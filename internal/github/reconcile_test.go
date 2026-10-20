@@ -116,3 +116,27 @@ func TestTheWindowOfTheReconciliationIsAnchoredAtTheFirstTry(t *testing.T) {
 		t.Fatal("the comment left the window because the try came later")
 	}
 }
+
+// A Citadel that restarts long after the promotion reads the window of the
+// epoch, not the last 30 minutes before the restart.
+func TestTheWindowOfTheReconciliationEndsAtTheAnchorOfTheEpoch(t *testing.T) {
+	t.Parallel()
+	r := newActionsRig(t, tables{})
+	clk := r.objs.Clock.(*clock.Fake)
+	epic := r.gh.AddIssue(repoFull, "épico", github.EpicLabel)
+	started := clk.Now()
+	if _, err := r.rest.PostComment(r.ctx, repoFull, epic, github.WithMarker("feito", "op-before-the-swap")); err != nil {
+		t.Fatal(err)
+	}
+	clk.Advance(45 * time.Minute) // the restart, past the 30 minutes
+	rec := &github.Reconciler{Objects: r.objs, API: r.rest, Clock: clk,
+		Anchor:  func(context.Context) (time.Time, error) { return started, nil },
+		Repos:   func(context.Context) ([]string, error) { return []string{repoFull}, nil },
+		Authors: func(context.Context) (map[string]bool, error) { return map[string]bool{"grand_master[bot]": true}, nil }}
+	if err := rec.Reconcile(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, _ := r.objs.ByOp(r.ctx, "op-before-the-swap"); !found {
+		t.Fatal("the comment of the old Citadel was not read 45 minutes after the epoch began")
+	}
+}

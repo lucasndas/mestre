@@ -24,7 +24,7 @@ func TestTheStandardIntegrationReconcilesWhatTheOldCitadelMadeOnGitHub(t *testin
 	if _, found, _ := objs.ByOp(c.ctx, op); found {
 		t.Fatal("the operation is known before the reconciliation")
 	}
-	if err := reconcilerOf(c.run, c.orc)(c.ctx); err != nil {
+	if err := reconcilerOf(c.run, c.orc, nil)(c.ctx); err != nil {
 		t.Fatal(err)
 	}
 	obj, found, _ := objs.ByOp(c.ctx, op)
@@ -47,10 +47,10 @@ func TestTheStandardIntegrationReconcilesWhatTheOldCitadelMadeOnGitHub(t *testin
 func TestTheFenceOfTheRunGetsTheReconciliationOfTheIntegration(t *testing.T) {
 	t.Parallel()
 	c := newGHCompose(t)
-	if reconcilerOf(c.run, c.orc) == nil {
+	if reconcilerOf(c.run, c.orc, nil) == nil {
 		t.Fatal("the standard integration gave the fence no reconciliation")
 	}
-	if reconcilerOf(c.run, nil) != nil || reconcilerOf(nil, c.orc) != nil {
+	if reconcilerOf(c.run, nil, nil) != nil || reconcilerOf(nil, c.orc, nil) != nil {
 		t.Error("a reconciliation without an orchestration or an integration")
 	}
 }

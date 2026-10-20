@@ -79,8 +79,12 @@ type Reconciler struct {
 	// Authors are the logins ("<slug>[bot]", lower case) of the Apps of the Guild:
 	// only their comments are the Guild's, not those of any other bot.
 	Authors func(ctx context.Context) (map[string]bool, error)
-	Clock   clock.Clock
-	Window  time.Duration
+	// Anchor is the moment the window ends at (the start of the epoch the Citadel
+	// took): a Citadel that restarts long after the promotion still reads what the
+	// old one made. nil, or a zero time: now.
+	Anchor func(ctx context.Context) (time.Time, error)
+	Clock  clock.Clock
+	Window time.Duration
 
 	mu    sync.Mutex
 	since time.Time
@@ -105,7 +109,18 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 	// reads from the same moment, so the comments of the old Citadel do not leave it
 	r.mu.Lock()
 	if r.since.IsZero() {
-		r.since = r.Clock.Now().Add(-window)
+		end := r.Clock.Now()
+		if r.Anchor != nil {
+			t, err := r.Anchor(ctx)
+			if err != nil {
+				r.mu.Unlock()
+				return err
+			}
+			if !t.IsZero() {
+				end = t
+			}
+		}
+		r.since = end.Add(-window)
 	}
 	since := r.since
 	r.mu.Unlock()

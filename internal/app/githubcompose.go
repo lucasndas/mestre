@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/orchestration/basesync"
@@ -255,7 +256,7 @@ func (r *stdRun) poller(orc *Orchestration) (*github.Poller, error) {
 // the Apps of the Guild made on the repositories of the active workspaces in the
 // last 30 minutes (with the App Grão-Mestre) and records the operations it does
 // not know.
-func (r *stdRun) GuildReconcile(orc *Orchestration) func(ctx context.Context) error {
+func (r *stdRun) GuildReconcile(orc *Orchestration, anchor func(ctx context.Context) (time.Time, error)) func(ctx context.Context) error {
 	var rec *github.Reconciler
 	var once sync.Once
 	return func(ctx context.Context) error {
@@ -264,7 +265,7 @@ func (r *stdRun) GuildReconcile(orc *Orchestration) func(ctx context.Context) er
 		}
 		once.Do(func() {
 			rec = &github.Reconciler{
-				Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock,
+				Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock, Anchor: anchor,
 				API: r.gmRest(r.gmApp(ctx), pollPermissions),
 				Repos: func(ctx context.Context) ([]string, error) {
 					var out []string

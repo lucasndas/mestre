@@ -33,6 +33,9 @@ func newReconcileWorld(t *testing.T) *reconcileWorld {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	e := &Engine{clk: clk, log: slog.New(slog.DiscardHandler), statusCh: make(chan struct{}, 1), id: guild.Identity{MachineID: "b"}}
+	if _, err := db.Writer().ExecContext(t.Context(), `INSERT INTO epochs (epoch, citadel_machine_id, from_lsn, started_at) VALUES (1, 'b', 0, ?)`, clk.Now().UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
 	// the epoch 2 was taken by this machine, by a promotion
 	if _, err := db.Writer().ExecContext(t.Context(), `INSERT INTO epochs (epoch, citadel_machine_id, from_lsn, started_at) VALUES (2, 'b', 0, ?)`, clk.Now().UnixMilli()); err != nil {
 		t.Fatal(err)
@@ -81,6 +84,13 @@ func TestAFailingReconciliationIsKeptForTheStatusAndTheEpochStaysPending(t *test
 	if err := rec(t.Context()); !errors.Is(err, boom) {
 		t.Fatalf("reconcile = %v", err)
 	}
+	// the period that ends is no failure to show
+	gone, cancel := context.WithCancel(t.Context())
+	cancel()
+	w2 := newReconcileWorld(t)
+	if err := w2.e.reconcileFor(w2.run, w2.db, func(context.Context) error { return boom })(gone); err == nil || w2.run.reconcileFail.Load() != nil {
+		t.Errorf("a cancelled period kept a failure: %v", w2.run.reconcileFail.Load())
+	}
 	w.clk.Advance(time.Hour)
 	if err := rec(t.Context()); !errors.Is(err, boom) {
 		t.Fatalf("reconcile = %v", err)
@@ -108,7 +118,8 @@ func TestTheFenceOfThePeriodIsGivenTheReconciliationOfTheIntegration(t *testing.
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"e.reconcileFor(run, db, reconcilerOf(integ, hosted))",
+		"e.reconcileFor(run, db, reconcilerOf(integ, hosted, ",
+		"e.reconcilePending(ctx, db, run.epoch)",
 		"guild.NewFence(e.fenceConfig(run, integ, reconcile, promoted, wait))",
 	} {
 		if !strings.Contains(string(src), want) {
@@ -137,5 +148,11 @@ func TestTheStatusSaysWhyAPromotedCitadelWaitsForTheReconciliation(t *testing.T)
 	got := w.e.waitingOf(w.run)
 	if got != "Cidadela promovida aguardando reconciliação desde 12:00: github: 502" {
 		t.Fatalf("waiting = %q", got)
+	}
+	// a fence that is not waiting (no lock: it acts) says nothing, whatever was kept
+	w.run.fence = guild.NewFence(w.e.fenceConfig(w.run, nil, nil, false, time.Second))
+	w.run.fence.Demote()
+	if got := w.e.waitingOf(w.run); got != "" {
+		t.Errorf("a demoted fence says %q", got)
 	}
 }

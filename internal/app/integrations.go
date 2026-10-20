@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
@@ -63,17 +64,17 @@ type GuildLocker interface {
 // GitHub that a promoted Citadel makes before it acts outside
 // (docs/guilda/cidadela-e-torres.md#github-depois-da-troca).
 type GuildReconciler interface {
-	GuildReconcile(orc *Orchestration) func(ctx context.Context) error
+	GuildReconcile(orc *Orchestration, anchor func(ctx context.Context) (time.Time, error)) func(ctx context.Context) error
 }
 
 // reconcilerOf is the reconciliation for FenceConfig.Reconcile: nil when the
 // period has no orchestration or the integration reconciles nothing.
-func reconcilerOf(integ IntegrationRun, orc *Orchestration) func(ctx context.Context) error {
+func reconcilerOf(integ IntegrationRun, orc *Orchestration, anchor func(ctx context.Context) (time.Time, error)) func(ctx context.Context) error {
 	g, ok := integ.(GuildReconciler)
 	if !ok || orc == nil {
 		return nil
 	}
-	return g.GuildReconcile(orc)
+	return g.GuildReconcile(orc, anchor)
 }
 
 // Integration opens the integrations of a period. The zero Deps has none.

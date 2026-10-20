@@ -565,7 +565,10 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 			}
 		}
 	}
-	reconcile := e.reconcileFor(run, db, reconcilerOf(integ, hosted))
+	reconcile := e.reconcileFor(run, db, reconcilerOf(integ, hosted, func(ctx context.Context) (time.Time, error) {
+		rec, err := guild.EpochStart(ctx, db, run.epoch)
+		return rec.StartedAt, err
+	}))
 	if !promoted && reconcile != nil && e.reconcilePending(ctx, db, run.epoch) {
 		// A promoted Citadel that restarted before it finished reconciling GitHub
 		// reconciles again, after a short wait (the old one's lease is long gone).
@@ -1088,12 +1091,19 @@ func (e *Engine) reconcileFor(run *citadelRun, db *store.DB, base func(context.C
 				err = fmt.Errorf("recording the epoch as reconciled: %w", err)
 			}
 		}
+		if err != nil && ctx.Err() != nil {
+			return err // the period ends: not a failure to show
+		}
 		if err != nil {
 			since := e.clk.Now()
 			if prev := run.reconcileFail.Load(); prev != nil {
 				since = prev.since
 			}
-			run.reconcileFail.Store(&reconcileFailure{since: since, err: err.Error()})
+			msg := err.Error()
+			if e.deps.Masker != nil {
+				msg = e.deps.Masker.Mask(msg)
+			}
+			run.reconcileFail.Store(&reconcileFailure{since: since, err: msg})
 			e.log.Error("app: the promoted Citadel waits: the reconciliation with GitHub failed", "epoch", run.epoch, "since", since, "err", err)
 			e.changed()
 			return err
