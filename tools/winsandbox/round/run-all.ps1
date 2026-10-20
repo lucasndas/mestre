@@ -822,6 +822,9 @@ function Test-Item8 {
 function Clear-RealAccountLeftovers {
     foreach ($svc in 'MestreLauncher$ci', 'Mestre$ci') { & sc.exe stop $svc 2>&1 | Out-Null; & sc.exe delete $svc 2>&1 | Out-Null }
     if (Get-LocalUser -Name 'mestre-agente-ci' -ErrorAction SilentlyContinue) { Remove-LocalUser -Name 'mestre-agente-ci' -ErrorAction SilentlyContinue }
+    # The profile outlives the account: a new one would be <name>.<computer>,
+    # which the tests refuse.
+    Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue | Where-Object { $_.LocalPath -like '*\mestre-agente-ci*' } | Remove-CimInstance -ErrorAction SilentlyContinue
     if (Test-Path 'C:\ProgramData\MestreCI') { Remove-Item -Recurse -Force 'C:\ProgramData\MestreCI' -ErrorAction SilentlyContinue }
 }
 
@@ -913,18 +916,7 @@ function Test-Item9 {
         else { Add-Sub 9 'FAIL' ('go test ./internal/winsvc: ' + (Tail $r.Out 8)) }
         Clear-RealAccountLeftovers
         Write-Host 'Rodando tools/realaccount (cria a conta mestre-agente-ci e os serviços, e remove tudo)...'
-        # tools/realaccount adds the account to the group by the English name
-        # 'Users'; on a Windows in another language (pt-BR: Usuários) the group
-        # of SID S-1-5-32-545 is called 'Users' only while the tool runs.
-        $users = Get-LocalGroup -SID 'S-1-5-32-545'
-        $renamed = $false
-        if ($users.Name -ne 'Users') { Rename-LocalGroup -SID 'S-1-5-32-545' -NewName 'Users'; $renamed = $true }
-        try {
-            $r = Invoke-Native -File 'go' -Arguments @('run', './tools/realaccount', 'run', '-budget', '20m', '-timeout', '40m') -Dir $Repo -Env @{ MESTRE_REAL_ACCOUNT = '1'; CGO_ENABLED = '0' } -TimeoutSec 3000
-        } finally {
-            if ($renamed) { Rename-LocalGroup -SID 'S-1-5-32-545' -NewName $users.Name }
-        }
-        if ($renamed) { $r.Out = "(grupo $($users.Name) chamado de Users durante a ferramenta: ela usa o nome em inglês)`n" + $r.Out }
+        $r = Invoke-Native -File 'go' -Arguments @('run', './tools/realaccount', 'run', '-budget', '20m', '-timeout', '40m') -Dir $Repo -Env @{ MESTRE_REAL_ACCOUNT = '1'; CGO_ENABLED = '0' } -TimeoutSec 3000
         Save-Detail 'item9-realaccount.log' $r.Out
         if ($r.Out -match '(?m)^PASS realaccount') { Add-Sub 9 'PASS' ('contas reais: ' + ((Tail $r.Out 1) -replace '\s+', ' ')) }
         else { Add-Sub 9 'FAIL' ("contas reais:`n" + (Tail $r.Out 10)) }
