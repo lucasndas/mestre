@@ -37,3 +37,16 @@ func TestPROpenSendsTheMirrorBranchAndOpensThePRWithTheAppMestreAndTheEpic(t *te
 		t.Errorf("the description lacks Closes #1 (the epic): %q", body)
 	}
 }
+
+func TestAPRIsMergeableOnlyWhenGitHubSaysClean(t *testing.T) {
+	t.Parallel()
+	for state, want := range map[string]bool{"clean": true, "has_hooks": true, "unknown": false, "unstable": false, "blocked": false, "behind": false, "": false} {
+		r := newRig(t)
+		pr := prOfTheTable(t, r)
+		r.gh.SetPull(repoFull, pr, strings.Repeat("a", 40), false, state)
+		got := r.run("tm", "pr status", nil)
+		if got.Data["mergeable"] != want {
+			t.Errorf("%q: mergeable %v, want %v (%v)", state, got.Data["mergeable"], want, got.Data["blocked_by"])
+		}
+	}
+}

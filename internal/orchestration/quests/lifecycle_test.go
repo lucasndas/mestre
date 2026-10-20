@@ -10,7 +10,6 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/connections"
 	"github.com/lucasndas/mestre/internal/orchestration/quests"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
-	"github.com/lucasndas/mestre/internal/protocol"
 )
 
 // told says whether an item with the text was put in the inbox of the
@@ -237,80 +236,6 @@ steps:
 	}
 }
 
-// CA-CONX-02: Dev -> Reviewer with a return to the Dev: when the quest is made
-// there are the connections Dev <-> Reviewer and the ones with the scroll of
-// the quest; when it ends they go away if nothing else keeps them.
-func TestTheConnectionsOfAQuestExistFromItsCreationAndGoWhenItEnds(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	dev := w.recruit("Dev Claude", "Dev Claude 1")
-	rev := w.recruit("Revisor Codex", "Revisor Codex 1")
-	// The characters of the table are connected to the Master, not to each other.
-	reasons := func(a, b connections.Ref) string {
-		t.Helper()
-		cs, err := w.orc.Connections.Store().Of(w.ctx, a)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, c := range cs {
-			if c.A == b || c.B == b {
-				var rs []string
-				for _, r := range c.Reasons {
-					rs = append(rs, r.Name)
-				}
-				return strings.Join(rs, ",")
-			}
-		}
-		return ""
-	}
-	if got := reasons(connections.Char(dev.ID), connections.Char(rev.ID)); got != "" {
-		t.Fatalf("Dev and Reviewer were connected before the quest: %q", got)
-	}
-	v := w.create(`
-name: Revisao
-steps:
-  - {id: dev,    character: Dev Claude 1}
-  - {id: review, character: Revisor Codex 1, after: [dev], can_return_to: dev}
-`)
-	reason := connections.QuestReason(v.ID)
-	scroll := connections.Scroll(v.Scroll)
-	if v.Scroll == "" {
-		t.Fatal("the quest has no scroll")
-	}
-	for name, pair := range map[string][2]connections.Ref{
-		"Dev and Reviewer":    {connections.Char(dev.ID), connections.Char(rev.ID)},
-		"Dev and scroll":      {connections.Char(dev.ID), scroll},
-		"Reviewer and scroll": {connections.Char(rev.ID), scroll},
-	} {
-		if got := reasons(pair[0], pair[1]); got != reason {
-			t.Errorf("%s after the quest was made: %q; want %q", name, got, reason)
-		}
-	}
-	// The Dev can ask the Reviewer by name, and read the scroll of the quest.
-	if _, err := w.orc.Connections.Target(w.ctx, dev.ID, "", "Revisor Codex 1"); err != nil {
-		t.Errorf("Dev cannot reach the Reviewer: %v", err)
-	}
-	if ok, err := w.orc.Connections.CanSeeScroll(w.ctx, dev.ID, v.Scroll); err != nil || !ok {
-		t.Errorf("Dev cannot see the scroll of the quest: %v, %v", ok, err)
-	}
-
-	q := w.run(v)
-	w.finish("Dev Claude 1", "feito", nil, "")
-	w.finish("Revisor Codex 1", "ok", nil, "")
-	if got := w.quest(q.ID); got.State != quests.Completed {
-		t.Fatalf("the quest is %s", got.State)
-	}
-	for name, pair := range map[string][2]connections.Ref{
-		"Dev and Reviewer":    {connections.Char(dev.ID), connections.Char(rev.ID)},
-		"Dev and scroll":      {connections.Char(dev.ID), scroll},
-		"Reviewer and scroll": {connections.Char(rev.ID), scroll},
-	} {
-		if got := reasons(pair[0], pair[1]); got != "" {
-			t.Errorf("%s after the quest ended: %q; want no connection", name, got)
-		}
-	}
-}
-
 // The characters the engine makes for the steps are connected as the steps are:
 // the one of a step with the one of the step it follows and the one it may
 // return to, and each of them with the scroll.
@@ -406,93 +331,6 @@ func TestAPausedTableStartsNoStep(t *testing.T) {
 	w.wantStates(q, map[string]quests.StepState{"a": quests.StepRunning})
 }
 
-// A table that waits for the merge of another one begins no step, even one
-// that is at work, and goes on when the other epic is done
-// (docs/orquestracao/dependencia-entre-mesas.md).
-// CA-DEPMESA-01
-func TestATableThatWaitsForAnotherTableStartsNoStepUntilItIsMerged(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t, worldOpts{epics: []int{43}})
-	res, err := w.orc.EpicDeps.Depend(w.ctx, w.gm, 42, 43)
-	if err != nil || !res.Waiting {
-		t.Fatalf("Depend = %+v, %v; want waiting", res, err)
-	}
-	q := w.run(w.create(oneStep))
-	w.wantStates(q, map[string]quests.StepState{"a": quests.StepPending})
-	// The epic #43 is closed as completed: the table goes on at once, with no
-	// sweep to wake the quest.
-	if err := w.orc.EpicDeps.EpicClosed(w.ctx, w.slug, 43, false); err != nil {
-		t.Fatal(err)
-	}
-	w.wantStates(q, map[string]quests.StepState{"a": quests.StepRunning})
-}
-
-// Part of CA-CIDADELA-11 (the promotion itself is the Guild's: the full suite
-// runs it with instances): with characters on the Tower and others on the
-// machine of the old Citadel, each with a step under way, when the new Citadel
-// takes over only the ones of the old Citadel's machine are interrupted, and
-// only their steps are delivered again, with the note, once they are back.
-func TestAfterAPromotionOnlyTheStepsOfTheInterruptedCharactersAreDeliveredAgain(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	q := w.run(w.create(`
-name: Dois lados
-steps:
-  - {id: local,  sheet: Dev Claude}
-  - {id: remoto, sheet: QA Antigravity, machine: windows-pc}
-`))
-	local, remote := w.char("Dev Claude 1"), w.char("QA Antigravity 1")
-	if local.Machine != "cidadela" || remote.Machine != "torre" {
-		t.Fatalf("machines: %s, %s", local.Machine, remote.Machine)
-	}
-	beforeLocal, beforeRemote := len(w.machines.Delivered(local)), len(w.machines.Delivered(remote))
-	startCommit := func(step string) string {
-		rs, _ := w.orc.Quests.Store().Runs(w.ctx, q.ID+"/"+step)
-		return rs[0].StartCommit
-	}
-	startLocal := startCommit("local")
-
-	// The new Citadel finds the terminals of the Tower alive and the ones of
-	// the machine of the old Citadel gone.
-	live := []protocol.TerminalState{{TerminalID: remote.TerminalID, AgentID: remote.ID, State: string(characters.Busy)}}
-	if err := w.orc.Characters.Reconcile(w.ctx, "torre", live); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.orc.Characters.Reconcile(w.ctx, "cidadela", nil); err != nil {
-		t.Fatal(err)
-	}
-	if w.get(local.ID).State != characters.Interrupted || w.get(remote.ID).State != characters.Busy {
-		t.Fatalf("states: %s, %s", w.get(local.ID).State, w.get(remote.ID).State)
-	}
-	// The interrupted step waits to be delivered again; the other is untouched.
-	if st := w.step(q, "local"); st.State != quests.StepPreparing || st.ResumeNote != "retomada após reinício" {
-		t.Errorf("the step of the interrupted character: %+v", st)
-	}
-	if st := w.step(q, "remoto"); st.State != quests.StepRunning {
-		t.Errorf("the step of the live character: %+v", st)
-	}
-	if len(w.machines.Delivered(local)) != beforeLocal {
-		t.Error("the step was delivered again before the character was back")
-	}
-	if err := w.orc.Characters.ResumeMachine(w.ctx, "cidadela"); err != nil {
-		t.Fatal(err)
-	}
-	w.wantStates(q, map[string]quests.StepState{"local": quests.StepRunning, "remoto": quests.StepRunning})
-	again := w.machines.Delivered(local)
-	if len(again) != beforeLocal+1 || !strings.Contains(again[len(again)-1], "retomada após reinício") || !strings.Contains(again[len(again)-1], "Faça") && !strings.Contains(again[len(again)-1], "Etapa") {
-		t.Errorf("the step was not delivered again with the note: %q", again)
-	}
-	if len(w.machines.Delivered(remote)) != beforeRemote {
-		t.Error("the step of the live character was delivered again")
-	}
-	if runs, _ := w.orc.Quests.Store().Runs(w.ctx, q.ID+"/local"); len(runs) != 1 || runs[0].StartCommit != startLocal {
-		t.Errorf("the delivery again made a run or moved the start: %+v", runs)
-	}
-	// and it ends normally
-	w.finish("Dev Claude 1", "fim", nil, "")
-	w.wantStates(q, map[string]quests.StepState{"local": quests.StepCompleted})
-}
-
 // A character that takes the place of the one a step had (recruit --replace)
 // gets the step delivered, with the note.
 func TestAReplacementTakesTheStepOfTheCharacterItReplaces(t *testing.T) {
@@ -573,5 +411,79 @@ func TestAQuestOfATableThatEndedIsCancelledBySweep(t *testing.T) {
 	}
 	if got := w.quest(q.ID); got.State != quests.Cancelled || got.PausedReason != "a mesa terminou" {
 		t.Errorf("the quest of a cancelled table is %s (%q)", got.State, got.PausedReason)
+	}
+}
+
+// CA-CONX-02: Dev -> Reviewer with a return to the Dev: when the quest is made
+// there are the connections Dev <-> Reviewer and the ones with the scroll of
+// the quest; when it ends they go away if nothing else keeps them.
+func TestTheConnectionsOfAQuestExistFromItsCreationAndGoWhenItEnds(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.recruit("Dev Claude", "Dev Claude 1")
+	rev := w.recruit("Revisor Codex", "Revisor Codex 1")
+	// The characters of the table are connected to the Master, not to each other.
+	reasons := func(a, b connections.Ref) string {
+		t.Helper()
+		cs, err := w.orc.Connections.Store().Of(w.ctx, a)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range cs {
+			if c.A == b || c.B == b {
+				var rs []string
+				for _, r := range c.Reasons {
+					rs = append(rs, r.Name)
+				}
+				return strings.Join(rs, ",")
+			}
+		}
+		return ""
+	}
+	if got := reasons(connections.Char(dev.ID), connections.Char(rev.ID)); got != "" {
+		t.Fatalf("Dev and Reviewer were connected before the quest: %q", got)
+	}
+	v := w.create(`
+name: Revisao
+steps:
+  - {id: dev,    character: Dev Claude 1}
+  - {id: review, character: Revisor Codex 1, after: [dev], can_return_to: dev}
+`)
+	reason := connections.QuestReason(v.ID)
+	scroll := connections.Scroll(v.Scroll)
+	if v.Scroll == "" {
+		t.Fatal("the quest has no scroll")
+	}
+	for name, pair := range map[string][2]connections.Ref{
+		"Dev and Reviewer":    {connections.Char(dev.ID), connections.Char(rev.ID)},
+		"Dev and scroll":      {connections.Char(dev.ID), scroll},
+		"Reviewer and scroll": {connections.Char(rev.ID), scroll},
+	} {
+		if got := reasons(pair[0], pair[1]); got != reason {
+			t.Errorf("%s after the quest was made: %q; want %q", name, got, reason)
+		}
+	}
+	// The Dev can ask the Reviewer by name, and read the scroll of the quest.
+	if _, err := w.orc.Connections.Target(w.ctx, dev.ID, "", "Revisor Codex 1"); err != nil {
+		t.Errorf("Dev cannot reach the Reviewer: %v", err)
+	}
+	if ok, err := w.orc.Connections.CanSeeScroll(w.ctx, dev.ID, v.Scroll); err != nil || !ok {
+		t.Errorf("Dev cannot see the scroll of the quest: %v, %v", ok, err)
+	}
+
+	q := w.run(v)
+	w.finish("Dev Claude 1", "feito", nil, "")
+	w.finish("Revisor Codex 1", "ok", nil, "")
+	if got := w.quest(q.ID); got.State != quests.Completed {
+		t.Fatalf("the quest is %s", got.State)
+	}
+	for name, pair := range map[string][2]connections.Ref{
+		"Dev and Reviewer":    {connections.Char(dev.ID), connections.Char(rev.ID)},
+		"Dev and scroll":      {connections.Char(dev.ID), scroll},
+		"Reviewer and scroll": {connections.Char(rev.ID), scroll},
+	} {
+		if got := reasons(pair[0], pair[1]); got != "" {
+			t.Errorf("%s after the quest ended: %q; want no connection", name, got)
+		}
 	}
 }

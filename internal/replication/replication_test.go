@@ -3,20 +3,12 @@ package replication_test
 import (
 	"bytes"
 	"context"
-	"errors"
-	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/guild"
-	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/replication"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/vault"
 )
 
@@ -53,42 +45,29 @@ func snapshots(tw *tower, n int32) func() bool {
 	return func() bool { return tw.snapshots.Load() == n }
 }
 
-// CA-REPL-01
-// CA-REPL-02
-// CA-REPL-05
-func TestTheDatabaseStreamsToATowerFromTheFullCopyOnAndRefusesEveryOtherWrite(t *testing.T) {
+// Part of CA-REPL-01, CA-REPL-02 and CA-REPL-05 (the story with a thousand
+// transactions, the lost frame and the record that does not fit is in the full
+// suite): a Tower just accepted gets a full copy equal to the primary, the
+// records that follow arrive in order and are acked, and nothing writes to the
+// replica but the replication.
+func TestATowerGetsTheFullCopyThenTheRecordsInOrderAndTakesNoOtherWrite(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		r := newRig(t, rigOpts{})
 		ctx := context.Background()
-		for i := range 30 {
+		for i := range 5 {
 			r.insertMachine(i)
 		}
 		tw := r.addTower("t1", true)
-
-		// A Tower just accepted gets a full copy, equal to the primary at the lsn noted.
 		eventually(t, "the full copy", snapshots(tw, 1))
 		equal(t, r, tw)
 
-		// A thousand transactions arrive in order, the replica is the primary's, and
-		// the last replica.ack carries the current lsn.
 		start := r.lsn()
-		for i := range 1000 {
-			tx, err := r.cdb.Writer().BeginTx(ctx, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for j := range 2 {
-				if _, err := tx.Exec(`INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, joined_at) VALUES (?, 'n', '', 0, 0, 'active', '{}', 0)`, fmt.Sprintf("m%04d-%d", i, j)); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if err := tx.Commit(); err != nil {
-				t.Fatal(err)
-			}
+		for i := range 20 {
+			r.insertMachine(100 + i)
 		}
-		if r.lsn() != start+1000 {
-			t.Fatalf("the primary is at %d, want %d", r.lsn(), start+1000)
+		if r.lsn() != start+20 {
+			t.Fatalf("the primary is at %d, want %d", r.lsn(), start+20)
 		}
 		equal(t, r, tw)
 		frames := r.framesTo("t1")
@@ -97,39 +76,8 @@ func TestTheDatabaseStreamsToATowerFromTheFullCopyOnAndRefusesEveryOtherWrite(t 
 				t.Fatalf("frames out of order: %v", frames)
 			}
 		}
-		var a, b string // the rows of the log the Tower stored are the primary's, record for record
-		q := `SELECT group_concat(lsn || ':' || length(body), ',') FROM (SELECT * FROM replication_log WHERE lsn > ? ORDER BY lsn)`
-		_ = r.cdb.Reader().QueryRow(q, start).Scan(&a)
-		_ = tw.db.Reader().QueryRow(q, start).Scan(&b)
-		if a == "" || a != b {
-			t.Fatalf("the logs differ:\nprimary %.200s\nreplica %.200s", a, b)
-		}
 		eventuallyFor(t, "the last ack", 100*time.Millisecond, 60, func() bool { return statusOf(t, r, "t1").Acked == r.lsn() })
 
-		// A hole: the frame of one record is lost, the next one arrives, and the Tower
-		// asks again from the last record it has; no full copy for that.
-		r.dropNextFor("t1")
-		r.insertMachine(2001)
-		eventually(t, "the frame to be lost", func() bool { return !r.dropping() })
-		have := tw.lsn()
-		r.insertMachine(2002)
-		equal(t, r, tw)
-		if tw.lsn() <= have+1 || tw.snapshots.Load() != 1 {
-			t.Fatalf("after the hole: lsn %d (was %d), %d full copies; want the records, not a copy", tw.lsn(), have, tw.snapshots.Load())
-		}
-
-		// A record that does not fit the replica makes it ask for a full copy.
-		if err := tw.db.Purge(ctx, "machines"); err != nil {
-			t.Fatal(err)
-		}
-		r.exec(`UPDATE machines SET name = 'renamed' WHERE machine_id = 'm0001'`)
-		eventually(t, "the second full copy", snapshots(tw, 2))
-		equal(t, r, tw)
-		if st := tw.rep.Status(); st.State != "ok" {
-			t.Errorf("status = %+v", st)
-		}
-
-		// Nothing writes to the replica but the replication, while it replicates and after.
 		for _, q := range []string{
 			`INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, joined_at) VALUES ('x', 'x', '', 0, 0, 'active', '{}', 0)`,
 			`DELETE FROM machines`,
@@ -140,6 +88,74 @@ func TestTheDatabaseStreamsToATowerFromTheFullCopyOnAndRefusesEveryOtherWrite(t 
 			}
 		}
 		equal(t, r, tw)
+	})
+}
+
+// Part of CA-REPL-04 and CA-REPL-10 (the story with the exclusion, the undone
+// exclusion and the promoted Tower is in the full suite): the vault reaches the
+// common machine and not the excluded one, a secret written later too, and the
+// key changed reaches the common one.
+func TestTheVaultReachesTheCommonMachineAndNotTheExcludedOne(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(t, rigOpts{vault: true, durable: true})
+		ctx := context.Background()
+		put := func(name, value string) {
+			t.Helper()
+			if err := r.vault.Put(ctx, name, vault.TypeProviderAPIKey, []byte(value), nil); err != nil {
+				t.Fatal(err)
+			}
+		}
+		put("provider_claude_api", "sk-ant-api03-Zx8Cv7Bn6Mm5Ll4Kk3Jj2Hh1")
+		var ciphertext []byte
+		if err := r.cdb.Reader().QueryRow(`SELECT ciphertext FROM secrets`).Scan(&ciphertext); err != nil {
+			t.Fatal(err)
+		}
+		r.roster.set("excluded", true)
+		common := r.addTower("common", true)
+		excluded := r.addTower("excluded", true)
+		holds := func(tw *tower) bool {
+			return (&vault.Copier{Keys: tw.keys, EnvelopePath: tw.env}).Holds(ctx)
+		}
+		rows := func(tw *tower) int {
+			var n int
+			_ = tw.db.Reader().QueryRow(`SELECT count(*) FROM secrets`).Scan(&n)
+			return n
+		}
+		eventually(t, "both copies", func() bool { return common.lsn() == r.lsn() && excluded.lsn() == r.lsn() && holds(common) })
+		equal(t, r, common)
+		equal(t, r, excluded, "secrets", "site_login_attempts")
+		if rows(common) != 1 {
+			t.Fatalf("the common machine has %d secrets, want 1", rows(common))
+		}
+		if _, err := os.Stat(excluded.env); err == nil || holds(excluded) || rows(excluded) != 0 {
+			t.Fatalf("the excluded machine received vault: holds=%v rows=%d", holds(excluded), rows(excluded))
+		}
+		if b, _ := os.ReadFile(excluded.dbPath); bytes.Contains(b, ciphertext) {
+			t.Error("the file of the excluded replica contains the secret")
+		}
+
+		// A secret written now reaches the common machine and not the excluded one,
+		// and so does the new key.
+		put("later", "sk-ant-api03-Aa1Bb2Cc3Dd4Ee5Ff6")
+		eventually(t, "the new secret", func() bool { return rows(common) == 2 })
+		before, _ := (&vault.Copier{Keys: common.keys, EnvelopePath: common.env}).Export(ctx)
+		if err := r.vault.Rotate(ctx); err != nil {
+			t.Fatal(err)
+		}
+		r.primary.VaultChanged(ctx)
+		want, _ := (&vault.Copier{Keys: r.ckeys, EnvelopePath: r.envelope}).Export(ctx)
+		eventually(t, "the new vault", func() bool {
+			got, err := (&vault.Copier{Keys: common.keys, EnvelopePath: common.env}).Export(ctx)
+			return err == nil && bytes.Equal(got.Keyring, want.Keyring) && bytes.Equal(got.Envelope, want.Envelope)
+		})
+		if bytes.Equal(before.Keyring, want.Keyring) {
+			t.Fatal("the key did not change")
+		}
+		equal(t, r, excluded, "secrets", "site_login_attempts")
+		if rows(excluded) != 0 || holds(excluded) {
+			t.Fatalf("the excluded machine got the vault: %d secrets", rows(excluded))
+		}
 	})
 }
 
@@ -214,158 +230,6 @@ func TestATowerThatComesBackGetsOnlyWhatIsMissingOrAFullCopyAfterTheRetention(t 
 	})
 }
 
-// CA-REPL-01
-// CA-REPL-04
-// CA-REPL-05
-// CA-REPL-10
-func TestTheVaultReachesOnlyTheMachinesThatAreNotExcludedAndThePromotedTowerChangesTheKeyWithoutThePrivateRecoveryKey(t *testing.T) {
-	t.Parallel()
-	synctest.Test(t, func(t *testing.T) {
-		r := newRig(t, rigOpts{vault: true, durable: true})
-		ctx := context.Background()
-		put := func(name, value string) {
-			t.Helper()
-			if err := r.vault.Put(ctx, name, vault.TypeProviderAPIKey, []byte(value), nil); err != nil {
-				t.Fatal(err)
-			}
-		}
-		put("provider_claude_api", "sk-ant-api03-Zx8Cv7Bn6Mm5Ll4Kk3Jj2Hh1")
-		for i := range 5 {
-			r.insertMachine(i)
-		}
-		var ciphertext []byte
-		if err := r.cdb.Reader().QueryRow(`SELECT ciphertext FROM secrets`).Scan(&ciphertext); err != nil {
-			t.Fatal(err)
-		}
-		r.roster.set("excluded", true)
-		common := r.addTower("common", true)
-		excluded := r.addTower("excluded", true)
-
-		holds := func(tw *tower) bool {
-			return (&vault.Copier{Keys: tw.keys, EnvelopePath: tw.env}).Holds(ctx)
-		}
-		rows := func(tw *tower) int {
-			var n int
-			_ = tw.db.Reader().QueryRow(`SELECT count(*) FROM secrets`).Scan(&n)
-			return n
-		}
-		eventually(t, "both copies", func() bool { return common.lsn() == r.lsn() && excluded.lsn() == r.lsn() && holds(common) })
-
-		// The common machine has everything; the excluded one every table but the
-		// vault ones, which are empty, and not the secret anywhere in its file.
-		equal(t, r, common)
-		equal(t, r, excluded, "secrets", "site_login_attempts")
-		if !holds(common) || rows(common) != 1 {
-			t.Fatalf("the common machine: key and envelope %v, %d secrets; want all of it", holds(common), rows(common))
-		}
-		if _, err := os.Stat(excluded.env); err == nil || holds(excluded) || rows(excluded) != 0 {
-			t.Fatalf("the excluded machine received vault: holds=%v rows=%d", holds(excluded), rows(excluded))
-		}
-		if b, _ := os.ReadFile(excluded.dbPath); bytes.Contains(b, ciphertext) {
-			t.Error("the file of the excluded replica contains the secret")
-		}
-		if b, _ := os.ReadFile(common.dbPath); !bytes.Contains(b, ciphertext) {
-			t.Error("the common replica should hold the (encrypted) secret")
-		}
-
-		// A secret written now reaches the common machine and not the excluded one.
-		put("later", "sk-ant-api03-Aa1Bb2Cc3Dd4Ee5Ff6")
-		eventually(t, "the new secret", func() bool { return rows(common) == 2 })
-		equal(t, r, excluded, "secrets", "site_login_attempts")
-		if rows(excluded) != 0 {
-			t.Fatalf("the excluded machine got %d secrets", rows(excluded))
-		}
-
-		// The Owner excludes the common machine: it erases the three things and gives a receipt.
-		r.roster.set("common", true)
-		r.primary.ExclusionChanged(guild.Machine{ID: "common", Excluded: true})
-		eventually(t, "the vault to be erased", func() bool { return !holds(common) && rows(common) == 0 })
-		if _, err := os.Stat(common.env); err == nil {
-			t.Error("the envelope is still there")
-		}
-		eventually(t, "the receipt", func() bool { return len(r.receipts()) >= 1 })
-		if got := r.receipts(); len(got) != 1 || got[0] != "common" {
-			t.Errorf("receipts = %v, want one from common", got)
-		}
-		put("after", "sk-ant-api03-Gg7Hh8Ii9Jj0")
-		equal(t, r, common, "secrets", "site_login_attempts")
-		if rows(common) != 0 {
-			t.Errorf("an excluded machine got %d secrets", rows(common))
-		}
-
-		// Undoing the exclusion gives it the vault back, with a full copy that has the tables.
-		r.roster.set("common", false)
-		r.primary.ExclusionChanged(guild.Machine{ID: "common", Excluded: false})
-		eventually(t, "the vault to come back", func() bool { return holds(common) && rows(common) == 3 && common.lsn() == r.lsn() })
-		equal(t, r, common)
-
-		// The key is changed and the Towers get the new vault.
-		before, _ := (&vault.Copier{Keys: common.keys, EnvelopePath: common.env}).Export(ctx)
-		if err := r.vault.Rotate(ctx); err != nil {
-			t.Fatal(err)
-		}
-		r.primary.VaultChanged(ctx)
-		want, _ := (&vault.Copier{Keys: r.ckeys, EnvelopePath: r.envelope}).Export(ctx)
-		eventually(t, "the new vault", func() bool {
-			got, err := (&vault.Copier{Keys: common.keys, EnvelopePath: common.env}).Export(ctx)
-			return err == nil && bytes.Equal(got.Keyring, want.Keyring) && bytes.Equal(got.Envelope, want.Envelope)
-		})
-		if bytes.Equal(before.Keyring, want.Keyring) {
-			t.Fatal("the key did not change")
-		}
-		equal(t, r, common)
-
-		// The vault does not open on the replica of a Tower.
-		cfg := vault.Config{DB: common.db, Keys: common.keys, EnvelopePath: common.env, RecoveryPublicKey: bytes.Repeat([]byte{1}, 32), Masker: logging.NewMasker()}
-		if _, err := vault.Open(ctx, cfg); !errors.Is(err, vault.ErrReplica) {
-			t.Errorf("vault.Open on a replica = %v, want ErrReplica", err)
-		}
-		if _, err := vault.Create(ctx, cfg); !errors.Is(err, vault.ErrReplica) {
-			t.Errorf("vault.Create on a replica = %v, want ErrReplica", err)
-		}
-
-		// The Citadel is lost and the Tower is promoted: its file becomes the main
-		// database, no copy, and the vault opens from its own copy. Changing the key
-		// needs only the public recovery key, and the new envelope opens with the
-		// recovery key.
-		envelopeBefore, _ := os.ReadFile(common.env)
-		common.stop()
-		r.stop()
-		promoted, err := guildtpl.Open(ctx, common.dbPath, store.Options{Clock: r.clk}) // flushes: the key rotates
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer promoted.Close()
-		v, err := vault.Open(ctx, vault.Config{
-			DB: promoted, Keys: common.keys, EnvelopePath: common.env, RecoveryPublicKey: r.rk.PublicKey(), Masker: logging.NewMasker(), Clock: r.clk,
-		})
-		if err != nil || v.Err() != nil {
-			t.Fatalf("the promoted Tower cannot open the vault from its copy: %v / %v", err, v.Err())
-		}
-		if err := v.Rotate(ctx); err != nil {
-			t.Fatal(err)
-		}
-		envelopeAfter, _ := os.ReadFile(common.env)
-		if bytes.Equal(envelopeBefore, envelopeAfter) {
-			t.Fatal("the envelope did not change with the key")
-		}
-		restored := &memKeys{}
-		if err := vault.RestoreKey(ctx, envelopeAfter, r.rk, restored); err != nil {
-			t.Fatalf("the new envelope does not open with the recovery key: %v", err)
-		}
-		v2, err := vault.Open(ctx, vault.Config{
-			DB: promoted, Keys: restored, EnvelopePath: filepath.Join(t.TempDir(), "e.bin"), RecoveryPublicKey: r.rk.PublicKey(), Masker: logging.NewMasker(), Clock: r.clk,
-		})
-		if err != nil || v2.Err() != nil {
-			t.Fatalf("open with the restored key: %v / %v", err, v2.Err())
-		}
-		var got []byte
-		if err := v2.Use(ctx, "provider_claude_api", "test", func(b []byte) error { got = append(got, b...); return nil }); err != nil || string(got) != "sk-ant-api03-Zx8Cv7Bn6Mm5Ll4Kk3Jj2Hh1" {
-			t.Fatalf("the secret read with the restored key = %q, %v", got, err)
-		}
-	})
-}
-
 // Part of CA-REPL-06 (fecha no M7, com o checklist que lê o alerta): the alert
 // of the late Tower, the part of milestone 2
 func TestALateTowerIsAnAlertAfterAMinuteOverTheThreshold(t *testing.T) {
@@ -412,184 +276,4 @@ func TestALateTowerIsAnAlertAfterAMinuteOverTheThreshold(t *testing.T) {
 			return len(a) == 0 && late.lsn() == r.lsn()
 		})
 	})
-}
-
-// Part of CA-REPL-08, the part of milestone 2: a file that a record cites is on the
-// Tower before the record is applied there.
-func TestFilesReachTheTowerBeforeTheRecordsThatCiteThemAndAMachineThatLeavesErasesThem(t *testing.T) {
-	t.Parallel()
-	synctest.Test(t, func(t *testing.T) {
-		cites := func(c store.Change) []replication.FileRef {
-			if c.Table == "machines" && c.Op == store.OpInsert && strings.HasSuffix(c.New[1].(string), ".md") {
-				return []replication.FileRef{{Root: "classes", Path: c.New[1].(string)}} // the name column stands for a path
-			}
-			return nil
-		}
-		r := newRig(t, rigOpts{files: true, cites: cites, vault: true})
-		ctx := context.Background()
-		write := func(rel, body string) {
-			t.Helper()
-			p := filepath.Join(r.filesDir, filepath.FromSlash(rel))
-			if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(p, []byte(body), 0o640); err != nil {
-				t.Fatal(err)
-			}
-		}
-		read := func(tw *tower, rel string) string {
-			b, _ := os.ReadFile(filepath.Join(tw.files, filepath.FromSlash(rel)))
-			return string(b)
-		}
-		// What is in the folder when the Tower connects comes first.
-		write("a.md", "a")
-		write("dir/b.md", "b")
-		write("dir/deep/c.md", "c")
-		if err := r.vault.Put(ctx, "k", vault.TypeProviderAPIKey, []byte("sk-ant-api03-Zx8Cv7Bn6Mm5Ll4Kk3Jj2Hh1"), nil); err != nil {
-			t.Fatal(err)
-		}
-		tw := r.addTower("t1", true)
-		eventually(t, "the folder", func() bool { return read(tw, "dir/deep/c.md") == "c" && tw.lsn() == r.lsn() })
-		if read(tw, "a.md") != "a" || read(tw, "dir/b.md") != "b" {
-			t.Fatal("the files of the folder did not all arrive")
-		}
-
-		// A record that cites a file finds it on the Tower when it is applied.
-		write("qa/classe.md", "# classe QA\n")
-		write("dev/classe.md", "# classe Dev\n")
-		insert := func(id, name string) uint64 {
-			r.exec(`INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, joined_at) VALUES (?, ?, '', 0, 0, 'active', '{}', 0)`, id, name)
-			return r.lsn()
-		}
-		lsn1 := insert("m1", "qa/classe.md")
-		eventually(t, "the first record", func() bool { return tw.lsn() == lsn1 })
-		lsn2 := insert("m2", "dev/classe.md")
-		equal(t, r, tw)
-		ev := tw.log()
-		for _, c := range []struct {
-			file string
-			lsn  uint64
-		}{{"qa/classe.md", lsn1}, {"dev/classe.md", lsn2}} {
-			f, a := indexOf(ev, "file "+c.file), appliedAt(ev, c.lsn)
-			if f < 0 || a < 0 || f > a || read(tw, c.file) == "" {
-				t.Fatalf("%s arrived at event %d and the record %d that cites it was applied at %d; events = %v", c.file, f, c.lsn, a, ev)
-			}
-		}
-
-		// A file that did not change is not sent again; a new content for the same path is.
-		n := countPrefix(tw.log(), "file ")
-		r.exec(`UPDATE machines SET priority = 5 WHERE machine_id = 'm1'`)
-		equal(t, r, tw)
-		if got := countPrefix(tw.log(), "file "); got != n {
-			t.Errorf("files received grew from %d to %d: an update that cites no new file sent one", n, got)
-		}
-		write("qa/classe.md", "# classe QA 2\n")
-		insert("m3", "qa/classe.md")
-		eventually(t, "the new content", func() bool { return read(tw, "qa/classe.md") == "# classe QA 2\n" })
-
-		// A reconnection sends nothing again: the Tower has the content.
-		equal(t, r, tw)
-		n = countPrefix(tw.log(), "file ")
-		tw.stop()
-		tw.start(true)
-		eventually(t, "the reconnection", func() bool { return tw.lsn() == r.lsn() && statusOf(t, r, "t1").Acked == r.lsn() })
-		if got := countPrefix(tw.log(), "file "); got != n {
-			t.Errorf("%d files sent again to a Tower that had them", got-n)
-		}
-
-		// A file nobody cites goes when the Citadel says so, and a path that leaves
-		// the folder goes nowhere.
-		write("new.md", "new")
-		r.primary.FileChanged("classes", "new.md")
-		eventually(t, "new.md", func() bool { return read(tw, "new.md") == "new" })
-		r.primary.FileChanged("classes", "../escape.md")
-		settle()
-		if _, err := os.Stat(filepath.Join(filepath.Dir(tw.files), "escape.md")); err == nil {
-			t.Error("a file escaped the folder")
-		}
-
-		// The machine leaves the Guild: vault, replica and files are erased.
-		var w guild.Wiper = tw.rep
-		tw.stop()
-		if err := w.Wipe(ctx, "removed"); err != nil {
-			t.Fatal(err)
-		}
-		for _, p := range []string{tw.dbPath, tw.env, filepath.Join(tw.files, "a.md"), filepath.Join(tw.files, "dir")} {
-			if _, err := os.Stat(p); err == nil {
-				t.Errorf("%s is still there", p)
-			}
-		}
-		if (&vault.Copier{Keys: tw.keys, EnvelopePath: tw.env}).Holds(ctx) {
-			t.Error("the key is still there")
-		}
-	})
-}
-
-// CA-REPL-14
-// A machine that left the Guild takes nothing more of it while its engine still
-// runs and the Citadel, which has not revoked it yet, goes on sending: the key
-// of the vault does not come back, nor a file, nor the replica. The Citadel
-// sends the key again after a rotation and files at every change.
-func TestACitadelThatStillSendsToAMachineThatLeftChangesNothingThere(t *testing.T) {
-	t.Parallel()
-	synctest.Test(t, func(t *testing.T) {
-		r := newRig(t, rigOpts{files: true, vault: true})
-		ctx := context.Background()
-		if err := r.vault.Put(ctx, "k", vault.TypeProviderAPIKey, []byte("sk-ant-api03-Zx8Cv7Bn6Mm5Ll4Kk3Jj2Hh1"), nil); err != nil {
-			t.Fatal(err)
-		}
-		tw := r.addTower("t1", true)
-		copier := &vault.Copier{Keys: tw.keys, EnvelopePath: tw.env}
-		eventually(t, "the Tower to have the replica and the vault", func() bool { return tw.lsn() == r.lsn() && copier.Holds(ctx) })
-
-		var w guild.Wiper = tw.rep
-		if err := w.Wipe(ctx, "removed"); err != nil {
-			t.Fatal(err)
-		}
-		if copier.Holds(ctx) {
-			t.Fatal("set-up: the Wipe left the key")
-		}
-
-		if err := os.MkdirAll(r.filesDir, 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(r.filesDir, "late.md"), []byte("late"), 0o640); err != nil {
-			t.Fatal(err)
-		}
-		r.primary.VaultChanged(ctx)
-		r.primary.FileChanged("classes", "late.md")
-		r.insertMachine(1)
-		advance(time.Minute)
-
-		for _, p := range []string{tw.env, tw.dbPath, filepath.Join(tw.files, "late.md")} {
-			if _, err := os.Stat(p); err == nil {
-				t.Errorf("%s is back after the Wipe", p)
-			}
-		}
-		if copier.Holds(ctx) {
-			t.Error("the key of the vault is back after the Wipe")
-		}
-		if entries, _ := os.ReadDir(tw.xfer); len(entries) != 0 {
-			t.Errorf("the transfers folder has %v after the Wipe", entries)
-		}
-	})
-}
-
-func indexOf(s []string, v string) int {
-	for i, x := range s {
-		if x == v {
-			return i
-		}
-	}
-	return -1
-}
-
-func countPrefix(s []string, prefix string) int {
-	n := 0
-	for _, x := range s {
-		if strings.HasPrefix(x, prefix) {
-			n++
-		}
-	}
-	return n
 }

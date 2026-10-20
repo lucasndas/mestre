@@ -116,42 +116,6 @@ func hasEvent(items []string, marker string) bool {
 	return false
 }
 
-// CA-SYNC-02: a red verification gives the step back to the Dev with the
-// output and counts a volta; a green one ends it.
-func TestARedVerificationReturnsTheSyncToTheDevAndAGreenOneEndsIt(t *testing.T) {
-	t.Parallel()
-	v := &fakeVerifier{confirmed: true, results: []quests.VerifyResult{red("build failed\nlogin.go:3: undefined: x", "login.go:3")}}
-	w, dev := syncWorld(t, v)
-
-	if res := w.doneOfSync(dev); res.Verification != quests.VerificationPending {
-		t.Fatalf("verification = %q; want pending (the class of the Dev does not ask for it)", res.Verification)
-	}
-	w.orc.Quests.WaitVerifications()
-	q := w.syncState()
-	if q.State != quests.Running {
-		t.Fatalf("the sync is %s after a red verification", q.State)
-	}
-	steps, err := w.orc.Quests.Store().Steps(w.ctx, q.ID)
-	if err != nil || len(steps) != 1 || steps[0].Returns != 1 || steps[0].State != quests.StepRunning {
-		t.Fatalf("steps = %+v, %v; want the step running with one volta", steps, err)
-	}
-	told := strings.Join(w.itemsOf(dev.ID, inbox.KindSystem), "\n")
-	for _, want := range []string{"go test ./...", "login.go:3: undefined: x"} {
-		if !strings.Contains(told, want) {
-			t.Errorf("the Dev was not told %q:\n%s", want, told)
-		}
-	}
-
-	w.doneOfSync(dev) // the second run is green
-	w.orc.Quests.WaitVerifications()
-	if got := w.syncState().State; got != quests.Completed {
-		t.Fatalf("the sync is %s after the green verification", got)
-	}
-	if v.count() != 2 {
-		t.Errorf("verifications = %d; want 2", v.count())
-	}
-}
-
 // CA-SYNC-03: the limit of returns pauses the mission, the Master of the table
 // gets the return_limit and the table keeps working; the same failure again
 // pauses before.

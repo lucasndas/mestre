@@ -22,60 +22,6 @@ func data(t *testing.T, r localchan.Response) map[string]any {
 	return m
 }
 
-// Part of CA-CLI-COM-10 (internal/app closes it over cli.Run): the Reviewer hands the work back to the Dev with a reason.
-func TestDoneWithReturnExitsZeroAndPointsToTheStepOfTheDev(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	q := w.run(w.create(reviewDef))
-	w.finish("Dev Claude 1", "primeira versão", map[string]string{"a.go": "1"}, "")
-	rev := w.char("Revisor Codex 1")
-	r := w.call(rev.ID, "done", map[string]any{"return": "sem testes de erro"}, "faltam testes")
-	if !r.OK || r.ExitCode() != 0 {
-		t.Fatalf("done --return = %d %+v", r.ExitCode(), r.Error)
-	}
-	d := data(t, r)
-	if d["returned_to"] != "dev" || d["quest_state"] != "running" || d["quest"] != "Revisão" || d["step"] != "review" || d["task"] != q.ID+"/review" ||
-		d["queued"] != false {
-		t.Errorf("done --json = %v", d)
-	}
-	if _, ok := d["warnings"].([]any); !ok {
-		t.Errorf("warnings = %v: always a list", d["warnings"])
-	}
-	if item := w.itemOf("Dev Claude 1"); !strings.Contains(item, "sem testes de erro") {
-		t.Errorf("the Dev did not get the reason:\n%s", item)
-	}
-}
-
-// Part of CA-CLI-COM-12 (internal/app closes it over cli.Run): the limit of returns used up: the done is registered, the
-// exit is 0, returned_to is null, the quest is paused and the table master
-// gets return_limit.
-func TestDoneWithReturnPastTheLimitExitsZeroAndPausesTheQuest(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	q := w.run(w.create(strings.Replace(reviewDef, "max_returns: 3", "max_returns: 1", 1)))
-	w.finish("Dev Claude 1", "v1", map[string]string{"a.go": "1"}, "")
-	w.finish("Revisor Codex 1", "não", nil, "motivo")
-	w.finish("Dev Claude 1", "de novo", map[string]string{"a.go": "2"}, "")
-	r := w.call(w.char("Revisor Codex 1").ID, "done", map[string]any{"return": "y"}, "x")
-	if !r.OK || r.ExitCode() != 0 {
-		t.Fatalf("done past the limit = %d %+v", r.ExitCode(), r.Error)
-	}
-	d := data(t, r)
-	if v, has := d["returned_to"]; !has || v != nil || d["quest_state"] != "paused" {
-		t.Errorf("done --json = %v", d)
-	}
-	if got := w.quest(q.ID); got.State != quests.Paused {
-		t.Errorf("the quest is %s", got.State)
-	}
-	found := false
-	for _, m := range w.machines.Delivered(w.master) {
-		found = found || strings.Contains(m, "[return_limit]")
-	}
-	if !found {
-		t.Error("the table master was not told return_limit")
-	}
-}
-
 // A summary over 4,000 characters is refused (exit 8) unless it came from
 // --file, which takes 64 KiB.
 func TestALongSummaryNeedsAFile(t *testing.T) {

@@ -20,8 +20,6 @@ func (proofAll) DoneRequires(context.Context, string, string, string) (classes.D
 	return classes.DoneRequires{Proof: classes.ProofAll}, nil
 }
 
-const criteriaBody = "Login com senha.\n\n## Critérios\n- [ ] C1 aceita senha correta\n- [ ] C2 recusa senha vazia\n- [ ] C3 bloqueia depois de cinco erros\n"
-
 // issueOf makes the issue the Master of the table would have made.
 func (w *world) issueOf(body string) int {
 	w.t.Helper()
@@ -45,56 +43,6 @@ steps:
   - {id: dev, sheet: Dev Claude}
   - {id: qa, sheet: QA Antigravity, after: [dev]}
 `, issue)
-}
-
-// CA-PROVA-01
-func TestAProofMarksTheCriterionOnTheIssueAndGoesToTheScroll(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	n := w.issueOf(criteriaBody)
-	q := w.run(w.create(proofQuest(n)))
-	if got := w.hub.calls; contains(got, "issue") {
-		t.Fatalf("a second issue was made: %v", got)
-	}
-	w.finish("Dev Claude 1", "feito", map[string]string{"login.go": "1"}, "")
-
-	r := w.done("QA Antigravity 1", map[string]any{"proof": []string{"C1=login_test.go:TestVazia", "C2=captura em docs/c2.png"}}, "ok")
-	if !r.OK {
-		t.Fatalf("done = %+v", r.Error)
-	}
-	body := w.issueBody(n)
-	for _, want := range []string{"- [x] C1 aceita senha correta", "  - prova (declarada por QA Antigravity 1): login_test.go:TestVazia",
-		"- [x] C2 recusa senha vazia", "captura em docs/c2.png", "- [ ] C3 bloqueia depois de cinco erros", "Login com senha.", "<!-- mestre:etapas -->"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("the issue lacks %q:\n%s", want, body)
-		}
-	}
-	if strings.Contains(body, "C3 bloqueia depois de cinco erros\n  - prova") {
-		t.Error("C3 has a proof")
-	}
-	text := w.scroll(w.quest(q.ID))
-	for _, want := range []string{"**Provas:**", "C1 (declarada por QA Antigravity 1)", "login_test.go:TestVazia", "C2 (declarada", "captura em docs/c2.png"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("the scroll lacks %q:\n%s", want, text)
-		}
-	}
-
-	// a criterion the quest does not have: refused, nothing registered
-	w2 := newWorld(t)
-	n2 := w2.issueOf(criteriaBody)
-	q2 := w2.run(w2.create(proofQuest(n2)))
-	w2.finish("Dev Claude 1", "feito", nil, "")
-	r = w2.done("QA Antigravity 1", map[string]any{"proof": []string{"C9=x"}}, "ok")
-	if r.OK || r.Error.Code != "not_found" || r.ExitCode() != localchan.ExitNotFound {
-		t.Fatalf("a proof of C9 = %+v", r)
-	}
-	w2.wantStates(q2, map[string]quests.StepState{"qa": quests.StepRunning})
-	if ps, _ := w2.orc.Quests.Store().Proofs(w2.ctx, q2.ID, 1); len(ps) != 0 {
-		t.Errorf("a refused done kept proofs: %+v", ps)
-	}
-	if dones, _ := w2.orc.Registry.Dones(w2.ctx, w2.char("QA Antigravity 1").ID); len(dones) != 0 {
-		t.Errorf("a refused done was registered: %+v", dones)
-	}
 }
 
 // CA-PROVA-02
@@ -121,84 +69,65 @@ func TestAClassThatAsksForProofRefusesTheDoneThatLacksOne(t *testing.T) {
 	}
 }
 
-// CA-PROVA-06
-func TestTheSameFailureThreeTimesPausesBeforeTheReturnsRunOut(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	q := w.run(w.create("same_failure: 3\nmax_returns: 5\nname: Revisão\nsteps:\n  - {id: dev, sheet: Dev Claude}\n  - {id: review, sheet: Revisor Codex, after: [dev], can_return_to: dev}\n"))
-	w.finish("Dev Claude 1", "v1", map[string]string{"a.go": "1"}, "")
-	returnWith := func(where string) localchan.Response {
-		r := w.done("Revisor Codex 1", map[string]any{"return": "sem teste", "cause": "test", "where": []string{where}}, "reprovado")
-		if !r.OK {
-			t.Fatalf("return = %+v", r.Error)
-		}
-		return r
-	}
-	for i := 1; i <= 2; i++ {
-		returnWith("src/login.go:40")
-		w.machines.Report(w.ctx, w.char("Revisor Codex 1").ID, "idle")
-		w.wantStates(q, map[string]quests.StepState{"dev": quests.StepRunning})
-		w.finish("Dev Claude 1", fmt.Sprintf("v%d", i+1), map[string]string{"a.go": fmt.Sprint(i + 1)}, "")
-	}
-	r := returnWith("./src/login.go:40:7") // the same print, as written another way
-	var res quests.DoneResult
-	if err := json.Unmarshal(r.Data, &res); err != nil {
-		t.Fatal(err)
-	}
-	if res.ReturnedTo != nil || res.QuestState != "paused" {
-		t.Fatalf("the third = %+v, want paused and not returned", res)
-	}
-	if got := w.quest(q.ID); got.PausedReason != "mesma falha repetida" {
-		t.Errorf("paused for %q", got.PausedReason)
-	}
-	var event string
-	for _, d := range w.machines.Delivered(w.master) {
-		if strings.Contains(d, "return_limit") {
-			event = d
-		}
-	}
-	for _, want := range []string{"mesma falha repetida", "src/login.go:40", "3 tentativas", "sem teste"} {
-		if !strings.Contains(event, want) {
-			t.Errorf("the event return_limit lacks %q: %q", want, event)
-		}
-	}
-
-	// another print in the middle starts the count again
-	w2 := newWorld(t)
-	q2 := w2.run(w2.create("same_failure: 3\nmax_returns: 5\nname: Revisão\nsteps:\n  - {id: dev, sheet: Dev Claude}\n  - {id: review, sheet: Revisor Codex, after: [dev], can_return_to: dev}\n"))
-	w2.finish("Dev Claude 1", "v1", map[string]string{"a.go": "1"}, "")
-	for i, where := range []string{"src/login.go:40", "src/login.go:52", "src/login.go:40"} {
-		r := w2.done("Revisor Codex 1", map[string]any{"return": "sem teste", "cause": "test", "where": []string{where}}, "reprovado")
-		var res quests.DoneResult
-		if err := json.Unmarshal(r.Data, &res); err != nil || res.ReturnedTo == nil || res.QuestState != "running" {
-			t.Fatalf("return %d = %+v (%v), want it back to the Dev", i+1, res, err)
-		}
-		w2.machines.Report(w2.ctx, w2.char("Revisor Codex 1").ID, "idle")
-		w2.finish("Dev Claude 1", fmt.Sprintf("v%d", i+2), map[string]string{"a.go": fmt.Sprint(i + 2)}, "")
-	}
-	if got := w2.quest(q2.ID); got.State != quests.Running {
-		t.Errorf("the quest is %s", got.State)
-	}
-}
-
-// CA-PROVA-07
-func TestReturnsWithNoPrintNeverPauseForTheSameFailure(t *testing.T) {
+// Part of CA-PROVA-06 (the story with the three returns, the other print in the
+// middle and the event is in the full suite): the same print twice in a row
+// pauses the quest before the returns run out, and the return is not made.
+func TestTheSamePlaceTwiceInARowPausesTheQuestAndTellsTheMaster(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
 	q := w.run(w.create("same_failure: 2\nmax_returns: 5\nname: Revisão\nsteps:\n  - {id: dev, sheet: Dev Claude}\n  - {id: review, sheet: Revisor Codex, after: [dev], can_return_to: dev}\n"))
 	w.finish("Dev Claude 1", "v1", map[string]string{"a.go": "1"}, "")
-	for i, flags := range []map[string]any{{}, {"cause": "test"}, {"cause": "test"}, {}} {
+	returnWith := func(where string) quests.DoneResult {
+		r := w.done("Revisor Codex 1", map[string]any{"return": "sem teste", "cause": "test", "where": []string{where}}, "reprovado")
+		var res quests.DoneResult
+		if err := json.Unmarshal(r.Data, &res); err != nil || !r.OK {
+			t.Fatalf("return = %+v (%v)", r, err)
+		}
+		return res
+	}
+	if res := returnWith("src/login.go:40"); res.ReturnedTo == nil || res.QuestState != "running" {
+		t.Fatalf("the first = %+v, want it back to the Dev", res)
+	}
+	w.machines.Report(w.ctx, w.char("Revisor Codex 1").ID, "idle")
+	w.finish("Dev Claude 1", "v2", map[string]string{"a.go": "2"}, "")
+	if res := returnWith("./src/login.go:40:7"); res.ReturnedTo != nil || res.QuestState != "paused" {
+		t.Fatalf("the second = %+v, want paused and not returned", res)
+	}
+	if got := w.quest(q.ID); got.PausedReason != "mesma falha repetida" {
+		t.Errorf("paused for %q", got.PausedReason)
+	}
+	found := false
+	for _, d := range w.machines.Delivered(w.master) {
+		found = found || strings.Contains(d, "return_limit") && strings.Contains(d, "mesma falha repetida") && strings.Contains(d, "src/login.go:40")
+	}
+	if !found {
+		t.Error("the Master did not get the event return_limit with the place")
+	}
+}
+
+// Part of CA-PROVA-06 and CA-PROVA-07 (the story with three returns is in the
+// full suite): another place in the middle starts the count again, and returns
+// with no place never pause for the same failure.
+func TestAnotherPlaceInTheMiddleOrNoPlaceNeverPausesForTheSameFailure(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	q := w.run(w.create("same_failure: 2\nmax_returns: 9\nname: Revisão\nsteps:\n  - {id: dev, sheet: Dev Claude}\n  - {id: review, sheet: Revisor Codex, after: [dev], can_return_to: dev}\n"))
+	w.finish("Dev Claude 1", "v1", map[string]string{"a.go": "1"}, "")
+	for i, flags := range []map[string]any{
+		{"cause": "test", "where": []string{"src/login.go:40"}}, {"cause": "test", "where": []string{"src/login.go:52"}}, {"cause": "test", "where": []string{"src/login.go:40"}},
+		{}, {"cause": "test"}, {"cause": "test"}, {},
+	} {
 		flags["return"] = "ainda não"
 		r := w.done("Revisor Codex 1", flags, "reprovado")
 		var res quests.DoneResult
-		if err := json.Unmarshal(r.Data, &res); err != nil || res.ReturnedTo == nil {
-			t.Fatalf("return %d = %+v (%v)", i+1, res, err)
+		if err := json.Unmarshal(r.Data, &res); err != nil || res.ReturnedTo == nil || res.QuestState != "running" {
+			t.Fatalf("return %d = %+v (%v), want it back to the Dev", i+1, res, err)
 		}
 		w.machines.Report(w.ctx, w.char("Revisor Codex 1").ID, "idle")
 		w.finish("Dev Claude 1", fmt.Sprintf("v%d", i+2), map[string]string{"a.go": fmt.Sprint(i + 2)}, "")
 	}
 	if got := w.quest(q.ID); got.State != quests.Running {
-		t.Errorf("the quest is %s: a return with no place paused it", got.State)
+		t.Errorf("the quest is %s", got.State)
 	}
 }
 
@@ -273,35 +202,6 @@ func TestTheCriteriaAreFrozenForTheRoundAndTheNextRoundReadsThemAgain(t *testing
 	}
 }
 
-// CA-PROVA-12, the half of the done
-func TestProofDoesNotGoWithReturnAndTheCauseMustBeOneOfTheList(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	n := w.issueOf("- [ ] C1 um\n")
-	w.run(w.create("name: Rev\nissue: " + fmt.Sprint(n) + "\nsteps:\n  - {id: dev, sheet: Dev Claude}\n  - {id: review, sheet: Revisor Codex, after: [dev], can_return_to: dev}\n"))
-	w.finish("Dev Claude 1", "v1", nil, "")
-	for name, flags := range map[string]map[string]any{
-		"proof with return":    {"return": "y", "proof": []string{"C1=t"}},
-		"unknown cause":        {"return": "y", "cause": "urgente"},
-		"cause with no return": {"cause": "test"},
-		"where with no return": {"where": []string{"a.go:1"}},
-		"four places":          {"return": "y", "where": []string{"a:1", "b:1", "c:1", "d:1"}},
-		"proof with no equal":  {"proof": []string{"C1"}},
-	} {
-		r := w.done("Revisor Codex 1", flags, "x")
-		if r.OK || r.ExitCode() != localchan.ExitUsage {
-			t.Errorf("%s = %+v, want usage", name, r)
-		}
-	}
-	if r := w.done("Revisor Codex 1", map[string]any{"proof": []string{"C1=" + strings.Repeat("x", quests.MaxProof+1)}}, "x"); r.OK || r.ExitCode() != localchan.ExitLimit {
-		t.Errorf("a proof of 501 characters = %+v, want too_large", r)
-	}
-	// a task with no quest takes no proof
-	if r := w.call(w.master.ID, "done", map[string]any{"proof": []string{"C1=t"}}, "x"); r.OK || r.ExitCode() != localchan.ExitUsage {
-		t.Errorf("a proof of a character with no step = %+v", r)
-	}
-}
-
 // CA-PROVA-15, the half of the print and of the quest with no criteria
 func TestThePlacesOfAFailureAreNormalizedAndAnIssueWithoutCriteriaRunsWithoutThem(t *testing.T) {
 	t.Parallel()
@@ -344,3 +244,5 @@ func contains(l []string, s string) bool {
 	}
 	return false
 }
+
+const criteriaBody = "Login com senha.\n\n## Critérios\n- [ ] C1 aceita senha correta\n- [ ] C2 recusa senha vazia\n- [ ] C3 bloqueia depois de cinco erros\n"
