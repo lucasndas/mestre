@@ -148,11 +148,14 @@ func (s *Service) handleReply(ctx context.Context, c *localchan.Call) localchan.
 		return localchan.Fail(localchan.CodeUsage, `usage: mestre reply "<text>" [--to-message <id>]`, "")
 	}
 	attach := flagList(c, "attach")
-	res, err := s.Reply(ctx, ReplyRequest{From: x, Text: args[0], Attachments: attach, ToMessage: flagString(c, "to-message")})
+	res, err := s.Reply(ctx, ReplyRequest{From: x, Text: args[0], Attachments: attach, ToMessage: flagString(c, "to-message"), RedactSource: flagBool(c, "redact-source")})
 	if err != nil {
 		return Refusal(err)
 	}
 	text := "resposta enviada pelo canal de origem"
+	if flagBool(c, "redact-source") {
+		text = "a mensagem com o segredo foi apagada; " + text
+	}
 	if res.Delivery == DeliveryQueued {
 		text = "o canal de origem está fora do ar: a resposta ficou guardada e será entregue quando ele voltar"
 	}

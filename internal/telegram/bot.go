@@ -131,6 +131,9 @@ type Options struct {
 	Terms []glossary.Term
 	// Mask takes the secrets out of every message that leaves (the mask of the logs).
 	Mask func(string) string
+	// Machine is the id of this machine, written in the audit of the attempts to
+	// send a secret.
+	Machine string
 	// OnConflict is told of a 409 of getUpdates (another reader of the same bot).
 	OnConflict func(ctx context.Context)
 	// PollTimeout is the long polling timeout (50 s by default).
@@ -371,7 +374,7 @@ func (b *Bot) PollOnce(ctx context.Context) error {
 }
 
 // redacted is the update as it is kept: the text of a user the bot waits an
-// answer from (a PIN) is not kept.
+// answer from (a PIN) and the text that carries a secret are not kept.
 func (b *Bot) redacted(ctx context.Context, up Update, raw []byte) []byte {
 	m := up.Message
 	if m == nil || m.From == nil || (m.Text == "" && m.Caption == "") {
@@ -382,7 +385,11 @@ func (b *Bot) redacted(ctx context.Context, up Update, raw []byte) []byte {
 		return raw
 	}
 	if _, open, err := b.st.Capturing(ctx, u.ID); err != nil || !open {
-		return raw
+		// a message with a secret is not kept either: the queue of updates would
+		// hold it until it is processed
+		if k, _ := b.screen(m.Text + "\n" + m.Caption); k == secretNone {
+			return raw
+		}
 	}
 	cp := *m
 	cp.Text, cp.Caption = "", ""
@@ -485,6 +492,16 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 	in := Inbound{User: u, Kind: m.Kind(), Text: text, ChatID: m.Chat.ID, MessageID: m.MessageID, File: m.FileOf()}
 	if in.Text == "" {
 		in.Text = strings.TrimSpace(m.Caption)
+	}
+	// A secret is taken out before anything keeps or delivers the text: the
+	// message is deleted from the chat, and the Grand Master gets only what is left.
+	switch kind, clean := b.screen(in.Text); kind {
+	case secretPassphrase:
+		b.blocked(ctx, u, m, kind)
+		in.Text, in.File, in.Kind = HeldNotice, nil, KindText
+	case secretFormat:
+		b.blocked(ctx, u, m, kind)
+		in.Text, in.File = clean, nil
 	}
 	if m.ReplyTo != nil {
 		in.ReplyToMessage = m.ReplyTo.MessageID

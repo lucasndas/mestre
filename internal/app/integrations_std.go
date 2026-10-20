@@ -117,6 +117,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 		return nil, fmt.Errorf("app: the decrees: %w", err)
 	}
 	r.routing = &telegram.Routing{}
+	r.replies = &telegram.Replies{}
 	r.block = &telegram.BlockChannel{Users: svc}
 	r.choose = &telegram.ChooseChannel{Users: svc}
 	r.stall = &telegram.StallChannel{Users: svc}
@@ -154,6 +155,8 @@ type stdRun struct {
 	decrees *decrees.Service
 	// routing decides the workspace of each message of a user.
 	routing *telegram.Routing
+	// replies takes the answers of the Grand Master back to the chat of the user.
+	replies *telegram.Replies
 	// block sends the messages that ask something of the users because a table is stopped.
 	block *telegram.BlockChannel
 	// choose asks a user a question with buttons (`mestre choose`).
@@ -297,7 +300,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	bot, err := telegram.New(telegram.Options{
 		DB: r.env.DB, Clock: r.env.Clock, Users: r.users, Alerts: r.alert, Strangers: r.alert, Gate: lateGate{r}, Logger: r.env.Log,
 		Client: client,
-		Router: r.routing, Commands: append(append(r.lc.Commands(), r.dc.Commands()...), r.routing.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask,
+		Router: r.routing, Commands: append(append(r.lc.Commands(), r.dc.Commands()...), r.routing.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask, Machine: r.env.Machine,
 		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.dg.Actions(), r.routing.Actions(), r.block.Actions(), r.choose.Actions(), r.stall.Actions()),
 		Captures: mergeCaptures(r.ac.Captures(), map[string]telegram.CaptureFunc{telegram.PINKind: r.pins.Capture()}),
 		OnConflict: func(context.Context) {
@@ -314,6 +317,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	r.dc.Bind(bot)
 	r.dg.Bind(bot)
 	r.routing.Bind(bot)
+	r.replies.Bind(bot)
 	r.block.Bind(bot)
 	r.choose.Bind(bot)
 	r.stall.Bind(bot)
@@ -356,6 +360,9 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		}
 	}
 	o.ChainUsers = r.flow
+	if o.Channels == nil {
+		o.Channels = r.replies // the answer of `mestre reply` goes back to the chat of the user
+	}
 	if o.ChainStallPeople == nil {
 		o.ChainStallPeople = r.stall
 	}

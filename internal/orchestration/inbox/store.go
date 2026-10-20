@@ -236,6 +236,21 @@ func (s *Store) exec(ctx context.Context, q string, args ...any) (int64, error) 
 	return n, err
 }
 
+// Delete removes an item from the inbox, as if it had never been queued (a
+// message that carried a secret). Its answers stay: they hold only what the
+// Grand Master wrote.
+func (s *Store) Delete(ctx context.Context, id string) error {
+	seq, ok := seqOf(id)
+	if !ok {
+		return fmt.Errorf("%w: %q", ErrNoItem, id)
+	}
+	n, err := s.exec(ctx, `DELETE FROM inbox_messages WHERE seq = ?`, seq)
+	if err == nil && n == 0 {
+		err = ErrNoItem
+	}
+	return err
+}
+
 // MarkTyping says the item is being typed: it is not the next any more.
 func (s *Store) MarkTyping(ctx context.Context, id string, at time.Time) (bool, error) {
 	seq, ok := seqOf(id)
