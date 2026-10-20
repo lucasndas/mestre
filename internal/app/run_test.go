@@ -24,6 +24,7 @@ func TestRunReturnsTheErrorOfAPeriodInsteadOfWaitingForItsOwnContext(t *testing.
 	cfg := app.Config{Instance: "a", Name: "a", Hostname: "a", Bind: "a", EnginePort: 7443, NoDiscovery: true, Synchronous: "OFF"}
 	paths := app.DirPaths(dir)
 	paths.CLISocket = ""
+	seedGuild(t, paths)
 	_, rk, err := app.Found(t.Context(), cfg, paths, clk)
 	if err != nil {
 		t.Fatal(err)

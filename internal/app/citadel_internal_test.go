@@ -101,6 +101,7 @@ func TestACitadelWithAClosedVaultSendsNoCopyOfItsKeyToTheTowers(t *testing.T) {
 	clk := clock.Real{}
 	cfg := Config{Instance: "a", Name: "a", Hostname: "a", EnginePort: 7443, NoDiscovery: true, Synchronous: "OFF"}
 	paths := DirPaths(t.TempDir())
+	seedGuild(t, paths)
 	_, rk, err := Found(ctx, cfg, paths, clk)
 	if err != nil {
 		t.Fatal(err)
@@ -174,6 +175,7 @@ func TestAPromotionWhoseVaultDoesNotServeIsRefusedBeforeTheEpochIsClaimed(t *tes
 			clk := clock.Real{}
 			cfg := Config{Instance: "a", Name: "a", Hostname: "a", EnginePort: 7443, NoDiscovery: true, Synchronous: "OFF"}
 			paths := DirPaths(t.TempDir())
+			seedGuild(t, paths)
 			founded, rk, err := Found(ctx, cfg, paths, clk) // the folders of a Tower hold the same files
 			if err != nil {
 				t.Fatal(err)
@@ -233,6 +235,7 @@ func TestATowerIsPromotableOnlyWithAVaultThatServes(t *testing.T) {
 	clk := clock.Real{}
 	cfg := Config{Instance: "a", Name: "a", Hostname: "a", EnginePort: 7443, NoDiscovery: true, Synchronous: "OFF"}
 	paths := DirPaths(t.TempDir())
+	seedGuild(t, paths)
 	founded, rk, err := Found(ctx, cfg, paths, clk) // a replica holds the same rows
 	if err != nil {
 		t.Fatal(err)
