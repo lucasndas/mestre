@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -23,7 +24,7 @@ func claudeEnv(t *testing.T) env {
 	e := newEnv(t, "CLAUDE_CONFIG_DIR="+cfgDir)
 	testkit.WriteFiles(t, cfgDir, map[string]string{
 		".credentials.json": "{}",
-		".claude.json":      fmt.Sprintf(`{"projects": {%q: {"hasTrustDialogAccepted": true}}}`, e.dir),
+		".claude.json":      fmt.Sprintf(`{"projects": {%q: {"hasTrustDialogAccepted": true}}}`, filepath.ToSlash(e.dir)),
 	})
 	return e
 }

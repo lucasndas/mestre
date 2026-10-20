@@ -27,6 +27,24 @@ const (
 // The pieces the supervision drives belong to other subjects; each is a
 // small interface here, implemented by its owner.
 
+// SendRetrier is an adapter whose CLI may keep a delivery in its input area
+// without sending it: Codex 0.163.0 on Windows, the first message typed
+// while it still starts (docs/provedores/codex.md#digitação). InputHolds
+// tells whether the input area of screen still holds text; the supervisor
+// then types SendKey once more, never the text.
+type SendRetrier interface {
+	InputHolds(screen, text string) bool
+	SendKey() []byte
+}
+
+// DefaultSendRetry is how long after a delivery, and after each look, the
+// supervisor looks for it still in the input area of a SendRetrier; it
+// looks SendRetries times, all before the confirmation timeout.
+const (
+	DefaultSendRetry = 2 * time.Second
+	SendRetries      = 4
+)
+
 // Keyboard types into the character's terminal (terminal.Terminal.Input).
 type Keyboard interface {
 	Input(ctx context.Context, data []byte) error
@@ -464,7 +482,35 @@ func (s *Supervisor) Deliver(ctx context.Context, id, text string) error {
 		s.mu.Unlock()
 		return fmt.Errorf("type delivery %s: %w", id, err)
 	}
+	if r, ok := s.cfg.Adapter.(SendRetrier); ok {
+		s.cfg.Clock.AfterFunc(DefaultSendRetry, func() { s.resend(id, text, r, 1) })
+	}
 	return nil
+}
+
+// resend types the send key once more when the delivery is still waiting for
+// its turn_start and the screen is the input area with the text still in
+// it: no known screen (a dialog would take the key as its answer). A key sent
+// empties the input area, so the next look types nothing.
+func (s *Supervisor) resend(id, text string, r SendRetrier, look int) {
+	s.mu.Lock()
+	_, waiting := s.pending[id]
+	screen := s.lastScreen
+	res := s.cfg.Adapter.Screens(ScreenInput{
+		Text: screen, Stable: true, SessionStarted: s.sessionStarted, Begun: s.begun || s.sessionStarted, ReadyPattern: s.cfg.ReadyPattern,
+	})
+	s.mu.Unlock()
+	if !waiting {
+		return
+	}
+	if res.Known == nil && res.State == StateReady && r.InputHolds(screen, text) {
+		if err := s.cfg.Keyboard.Input(s.ctx, r.SendKey()); err != nil {
+			s.report(fmt.Errorf("send key again for delivery %s: %w", id, err))
+		}
+	}
+	if look < SendRetries {
+		s.cfg.Clock.AfterFunc(DefaultSendRetry, func() { s.resend(id, text, r, look+1) })
+	}
 }
 
 func (s *Supervisor) unconfirmed(id string) {

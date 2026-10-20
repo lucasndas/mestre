@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -83,7 +84,7 @@ func (h ShellHooks) Run(ctx context.Context, spec HookSpec) (HookResult, error) 
 	defer cancel()
 	c := shellCommand(rctx, spec.Run)
 	c.Dir = spec.Dir
-	env := spec.Env
+	env := agentEnv(runtime.GOOS, spec.Env, spec.Dir)
 	if env == nil {
 		env = os.Environ()
 	}

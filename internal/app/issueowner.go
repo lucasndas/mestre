@@ -7,6 +7,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/orchestration/quests"
+	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -32,8 +33,20 @@ func (o issueOwner) Owns(ctx context.Context, workspace, table string, issue int
 		return false, err
 	}
 	obj, found, err := (&github.Objects{DB: o.db, Clock: o.clk}).Get(ctx, repo, github.KindIssue, issue)
-	if err != nil || !found {
+	if err != nil {
 		return false, err
 	}
-	return obj.Kind == github.KindIssue && obj.Table == workspace+"/"+table, nil
+	if found {
+		return obj.Kind == github.KindIssue && obj.Table == workspace+"/"+table, nil
+	}
+	// The epic itself is the table's, though the engine never registered it
+	// (it is the root of the tree the guard walks).
+	t, err := tables.Store{DB: o.db}.Get(ctx, workspace, table)
+	if errors.Is(err, tables.ErrNoTable) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return issue != 0 && t.Epic == issue, nil
 }

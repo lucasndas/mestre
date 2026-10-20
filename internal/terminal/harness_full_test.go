@@ -336,7 +336,7 @@ func (h *harness) agentSpec(id string) terminal.CreateSpec {
 		"work-" + id + "/.git/HEAD":        "ref: refs/heads/main\n",
 		"cfg-" + id + "/.credentials.json": "{}",
 		"cfg-" + id + "/.claude.json": fmt.Sprintf(`{"numStartups": 3, "projects": {%q: {"hasTrustDialogAccepted": true}}}`,
-			work),
+			filepath.ToSlash(work)),
 	})
 	return terminal.CreateSpec{
 		ID: id, CharacterID: "c-" + id, Dir: work,
