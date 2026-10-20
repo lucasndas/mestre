@@ -77,3 +77,40 @@ func TestCheckSaysCodexRunsWithoutTheNativeWriteBarrier(t *testing.T) {
 		}
 	}
 }
+
+// CA-NATIVO-13
+//
+// `class check` translates the controls with the plans B of the machine, as
+// a character of it starts: on Windows, with the plans B that keep the
+// provider network on, Codex and Antigravity run a class without internet
+// with no native network barrier, and the check says so.
+func TestCheckUsesThePlansBOfTheMachine(t *testing.T) {
+	t.Parallel()
+	const offline = "version: 1\nnetwork: {internet: false}\n"
+	for _, tt := range []struct {
+		name string
+		fb   providers.NativeFallbacks
+		gap  []providers.ID
+	}{
+		{"default", providers.NativeFallbacks{}, nil},
+		{"codex offline network", providers.NativeFallbacks{CodexOfflineNetwork: true}, []providers.ID{providers.Codex}},
+		{"antigravity no sandbox", providers.NativeFallbacks{AntigravityNoSandbox: true}, []providers.ID{providers.Antigravity}},
+	} {
+		f := newFixture(t)
+		f.lib.OS, f.lib.Fallbacks = "windows", tt.fb
+		rep, err := f.lib.CheckFiles(context.Background(), pkg(t, "qa", "novo", offline, nil),
+			classes.ClassKey{Scope: classes.ClassWorkspace, Name: "qa"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []providers.ID
+		for _, p := range rep.Providers {
+			if slices.ContainsFunc(p.DispatcherOnly, func(l string) bool { return strings.HasPrefix(l, "internet: sem reforço nativo de rede") }) {
+				got = append(got, p.Provider)
+			}
+		}
+		if !slices.Equal(got, tt.gap) {
+			t.Errorf("%s: providers without the native network barrier = %v, want %v", tt.name, got, tt.gap)
+		}
+	}
+}

@@ -117,12 +117,12 @@ Os itens de M3 e M4 que só o Windows real responde rodam num único script, `to
 | # | O que o script faz | Fica manual |
 |---|---|---|
 | 1 | `go test` das linhas reais; a linha do Codex no PowerShell 5.1 e no 7 e a do Claude no Git Bash chamando um `mestre.exe` que sai com 2; etapas 4 a 6 da conformidade do Claude e do Codex | nada |
-| 2 | etapa 5 da conformidade do Codex (`mestre debug` identificado) e uma sonda: `codex exec` com `network_access=false` roda `curl --unix-socket` num servidor do script, que lê PID, dono e cadeia de pais do outro lado | a chave `windows.sandbox=elevated` pode mudar com a versão do Codex; sem ela, o Codex pode cair no sandbox sem elevação |
+| 2 | etapa 5 da conformidade do Codex (`mestre debug` identificado) e uma sonda: `codex exec` com `network_access=false` roda `curl --unix-socket` num servidor do script, que lê PID, dono e cadeia de pais do outro lado, com o socket fora das pastas graváveis (como o `cli.sock`) e dentro do workdir (separa a ACL do bloqueio de rede) | a chave `windows.sandbox=elevated` pode mudar com a versão do Codex; sem ela, o Codex pode cair no sandbox sem elevação |
 | 3 | nomes das ferramentas de shell vistos nas etapas 5 e 6 (Claude, Codex, `agy`) contra o mapa | nada |
-| 4 | credencial `gemini:antigravity` (só o nome), `agy -p /usage`, `agy --sandbox` rodando `git --version`, o login depois, etapas 1, 4 a 6 do `agy` | nada |
+| 4 | credencial `gemini:antigravity` (só o nome), `agy -p /usage`, `agy --sandbox` rodando `git --version` (o `-p` nega a permissão `command`, que não pode perguntar: uma regra `allow` só desse comando vale durante a sonda), o login depois, etapas 1, 4 a 6 do `agy` | nada |
 | 5 | etapa 12 de cada provedor (hook dentro do subagente nativo) | nada |
 | 6 | as 12 etapas nos três provedores, com `tools/conformance` | nada |
-| 7 | telas de permissão que a conformidade encontrou; Bloco de Notas para colar a tela de permissão do Claude (janela de terminal já aberta) e o menu de limite de uso | o menu de limite só aparece no limite real: se aparecer, cole o texto; senão, deixe vazio |
+| 7 | telas de permissão que a conformidade encontrou; Bloco de Notas (ou o console, no Sandbox do Windows 11, que não o tem) para colar a tela de permissão do Claude (janela de terminal já aberta) e o menu de limite de uso | o menu de limite só aparece no limite real: se aparecer, cole o texto; senão, deixe vazio |
 | 8 | 33 casos (aspas e espaços tipográficos, travessões, `.`, parêntese, `Start-Process -ArgumentList`, CR solto, `New-ScheduledTaskAction`, `sc.exe`, `schtasks`) em `powershell.exe` e `pwsh.exe`, com um `git` de mentira que registra o que recebeu | nada |
 | 9 | ACL de `maquina\agentes\<id>\` numa conta local de teste, a SID da conta, `go test ./internal/winsvc` e `tools/realaccount` (setgid não existe no Windows) | nada |
 
