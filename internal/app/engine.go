@@ -26,6 +26,7 @@ import (
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/store"
@@ -225,6 +226,10 @@ type Engine struct {
 	rt       *machineRuntime
 	orc      atomic.Pointer[Orchestration] // the orchestration of the period that acts
 	sheets   atomic.Pointer[machinesheet.Registry]
+	mach     atomic.Pointer[machineRouter]   // the machines of the orchestration of the period
+	srvp     atomic.Pointer[protocol.Server] // the protocol server of the period of the Citadel
+	sent     replies                         // the ends of the table.done the Citadel waits for
+	tabs     atomic.Pointer[tables.Service]  // the tables of the period of the Citadel, for the bundles of the Towers
 	member   *guild.Member
 	id       guild.Identity
 	epochs   *guild.Epochs

@@ -419,5 +419,6 @@ func Requirements(b Base, s Sheet, class *classes.Class) (machinesheet.Requireme
 	if s.Agent == AgentShell || !slices.Contains(Agents(), s.Agent) {
 		return sum, nil
 	}
+	sum.CLI = sum.CLI || s.HasSkills()
 	return sum.WithAgent(s.Agent, s.Account)
 }

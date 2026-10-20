@@ -46,6 +46,10 @@ type Profile struct {
 	Version    string `json:"version,omitempty"`
 	LoggedIn   bool   `json:"logged_in"`
 	Conformant bool   `json:"conformant"`
+	// CLIUnreachable: the conformance of this version found that the `mestre`
+	// CLI, called by the shell tool of the provider, does not reach the
+	// engine; a character that calls the CLI is not recruited on this profile.
+	CLIUnreachable bool `json:"cli_unreachable,omitempty"`
 	// Default marks the profile that a character sheet without `account`
 	// uses.
 	Default bool `json:"default,omitempty"`
