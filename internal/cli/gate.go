@@ -92,6 +92,9 @@ var lockedRefuses = map[string]bool{
 	"class create": true, "class edit": true, "class assign": true,
 	"issue create": true, "issue update": true, "issue comment": true, "issue list": true,
 	"pr status": true, "pr comment": true, "pr reply": true, "pr note": true,
+	// the subdelegation gives the Mestre of a table the power to decide, and no
+	// approval is applied while the Mestre is locked (docs/aprovacoes/fluxo.md)
+	"approval delegate": true,
 }
 
 // LockedResponse is the answer of a command the lock refuses.
