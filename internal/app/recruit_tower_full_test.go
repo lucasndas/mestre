@@ -29,7 +29,7 @@ import (
 type builderIntegration struct{ resumed *resumeLog }
 
 func (b builderIntegration) Open(context.Context, IntegrationEnv) (IntegrationRun, error) {
-	return builderRun{b.resumed}, nil
+	return builderRun(b), nil
 }
 
 // resumeLog keeps the session each character was built to resume (empty: a new one).

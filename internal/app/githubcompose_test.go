@@ -46,6 +46,12 @@ func newGHCompose(t *testing.T) *ghCompose { return newGHComposeWith(t, false) }
 
 // newGHComposeWith can put the chain of approval in the orchestration.
 func newGHComposeWith(t *testing.T, withChain bool) *ghCompose {
+	return newGHComposeCfg(t, withChain, false)
+}
+
+// newGHComposeCfg is newGHComposeWith that can leave the people and the channel of the
+// inbox to the integration, as `mestre run` does (no double of them).
+func newGHComposeCfg(t *testing.T, withChain, integrationPeople bool) *ghCompose {
 	t.Helper()
 	i := newInteg(t, false)
 	double, err := fakegithub.New(i.clk, t)
@@ -100,6 +106,9 @@ func newGHComposeWith(t *testing.T, withChain bool) *ghCompose {
 		Git: c.remote, Machines: machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: c.rdir},
 		Epics: orcfakes.Epics{}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
 		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}}
+	if integrationPeople {
+		o.Users = nil
+	}
 	if withChain {
 		o.ChainClasses = stubClasses{}
 	}

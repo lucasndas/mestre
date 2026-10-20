@@ -397,6 +397,14 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 	if o.Messages == nil {
 		o.Messages = inboxMessages{&inbox.Store{DB: r.env.DB}}
 	}
+	// the people and the channel of the inbox: the notices "Sistema" that find no
+	// Grand Master and the answers of `mestre reply` go out by the bot
+	if o.Users == nil {
+		o.Users = inboxUsers{r}
+	}
+	if o.Channels == nil {
+		o.Channels = inboxChannel{r}
+	}
 	if o.ChainSinks == nil {
 		o.ChainSinks = map[classes.RequestType]chain.Sink{}
 	}
@@ -568,6 +576,11 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 			<-ctx.Done()
 			return nil
 		}
+		go func() { // the answers kept while the bot was not up
+			if _, err := orc.Inbox.ChannelUp(ctx, inbox.ChannelTelegram); err != nil && ctx.Err() == nil {
+				r.env.Log.Warn("app: the answers kept for the Telegram were not sent", "err", err)
+			}
+		}()
 		return bot.Run(ctx)
 	}}
 }

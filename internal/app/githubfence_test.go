@@ -14,6 +14,7 @@ import (
 	"github.com/lucasndas/mestre/internal/testkit/fakelock"
 	"github.com/lucasndas/mestre/internal/users"
 	"github.com/lucasndas/mestre/internal/vault"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // fencedGitHub is the standard integration over the double of GitHub with the
@@ -68,13 +69,15 @@ func newFencedGitHub(t *testing.T, hold bool) *fencedGitHub {
 // state waits for the fence to report s (the states that come before are skipped).
 func (f *fencedGitHub) state(s guild.FenceState) {
 	f.t.Helper()
+	deadline := clock.Real{}.NewTimer(30 * time.Second)
+	defer deadline.Stop()
 	for {
 		select {
 		case got := <-f.states:
 			if got == s {
 				return
 			}
-		case <-time.After(30 * time.Second):
+		case <-deadline.C():
 			f.t.Fatalf("the fence did not report %s", s)
 		}
 	}
@@ -93,10 +96,13 @@ func (f *fencedGitHub) comment(id, text string) localchan.Response {
 // goroutines of the fence and of the double of GitHub, with no timer of the fake clock.
 func (f *fencedGitHub) until(what string, cond func() bool) {
 	f.t.Helper()
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := clock.Real{}.NewTimer(30 * time.Second)
+	defer deadline.Stop()
 	for !cond() {
-		if time.Now().After(deadline) {
+		select {
+		case <-deadline.C():
 			f.t.Fatalf("timed out waiting for %s", what)
+		default:
 		}
 		runtime.Gosched()
 	}
