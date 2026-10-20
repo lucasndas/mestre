@@ -58,7 +58,7 @@ Cada mudança recebe uma chave única, guardada na tabela `github_seen_events` (
 | revisão | `revisao:<id>:<state>` |
 | PR mesclado ou fechado | `merge:<id>:<merged_at>` e `fechado:<id>:<closed_at>` (uma mudança posterior no PR já mesclado não repete o evento) |
 | check run | `check:<id>:<status>:<conclusion>` |
-| status combinado | `status:<sha>:<state>:<quantos statuses>` |
+| status combinado | `status:<sha>:<state>` |
 
 - Chave já vista é ignorada. Isso cobre páginas lidas de novo, reinícios e o mesmo fato visto por dois endpoints.
 - **Eco:** o que o próprio motor criou ou alterou (registrado em `github_objects` com o `updated_at` devolvido pela API, ver [ações por nível](acoes-por-nivel.md)) não vira evento. Item com o [marcador de operação](acoes-por-nivel.md#marcador-de-operação) da própria Guilda também nunca vira evento externo, mesmo que não esteja em `github_objects` (ex.: criado pela Cidadela antiga logo antes de uma troca); o motor o importa em `github_objects`.

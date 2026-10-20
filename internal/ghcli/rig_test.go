@@ -249,7 +249,6 @@ type rig struct {
 	h       *ghcli.Handlers
 	db      *store.DB
 	chars   chars
-	quota   *github.Quota
 }
 
 // newRig has a table 42-login (its epic is the issue #1) with its Mestre da mesa "tm", a QA
@@ -316,7 +315,7 @@ func newRig(t *testing.T) *rig {
 		}
 		return cli.Profile{Role: cli.RoleCharacter}
 	})
-	rg := &rig{t: t, ctx: ctx, gh: gh, objs: objs, prs: pr, lease: ls, clk: clk, onFiles: onFiles, git: git, mirror: mirror, remote: remoteDir, auth: auth, wf: wf, criteria: crit, branch: branch, h: h, db: db, chars: cs, quota: quota, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
+	rg := &rig{t: t, ctx: ctx, gh: gh, objs: objs, prs: pr, lease: ls, clk: clk, onFiles: onFiles, git: git, mirror: mirror, remote: remoteDir, auth: auth, wf: wf, criteria: crit, branch: branch, h: h, db: db, chars: cs, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
 	h.Locked = func(context.Context) bool { return rg.locked.Load() }
 	return rg
 }

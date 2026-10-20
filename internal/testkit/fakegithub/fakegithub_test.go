@@ -101,12 +101,12 @@ func TestUnknownRouteFailsTheTestAsNotImplemented(t *testing.T) {
 	rep := &recorder{}
 	_, _, do := setup(t, rep)
 
-	resp := do("GET", "/repos/octo/repo/branches", "", "")
+	resp := do("GET", "/repos/octo/repo/pulls", "", "")
 
 	if resp.StatusCode != http.StatusNotImplemented {
 		t.Fatalf("status = %d, want 501 (never an empty success)", resp.StatusCode)
 	}
-	if len(rep.msgs) != 1 || rep.msgs[0] != "not implemented in double: GET /repos/octo/repo/branches" {
+	if len(rep.msgs) != 1 || rep.msgs[0] != "not implemented in double: GET /repos/octo/repo/pulls" {
 		t.Fatalf("test failures = %q", rep.msgs)
 	}
 }
@@ -118,7 +118,7 @@ func TestUnknownRouteParameterOrFieldFailsEvenWithoutCredentials(t *testing.T) {
 	cases := []struct {
 		name, method, path, body, token, want string
 	}{
-		{"unauthenticated unknown route", "GET", "/repos/octo/repo/branches", "", "", "GET /repos/octo/repo/branches"},
+		{"unauthenticated unknown route", "GET", "/repos/octo/repo/pulls", "", "", "GET /repos/octo/repo/pulls"},
 		{"bad token unknown route", "GET", "/rate_limit", "", "wrong", "GET /rate_limit"},
 		{"unauthenticated unknown method", "DELETE", "/repos/octo/repo/issues", "", "", "DELETE /repos/octo/repo/issues"},
 		{"unknown method on an issue", "POST", "/repos/octo/repo/issues/1", "{}", "inst-token", "POST /repos/octo/repo/issues/1"},

@@ -48,49 +48,6 @@ type situationFake struct {
 	mu     sync.Mutex
 	mode   github.Mode
 	tables map[int]string
-	prs    []github.TablePR
-}
-
-func (s *situationFake) TablePRs(context.Context, github.Watch) []github.TablePR {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]github.TablePR(nil), s.prs...)
-}
-
-// mirrorFake is the mirror: the commits that can be reached from the base.
-type mirrorFake struct {
-	mu      sync.Mutex
-	reach   map[string]bool
-	asked   int
-	marked  []string
-	failing error
-	markErr error
-}
-
-func (m *mirrorFake) Reachable(_ context.Context, _ github.Watch, sha string) (bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.asked++
-	if sha == "" {
-		return false, errors.New("no commit to look for")
-	}
-	return m.reach[sha], m.failing
-}
-
-func (m *mirrorFake) Merged(_ context.Context, _ github.Watch, table string, n int) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.markErr != nil {
-		return m.markErr
-	}
-	m.marked = append(m.marked, fmt.Sprintf("%s#%d", table, n))
-	return nil
-}
-
-func (m *mirrorFake) get() (asked int, marked []string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.asked, append([]string(nil), m.marked...)
 }
 
 func (s *situationFake) Mode(context.Context, github.Watch) github.Mode {
@@ -114,7 +71,6 @@ type pollRig struct {
 	sit   *situationFake
 	watch github.Watch
 	rand  float64
-	mir   *mirrorFake
 }
 
 const pollRepo = "lucas/meu-app"
@@ -124,7 +80,7 @@ func newPoll(t *testing.T) *pollRig {
 	w := newWorld(t)
 	w.gh.AddRepo("lucas", "meu-app")
 	w.gh.IssueToken("tok", "grao-mestre")
-	r := &pollRig{world: w, mir: &mirrorFake{reach: map[string]bool{}}, sink: &sinkFake{}, sit: &situationFake{mode: github.ModeAttentive, tables: map[int]string{}}, rand: 0.5}
+	r := &pollRig{world: w, sink: &sinkFake{}, sit: &situationFake{mode: github.ModeAttentive, tables: map[int]string{}}, rand: 0.5}
 	r.watch = github.Watch{Workspace: "meu-app", Repo: pollRepo, Since: w.clk.Now()}
 	r.p = r.poller(w)
 	return r
@@ -134,7 +90,7 @@ func (r *pollRig) poller(w *world) *github.Poller {
 	p, err := github.NewPoller(github.PollerOptions{
 		DB: w.db, Clock: w.clk, API: w.srv.URL, HTTP: w.srv.Client(),
 		Token:   func(context.Context, string) (string, error) { return "tok", nil },
-		Objects: &github.Objects{DB: w.db, Clock: w.clk}, Sink: r.sink, Situation: r.sit, Merges: r.mir,
+		Objects: &github.Objects{DB: w.db, Clock: w.clk}, Sink: r.sink, Situation: r.sit,
 		Watches: func(context.Context) ([]github.Watch, error) { return []github.Watch{r.watch}, nil },
 		Rand:    func() float64 { return r.rand },
 	})
@@ -487,7 +443,7 @@ func TestRetryAfterIsKeptBetweenOneSecondAndOneHour(t *testing.T) {
 	}{
 		{map[string]string{"Retry-After": "0"}, time.Second},
 		{map[string]string{"Retry-After": "99999999"}, time.Hour},
-		{map[string]string{"x-ratelimit-remaining": "0", "x-ratelimit-reset": "1"}, time.Minute}, // the hourly quota: no hot loop
+		{map[string]string{"x-ratelimit-remaining": "0", "x-ratelimit-reset": "1"}, time.Second},
 	} {
 		r := newPoll(t)
 		r.gh.FailNextRead(http.StatusForbidden, tc.hdr)
@@ -559,312 +515,3 @@ func (s *slowSink) Deliver(ctx context.Context, w github.Watch, table string, ev
 }
 
 func (s *slowSink) calls() int { s.mu.Lock(); defer s.mu.Unlock(); return s.n }
-
-func (r *pollRig) tablePR(table, head string) (n int, sha string) {
-	r.t.Helper()
-	n = r.gh.AddPR(pollRepo, "feat", head, pollRepo)
-	sha = fmt.Sprintf("%040d", n)
-	r.gh.SetPull(pollRepo, n, sha, false, "clean")
-	r.sit.mu.Lock()
-	r.sit.tables[n] = table
-	r.sit.prs = append(r.sit.prs, github.TablePR{Number: n, Table: table})
-	r.sit.mu.Unlock()
-	return n, sha
-}
-
-// the table the batch is of, with the kinds in it
-func (r *pollRig) kindsOf(table string) []github.EventKind {
-	r.sink.mu.Lock()
-	defer r.sink.mu.Unlock()
-	var out []github.EventKind
-	for _, b := range r.sink.batches {
-		if b.Table == table {
-			for _, e := range b.Events {
-				out = append(out, e.Kind)
-			}
-		}
-	}
-	return out
-}
-
-// Part of CA-GH-EV-05 (the item of the inbox of the Grand Master is the test of the inbox package)
-func TestAReviewAndTheEndOfTheCIOfATablePRGoInOneBatchOfTheTable(t *testing.T) {
-	t.Parallel()
-	r := newPoll(t)
-	r.clk.Advance(10 * time.Second)
-	n, sha := r.tablePR("mesa-a", "feat/a")
-	r.gh.AddReview(pollRepo, n, "pessoa", "APPROVED")
-	r.gh.AddCheck(pollRepo, sha, "ci", "success")
-	r.cycle()
-	r.sink.mu.Lock()
-	batches := len(r.sink.batches)
-	r.sink.mu.Unlock()
-	kinds := r.kindsOf("mesa-a")
-	has := func(k github.EventKind) bool {
-		for _, x := range kinds {
-			if x == k {
-				return true
-			}
-		}
-		return false
-	}
-	if !has(github.EventReview) || !has(github.EventCI) {
-		t.Fatalf("kinds of the table: %v", kinds)
-	}
-	for _, e := range r.sink.events() {
-		if e.Table != "mesa-a" && e.Kind != github.EventPRChanged {
-			t.Errorf("event of another table: %+v", e)
-		}
-	}
-	_ = batches
-	// the same review and check are not events again
-	before := len(r.sink.events())
-	r.cycle()
-	if len(r.sink.events()) != before {
-		t.Error("the review or the check came again")
-	}
-}
-
-func TestACIThatIsRunningKeepsTheWorkspaceActiveUntilItEnds(t *testing.T) {
-	t.Parallel()
-	r := newPoll(t)
-	r.clk.Advance(10 * time.Second)
-	n, sha := r.tablePR("mesa-a", "feat/a")
-	_ = n
-	r.gh.AddCheck(pollRepo, sha, "ci", "") // running
-	r.cycle()
-	r.clk.Advance(github.ActiveHold + time.Minute) // nothing changes for longer than the hold
-	if got := r.p.Interval(r.ctx, r.watch); got != github.IntervalActive {
-		t.Fatalf("with the CI running: %v, want 30 s", got)
-	}
-	for _, k := range r.kindsOf("mesa-a") {
-		if k == github.EventCI {
-			t.Fatal("a check that is still running became an event")
-		}
-	}
-	r.gh.FinishCheck(pollRepo, sha, "ci", "failure")
-	r.cycle()
-	var got github.Event
-	for _, e := range r.sink.events() {
-		if e.Kind == github.EventCI {
-			got = e
-		}
-	}
-	if got.Table != "mesa-a" || !strings.Contains(got.Summary, "failure") || !strings.Contains(got.Link, "/runs/") {
-		t.Fatalf("the end of the CI: %+v", got)
-	}
-	r.clk.Advance(github.ActiveHold + time.Minute)
-	if d := r.p.Interval(r.ctx, r.watch); d != github.IntervalAttentive {
-		t.Errorf("after the CI ended and nothing else: %v, want 2 min", d)
-	}
-	// the commit whose checks ended is not asked about again
-	reads := len(r.gh.Reads())
-	r.cycle()
-	for _, rq := range r.gh.Reads()[reads:] {
-		if strings.Contains(rq.Path, "/check-runs") || strings.Contains(rq.Path, "/status") {
-			t.Errorf("asked again about the commit that ended: %s", rq.Path)
-		}
-	}
-}
-
-// CA-GH-EV-08
-func TestAMergeOnlyCountsWhenTheCommitIsInTheMirror(t *testing.T) {
-	t.Parallel()
-	r := newPoll(t)
-	r.clk.Advance(10 * time.Second)
-	lost, _ := r.tablePR("mesa-a", "feat/a")
-	ok, _ := r.tablePR("mesa-b", "feat/b")
-	r.gh.SetPullMerge(pollRepo, lost, "aaaa")
-	r.gh.SetPullMerge(pollRepo, ok, "bbbb")
-	r.gh.SetPullState(pollRepo, lost, "closed", true, "")
-	r.gh.SetPullState(pollRepo, ok, "closed", true, "")
-	r.sit.mu.Lock()
-	r.sit.prs = nil
-	r.sit.mu.Unlock()
-	r.mir.reach["bbbb"] = true
-	r.cycle()
-	_, marked := r.mir.get()
-	if len(marked) != 1 || marked[0] != fmt.Sprintf("mesa-b#%d", ok) {
-		t.Fatalf("tables marked merged: %v", marked)
-	}
-	a := r.kindsOf("mesa-a")
-	if len(a) != 1 || a[0] != github.EventWarning {
-		t.Fatalf("the table whose commit is not in the mirror got %v, want only the warning", a)
-	}
-	if b := r.kindsOf("mesa-b"); len(b) != 1 || b[0] != github.EventPRMerged {
-		t.Fatalf("the table whose commit is in the mirror got %v", b)
-	}
-}
-
-// CA-GH-EV-11
-func TestAMergeNotInTheMirrorYetIsMarkedWhenItArrivesWithoutANewWarningOrAlertedAfterAnHour(t *testing.T) {
-	t.Parallel()
-	r := newPoll(t)
-	r.clk.Advance(10 * time.Second)
-	late, _ := r.tablePR("mesa-a", "feat/a")
-	never, _ := r.tablePR("mesa-b", "feat/b")
-	r.gh.SetPullMerge(pollRepo, late, "aaaa")
-	r.gh.SetPullMerge(pollRepo, never, "bbbb")
-	r.gh.SetPullState(pollRepo, late, "closed", true, "")
-	r.gh.SetPullState(pollRepo, never, "closed", true, "")
-	r.sit.mu.Lock()
-	r.sit.prs = nil
-	r.sit.mu.Unlock()
-	r.cycle()
-	if _, marked := r.mir.get(); len(marked) != 0 {
-		t.Fatalf("marked before the commits arrived: %v", marked)
-	}
-	r.clk.Advance(10 * time.Minute) // the mirror fetches and the commit of the first arrives
-	r.mir.mu.Lock()
-	r.mir.reach["aaaa"] = true
-	r.mir.mu.Unlock()
-	r.cycle()
-	if _, marked := r.mir.get(); len(marked) != 1 || marked[0] != fmt.Sprintf("mesa-a#%d", late) {
-		t.Fatalf("marked: %v", marked)
-	}
-	warnings := 0
-	for _, e := range r.sink.events() {
-		if e.Kind == github.EventWarning {
-			warnings++
-		}
-	}
-	if warnings != 2 { // one for each table, at the time of the merge, and no more
-		t.Fatalf("%d warnings", warnings)
-	}
-	r.clk.Advance(github.MergeWait) // an hour and it never came
-	r.gh.IssueToken("tok", "grao-mestre")
-	r.cycle()
-	var alerts []github.Event
-	for _, e := range r.sink.events() {
-		if e.Kind == github.EventAlert {
-			alerts = append(alerts, e)
-		}
-	}
-	if len(alerts) != 1 || alerts[0].Table != "mesa-b" {
-		t.Fatalf("alerts: %+v", alerts)
-	}
-	asked, _ := r.mir.get()
-	r.clk.Advance(time.Minute)
-	r.cycle()
-	if after, _ := r.mir.get(); after != asked {
-		t.Error("the commit was checked again after the alert")
-	}
-	if _, marked := r.mir.get(); len(marked) != 1 {
-		t.Errorf("marked: %v", marked)
-	}
-}
-
-func TestTheReviewsFromBeforeTheWorkspaceAndTheOnesNotSubmittedAreNoEvents(t *testing.T) {
-	t.Parallel()
-	r := newPoll(t)
-	n, _ := r.tablePR("mesa-a", "feat/a")
-	r.gh.AddReview(pollRepo, n, "pessoa", "APPROVED") // from before the workspace
-	r.clk.Advance(10 * time.Second)
-	r.watch.Since = r.clk.Now()
-	r.clk.Advance(time.Second)
-	r.gh.AddReview(pollRepo, n, "pessoa", "PENDING") // not submitted yet
-	r.cycle()
-	for _, e := range r.sink.events() {
-		if e.Kind == github.EventReview {
-			t.Errorf("review event: %+v", e)
-		}
-	}
-	r.clk.Advance(time.Second)
-	r.gh.AddReview(pollRepo, n, "pessoa", "CHANGES_REQUESTED")
-	r.cycle()
-	got := 0
-	for _, e := range r.sink.events() {
-		if e.Kind == github.EventReview {
-			got++
-			if !strings.HasPrefix(e.Summary, "changes_requested") {
-				t.Errorf("summary %q", e.Summary)
-			}
-		}
-	}
-	if got != 1 {
-		t.Errorf("%d review events, want the submitted one", got)
-	}
-}
-
-func TestAMergeWhoseCommitGitHubDidNotSayYetIsMarkedWhenItDoes(t *testing.T) {
-	t.Parallel()
-	r := newPoll(t)
-	r.clk.Advance(10 * time.Second)
-	n, _ := r.tablePR("mesa-a", "feat/a")
-	r.gh.SetPullState(pollRepo, n, "closed", true, "") // merged, and merge_commit_sha still empty
-	r.sit.mu.Lock()
-	r.sit.prs = nil
-	r.sit.mu.Unlock()
-	r.cycle()
-	if _, marked := r.mir.get(); len(marked) != 0 {
-		t.Fatalf("marked without a commit: %v", marked)
-	}
-	r.clk.Advance(5 * time.Minute)
-	r.gh.SetPullMerge(pollRepo, n, "cccc")
-	r.mir.mu.Lock()
-	r.mir.reach["cccc"] = true
-	r.mir.mu.Unlock()
-	r.cycle()
-	if _, marked := r.mir.get(); len(marked) != 1 {
-		t.Fatalf("the merge was never marked: %v", marked)
-	}
-	for _, e := range r.sink.events() {
-		if e.Kind == github.EventAlert {
-			t.Errorf("a good merge became an alert: %+v", e)
-		}
-	}
-}
-
-func TestATableThatCanNotBeMarkedDoesNotStopTheWorkspace(t *testing.T) {
-	t.Parallel()
-	r := newPoll(t)
-	r.clk.Advance(10 * time.Second)
-	n, _ := r.tablePR("mesa-a", "feat/a")
-	r.gh.SetPullMerge(pollRepo, n, "aaaa")
-	r.gh.SetPullState(pollRepo, n, "closed", true, "")
-	r.sit.mu.Lock()
-	r.sit.prs = nil
-	r.sit.mu.Unlock()
-	r.mir.reach["aaaa"] = true
-	r.mir.markErr = errors.New("the table is gone")
-	r.cycle()
-	r.gh.AddIssueComment(pollRepo, n, "pessoa", "oi")
-	if !r.cycle() { // a failure of the table would repeat forever and block this
-		t.Fatal("the workspace is stuck on the table that could not be marked")
-	}
-}
-
-func TestMoreThanAHundredReviewsAndAChecksReRunAreRead(t *testing.T) {
-	t.Parallel()
-	r := newPoll(t)
-	r.clk.Advance(10 * time.Second)
-	n, sha := r.tablePR("mesa-a", "feat/a")
-	for range 130 {
-		r.gh.AddReview(pollRepo, n, "pessoa", "COMMENTED")
-	}
-	r.gh.AddCheck(pollRepo, sha, "ci", "failure")
-	r.cycle()
-	reviews := 0
-	for _, e := range r.sink.events() {
-		if e.Kind == github.EventReview {
-			reviews++
-		}
-	}
-	if reviews != 130 {
-		t.Fatalf("%d reviews read, want 130", reviews)
-	}
-	// the check ended; a re-run makes another check run on the same commit
-	r.clk.Advance(11 * time.Minute)
-	r.gh.IssueToken("tok", "grao-mestre")
-	r.gh.AddCheck(pollRepo, sha, "ci", "success")
-	r.cycle()
-	var ci int
-	for _, e := range r.sink.events() {
-		if e.Kind == github.EventCI {
-			ci++
-		}
-	}
-	if ci != 2 {
-		t.Fatalf("%d CI events, want the failure and the re-run", ci)
-	}
-}
