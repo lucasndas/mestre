@@ -20,7 +20,7 @@ func TestAFullCopyOfAnotherEpochOrGuildIsRefused(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	const guildID = "01J9Z0000000000000000000G1"
-	primary, err := guildtpl.Open(ctx, filepath.Join(t.TempDir(), "p.db"), store.Options{Synchronous: "OFF"})
+	primary, err := guildtpl.Open(ctx, filepath.Join(t.TempDir(), "p.db"), store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func TestAFullCopyOfAnotherEpochOrGuildIsRefused(t *testing.T) {
 		VALUES (1, ?, x'00', 3, '{}', 'UTC', x'07', 0)`, guildID); err != nil {
 		t.Fatal(err)
 	}
-	replica, err := guilddb.Open(ctx, filepath.Join(t.TempDir(), "r.db"), store.Options{Replica: true, Synchronous: "OFF"})
+	replica, err := guilddb.Open(ctx, filepath.Join(t.TempDir(), "r.db"), store.Options{StmtCache: guildtpl.StmtCache, Replica: true, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -59,6 +59,10 @@ type Options struct {
 	// the same transaction, for the replication to ship (the Guild database
 	// on the Citadel). See capture.go.
 	Capture bool
+	// StmtCache is how many prepared statements each connection keeps to run
+	// again; zero (production) keeps none. Tests that open many databases turn
+	// it on: preparing is most of what a short statement costs (stmtcache.go).
+	StmtCache int
 }
 
 // DB is an open database: one writer connection and a read-only pool.
@@ -129,7 +133,15 @@ func (d *DB) openPools(ctx context.Context) error {
 		writer.Close()
 		return err
 	}
-	reader, err := sql.Open("sqlite", roDSN(d.path, readerPragmas(d.opts.BusyTimeout)))
+	var reader *sql.DB
+	if rdsn := roDSN(d.path, readerPragmas(d.opts.BusyTimeout)); d.opts.StmtCache > 0 {
+		var base driver.Connector
+		if base, err = sqlite.NewConnector(rdsn); err == nil {
+			reader = sql.OpenDB(cachedConnector{Connector: base, max: d.opts.StmtCache})
+		}
+	} else {
+		reader, err = sql.Open("sqlite", rdsn)
+	}
 	if err != nil {
 		writer.Close()
 		return fmt.Errorf("store: open %s for reading: %w", d.path, err)
@@ -162,13 +174,19 @@ func (d *DB) openWriter() (*sql.DB, error) {
 		if err != nil {
 			return nil, err
 		}
-		w = sql.OpenDB(logConnector{Connector: base, cap: d.capture})
+		w = sql.OpenDB(logConnector{Connector: base, cap: d.capture, cache: d.opts.StmtCache})
 	case d.replica:
 		base, err := sqlite.NewConnector(conn)
 		if err != nil {
 			return nil, err
 		}
-		w = sql.OpenDB(guardConnector{Connector: base})
+		w = sql.OpenDB(guardConnector{Connector: base, cache: d.opts.StmtCache})
+	case d.opts.StmtCache > 0:
+		base, err := sqlite.NewConnector(conn)
+		if err != nil {
+			return nil, err
+		}
+		w = sql.OpenDB(cachedConnector{Connector: base, max: d.opts.StmtCache})
 	default:
 		var err error
 		if w, err = sql.Open("sqlite", conn); err != nil {

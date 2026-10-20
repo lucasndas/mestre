@@ -40,14 +40,14 @@ func buildTemplates() (g, m []byte, err error) {
 	}
 	defer os.RemoveAll(dir)
 	ctx := context.Background()
-	gdb, err := guildtpl.Open(ctx, filepath.Join(dir, "mestre.db"), store.Options{Synchronous: "OFF"})
+	gdb, err := guildtpl.Open(ctx, filepath.Join(dir, "mestre.db"), store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"})
 	if err != nil {
 		return nil, nil, err
 	}
 	if err := gdb.Close(); err != nil {
 		return nil, nil, err
 	}
-	mdb, err := machine.Open(ctx, filepath.Join(dir, "maquina.db"), store.Options{Synchronous: "OFF"})
+	mdb, err := machine.Open(ctx, filepath.Join(dir, "maquina.db"), store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -69,7 +69,7 @@ func seedDB(ctx context.Context, path string, template []byte, open func(context
 			return nil, err
 		}
 	}
-	return open(ctx, path, store.Options{Synchronous: "OFF"})
+	return open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"})
 }
 
 // The behavior is tested on the machine database; the Guild database has the
