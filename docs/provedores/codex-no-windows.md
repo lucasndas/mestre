@@ -28,7 +28,7 @@ No `unelevated` o sandbox não tem barreira de rede, como no Linux ([canal local
 
 ## A verificar no Windows real
 
-Tudo o que o CI não alcança (CA-CODEX-WIN-05, no round do Windows, `tools/winsandbox/round/run-all.ps1`): (1) dois personagens Codex, logons distintos, `OpenProcess` de um sobre o outro negado; (2) escrita no worktree alheio e fora dos workspaces negada, no próprio permitida; (3) o `connect()` da CLI passa com a pasta `run\` só em leitura e execução e com a ACE da CLI no próprio processo, e o `mestre list` volta com o terminal certo; (4) um `.codex/config.toml` com perfil ou recurso antigo não devolve o modo a `elevated`; (5) a ACE do terminal sai ao fim dele.
+Tudo o que o CI não alcança (CA-CODEX-WIN-05, no round do Windows, `tools/winsandbox/round/run-all.ps1`): (1) dois personagens Codex, logons distintos, `OpenProcess` de um sobre o outro negado; (2) escrita no worktree alheio e fora dos workspaces negada, no próprio permitida; (3) o `connect()` da CLI passa com a pasta `run\` só em leitura e execução e com a ACE da CLI no próprio processo, e o `mestre list` volta com o terminal certo; (4) um `.codex/config.toml` com perfil ou recurso antigo não devolve o modo a `elevated`; (5) a ACE do terminal sai ao fim dele; (6) o processo da CLI no sandbox tem mesmo `WRITE_DAC` sobre si pela SID de logon, e o `mestre-pty` o abre para o `IsProcessInJob`; (7) o limite de conexões por usuário do canal local: o token do comando do Codex provavelmente não nomeia o motor, então a SID do chamador não é lida e só valem os limites por processo e globais.
 
 ## Evolução: `mxc` (M7)
 
