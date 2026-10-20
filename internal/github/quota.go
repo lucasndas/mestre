@@ -38,7 +38,13 @@ func (q *Quota) Observe(app string, h http.Header) {
 	if q.by == nil {
 		q.by = map[string]quotaState{}
 	}
-	q.by[app] = quotaState{remaining: remaining, limit: limit, reset: time.Unix(reset, 0)}
+	next := quotaState{remaining: remaining, limit: limit, reset: time.Unix(reset, 0)}
+	// answers may arrive out of order: within one window what is known is the
+	// lowest count; a newer window replaces it
+	if old, ok := q.by[app]; ok && old.reset.Equal(next.reset) && old.remaining < next.remaining {
+		return
+	}
+	q.by[app] = next
 }
 
 // Low says whether the App is under 10% of its quota, and when it renews.
