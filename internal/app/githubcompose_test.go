@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"net/http"
@@ -63,10 +61,7 @@ func newGHComposeCfg(t *testing.T, withChain, integrationPeople bool) *ghCompose
 	}
 	srv := httptest.NewServer(double)
 	t.Cleanup(srv.Close)
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatal(err)
-	}
+	key := testRSAKey(t) // one for the binary: generating a key is the slow part
 	pemKey := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
 	apps := &github.Registry{DB: i.db, Clock: i.clk}
 	for n, a := range []github.App{{Name: "lucas-mestre-grao-mestre", Role: github.RoleGrandMaster}, {Name: "lucas-mestre-mestre", Role: github.RoleMestre}} {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -24,7 +25,7 @@ import (
 // newTowerAsyncHooks is the runner of the asynchronous hooks of the characters of this Tower,
 // over the rules the Citadel sent.
 func (e *Engine) newTowerAsyncHooks(rules *classes.Store) *hook.AsyncRunner {
-	src := &hook.ClassHookSource{FromRules: true, Rules: rules, Characters: e.deps.Characters}
+	src := noRulesIsNoHooks{&hook.ClassHookSource{FromRules: true, Rules: rules, Characters: e.deps.Characters}}
 	return &hook.AsyncRunner{Source: src, Exec: terminalHookExec{e}, Out: towerHookOutputs{e: e}, Clock: e.clk, Logger: e.log}
 }
 
@@ -135,4 +136,17 @@ func (e *Engine) handleHookOutput(ctx context.Context, m *protocol.Message) (*pr
 		return nil, protocol.NewError(protocol.CodeUnavailable, "hook.output: %v", err)
 	}
 	return nil, nil
+}
+
+// noRulesIsNoHooks is the source of the asynchronous hooks of a Tower: a character with no
+// effective rules stored here has no hooks to run, and says nothing at each call. The
+// synchronous side does not need this: without rules the policy of the hook already denies.
+type noRulesIsNoHooks struct{ *hook.ClassHookSource }
+
+func (s noRulesIsNoHooks) Async(ctx context.Context, ev providers.Event) ([]hook.AsyncHook, []string, error) {
+	run, refused, err := s.ClassHookSource.Async(ctx, ev)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, nil
+	}
+	return run, refused, err
 }

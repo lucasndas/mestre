@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -20,6 +19,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/users"
 	"github.com/lucasndas/mestre/internal/vault"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // approvalWorld is the standard integration with the chain of approval, the
@@ -65,9 +65,13 @@ func newApprovalWorld(t *testing.T) *approvalWorld {
 	fence := guild.NewFence(guild.FenceConfig{Lock: epochLock{}, Clock: c.clk, Epoch: func() uint64 { return 1 }})
 	c.run.BindFence(fence)
 	go func() { _ = fence.Run(c.ctx) }()
-	for i := 0; i < 200000 && !fence.LeaseValid(); i++ {
+	// the check of the lock runs in the goroutine of the fence, in real time: each turn moves the
+	// fake clock and then gives it a real moment to finish (not a count of yields, which a slow
+	// machine runs out before the check ends)
+	for i := 0; i < 15000 && !fence.LeaseValid(); i++ { // up to 30 s
 		c.clk.Advance(guild.LeaseInterval)
-		runtime.Gosched()
+		pause := clock.Real{}.NewTimer(2 * time.Millisecond)
+		<-pause.C()
 	}
 	if !fence.LeaseValid() {
 		t.Fatal("the lease of the epoch did not become valid")
