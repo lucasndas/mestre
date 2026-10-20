@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"runtime"
 	"sync"
 	"time"
 
@@ -187,6 +188,7 @@ func (s *Session) Start(ctx context.Context, spec StartSpec) (int, error) {
 	if spec.Rows == 0 {
 		spec.Rows = ptywire.DefaultRows
 	}
+	spec.Env = agentEnv(runtime.GOOS, spec.Env, spec.Dir)
 	agent, err := s.cfg.Runner.Start(ctx, spec)
 	if err != nil {
 		return 0, err
