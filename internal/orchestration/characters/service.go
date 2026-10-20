@@ -45,6 +45,9 @@ type ServiceOptions struct {
 	Machines Machines
 	Builder  Builder
 	Notifier Notifier
+	// Brief tells the Grand Master, in the message it gets when it restarts,
+	// where the workspace stands (nil: the message says only where it was).
+	Brief Briefer
 	// Scrolls, Inbox and Usage may be nil: nothing is written, the inbox is
 	// empty, the use is not told.
 	Scrolls Scrolls

@@ -191,6 +191,10 @@ type DismissRequest struct {
 	Workspace, Table string
 	By               Creator
 	Reason           string
+	// Retire ends a pinned Grand Master for good: the replacement of its
+	// sheet. Only the engine, the Owner and the Administrators do it, and only
+	// to a Grand Master; the audit says so.
+	Retire bool
 }
 
 // DismissResult is the answer of Dismiss.
@@ -213,13 +217,21 @@ func (s *Service) Dismiss(ctx context.Context, req DismissRequest) (DismissResul
 	if err := s.mayDismiss(ctx, req.By, c); err != nil {
 		return DismissResult{}, err
 	}
-	if c.Pinned {
+	retiring := c.Pinned && req.Retire && c.Role == RoleGrandMaster && (req.By.Kind == CreatedByEngine || req.By.Kind == CreatedByUser)
+	if retiring {
+		s.audit(ctx, c, "character.retired", map[string]string{"by": encodeBy(req.By), "reason": req.Reason})
+	} else if c.Pinned {
 		s.refuse(ctx, c, "dismiss", req.By)
 		return DismissResult{}, fmt.Errorf("%w: %s", ErrPinned, c.Name)
 	}
 	reason := req.Reason
 	if reason == "" {
 		reason = "dismiss"
+	}
+	if retiring {
+		// the mark stays in the scheduled end: a pinned Grand Master is ended at
+		// its safe point only when the end is a retirement (runScheduled)
+		reason = retirePrefix + reason
 	}
 	switch c.State {
 	case Stopped:
@@ -253,6 +265,17 @@ func (s *Service) Dismiss(ctx context.Context, req DismissRequest) (DismissResul
 	}
 	c.StopRequestedAt = s.clk.Now()
 	return DismissResult{Status: Scheduled, Character: c}, nil
+}
+
+// retirePrefix marks the reason of the end of a Grand Master that is retired:
+// only Dismiss with Retire, which the engine, the Owner and the Administrators
+// make, writes it (a pinned character is refused before the end is scheduled).
+const retirePrefix = "retire: "
+
+// retired says the scheduled end of c is the retirement of a Grand Master.
+func retired(c Character) bool {
+	by := decodeBy(c.StopRequestedBy)
+	return c.Role == RoleGrandMaster && strings.HasPrefix(c.StopReason, retirePrefix) && (by.Kind == CreatedByEngine || by.Kind == CreatedByUser)
 }
 
 func encodeBy(by Creator) string { return string(by.Kind) + ":" + by.ID }
@@ -369,7 +392,7 @@ func (s *Service) runScheduled(ctx context.Context, c Character) error {
 	if c.StopRequestedAt.IsZero() {
 		return nil
 	}
-	if c.Pinned {
+	if c.Pinned && !retired(c) {
 		s.refuse(ctx, c, "scheduled", decodeBy(c.StopRequestedBy))
 		return nil
 	}
@@ -426,6 +449,9 @@ func (s *Service) Pin(ctx context.Context, id string, pinned bool, by Creator) e
 	}
 	if !c.State.Alive() {
 		return fmt.Errorf("%w: %s", ErrNoCharacter, c.Name)
+	}
+	if !pinned && c.Role == RoleGrandMaster {
+		return fmt.Errorf("%w: o Grão-Mestre nasce fixado e não pode ser desafixado", ErrLevelDenied)
 	}
 	return s.o.Registry.SetPinned(ctx, id, pinned)
 }
@@ -575,6 +601,15 @@ func (s *Service) Replace(ctx context.Context, rq ReplaceRequest) (CreateResult,
 	creator := old.CreatedBy
 	req := CreateRequest{Name: old.Name, Sheet: rq.Sheet, Class: rq.Class, Workspace: old.Workspace, Table: old.Table, Role: old.Role,
 		Creator: rq.By, Quest: old.Quest, Step: old.Step, ReplaceOf: old.ID, Prefer: old.Machine, Inherit: &creator}
+	if old.Role == RoleGrandMaster {
+		// The Grand Master is not made by a person (it is born with the workspace):
+		// the change of its sheet is, for the engine, the end of the old one by an
+		// Administrator (checked by Dismiss) and the birth of the new.
+		if rq.By.Kind != CreatedByEngine && rq.By.Kind != CreatedByUser {
+			return CreateResult{}, fmt.Errorf("%w: só o Dono e os Administradores trocam a ficha do Grão-Mestre", ErrLevelDenied)
+		}
+		req.Creator = Creator{Kind: CreatedByEngine}
+	}
 	// The sheet, the ceiling and the machine are checked before the old one is
 	// stopped: a replacement that cannot start leaves the old one alive.
 	if _, err := s.check(ctx, req); err != nil {
@@ -588,7 +623,7 @@ func (s *Service) Replace(ctx context.Context, rq ReplaceRequest) (CreateResult,
 		delete(s.replacing, old.ID)
 		s.mu.Unlock()
 	}
-	if _, err := s.Dismiss(ctx, DismissRequest{ID: old.ID, By: rq.By, Reason: "replaced by sheet " + rq.Sheet}); err != nil {
+	if _, err := s.Dismiss(ctx, DismissRequest{ID: old.ID, By: rq.By, Reason: "replaced by sheet " + rq.Sheet, Retire: old.Role == RoleGrandMaster}); err != nil {
 		forget()
 		return CreateResult{}, err
 	}
@@ -683,7 +718,11 @@ func (s *Service) Alive(ctx context.Context) ([]Character, error) { return s.o.R
 // (docs/orquestracao/personagens.md#retomada-após-reinício).
 func (s *Service) resumeMessage(ctx context.Context, c Character) string {
 	var b strings.Builder
-	b.WriteString("The engine restarted you after an interruption; your previous session could not be resumed.")
+	if c.ProviderSessionID != "" {
+		b.WriteString("The engine restarted you after an interruption; your previous session was resumed.")
+	} else {
+		b.WriteString("The engine restarted you after an interruption; your previous session could not be resumed.")
+	}
 	if c.Quest != "" {
 		fmt.Fprintf(&b, " You were working on the step of quest %s.", c.Quest)
 		if c.Step != "" {
@@ -695,6 +734,13 @@ func (s *Service) resumeMessage(ctx context.Context, c Character) string {
 		fmt.Fprintf(&b, " Your last done was: %s", dones[len(dones)-1].Text)
 	}
 	b.WriteString(" Go on from there; your inbox and your waits were kept.")
+	if c.Role == RoleGrandMaster && s.o.Brief != nil {
+		if brief, err := s.o.Brief.Brief(ctx, c.Workspace); err != nil {
+			s.log.Warn("characters: the state of the workspace was not read for the resumption message", "workspace", c.Workspace, "err", err)
+		} else if brief != "" {
+			b.WriteString("\n\n" + brief)
+		}
+	}
 	return b.String()
 }
 

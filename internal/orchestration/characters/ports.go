@@ -266,7 +266,17 @@ const (
 	NoticeWaitTimeout NoticeKind = "wait_timeout"
 	// NoticeSystem is a system item for the recipient.
 	NoticeSystem NoticeKind = "system"
+	// NoticeGrandMasterFailing: the Grand Master keeps failing to stay up.
+	NoticeGrandMasterFailing NoticeKind = "grand_master_failing"
 )
+
+// Briefer gives the state of a workspace for the resumption message of its
+// Grand Master: the tables that are open, its waits, the size of its inbox, the
+// approvals that wait and the last message of a user
+// (docs/orquestracao/grao-mestre.md#retomada-de-contexto).
+type Briefer interface {
+	Brief(ctx context.Context, workspace string) (string, error)
+}
 
 // Notice is a message to someone about a character.
 type Notice struct {
