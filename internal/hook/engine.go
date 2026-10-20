@@ -34,6 +34,11 @@ type Approvals interface {
 	Open(ctx context.Context, req ApprovalRequest) (int64, error)
 }
 
+// ErrNoApprovals is what Approvals.Open answers when this machine opens no
+// requests (a Tower, or a Citadel between periods): the character is told so
+// instead of being told to try again.
+var ErrNoApprovals = errors.New("this machine does not open approval requests")
+
 // ApprovalRequest is what an approval request is opened for.
 type ApprovalRequest struct {
 	AgentID, TableID string
@@ -246,6 +251,9 @@ func (e *Engine) ask(ctx context.Context, ev providers.Event, d classes.Decision
 		return Answer{Verdict: VerdictDeny, Reason: classes.DegradedReason}
 	}
 	n, err := e.Approvals.Open(ctx, ApprovalRequest{AgentID: ev.AgentID, TableID: ev.TableID, Action: d.Action, About: d.Reason, Risk: d.Risk, Event: ev})
+	if errors.Is(err, ErrNoApprovals) {
+		return Answer{Verdict: VerdictDeny, Reason: fmt.Sprintf("%s pede aprovação, e esta máquina ainda não abre pedidos de aprovação", d.Action)}
+	}
 	if err != nil || n <= 0 {
 		e.log().Warn("hook: the approval request was not opened", "agent", ev.AgentID, "err", err)
 		return Answer{Verdict: VerdictDeny, Reason: "não foi possível abrir o pedido de aprovação; tente de novo"}
