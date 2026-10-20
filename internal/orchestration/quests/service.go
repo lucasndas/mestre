@@ -50,6 +50,9 @@ type Options struct {
 	Approvals Approvals
 	// Done gives the done_requires of the classes (nil: none asks for a proof).
 	Done DoneRules
+	// Verifier runs the verification of the workspace for a class with verify:
+	// true (nil: nothing is confirmed, so the step ends unverified).
+	Verifier Verifier
 	// EscalateAfter defaults to DefaultEscalateAfter.
 	EscalateAfter time.Duration
 	// Gate is asked before the outside is touched (GitHub); an error means
@@ -76,6 +79,9 @@ type Service struct {
 	// finishing serializes the done of a character: two dones of the same
 	// character at once record one.
 	finishing map[string]*sync.Mutex
+	// verifs are the steps whose verification runs; vwg waits for them.
+	verifs map[string]bool
+	vwg    sync.WaitGroup
 
 	// work is the queue of the loop (Run); until it runs, an advance asked for
 	// is made at once, in the call that asked for it.
@@ -112,7 +118,7 @@ func NewService(o Options) (*Service, error) {
 	if o.EscalateAfter <= 0 {
 		o.EscalateAfter = DefaultEscalateAfter
 	}
-	return &Service{o: o, st: o.Store, clk: o.Clock, log: o.Logger, flights: map[string]*flight{}, finishing: map[string]*sync.Mutex{}, work: make(chan string, 256)}, nil
+	return &Service{o: o, st: o.Store, clk: o.Clock, log: o.Logger, flights: map[string]*flight{}, finishing: map[string]*sync.Mutex{}, verifs: map[string]bool{}, work: make(chan string, 256)}, nil
 }
 
 // Store gives access to the tables.
