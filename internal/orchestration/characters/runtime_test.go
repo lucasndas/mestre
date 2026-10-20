@@ -302,6 +302,68 @@ func TestStopOnlyFromTheSafePointStuckOrInterrupted(t *testing.T) {
 	}
 }
 
+// A start the Citadel gave up on is ended where it is, whatever state it reached
+// (the first message already makes it busy); a stop that does not say so still
+// waits for the safe point.
+// Part of CA-CIDADELA-16
+func TestAStartTheCitadelGaveUpOnIsEndedWhileStarting(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	c := r.make("Dev Claude", "Dev", "3-login")
+	rt := r.mach[c.Machine].rt
+	if r.state(c) != characters.Starting {
+		t.Fatalf("the character is %s; want starting", r.state(c))
+	}
+	if err := rt.Stop(r.ctx, characters.StopCommand{Character: c.ID, Final: true}); !errors.Is(err, characters.ErrNotAtSafePoint) {
+		t.Errorf("a stop of a character that starts: %v; want not at a safe point", err)
+	}
+	if err := rt.Stop(r.ctx, characters.StopCommand{Character: c.ID, Final: true, Abandon: true, Reason: "the Citadel gave up"}); err != nil {
+		t.Fatalf("the abandoned start: %v", err)
+	}
+	if _, err := rt.Env(r.ctx, c.ID); err == nil {
+		t.Error("the character is still on the machine after the abandon")
+	}
+}
+
+// An abandon names the terminal of the start that was given up on: a character that runs
+// in another (it was restarted since) is not touched.
+// Part of CA-CIDADELA-16
+func TestAnAbandonOnlyEndsTheTerminalOfTheStartItNames(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	c := r.make("Dev Claude", "Dev", "3-login")
+	rt := r.mach[c.Machine].rt
+	r.ready(c)
+	if err := rt.Stop(r.ctx, characters.StopCommand{Character: c.ID, Abandon: true, Terminal: "another-terminal"}); !errors.Is(err, characters.ErrNotAtSafePoint) {
+		t.Errorf("an abandon of another terminal: %v; want refused", err)
+	}
+	if _, err := rt.Env(r.ctx, c.ID); err != nil {
+		t.Errorf("the character was ended by the abandon of another terminal: %v", err)
+	}
+	if err := rt.Stop(r.ctx, characters.StopCommand{Character: c.ID, Abandon: true, Terminal: r.get(c.ID).TerminalID}); err != nil {
+		t.Errorf("an abandon of its own terminal, idle: %v", err)
+	}
+}
+
+// Part of CA-CIDADELA-16
+func TestAnAbandonedStartIsEndedWhenItIsAlreadyBusy(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	c := r.make("Dev Claude", "Dev", "3-login")
+	rt := r.mach[c.Machine].rt
+	r.ready(c)
+	r.busy(c)
+	if err := rt.Stop(r.ctx, characters.StopCommand{Character: c.ID, Final: true, Abandon: true, Reason: "the Citadel gave up"}); err != nil {
+		t.Fatalf("the abandoned start of a busy character: %v", err)
+	}
+	if _, err := rt.Env(r.ctx, c.ID); err == nil {
+		t.Error("the character is still on the machine after the abandon")
+	}
+	if got := r.get(c.ID).State; got != characters.Stopped {
+		t.Errorf("the registry has the character %s; want stopped", got)
+	}
+}
+
 func TestAnAgentThatEndsOnItsOwnIsInterruptedAndNotForgotten(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, rigOptions{})

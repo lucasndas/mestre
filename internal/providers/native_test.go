@@ -198,3 +198,50 @@ func TestCodexFlagsFollowWriteAndNetwork(t *testing.T) {
 		t.Fatal("the null adapter has native controls")
 	}
 }
+
+// CA-NATIVO-14
+//
+// On Windows the model may run a command through Bash (Git Bash) or through
+// PowerShell: the command rules name both tools; on Linux, only Bash.
+func TestClaudeCommandRulesNameThePowerShellToolOnWindowsOnly(t *testing.T) {
+	t.Parallel()
+	perms := func(goos string) (allow, deny []string) {
+		p := policy()
+		p.OS = goos
+		p.AllowCommands = []string{"make *"}
+		p.DenyCommands = []string{"*"}
+		nc, err := nativeOf(t, providers.ClaudeCode).Native(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var obj struct {
+			Permissions struct{ Allow, Deny []string } `json:"permissions"`
+		}
+		if err := json.Unmarshal([]byte(merged(t, nc.Files[0], "")), &obj); err != nil {
+			t.Fatal(err)
+		}
+		return obj.Permissions.Allow, obj.Permissions.Deny
+	}
+	allow, deny := perms("windows")
+	for _, want := range []string{"PowerShell(make *)", "Bash(make *)"} {
+		if !slices.Contains(allow, want) {
+			t.Errorf("windows allow %v lacks %s", allow, want)
+		}
+	}
+	for _, want := range []string{"PowerShell(git push *)", "PowerShell(git push)", "Bash(git push *)", "PowerShell", "Bash"} {
+		if !slices.Contains(deny, want) {
+			t.Errorf("windows deny %v lacks %s", deny, want)
+		}
+	}
+	allow, deny = perms("linux")
+	for _, l := range [][]string{allow, deny} {
+		for _, r := range l {
+			if strings.HasPrefix(r, "PowerShell") {
+				t.Errorf("linux rule %s names PowerShell", r)
+			}
+		}
+	}
+	if !slices.Contains(deny, "Bash(git push *)") {
+		t.Errorf("linux deny %v lacks Bash(git push *)", deny)
+	}
+}

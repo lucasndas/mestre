@@ -248,6 +248,7 @@ func TestAProviderThatNeverFiresPreToolUseIsNotConformantAndTheMachineIsRefused(
 }
 
 // CA-CONF-03
+// Part of CA-CONF-06 (the half of the full suite: the CLI of the fake agent reaches the engine, step 5 passes)
 func TestARequestForOneProviderTestsOnlyItAndReplacesItsPreviousResult(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
@@ -277,6 +278,9 @@ func TestARequestForOneProviderTestsOnlyItAndReplacesItsPreviousResult(t *testin
 		t.Fatalf("the fake Claude Code is not conformant: %s\n%+v", res.Reason, res.Steps)
 	}
 
+	if s5 := res.Step(conformance.StepCommandCommit); s5.Outcome != conformance.Passed || res.Flags.CLIUnreachable {
+		t.Fatalf("step 5 = %+v, cli_unreachable %v: the CLI of the fake agent reaches the engine", s5, res.Flags.CLIUnreachable)
+	}
 	got, ok, err := r.results.Latest(ctx, "m1", "claude-trabalho", providers.ClaudeCode)
 	if err != nil || !ok || got.Version != "2.1.296" || !got.Conformant || got.Origin != conformance.OriginCLIUpdate || len(got.Steps) != 12 {
 		t.Fatalf("m1/claude-trabalho = %+v; want the new result in place of the previous one", got)

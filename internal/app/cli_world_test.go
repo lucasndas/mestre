@@ -236,6 +236,9 @@ type commWorld struct {
 	local    *classes.Store
 	agents   string
 	profiles cli.Profiles
+	// mounts register more commands in the forwarder of the Citadel (the
+	// GitHub ones, in the worlds that have them).
+	mounts []func(*localchan.LocalForwarder)
 }
 
 // commPreRun is the machine running the pre-run of a ritual; its output is what
@@ -332,6 +335,9 @@ func newCommWorld(t *testing.T, setup ...func(*commWorld, *app.OrchestrationOpti
 
 	fwd := localchan.NewLocalForwarder()
 	w.orc.Register(fwd, nil)
+	for _, mount := range w.mounts {
+		mount(fwd)
+	}
 	profiles := w.profiles
 	if profiles == nil {
 		profiles = cli.ProfilesFunc(func(ctx context.Context, id string) cli.Profile {

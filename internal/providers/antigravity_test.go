@@ -121,11 +121,15 @@ func TestHookFilesKeepOtherHooksAndWriteTheMestreGroupOnce(t *testing.T) {
 				t.Fatalf("%s: %s handler = %v", goos, e.event, h)
 			}
 			// agy runs the Windows line by cmd /c with the quoting of Go, which
-			// breaks any " in it; and the line itself never answers allow: a
-			// guard that fails (the quotes of agy 1.4.2) must not let the tool
-			// through without the dispatcher.
-			if goos == "windows" && (strings.Contains(cmd, `"`) || strings.Contains(cmd, "allow")) {
-				t.Fatalf("windows: %s line has a quote or answers allow by itself: %s", e.event, cmd)
+			// breaks any " in it; and the line answers allow only when there is
+			// no MESTRE_AGENT_ID (agy run by hand without the Mestre): a guard
+			// that fails (the quotes of agy 1.4.2) or a binary that is gone
+			// must not let the tool through without the dispatcher.
+			if goos == "windows" {
+				_, afterGuard, _ := strings.Cut(cmd, ") else ")
+				if strings.Contains(cmd, `"`) || strings.Contains(afterGuard, "allow") {
+					t.Fatalf("windows: %s line has a quote or answers allow after the guard: %s", e.event, cmd)
+				}
 			}
 		}
 	}

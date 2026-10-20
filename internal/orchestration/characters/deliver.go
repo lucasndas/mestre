@@ -62,6 +62,9 @@ func (rt *Runtime) DeliverInbox(ctx context.Context, d protocol.InboxDeliver) (p
 	if !itemID.MatchString(d.ItemID) {
 		return protocol.InboxResult{}, fmt.Errorf("characters: %q is not an id of an item of the inbox", d.ItemID)
 	}
+	if rt.wasTyped(d.ItemID) {
+		return protocol.InboxResult{ItemID: d.ItemID, Status: protocol.InboxDelivered}, nil
+	}
 	busy := protocol.InboxResult{ItemID: d.ItemID, Status: protocol.InboxBusy}
 	if !s.status().State.Receives() || s.holdsFirst() {
 		return busy, nil
@@ -84,8 +87,31 @@ func (rt *Runtime) DeliverInbox(ctx context.Context, d protocol.InboxDeliver) (p
 	case err != nil:
 		return protocol.InboxResult{}, err
 	}
+	rt.markTyped(d.ItemID)
 	s.armStall()
 	return protocol.InboxResult{ItemID: d.ItemID, Status: protocol.InboxDelivered}, nil
+}
+
+const typedKept = 512
+
+func (rt *Runtime) wasTyped(item string) bool {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	return rt.typed[item]
+}
+
+func (rt *Runtime) markTyped(item string) {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	if rt.typed[item] {
+		return
+	}
+	rt.typed[item] = true
+	rt.typedOrder = append(rt.typedOrder, item)
+	if len(rt.typedOrder) > typedKept {
+		delete(rt.typed, rt.typedOrder[0])
+		rt.typedOrder = rt.typedOrder[1:]
+	}
 }
 
 // compose chooses what is typed, writing the file when it has to.

@@ -233,19 +233,19 @@ func (s *PRService) Open(ctx context.Context, a Actor, repo string, in POpen) (P
 			return POpened{}, err
 		}
 	}
-	if s.Send.Branches == nil {
-		return POpened{}, ErrNoPushSetup
-	}
-	b, err := s.Send.Branches.Prepare(ctx, a.Table)
-	if err != nil {
-		return POpened{}, err
-	}
 	if s.Send.Criteria != nil {
 		if open, err := s.Send.Criteria.Unproven(ctx, a.Table); err != nil {
 			return POpened{}, err
 		} else if len(open) > 0 {
 			return POpened{}, &CriteriaError{Criteria: open}
 		}
+	}
+	if s.Send.Branches == nil {
+		return POpened{}, ErrNoPushSetup
+	}
+	b, err := s.Send.Branches.Prepare(ctx, a.Table)
+	if err != nil {
+		return POpened{}, err
 	}
 	wf, err := s.scanAndCheck(ctx, a.Table, in.Class, b)
 	if err != nil {

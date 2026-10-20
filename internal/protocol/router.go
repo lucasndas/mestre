@@ -29,6 +29,10 @@ type Reply struct {
 	// connection that is open now (the answers of the transfer machine, which
 	// recovers by itself).
 	Transient bool
+	// InAck puts the payload in the ack of the command (Ack.Result) instead of
+	// sending a message: for the commands whose caller waits for the answer
+	// inside a handler of its own, which would hold the line of the link.
+	InAck bool
 }
 
 // Handler runs a message. It runs on the dispatch goroutine of the
@@ -96,6 +100,9 @@ func (r *Router) HandleData(t DataType, h DataHandler) {
 	r.data[t] = h
 	r.mu.Unlock()
 }
+
+// Lookup returns the handler of a type, the exact one before a pattern.
+func (r *Router) Lookup(typ string) (Handler, bool) { return r.lookup(typ) }
 
 func (r *Router) lookup(typ string) (Handler, bool) {
 	r.mu.RLock()
