@@ -141,6 +141,9 @@ type periodHooks struct {
 	// registry puts a character (nil in a period without orchestration).
 	usage        *hookUsage
 	agentMachine func(ctx context.Context, id string) (string, bool)
+	// siteRules are the effective rules of a character, for the request of a
+	// site credential by a Tower (nil in a period without the classes).
+	siteRules func(ctx context.Context, id string) (*classes.Rules, error)
 	// risk is the risk policy of a workspace, from its approval policy file.
 	risk func(workspace string) *classes.RiskPolicy
 	// layers gives the dynamic part of the Mestre layer of a character as it

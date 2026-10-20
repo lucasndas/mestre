@@ -150,6 +150,8 @@ type OrchestrationOptions struct {
 	// in Orchestration.TableRules.
 	ChainTempRules   chain.TempRules
 	ChainDelegations chain.Delegations
+	// ChainPolicyDecrees gives the decrees of policy that adjust the rules of the policy file.
+	ChainPolicyDecrees chain.PolicyDecrees
 	// ChainSubDelegations lets a Mestre da mesa decide what a subdelegation of the Grão-Mestre gives it.
 	ChainSubDelegations chain.SubDelegations
 	// ChainPRs reads the PRs for the conditions of the approval policy.
@@ -693,7 +695,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 			freshness = freshnessRef{&fresh}
 		}
 		ch, err = chain.NewService(chain.Options{Freshness: freshness, Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
-			Classes: o.ChainClasses, Policy: policy, Repos: workspaceRepoOf{ws}, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
+			Classes: o.ChainClasses, Policy: policy, Repos: workspaceRepoOf{ws}, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, PolicyDecrees: o.ChainPolicyDecrees, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
 			Supervision: supervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
 			Sinks: o.chainSinks(&qs, &us), Logger: o.Logger})
 		if err != nil {
