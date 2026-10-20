@@ -147,6 +147,7 @@ func (m *Manager) markDead(ctx context.Context, rec Record) error {
 	if err := m.cfg.Spawner.KillCgroup(ctx, rec.ID); err != nil {
 		m.log.Warn("cgroup of a dead terminal", "terminal", rec.ID, "error", err)
 	}
+	m.revokeAccess(rec.ID, rec.LogonSID)
 	_ = os.Remove(rec.SocketPath)
 	return m.reg.setStatus(ctx, rec.ID, StatusInterrupted, m.clk.Now())
 }

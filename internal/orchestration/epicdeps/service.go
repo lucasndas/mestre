@@ -116,6 +116,9 @@ type Result struct {
 	// Waiting says the table of the dependent epic is held now; without a
 	// table the dependency waits for it to open.
 	Waiting bool
+	// New says the call made the dependency (it was not pending already): who
+	// undoes its own work drops only these.
+	New bool
 }
 
 func waitRef(workspace string, epic, on int) string {
@@ -172,16 +175,16 @@ func (s *Service) Depend(ctx context.Context, by characters.Character, epic, on 
 		return Result{}, back(err)
 	}
 	if !hasTable || cur.State != Pending {
-		return Result{State: cur.State}, nil
+		return Result{State: cur.State, New: added && !had}, nil
 	}
 	if cur.Wait != "" {
-		return Result{State: Pending, Waiting: true}, nil
+		return Result{State: Pending, Waiting: true, New: added && !had}, nil
 	}
 	state, err := s.arm(ctx, cur, t)
 	if err != nil {
 		return Result{}, back(err)
 	}
-	return Result{State: state, Waiting: state == Pending}, nil
+	return Result{State: state, Waiting: state == Pending, New: added && !had}, nil
 }
 
 // undo takes back a dependency that could not be armed, so no half-made one
