@@ -373,7 +373,7 @@ func hookLines(t *testing.T, dir string) (claude, agy string) { //nolint:unused 
 // neutral reply of the event otherwise; the call comes only after the test.
 func TestHookLinesTestTheAgentIDBeforeCallingTheMestre(t *testing.T) {
 	t.Parallel()
-	reg := providers.NewRegistry(providers.Options{})
+	reg := providers.NewRegistry(providers.Options{NoFlush: true})
 	for _, c := range []struct {
 		goos, binary string
 	}{{"linux", "/opt/mestre/bin/mestre"}, {"windows", `C:\mestre\bin\mestre.exe`}} {

@@ -172,6 +172,8 @@ func (s *Service) handleList(ctx context.Context, c *localchan.Call) localchan.R
 		Machines []string `json:"machines"`
 		PR       int      `json:"pr"`
 		Usage    string   `json:"usage"`
+		// WaitingFor are the epics whose tables must be merged first.
+		WaitingFor []int `json:"waiting_for"`
 	}
 	rows := make([]row, 0, len(ts))
 	var text strings.Builder
@@ -179,7 +181,7 @@ func (s *Service) handleList(ctx context.Context, c *localchan.Call) localchan.R
 		if filter == "open" && Over(t.State) || filter == "closed" && !Over(t.State) {
 			continue
 		}
-		r := row{Name: t.ID, State: string(t.State), Paused: t.Paused, Epic: t.Epic, Branch: t.Branch, PR: t.PRNumber, Machines: []string{}, Usage: "-"}
+		r := row{Name: t.ID, State: string(t.State), Paused: t.Paused, Epic: t.Epic, Branch: t.Branch, PR: t.PRNumber, Machines: []string{}, Usage: "-", WaitingFor: s.waitingFor(ctx, t)}
 		if m, ok, _ := s.o.Registry.TableMaster(ctx, t.Workspace, t.ID); ok {
 			r.Master = m.Name
 		}
@@ -193,12 +195,42 @@ func (s *Service) handleList(ctx context.Context, c *localchan.Call) localchan.R
 		if t.Paused {
 			st += " (pausada)"
 		}
+		st += waitingLabel(r.WaitingFor)
 		fmt.Fprintf(&text, "- %s: %s, épico #%d, branch %s, PR %s\n", t.ID, st, t.Epic, t.Branch, prLabel(t.PRNumber))
 	}
 	if len(rows) == 0 {
 		text.WriteString("nenhuma mesa\n")
 	}
 	return localchan.OK(map[string]any{"text": strings.TrimRight(text.String(), "\n"), "tables": rows})
+}
+
+// waitingFor gives the epics the table waits for (none when it is over, or
+// when the dependencies cannot be read: the table list is not worth failing).
+func (s *Service) waitingFor(ctx context.Context, t Table) []int {
+	if s.o.Dependencies == nil || Over(t.State) {
+		return []int{}
+	}
+	on, err := s.o.Dependencies.Waiting(ctx, t.Workspace, t.Epic)
+	if err != nil || on == nil {
+		return []int{}
+	}
+	return on
+}
+
+// waitingLabel is " (aguardando a mesa #12)" for the epics a table waits for.
+func waitingLabel(on []int) string {
+	if len(on) == 0 {
+		return ""
+	}
+	parts := make([]string, len(on))
+	for i, e := range on {
+		parts[i] = "#" + strconv.Itoa(e)
+	}
+	noun := "a mesa "
+	if len(on) > 1 {
+		noun = "as mesas "
+	}
+	return " (aguardando " + noun + strings.Join(parts, ", ") + ")"
 }
 
 func prLabel(n int) string {
@@ -243,6 +275,8 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 	if t.Paused {
 		st += " (pausada: " + t.PausedReason + ")"
 	}
+	waiting := s.waitingFor(ctx, t)
+	st += waitingLabel(waiting)
 	fmt.Fprintf(&text, "Mesa %s: %s. Épico #%d, branch %s, PR %s", t.ID, st, t.Epic, t.Branch, prLabel(t.PRNumber))
 	if t.Merged {
 		text.WriteString(" (mesclado)")
@@ -255,7 +289,7 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 		text.WriteString("- ninguém\n")
 	}
 	data := map[string]any{"name": t.ID, "state": string(t.State), "paused": t.Paused,
-		"pause_reason": t.PausedReason, "epic": t.Epic, "branch": t.Branch, "pr": t.PRNumber, "merged": t.Merged, "characters": chars,
+		"pause_reason": t.PausedReason, "epic": t.Epic, "branch": t.Branch, "pr": t.PRNumber, "merged": t.Merged, "waiting_for": waiting, "characters": chars,
 		"missions": []string{}, "waits": []string{}, "usage": "-"}
 	if s.o.Oversight != nil {
 		paused, reason, queue, err := s.o.Oversight.Status(ctx, t.Workspace, t.ID)

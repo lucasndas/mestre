@@ -28,7 +28,16 @@ func (s *Service) apply(ctx context.Context, t Table, ev Event) (Table, error) {
 		}
 		return cur, fmt.Errorf("%w: %s in %s (it changed meanwhile)", ErrBadTransition, ev, cur.State)
 	}
-	return s.store.Get(ctx, t.Workspace, t.ID)
+	cur, err := s.store.Get(ctx, t.Workspace, t.ID)
+	if err == nil && ev == EventCancelled && s.o.Dependencies != nil {
+		if derr := s.o.Dependencies.Dropped(ctx, t.Workspace, cur); derr != nil {
+			s.log.Warn("tables: the waits of a cancelled table were not ended", "table", t.ID, "err", derr)
+		}
+		if derr := s.o.Dependencies.Cancelled(ctx, t.Workspace, cur); derr != nil {
+			s.log.Warn("tables: the tables that wait for a cancelled one were not told", "table", t.ID, "err", derr)
+		}
+	}
+	return cur, err
 }
 
 // PROpened is told when `mestre pr open` (or `pr update`) concluded: a table
@@ -78,6 +87,21 @@ func (s *Service) MissionStarted(ctx context.Context, workspace, id string) (Tab
 // puts an item `github` in the inbox of the Grand Master, who starts the
 // closing with `table close`. Telling it twice does nothing.
 func (s *Service) MergeConfirmed(ctx context.Context, workspace, id, head string) (Table, error) {
+	t, err := s.confirmMerge(ctx, workspace, id, head)
+	// The tables that wait for this one are released outside its lock, and
+	// again each time the merge is told (releasing is idempotent), so a
+	// failure to release is made good by the next poll: what they deliver
+	// to the characters may come back to this table.
+	if err == nil && s.o.Dependencies != nil {
+		if derr := s.o.Dependencies.Merged(ctx, workspace, t); derr != nil {
+			s.log.Warn("tables: the tables that wait for this one were not released", "table", id, "err", derr)
+		}
+	}
+	return t, err
+}
+
+// confirmMerge marks the table as merged.
+func (s *Service) confirmMerge(ctx context.Context, workspace, id, head string) (Table, error) {
 	defer s.lock(workspace, id)()
 	t, err := s.store.Get(ctx, workspace, id)
 	if err != nil {
@@ -242,5 +266,38 @@ func (s *Service) Paused(ctx context.Context, workspace, table string) (bool, er
 		}
 		return false, err
 	}
-	return t.Paused, nil
+	if t.Paused {
+		return true, nil
+	}
+	// A table that waits for another epic has not been handed its request yet.
+	if t.State == StateOpen {
+		return s.Held(ctx, workspace, table)
+	}
+	return false, nil
+}
+
+// Held says whether the table waits for the merge of another table: its
+// epic depends on an epic that was not merged (or was cancelled and the Grand
+// Master did not decide). A table in the state open is held from its first
+// message; one already at work only starts no new mission
+// (docs/orquestracao/dependencia-entre-mesas.md). A failure to ask counts as held.
+func (s *Service) Held(ctx context.Context, workspace, table string) (bool, error) {
+	if s.o.Dependencies == nil {
+		return false, nil
+	}
+	t, err := s.store.Get(ctx, workspace, table)
+	if err != nil {
+		if errors.Is(err, ErrNoTable) {
+			return false, nil
+		}
+		return true, err
+	}
+	if Over(t.State) {
+		return false, nil
+	}
+	held, err := s.o.Dependencies.Held(ctx, workspace, t.Epic)
+	if err != nil {
+		return true, err
+	}
+	return held, nil
 }

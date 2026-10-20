@@ -18,6 +18,7 @@ const (
 	KindApproval  Kind = "approval"
 	KindTime      Kind = "time"
 	KindSync      Kind = "sync"
+	KindEpic      Kind = "epic"
 	KindSlot      Kind = "slot"
 )
 

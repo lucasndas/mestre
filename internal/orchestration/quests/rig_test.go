@@ -252,6 +252,8 @@ type worldOpts struct {
 	done quests.DoneRules
 	// verifier runs the verification of the workspace (nil: no command).
 	verifier quests.Verifier
+	// epics are other epics that exist and are open.
+	epics []int
 }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
@@ -280,7 +282,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	w.machines = orcfakes.NewMachines(clk)
 	w.machines.Chars = func() *characters.Service { return w.orc.Characters }
 	oo := app.OrchestrationOptions{Guild: db, Machine: "cidadela", Clock: clk, WorkspacesDir: filepath.Join(root, "workspaces"), TempDir: filepath.Join(root, "tmp"),
-		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()}, Epics: orcfakes.Epics{}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{},
+		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()}, Epics: orcfakes.Epics{Also: opt.epics}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{},
 		Messages: orcfakes.Messages{}, Peers: w.peers, QuestCatalog: catalog{}, Users: w.users, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerTable: opt.perTable}, Ceiling: opt.ceiling}
 	oo.QuestDone = opt.done
 	oo.QuestVerifier = opt.verifier

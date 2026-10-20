@@ -52,6 +52,8 @@ type Options struct {
 	Requests    Requests
 	Oversight   Oversight
 	Peers       Peers
+	// Dependencies holds a table that waits for another (nil: none does).
+	Dependencies Dependencies
 	// TempDir is a private folder for the bundles while they are sent
 	// (os.TempDir when empty).
 	TempDir string
@@ -408,6 +410,14 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, er
 		return OpenResult{}, err
 	}
 
+	// A table whose epic waits for another has its request held in the queue
+	// (Paused) until the other is merged.
+	if s.o.Dependencies != nil {
+		if err = s.o.Dependencies.Opened(ctx, ws, t); err != nil {
+			return OpenResult{}, fmt.Errorf("a espera da mesa por outro épico: %w", err)
+		}
+		undo.add("dependencies", func(ctx context.Context) error { return s.o.Dependencies.Dropped(ctx, ws, t) })
+	}
 	item := inbox.NewItem{Workspace: ws, Target: master.ID, Kind: inbox.KindAgent, Sender: gm.Name, SenderID: gm.ID,
 		Text: firstMessage(epic, origin, hasOrigin, req.Notes), Attachments: files, Refs: inbox.Refs{Table: id}}
 	if hasOrigin {
