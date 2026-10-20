@@ -1,0 +1,14 @@
+<Configuration>
+  <Networking>Enable</Networking>
+  <MemoryInMB>8192</MemoryInMB>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>C:\mestre\tools\winsandbox</HostFolder>
+      <SandboxFolder>C:\winsandbox</SandboxFolder>
+      <ReadOnly>false</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>cmd.exe /c start "Mestre - triagem" powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -File C:\winsandbox\setup.ps1 -Branch round/m3m4-windows -Prompt tools/winsandbox/round/rodada-4-prompt.md</Command>
+  </LogonCommand>
+</Configuration>
