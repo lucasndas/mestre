@@ -20,6 +20,7 @@ import (
 // The base ACL (SYSTEM, the engine, the agents) and its protection from
 // inheritance stay as they were.
 func TestTheACEOfTheTerminalIsPutOnTheSocketAndItsFolderAndTakenAway(t *testing.T) {
+	t.Parallel()
 	_, agents := fakeSIDs(t)
 	owner, err := currentUserSID()
 	if err != nil {
@@ -114,6 +115,7 @@ func TestTheACEOfTheTerminalIsPutOnTheSocketAndItsFolderAndTakenAway(t *testing.
 // Anything that is not a logon SID is refused before any ACL is touched, and
 // so is a socket path that is missing or relative.
 func TestTheACEOfTheTerminalRefusesWhatIsNotALogonSID(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sock := filepath.Join(dir, "cli.sock")
 	if err := os.WriteFile(sock, nil, 0o600); err != nil {
