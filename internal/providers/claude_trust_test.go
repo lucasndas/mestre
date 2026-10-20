@@ -213,6 +213,26 @@ func TestPreTrustOnWindowsWritesTheKeyWithForwardSlashes(t *testing.T) {
 	}
 }
 
+// The trust of the mirror goes in every writing of its folder: the one with
+// forward slashes Claude Code writes and one with backslashes.
+func TestPreTrustOnWindowsClearsTheMirrorInEveryWriting(t *testing.T) {
+	t.Parallel()
+	profile, path := trustFile(t, `{"projects": {"C:/Mestre/espelhos/projeto.git": {"hasTrustDialogAccepted": true, "x": 1}, "c:\\mestre\\Espelhos\\projeto.git": {"hasTrustDialogAccepted": true}}}`)
+	claude := providers.NewClaudeCode(providers.Options{})
+	if _, err := claude.PreTrust(providers.PreTrustRequest{OS: "windows", Profile: profile, Worktree: `C:\Mestre\work\3-login`, RepoRoot: `C:\Mestre\espelhos\projeto.git`}); err != nil {
+		t.Fatal(err)
+	}
+	projects := decodeNumbers(t, readFile(t, path))["projects"].(map[string]any)
+	for _, k := range []string{"C:/Mestre/espelhos/projeto.git", `c:\mestre\Espelhos\projeto.git`} {
+		if _, has := projects[k].(map[string]any)["hasTrustDialogAccepted"]; has {
+			t.Errorf("mirror key %q kept the trust: %v", k, projects[k])
+		}
+	}
+	if projects["C:/Mestre/espelhos/projeto.git"].(map[string]any)["x"] == nil {
+		t.Errorf("the rest of the mirror entry went: %v", projects["C:/Mestre/espelhos/projeto.git"])
+	}
+}
+
 // Untrust takes back what PreTrust gave, when the worktree is removed.
 func TestUntrustTakesTheWorktreeOutAndNothingElse(t *testing.T) {
 	t.Parallel()

@@ -46,12 +46,9 @@ func (c *claudeCode) PreTrust(req PreTrustRequest) (Trust, error) {
 			trusted = append(trusted, wt)
 		}
 		if req.RepoRoot != "" && !sameFolder(req.OS, req.RepoRoot, req.Worktree) {
-			mirror := entryKey(req.OS, projects, req.RepoRoot)
-			if m, ok := projects[mirror].(map[string]any); ok {
-				if _, has := m["hasTrustDialogAccepted"]; has {
-					delete(m, "hasTrustDialogAccepted")
-					cleared = append(cleared, mirror)
-				}
+			for _, mirror := range trustedWritings(req.OS, projects, req.RepoRoot) {
+				delete(projects[mirror].(map[string]any), "hasTrustDialogAccepted")
+				cleared = append(cleared, mirror)
 			}
 		}
 		return trusted, cleared
@@ -63,10 +60,22 @@ func (c *claudeCode) PreTrust(req PreTrustRequest) (Trust, error) {
 		if req.RepoRoot == "" || sameFolder(req.OS, req.RepoRoot, req.Worktree) {
 			return true
 		}
-		m, _ := projects[entryKey(req.OS, projects, req.RepoRoot)].(map[string]any)
-		_, has := m["hasTrustDialogAccepted"]
-		return !has
+		return len(trustedWritings(req.OS, projects, req.RepoRoot)) == 0
 	})
+}
+
+// trustedWritings are the keys of projects that name folder, in any writing
+// (on Windows, any slash or case), and carry hasTrustDialogAccepted.
+func trustedWritings(goos string, projects map[string]any, folder string) []string {
+	var keys []string
+	for k, v := range projects {
+		if m, ok := v.(map[string]any); ok && sameFolder(goos, k, folder) {
+			if _, has := m["hasTrustDialogAccepted"]; has {
+				keys = append(keys, k)
+			}
+		}
+	}
+	return keys
 }
 
 // Untrust takes the worktree's entries out of the trust file, in any writing
