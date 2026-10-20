@@ -80,9 +80,10 @@ func TestNativeProgramsThatAliasesAndHyphensHideStillAsk(t *testing.T) {
 		}
 	}
 	// Linux hands the argument over as it is
-	lin := evasionEnvs()[0]
+	lin := evasionEnvs()[0].env
+	lin.OS = "linux"
 	for _, c := range []string{`rg 'a b\' .`, `sort.exe 'a"b'`, `git -c '' status`, `cross-env 'A=1" B=2' x`} {
-		if d := judgeAs(lin.env, r, "Bash", c); d.Verdict != classes.Allow {
+		if d := judgeAs(lin, r, "Bash", c); d.Verdict != classes.Allow {
 			t.Errorf("linux: %q = %s (%q); want allow", c, d.Verdict, d.Reason)
 		}
 	}
