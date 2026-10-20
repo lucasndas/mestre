@@ -88,7 +88,7 @@ func (x *channelRig) seedTable(t *testing.T, table, branch string, epic int) (ci
 // the Tower prepares and starts the terminal, the state comes back in the reports, a
 // message of the inbox is typed there, the turn that ends brings the character back
 // to idle, and dismissing it ends the terminal on the Tower.
-// Part of CA-CIDADELA-16
+// Part of CA-CIDADELA-16 (the whole path of a character on a Tower; the other cases of the criterion are in towerchannel_full_test.go)
 func TestAMasterRecruitsACharacterOnATowerAndItWorksTheTableThere(t *testing.T) {
 	t.Parallel()
 	x := newChannelRigWith(t, channelOpts{builder: true})
@@ -110,7 +110,10 @@ func TestAMasterRecruitsACharacterOnATowerAndItWorksTheTableThere(t *testing.T) 
 	}
 	var dev characters.Character
 	x.r.waitFor("the character to be ready on the Tower", func() bool {
-		cs, _ := x.orc.Registry.AliveOf(ctx, "meu-app")
+		cs, err := x.orc.Registry.AliveOf(ctx, "meu-app")
+		if err != nil {
+			t.Fatal(err)
+		}
 		for _, c := range cs {
 			if c.Name == "Dev-Busca" {
 				dev = c
@@ -125,19 +128,24 @@ func TestAMasterRecruitsACharacterOnATowerAndItWorksTheTableThere(t *testing.T) 
 	if _, err := os.Stat(filepath.Join(tree, "README.md")); err != nil {
 		t.Errorf("the worktree of the table on the Tower has not the code: %v", err)
 	}
+	if branch := git(t, tree, "rev-parse", "--abbrev-ref", "HEAD"); branch != "mestre/4-busca" {
+		t.Errorf("the worktree of the Tower is on %q; want the branch of the table", branch)
+	}
 	if !x.aliveOnTower(dev.ID) {
 		t.Fatal("the Tower has no live terminal for the character")
 	}
 	// a message of the inbox is typed on the Tower; the turn ends and the Citadel sees it idle again
+	before := dev.LastSignalAt
 	it, err := x.orc.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: "meu-app", Target: dev.ID, Kind: inbox.KindAgent, Sender: "Mestre", Text: "implemente a busca"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	x.r.waitFor("the message to be delivered and the turn to end", func() bool {
 		cur, err := x.orc.Inbox.Store().Get(ctx, it.ID)
-		return err == nil && cur.State == inbox.Delivered && x.state(t, dev.ID) == characters.Idle
+		now, gerr := x.orc.Registry.Get(ctx, dev.ID)
+		// the signals of the turn (start and end) came back from the Tower: it went through busy
+		return err == nil && gerr == nil && cur.State == inbox.Delivered && now.State == characters.Idle && now.LastSignalAt.After(before)
 	})
-	// dismissing it ends the terminal on the Tower
 	// the task of the message is still open: dismissing is scheduled for its safe point
 	dismiss := func() localchan.Response {
 		return forwarder{x.a.e}.Forward(ctx, &localchan.Call{
@@ -147,6 +155,9 @@ func TestAMasterRecruitsACharacterOnATowerAndItWorksTheTableThere(t *testing.T) 
 	}
 	if resp := dismiss(); resp.OK || !strings.Contains(string(resp.Data), "scheduled") {
 		t.Fatalf("dismiss of a character with its task open: %+v", resp)
+	}
+	if c, _ := x.orc.Registry.Get(ctx, dev.ID); c.State != characters.Idle || c.StopRequestedBy == "" || !x.aliveOnTower(dev.ID) {
+		t.Fatalf("with the dismissal pending the character is %s (stop requested by %q, alive on the Tower %v); want idle, asked and alive", c.State, c.StopRequestedBy, x.aliveOnTower(dev.ID))
 	}
 	// the character says it is done, from the Tower, through the connection
 	done := forwarder{x.b.e}.Forward(ctx, &localchan.Call{
@@ -160,4 +171,7 @@ func TestAMasterRecruitsACharacterOnATowerAndItWorksTheTableThere(t *testing.T) 
 	x.r.waitFor("the character to be stopped and its terminal gone from the Tower", func() bool {
 		return x.state(t, dev.ID) == characters.Stopped && !x.aliveOnTower(dev.ID)
 	})
+	if c, _ := x.orc.Registry.Get(ctx, dev.ID); c.TaskOpen {
+		t.Error("the task is still open after the done")
+	}
 }
