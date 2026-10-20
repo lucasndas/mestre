@@ -21,7 +21,9 @@ func (s *Service) Report(ctx context.Context, r Report) error {
 		s.mu.Unlock()
 		return nil
 	}
-	s.seq[r.Character] = r.Seq
+	if r.Seq != 0 { // a resync (Seq 0) is applied but does not reset what was seen
+		s.seq[r.Character] = r.Seq
+	}
 	s.mu.Unlock()
 	c, err := s.o.Registry.Get(ctx, r.Character)
 	if err != nil {
