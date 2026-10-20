@@ -13,7 +13,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -211,13 +210,7 @@ func (w *prWorld) githubReady(orc *Orchestration, db *store.DB) {
 	fence := guild.NewFence(guild.FenceConfig{Lock: epochLock{}, Clock: clock.Real{}, Epoch: func() uint64 { return 1 }})
 	go func() { _ = fence.Run(ctx) }()
 	w.attach(orc, db, v, fence)
-	for i := 0; i < 2000 && !fence.LeaseValid(); i++ {
-		runtime.Gosched()
-		time.Sleep(time.Millisecond)
-	}
-	if !fence.LeaseValid() {
-		t.Fatal("the lease of the epoch did not become valid")
-	}
+	w.r.waitFor("the lease of the epoch to be valid", fence.LeaseValid)
 }
 
 // attach opens the standard integration over the double of GitHub for the
