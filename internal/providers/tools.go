@@ -125,6 +125,12 @@ type Options struct {
 	// a text with line breaks is not typed (ErrTooLong), it goes through the
 	// file of the long messages.
 	AntigravityNoPaste bool
+	// NoFlush writes the trust files of the providers without flushing them
+	// to the disk (the default flushes). Only tests that are not about
+	// durability set it, as they open the database with Synchronous OFF
+	// (docs/qualidade/testes.md): a flush costs tens of milliseconds on a
+	// Windows runner.
+	NoFlush bool
 }
 
 // NormalizePath normalizes a path the way the adapters do with the paths of

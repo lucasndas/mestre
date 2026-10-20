@@ -570,6 +570,8 @@ type worldOpts struct {
 	noPeers bool
 	// settings replaces the defaults of the workspace.
 	settings tables.Settings
+	// deps replaces the absence of dependencies between the epics.
+	deps tables.Dependencies
 }
 
 func newWorld(t *testing.T, o worldOpts) *world {
@@ -626,6 +628,7 @@ func newWorld(t *testing.T, o worldOpts) *world {
 		opts.Peers = w.peers
 	}
 	opts.Settings = o.settings
+	opts.Dependencies = o.deps
 	w.svc, err = tables.New(opts)
 	if err != nil {
 		t.Fatal(err)
