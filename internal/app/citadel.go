@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/guild"
@@ -109,13 +110,15 @@ type takeover struct {
 
 // citadelRun is one period of this machine as the Citadel.
 type citadelRun struct {
-	db      *store.DB
-	epoch   uint64
-	fence   *guild.Fence
-	srv     *protocol.Server
-	primary *replication.Primary
-	vault   *vault.Vault
-	gate    gate
+	db    *store.DB
+	epoch uint64
+	fence *guild.Fence
+	// reconcileFail is why the fence waits for the reconciliation with GitHub (nil: it does not).
+	reconcileFail atomic.Pointer[reconcileFailure]
+	srv           *protocol.Server
+	primary       *replication.Primary
+	vault         *vault.Vault
+	gate          gate
 	// ran keeps the results of the calls that may come back from the
 	// outbox of a Tower (ranCalls).
 	ran *ranCalls
@@ -562,18 +565,14 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 			}
 		}
 	}
-	run.fence = guild.NewFence(guild.FenceConfig{
-		Lock: e.lockOf(run), Clock: e.clk, Epoch: func() uint64 { return run.epoch }, Promoted: promoted, Wait: wait, Logger: e.log, Reconcile: reconcilerOf(integ, hosted),
-		OnHigher: func(uint64) { e.signal(transition{to: RoleTower, unknown: true}) },
-		OnChange: func(s guild.FenceState) {
-			run.setActing(s == guild.FenceConfirmed || s == guild.FenceLockDown || s == guild.FenceNoLock)
-			if integ != nil {
-				integ.FenceChanged(s)
-			}
-			e.changed()
-		},
-		OnDiscard: func(names []string) { e.dropped(run.epoch, names) },
-	})
+	reconcile := e.reconcileFor(run, db, reconcilerOf(integ, hosted))
+	if !promoted && reconcile != nil && e.reconcilePending(ctx, db, run.epoch) {
+		// A promoted Citadel that restarted before it finished reconciling GitHub
+		// reconciles again, after a short wait (the old one's lease is long gone).
+		promoted, wait = true, time.Second
+		e.log.Warn("app: the epoch was not reconciled with GitHub; reconciling it before acting", "epoch", run.epoch)
+	}
+	run.fence = guild.NewFence(e.fenceConfig(run, integ, reconcile, promoted, wait))
 	if integ != nil {
 		integ.BindFence(run.fence)
 	}
@@ -1049,4 +1048,65 @@ func sweepBundles(dir string, log *slog.Logger) {
 			log.Warn("app: a leftover bundle of a mirror was not removed", "err", err)
 		}
 	}
+}
+
+// fenceConfig is the configuration of the fence of a period of the Citadel.
+// reconcile is what a promoted Citadel does with GitHub before it acts (nil:
+// nothing).
+func (e *Engine) fenceConfig(run *citadelRun, integ IntegrationRun, reconcile func(context.Context) error, promoted bool, wait time.Duration) guild.FenceConfig {
+	return guild.FenceConfig{
+		Lock: e.lockOf(run), Clock: e.clk, Epoch: func() uint64 { return run.epoch }, Promoted: promoted, Wait: wait, Logger: e.log, Reconcile: reconcile,
+		OnHigher: func(uint64) { e.signal(transition{to: RoleTower, unknown: true}) },
+		OnChange: func(s guild.FenceState) {
+			run.setActing(s == guild.FenceConfirmed || s == guild.FenceLockDown || s == guild.FenceNoLock)
+			if integ != nil {
+				integ.FenceChanged(s)
+			}
+			e.changed()
+		},
+		OnDiscard: func(names []string) { e.dropped(run.epoch, names) },
+	}
+}
+
+// reconcileFailure is why a promoted Citadel still waits and since when.
+type reconcileFailure struct {
+	since time.Time
+	err   string
+}
+
+// reconcileFor wraps the reconciliation of the period: a failure is logged as an
+// error and kept for the status (the fence stays waiting and tries again), and a
+// success records the epoch as reconciled. nil stays nil.
+func (e *Engine) reconcileFor(run *citadelRun, db *store.DB, base func(context.Context) error) func(context.Context) error {
+	if base == nil {
+		return nil
+	}
+	return func(ctx context.Context) error {
+		err := base(ctx)
+		if err == nil {
+			if err = guild.MarkReconciled(ctx, db, run.epoch, e.clk.Now()); err != nil {
+				err = fmt.Errorf("recording the epoch as reconciled: %w", err)
+			}
+		}
+		if err != nil {
+			since := e.clk.Now()
+			if prev := run.reconcileFail.Load(); prev != nil {
+				since = prev.since
+			}
+			run.reconcileFail.Store(&reconcileFailure{since: since, err: err.Error()})
+			e.log.Error("app: the promoted Citadel waits: the reconciliation with GitHub failed", "epoch", run.epoch, "since", since, "err", err)
+			e.changed()
+			return err
+		}
+		run.reconcileFail.Store(nil)
+		e.changed()
+		return nil
+	}
+}
+
+// reconcilePending says the epoch was taken by this machine by a promotion and
+// the reconciliation with GitHub did not finish.
+func (e *Engine) reconcilePending(ctx context.Context, db *store.DB, epoch uint64) bool {
+	rec, err := guild.EpochStart(ctx, db, epoch)
+	return err == nil && rec.Epoch > 1 && rec.CitadelMachineID == e.id.MachineID && rec.ReconciledAt.IsZero()
 }

@@ -62,6 +62,9 @@ type Status struct {
 	// the external functions are on.
 	Fence  guild.FenceState `json:"fence,omitempty"`
 	Acting bool             `json:"acting"`
+	// Waiting says why a promoted Citadel does not act yet when GitHub could not be
+	// reconciled ("Cidadela promovida aguardando reconciliação desde HH:MM: <motivo>").
+	Waiting string `json:"waiting,omitempty"`
 	// Failover is true while this machine takes the command.
 	Failover bool `json:"failover"`
 	// Connected is true on a Tower connected to the Citadel.
@@ -607,6 +610,7 @@ func (e *Engine) Status() Status {
 	}
 	if run != nil && st.Role == RoleCitadel {
 		st.Fence, st.Acting = run.fence.State(), run.fence.Acting()
+		st.Waiting = e.waitingOf(run)
 	}
 	_ = e.withGuildDB(func(db *store.DB) error {
 		st.LSN, _ = db.LastLSN(context.Background())
@@ -939,4 +943,14 @@ func (e *Engine) lockRefusal(ctx context.Context, cmd string) (localchan.Respons
 		return localchan.Response{}, true
 	}
 	return cli.LockedResponse(), false
+}
+
+// waitingOf says why a promoted Citadel does not act yet because GitHub could not
+// be reconciled ("" when it does not wait for that).
+func (e *Engine) waitingOf(run *citadelRun) string {
+	f := run.reconcileFail.Load()
+	if f == nil || run.fence == nil || run.fence.State() != guild.FenceWaiting {
+		return ""
+	}
+	return fmt.Sprintf("Cidadela promovida aguardando reconciliação desde %s: %s", f.since.Format("15:04"), f.err)
 }
