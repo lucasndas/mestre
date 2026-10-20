@@ -4,6 +4,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 )
@@ -21,6 +22,9 @@ func TestParseCriteriaReadsOnlyTheItemsOfTheSectionInOrder(t *testing.T) {
 		"fenced code":            {"## Criterios\n```\n- [ ] dentro do código\n```\n- [ ] fora\n", []string{"fora"}},
 		"crlf":                   {"## Critérios\r\n- [ ] um\r\n- [ ] dois\r\n", []string{"um", "dois"}},
 		"plain bullets":          {"## Critérios\n- sem caixa\n- [ ]\n- [ ] com caixa\n", []string{"com caixa"}},
+		"blank item":             {"## Critérios\n- [ ]  \n- [ ]\t\n- [ ] real\n", []string{"real"}},
+		"issue reference":        {"## critérios\n- [ ] a\n#42 depende disto\n- [ ] b\n", []string{"a", "b"}},
+		"control characters":     {"## Critérios\n- [ ] a\x1b[31mb\n", []string{"a[31mb"}},
 		"deeper heading ends it": {"## Critérios\n- [ ] a\n### Notas\n- [ ] b\n", []string{"a"}},
 	} {
 		if got := tables.ParseCriteria(tc.body); !slices.Equal(got, tc.want) {
@@ -48,7 +52,32 @@ func TestTableStatusGivesTheEpicWithItsNumberItsTitleAndTheThreeCriteria(t *test
 		t.Errorf("epic = %v", epic)
 	}
 
-	// An epic that cannot be read is not an epic without criteria.
+	// An epic that cannot be read is not an epic without criteria; one that
+	// hangs is not waited for.
+	w.gh.mu.Lock()
+	w.gh.hang = true
+	w.gh.mu.Unlock()
+	done := make(chan map[string]any)
+	go func() {
+		r := w.run(w.gm.ID, "table status", nil, "42-login")
+		e, _ := dataOf(t, r)["epic"].(map[string]any)
+		done <- e
+	}()
+	var hung map[string]any
+	for hung == nil {
+		w.clk.Advance(time.Second)
+		select {
+		case hung = <-done:
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	if hung["criteria_error"] == nil || len(hung["criteria"].([]any)) != 0 {
+		t.Errorf("epic with a hanging GitHub = %v", hung)
+	}
+	w.gh.mu.Lock()
+	w.gh.hang = false
+	w.gh.mu.Unlock()
+
 	w.gh.mu.Lock()
 	w.gh.err = errors.New("github is down")
 	w.gh.mu.Unlock()
@@ -57,7 +86,7 @@ func TestTableStatusGivesTheEpicWithItsNumberItsTitleAndTheThreeCriteria(t *test
 		t.Fatal(r.Error)
 	}
 	epic, _ = dataOf(t, r)["epic"].(map[string]any)
-	if epic["number"] != float64(42) || epic["title"] != "Login" || epic["criteria_error"] == nil {
+	if c, ok := epic["criteria"].([]any); epic["number"] != float64(42) || epic["title"] != "Login" || epic["criteria_error"] == nil || !ok || len(c) != 0 {
 		t.Errorf("epic with GitHub down = %v", epic)
 	}
 }

@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // Handlers are the commands `table open|list|status|close` of the Grand
@@ -308,6 +310,9 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 	return localchan.OK(data)
 }
 
+// epicReadTimeout is how long `table status` waits for the epic.
+const epicReadTimeout = 10 * time.Second
+
 // epicOf is the epic of a table for `table status`: its number, its title and
 // the criteria written in the section `## Critérios` of its body, read from
 // the repository host now. When it cannot be read the criteria are empty and
@@ -319,13 +324,15 @@ func (s *Service) epicOf(ctx context.Context, t Table) map[string]any {
 		e["criteria_error"] = err.Error()
 		return e
 	}
-	epic, err := s.o.GitHub.Epic(ctx, t.Workspace, t.Epic)
+	rctx, cancel := clock.WithTimeout(ctx, s.clk, epicReadTimeout)
+	defer cancel()
+	epic, err := s.o.GitHub.Epic(rctx, t.Workspace, t.Epic)
 	if err != nil {
 		e["criteria_error"] = err.Error()
 		return e
 	}
 	if epic.Title != "" {
-		e["title"] = epic.Title
+		e["title"] = clean(epic.Title)
 	}
 	e["criteria"] = ParseCriteria(epic.Body)
 	return e

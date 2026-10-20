@@ -197,9 +197,18 @@ type fakeGitHub struct {
 	closedPR []int
 	closedEp []int
 	err      error
+	// hang makes Epic wait for its context to end.
+	hang bool
 }
 
-func (g *fakeGitHub) Epic(_ context.Context, _ string, n int) (tables.Epic, error) {
+func (g *fakeGitHub) Epic(ctx context.Context, _ string, n int) (tables.Epic, error) {
+	g.mu.Lock()
+	hang := g.hang
+	g.mu.Unlock()
+	if hang {
+		<-ctx.Done()
+		return tables.Epic{}, ctx.Err()
+	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.err != nil {
