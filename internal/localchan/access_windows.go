@@ -1,6 +1,16 @@
 package localchan
 
-import "github.com/lucasndas/mestre/internal/winsvc"
+import (
+	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/lucasndas/mestre/internal/winsvc"
+)
+
+// DefaultTerminalAccess is what the engine does on the socket for each
+// terminal while it lives: the ACE of the logon SID of the terminal, on the
+// file and on the folder (winsvc.TerminalAccess).
+func DefaultTerminalAccess(socket string) terminal.Access {
+	return winsvc.TerminalAccess{Socket: socket}
+}
 
 // DefaultAccess on Windows is the ACL of cli.sock of an instance
 // (docs/arquitetura/canal-local.md#endpoint): the engine, whose account owns

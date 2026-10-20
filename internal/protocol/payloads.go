@@ -425,6 +425,38 @@ type TableSent struct {
 	Error     string   `json:"error,omitempty"`
 }
 
+// RitualPreRun is `ritual.prerun`: run Command as the character, in its
+// worktree, without interaction. The answer is RitualPreRunResult, in the ack.
+type RitualPreRun struct {
+	Character string `json:"character" proto:"req"`
+	Command   string `json:"command" proto:"req"`
+	// TimeoutSeconds bounds the run; MaxOutput is the most that is kept of the output.
+	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
+	MaxOutput      int `json:"max_output,omitempty"`
+}
+
+// RitualPreRunResult is what came of the pre-run.
+type RitualPreRunResult struct {
+	Output   string `json:"output,omitempty"`
+	ExitCode int    `json:"exit_code"`
+	Stderr   string `json:"stderr,omitempty"`
+	TimedOut bool   `json:"timed_out,omitempty"`
+}
+
+// ScrollPut is `scroll.put`: write the read-only copy of a scroll at Rel, in the
+// worktree Dir of a table on this machine.
+type ScrollPut struct {
+	Dir     string `json:"dir" proto:"req"`
+	Rel     string `json:"rel" proto:"req"`
+	Content string `json:"content"`
+}
+
+// ScrollRemove is `scroll.remove`: take the copy of a scroll that was deleted.
+type ScrollRemove struct {
+	Dir string `json:"dir" proto:"req"`
+	Rel string `json:"rel" proto:"req"`
+}
+
 // TableNotice is `table.notice`: a Tower tells the master of a table something
 // about its worktree (a branch that diverged, a worktree that conflicts).
 type TableNotice struct {
