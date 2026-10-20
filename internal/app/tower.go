@@ -19,7 +19,9 @@ import (
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/discovery"
+	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/guild"
+	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/replication"
@@ -69,10 +71,23 @@ func (e *Engine) replicaConfig(db *store.DB) (replication.ReplicaConfig, error) 
 	if err != nil {
 		return replication.ReplicaConfig{}, err
 	}
-	return replication.ReplicaConfig{
+	cfg := replication.ReplicaConfig{
 		DB: db, Clock: e.clk, GuildID: e.id.GuildID, Vault: e.vaultCopy(),
 		TransferDir: e.paths.transfers(), Leftovers: e.paths.leftovers(), Logger: e.log, Files: files,
-	}, nil
+	}
+	if e.paths.Workspaces != "" {
+		// the replica of each mirror lives where the worktrees of the tables of the Tower come from
+		masker := e.deps.Masker
+		if masker == nil {
+			masker = logging.NewMasker()
+		}
+		git, err := gitx.New(gitx.Options{Clock: e.clk, Masker: masker, Suite: os.Getenv("MESTRE_TEST_SUITE")})
+		if err != nil {
+			return replication.ReplicaConfig{}, err
+		}
+		cfg.Mirrors = &replication.MirrorStore{Root: e.paths.Workspaces, Git: git}
+	}
+	return cfg, nil
 }
 
 // towerWiper is what a Tower runs when the Citadel tells it to leave the Guild
