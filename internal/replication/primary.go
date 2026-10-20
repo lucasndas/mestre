@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -703,6 +704,7 @@ func (p *Primary) ship(ctx context.Context, link *protocol.Link, pe *peer, rows 
 		return err
 	}
 	var sent uint64
+	syncedMirrors := map[string]bool{}
 	for _, r := range rows {
 		row := r
 		if excluded {
@@ -716,6 +718,13 @@ func (p *Primary) ship(ctx context.Context, link *protocol.Link, pe *peer, rows 
 			if err != nil {
 				return sent, err
 			}
+			// a mirror is brought up to date once per batch: it holds every commit the
+			// rows of the batch cite (the rows are written after the commits arrive)
+			mirrors = slices.DeleteFunc(mirrors, func(id string) bool {
+				seen := syncedMirrors[id]
+				syncedMirrors[id] = true
+				return seen
+			})
 			if len(files)+len(mirrors) > 0 {
 				if err := flush(); err != nil {
 					return sent, err
@@ -725,7 +734,9 @@ func (p *Primary) ship(ctx context.Context, link *protocol.Link, pe *peer, rows 
 						break
 					}
 					if err := pe.files.ensure(ctx, link, excluded, ref); err != nil {
-						return sent, err
+						if skip := p.skippable(ctx, link, "file", ref.Root+"/"+ref.Path, err); skip != nil {
+							return sent, skip
+						}
 					}
 				}
 				for _, id := range mirrors {
@@ -733,7 +744,9 @@ func (p *Primary) ship(ctx context.Context, link *protocol.Link, pe *peer, rows 
 						break
 					}
 					if err := p.cfg.Mirrors.sync(ctx, link, pe, id); err != nil {
-						return sent, err
+						if skip := p.skippable(ctx, link, "mirror", id, err); skip != nil {
+							return sent, skip
+						}
 					}
 				}
 			}
@@ -754,6 +767,18 @@ func (p *Primary) ship(ctx context.Context, link *protocol.Link, pe *peer, rows 
 		sent = row.LSN
 	}
 	return sent, flush()
+}
+
+// skippable decides what a failure to send a cited file or mirror does: it is
+// logged and the record goes on (as the sending of every mirror and folder does),
+// unless the context ended or the connection is gone, which stops the batch to
+// be sent again.
+func (p *Primary) skippable(ctx context.Context, link *protocol.Link, what, name string, err error) error {
+	if ctx.Err() != nil || !link.Connected() {
+		return err
+	}
+	p.cfg.Logger.Warn("replication: a cited "+what+" was not sent, the record goes on", "name", name, "err", err)
+	return nil
 }
 
 // cited lists the files and the mirrors a record cites.
@@ -826,6 +851,28 @@ func (p *Primary) FileChanged(root, rel string) {
 			}
 		})
 	}
+}
+
+// ErrNoTower is returned by SendFile for a machine that is not connected.
+var ErrNoTower = errors.New("replication: the machine is not connected")
+
+// SendFile sends one file of the folders to a Tower now and returns when the
+// Tower has it (or already had it): for a command that needs the file there
+// before it goes on, as the copy of an attachment into a table of the Tower.
+// FileChanged is for the files nobody waits for.
+func (p *Primary) SendFile(ctx context.Context, machine string, ref FileRef) error {
+	srv := p.server()
+	p.mu.Lock()
+	pe := p.peers[machine]
+	p.mu.Unlock()
+	if srv == nil || pe == nil || pe.files == nil {
+		return fmt.Errorf("%w: %s", ErrNoTower, machine)
+	}
+	link := srv.Link(machine)
+	if !link.Connected() {
+		return fmt.Errorf("%w: %s", ErrNoTower, machine)
+	}
+	return pe.files.ensure(ctx, link, pe.isExcluded(), ref)
 }
 
 func (p *Primary) syncMirrors(ctx context.Context, link *protocol.Link, pe *peer) error {

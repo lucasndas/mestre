@@ -404,6 +404,15 @@ type TableRef struct {
 	Table     string `json:"table" proto:"req"`
 }
 
+// TableAttach is `table.attach`: copy attachments into the worktree of a table
+// on this Tower. Paths are relative to the main clone (`.mestre/anexos/…`); the
+// Citadel has sent the files to the main clone of the Tower already.
+type TableAttach struct {
+	Workspace string   `json:"workspace" proto:"req"`
+	Table     string   `json:"table" proto:"req"`
+	Paths     []string `json:"paths" proto:"req"`
+}
+
 // TableWhere is the answer to `table.where`, in the ack: where the Tower keeps
 // (or would keep) the worktree of the table and, when it exists, its state.
 type TableWhere struct {
