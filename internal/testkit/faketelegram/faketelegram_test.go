@@ -165,7 +165,7 @@ func TestUnknownMethodOrParameterFailsTheTest(t *testing.T) {
 		want                string
 	}{
 		{"unknown method", token, "sendPhoto", url.Values{"chat_id": {"1"}}, "telegram sendPhoto"},
-		{"unknown method with a wrong token", "wrong", "getFile", nil, "telegram getFile"},
+		{"unknown method with a wrong token", "wrong", "sendVideo", nil, "telegram sendVideo"},
 		{"unknown parameter", token, "sendMessage", url.Values{"chat_id": {"1"}, "text": {"x"}, "message_thread_id": {"3"}}, "telegram sendMessage parameter message_thread_id"},
 		{"unknown getUpdates parameter", token, "getUpdates", url.Values{"limit": {"5"}}, "telegram getUpdates parameter limit"},
 	}

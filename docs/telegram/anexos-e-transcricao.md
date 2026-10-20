@@ -12,7 +12,7 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
 
 - **Tamanho:**
   - O limite é configurável. O padrão é **20 MB**, que é também o teto para o Telegram, porque a Bot API na nuvem só baixa arquivos de até 20 MB.
-  - O motor confere o `file_size` **antes** de chamar `getFile`. Acima do limite, responde com o limite e não baixa nada.
+  - O motor confere o `file_size` **antes** de chamar `getFile`. Acima do limite, responde com o limite e não baixa nada. O limite vale também durante o download: um arquivo que passa dele, seja qual for o tamanho declarado, é cortado e recusado, sem nova tentativa.
 - **Download:** `getFile` e depois o link de arquivo, que vale pelo menos 1 hora. De uma foto, o motor baixa o maior tamanho disponível.
 - **Onde fica:** `.mestre/anexos/<AAAA>/<MM>/<id>-<nome>` no clone principal do workspace, na Cidadela.
   - O nome é saneado: sem separadores de caminho nem caracteres de controle, com até 100 caracteres. Uma foto sem nome vira `foto-<id>.jpg`.
@@ -32,6 +32,8 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
 - **Repasse à mesa:** o Grão-Mestre repassa o pedido ao Mestre da mesa com o texto original e os caminhos dos anexos ([Grão-Mestre](../orquestracao/grao-mestre.md)).
   - Quando o motor encontra um caminho em `.mestre/anexos/` numa mensagem para um personagem de mesa, ele copia o arquivo para os worktrees daquela mesa, inclusive nas Torres, pela conexão de cada Torre ([protocolo](../conectividade/protocolo.md#transferência-em-partes)).
   - Onde a cópia fica está em [sessão zero da mesa](../sessao-zero/mesa.md).
+- **Qualquer tipo é guardado:** o motor não recusa um tipo; vale o que o conteúdo diz ser, o arquivo nasce sem permissão de execução e o caminho é sempre o saneado. Legenda e transcrição passam pelo mascaramento de segredos antes de chegar a um agente.
+- **Mensagem que espera:** a mensagem do usuário guardada com o Mestre travado, ou à espera da escolha do workspace, leva a referência do arquivo; o arquivo só é baixado quando a mensagem é entregue, já com o workspace conhecido.
 - **Nunca executar:** anexos são conteúdo trazido pelo usuário. Os agentes leem e usam, mas nunca executam. É regra fixa do Mestre: o `mestre hook` nega executar ou dar permissão de execução a arquivos de `.mestre/anexos/` ([permissões](../classes/permissoes.md)).
 - **Limpeza:** não há limpeza automática; os anexos ficam até alguém apagá-los.
 
@@ -66,7 +68,9 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
   - O motor **da Cidadela** converte com `ffmpeg` (dependência do pacote no Ubuntu e do instalador do Windows, presente em toda máquina) para WAV 16 kHz mono antes de enviar à máquina que transcreve, seja ela qual for. Assim a máquina que transcreve nunca converte. O servidor não roda com `--convert`.
 - **Fila e tempo:**
   - Uma transcrição por vez por máquina, em ordem de chegada.
-  - O tempo limite é o maior entre 60 s e 2 vezes a duração do áudio (padrão).
+  - O tempo limite é o maior entre 60 s e 2 vezes a duração do áudio (padrão), contado depois que a vez do áudio chega.
+  - O motor só fala com um `whisper-server` em `127.0.0.1`; outro endereço é recusado antes de mandar o áudio.
+  - Texto vazio ou só marcas de ruído (`[BLANK_AUDIO]`, `(música)`) é falha.
 - **Privacidade:**
   - O servidor só escuta em `127.0.0.1`.
   - O áudio e o texto viajam só pela conexão WSS com mTLS entre a Cidadela e a máquina que transcreve.
@@ -97,7 +101,8 @@ sequenceDiagram
 
 ## Regras e erros
 
-- Um anexo que falha no download é tentado 3 vezes. Depois disso, o bot avisa o usuário e o Grão-Mestre não recebe nada.
+- Um anexo que falha no download é tentado 3 vezes, com espera de 1 s e 2 s no relógio do motor. Depois disso, o bot avisa o usuário e o Grão-Mestre não recebe nada.
+- Sem o serviço de anexos, qualquer mensagem com arquivo é respondida com "não consigo receber arquivos agora" e nada é entregue.
 - O tipo MIME detectado prevalece sobre o declarado. A divergência fica registrada.
 - Sem modelo baixado ou sem máquina capaz, todo áudio cai no caminho de falha e o checklist (desde o M7) acusa.
 

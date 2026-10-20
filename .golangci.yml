@@ -39,6 +39,7 @@ linters:
             - $all
             - "!**/internal/terminal/**"
             - "!**/internal/gitx/**"
+            - "!**/internal/attachments/ffmpeg/**"
             - "!**/internal/launcher/**"
             - "!**/internal/winsvc/**"
             - "!**/internal/testkit/**"
