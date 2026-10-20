@@ -92,7 +92,7 @@ O Dono pode passar a Cidadela a outra máquina pelo painel, com PIN: a Cidadela 
 ### GitHub depois da troca
 
 - Toda criação no GitHub leva um [marcador de operação](../github/acoes-por-nivel.md#marcador-de-operação).
-- Ao fim da [espera do promovido](trava-no-github.md#espera-do-promovido) e antes da primeira ação externa, a nova Cidadela **reconcilia**: lê o que os Apps da Guilda criaram nos últimos 30 min (padrão) e importa em `github_objects` os marcadores que não conhece ([persistência](../arquitetura/persistencia.md)). A fila de saída reenviada confere o marcador antes de criar. Evento externo com marcador da própria Guilda nunca vira "evento externo" ([eventos](../github/eventos.md)).
+- Ao fim da [espera do promovido](trava-no-github.md#espera-do-promovido) e antes da primeira ação externa, a nova Cidadela **reconcilia**: lê o que os Apps da Guilda criaram nos últimos 30 min (padrão) e importa em `github_objects` os marcadores que não conhece ([persistência](../arquitetura/persistencia.md)). Hoje a leitura cobre os **comentários** dos Apps (autor `[bot]` e marcador no fim do texto, o dono da issue herda a mesa); issues e PRs reenviados confiam no marcador do próprio reenvio. Se a leitura falha, a Cidadela promovida continua em espera e tenta de novo na conferência seguinte (`FenceConfig.Reconcile`, com o prazo de um aluguel). A fila de saída reenviada confere o marcador antes de criar. Evento externo com marcador da própria Guilda nunca vira "evento externo" ([eventos](../github/eventos.md)).
 
 ### Painel redirecionado
 

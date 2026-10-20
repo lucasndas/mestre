@@ -563,7 +563,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		}
 	}
 	run.fence = guild.NewFence(guild.FenceConfig{
-		Lock: e.lockOf(run), Clock: e.clk, Epoch: func() uint64 { return run.epoch }, Promoted: promoted, Wait: wait, Logger: e.log,
+		Lock: e.lockOf(run), Clock: e.clk, Epoch: func() uint64 { return run.epoch }, Promoted: promoted, Wait: wait, Logger: e.log, Reconcile: reconcilerOf(integ, hosted),
 		OnHigher: func(uint64) { e.signal(transition{to: RoleTower, unknown: true}) },
 		OnChange: func(s guild.FenceState) {
 			run.setActing(s == guild.FenceConfirmed || s == guild.FenceLockDown || s == guild.FenceNoLock)
