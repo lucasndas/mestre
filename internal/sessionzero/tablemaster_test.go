@@ -1,6 +1,7 @@
 package sessionzero_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -79,8 +80,10 @@ func TestTheInstructionsOfTheUsersFollowTheRulesInTheLayerOfTwoTableMasters(t *t
 					t.Errorf("%s, %s, %s: the rules of the system are not in the layer", agent, name, id)
 				case title >= 0 && title < rules:
 					t.Errorf("%s, %s, %s: the instructions of the users come before the rules of the system", agent, name, id)
-				case title < 0 && !strings.Contains(text, "INSTRUCTIONS.md"):
-					t.Errorf("%s, %s, %s: the instructions of the users are neither in the text nor pointed to", agent, name, id)
+				case title < 0 && !(strings.Contains(text, "INSTRUCTIONS.md") && slices.ContainsFunc(plan.Layer.Files, func(f sessionzero.File) bool {
+					return f.Path == "INSTRUCTIONS.md" && strings.Contains(string(f.Data), extra[:20])
+				})):
+					t.Errorf("%s, %s, %s: the instructions of the users are neither in the text nor in the file the text points to", agent, name, id)
 				case title >= 0 && !strings.Contains(text[title:], extra[:20]):
 					t.Errorf("%s, %s, %s: the text of the users is not under its title", agent, name, id)
 				}

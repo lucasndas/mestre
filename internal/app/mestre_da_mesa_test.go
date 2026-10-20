@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 )
 
@@ -31,8 +32,8 @@ func TestTheTableMasterIsDeniedTheCommandsThatTalkToTheUsers(t *testing.T) {
 	} {
 		r := w.run(w.master, append(args, "--json")...)
 		v := decodeJSON(t, r)
-		if r.code != 3 || v.OK || v.Error.Code == "" {
-			t.Errorf("%v by the table master = %d %+v, want exit 3 (denied)", args, r.code, v.Error)
+		if r.code != 3 || v.OK || v.Error.Code != "level_denied" {
+			t.Errorf("%v by the table master = %d %+v, want exit 3 level_denied", args, r.code, v.Error)
 		}
 	}
 }
@@ -44,12 +45,8 @@ func TestTheExtraInstructionsReachTheLayerOfTwoTableMastersAfterTheRulesOfTheSys
 	const extra = "Sempre abra o PR em rascunho."
 	w.instructions("mestre-da-mesa.md", extra+"\n")
 	_, second := w.openTable(43)
-	for _, c := range []string{w.master.ID, second.ID} {
-		ch := w.get(w.master)
-		if c == second.ID {
-			ch = w.get(second)
-		}
-		req, err := w.build(ch)
+	for _, c := range []characters.Character{w.master, second} {
+		req, err := w.build(w.get(c))
 		if err != nil {
 			t.Fatal(err)
 		}
