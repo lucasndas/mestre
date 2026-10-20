@@ -2,6 +2,7 @@ package tables_test
 
 import (
 	"errors"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -68,7 +69,8 @@ func TestTableStatusGivesTheEpicWithItsNumberItsTitleAndTheThreeCriteria(t *test
 		w.clk.Advance(time.Second)
 		select {
 		case hung = <-done:
-		case <-time.After(5 * time.Millisecond):
+		default:
+			runtime.Gosched()
 		}
 	}
 	if hung["criteria_error"] == nil || len(hung["criteria"].([]any)) != 0 {
