@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -24,6 +26,9 @@ type commitRig struct {
 	dir   string
 	repo  gitx.Repo
 	procs atomic.Int64
+	mu    sync.Mutex
+	last  []string
+	calls []string // the arguments of every git process, to name them in a failure
 	env   classes.Env
 	rules *classes.Rules
 	ev    providers.Event
@@ -32,7 +37,12 @@ type commitRig struct {
 func newCommitRig(t testing.TB, yaml string) *commitRig {
 	t.Helper()
 	rg := &commitRig{ctx: context.Background()}
-	g, err := gitx.New(gitx.Options{Clock: clock.NewFake(now), Masker: logging.NewMasker(), Trace: func([]string) { rg.procs.Add(1) }})
+	g, err := gitx.New(gitx.Options{Clock: clock.NewFake(now), Masker: logging.NewMasker(), Trace: func(args []string) {
+		rg.procs.Add(1)
+		rg.mu.Lock()
+		rg.calls = append(rg.calls, strings.Join(args, " "))
+		rg.mu.Unlock()
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +103,11 @@ func (rg *commitRig) write(t testing.TB, rel string) {
 func (rg *commitRig) decide() (classes.Decision, int64) {
 	before := rg.procs.Load()
 	d := classes.Decide(rg.ctx, rg.env, rg.rules, rg.ev)
-	return d, rg.procs.Load() - before
+	n := rg.procs.Load() - before
+	rg.mu.Lock()
+	rg.last = append([]string(nil), rg.calls[max(0, len(rg.calls)-int(n)):]...)
+	rg.mu.Unlock()
+	return d, n
 }
 
 const commitRules = `version: 1
@@ -121,13 +135,13 @@ func TestCommitDecisionStartsFewGitProcessesAndReadsTheRealIndex(t *testing.T) {
 	d, n := rg.decide()
 	want(t, d, classes.Allow, "")
 	if n > maxGitProcsPerCommitDecision+1 {
-		t.Fatalf("the first decision (worktree not checked yet) started %d git processes, want at most %d", n, maxGitProcsPerCommitDecision+1)
+		t.Fatalf("the first decision (worktree not checked yet) started %d git processes, want at most %d: %q", n, maxGitProcsPerCommitDecision+1, rg.last)
 	}
 	for range 3 {
 		d, n = rg.decide()
 		want(t, d, classes.Allow, "")
 		if n > maxGitProcsPerCommitDecision {
-			t.Fatalf("a decision on git commit started %d git processes, want at most %d", n, maxGitProcsPerCommitDecision)
+			t.Fatalf("a decision on git commit started %d git processes, want at most %d: %q", n, maxGitProcsPerCommitDecision, rg.last)
 		}
 	}
 
@@ -139,7 +153,7 @@ func TestCommitDecisionStartsFewGitProcessesAndReadsTheRealIndex(t *testing.T) {
 	d, n = rg.decide()
 	want(t, d, classes.Deny, classes.LayerClass, "src/a.ts")
 	if n > maxGitProcsPerCommitDecision {
-		t.Fatalf("the denying decision started %d git processes, want at most %d", n, maxGitProcsPerCommitDecision)
+		t.Fatalf("the denying decision started %d git processes, want at most %d: %q", n, maxGitProcsPerCommitDecision, rg.last)
 	}
 
 	// Taken out of the index again: allowed again.
