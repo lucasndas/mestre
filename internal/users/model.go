@@ -47,6 +47,14 @@ func (u User) Acts(workspace string) bool {
 	return false
 }
 
+// MayHoldGitHub says whether the user may have a personal GitHub credential:
+// active, at a level that connects, and acting in some workspace (the Owner acts
+// in all). A user who lost any of these has no credential in use, and the one
+// he had is taken away.
+func (u User) MayHoldGitHub() bool {
+	return u.State == Active && Can(u.Level, ConnectOwnGitHub) && (u.Level == Owner || len(u.Workspaces) > 0)
+}
+
 // The errors.
 var (
 	ErrNoUser        = errors.New("users: no such user")

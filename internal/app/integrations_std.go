@@ -124,7 +124,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r.stall = &telegram.StallChannel{Users: svc}
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
 	r.gc = &telegram.GuildChannel{Users: svc, PINs: r.pins, Machines: env.Machines, SetExcluded: env.SetExcluded, Pending: env.Pending}
-	r.gh = &telegram.GitHubChannel{Users: svc, Personal: r.personal, Clock: env.Clock, Logger: env.Log}
+	r.gh = &telegram.GitHubChannel{Users: svc, Personal: r.personal, Clock: env.Clock, Logger: env.Log, Moment: r.decrees.Moment}
 	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
 		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log})
@@ -325,13 +325,53 @@ func (r *stdRun) dropPersonal(ctx context.Context, id string) error {
 	if err != nil && !errors.Is(err, users.ErrNoUser) {
 		return fmt.Errorf("app: the user %s was not read to settle his GitHub credential: %w", id, err)
 	}
-	if err == nil && u.State == users.Active && users.Can(u.Level, users.ConnectOwnGitHub) && (u.Level == users.Owner || len(u.Workspaces) > 0) {
+	if err == nil && u.MayHoldGitHub() {
 		return nil
 	}
+	r.gh.Cancel(id) // a code he was waiting to authorize must not connect him now
 	if rerr := r.personal.Remove(ctx, id); rerr != nil {
 		return fmt.Errorf("app: the personal GitHub credential of %s was not removed: %w", id, rerr)
 	}
 	return nil
+}
+
+// personalSweepEvery is how often the credentials of users without the right are
+// swept.
+const personalSweepEvery = 5 * time.Minute
+
+// PersonalSweepLoop runs the sweep until the period ends (a loop of the period of
+// the Citadel): the removal done when a user changed may have failed after the
+// commit, so it is settled again and again.
+func (r *stdRun) PersonalSweepLoop(ctx context.Context) error {
+	return r.sweepPersonalLoop(ctx, personalSweepEvery)
+}
+
+func (r *stdRun) sweepPersonalLoop(ctx context.Context, every time.Duration) error {
+	t := r.env.Clock.NewTicker(every)
+	defer t.Stop()
+	for {
+		r.sweepPersonal(ctx)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C():
+		}
+	}
+}
+
+// sweepPersonal removes the credentials of users who may no longer have one and
+// ends the waits for their authorization.
+func (r *stdRun) sweepPersonal(ctx context.Context) {
+	if r.personal == nil {
+		return
+	}
+	gone, err := r.personal.Sweep(ctx)
+	for _, id := range gone {
+		r.gh.Cancel(id)
+	}
+	if err != nil && ctx.Err() == nil {
+		r.env.Log.Warn("app: the sweep of the personal GitHub credentials failed", "err", err)
+	}
 }
 
 // startBot makes the bot, reading its token from the vault: it runs only when the

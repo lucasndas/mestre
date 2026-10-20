@@ -187,6 +187,11 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 			return rep.Loop(ctx, rulesRetryEvery)
 		})
 	}
+	if sw, ok := integ.(interface {
+		PersonalSweepLoop(ctx context.Context) error
+	}); ok {
+		orc.Loops = append(orc.Loops, sw.PersonalSweepLoop)
+	}
 	if q := hostDecreeUses(integ, orc, e.clk, e.log.Warn); q != nil {
 		ph.decrees = q.Enqueue
 		orc.Loops = append(orc.Loops, q.Loop)

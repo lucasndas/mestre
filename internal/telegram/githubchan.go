@@ -30,13 +30,35 @@ type GitHubChannel struct {
 	Personal PersonalGitHub
 	Clock    clock.Clock
 	Logger   *slog.Logger
+	// Moment writes an instant in the time zone of the Guild (decrees.Service.Moment);
+	// nil: UTC.
+	Moment func(ctx context.Context, t time.Time) string
 
 	bot  *Bot
 	base context.Context
 
 	mu       sync.Mutex
-	watching map[string]context.CancelFunc // the connection each user waits for
+	watching map[string]*githubWatch // the connection each user waits for
 	wg       sync.WaitGroup
+}
+
+// githubWatch is one wait for an authorization; the map holds the pointer, so a
+// wait that ends removes only its own entry, never the one that replaced it.
+type githubWatch struct{ cancel context.CancelFunc }
+
+// Cancel ends the wait of a user for his authorization (his right to a personal
+// credential ended: a code he was given must not connect him).
+func (c *GitHubChannel) Cancel(userID string) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	w := c.watching[userID]
+	delete(c.watching, userID)
+	c.mu.Unlock()
+	if w != nil {
+		w.cancel()
+	}
 }
 
 // Bind ties the channel to the bot; ctx ends the waits (the period of the Citadel).
@@ -47,6 +69,15 @@ func (c *GitHubChannel) Bind(bot *Bot, ctx context.Context) {
 		c.Logger = slog.New(slog.DiscardHandler)
 	}
 	c.mu.Unlock()
+}
+
+// moment is when the code expires, in the time zone of the Guild (Moment), or in
+// UTC, saying so, when none is given: never the zone of the server.
+func (c *GitHubChannel) moment(ctx context.Context, t time.Time) string {
+	if c.Moment != nil {
+		return c.Moment(ctx, t)
+	}
+	return t.UTC().Format("02/01/2006 15:04") + " UTC"
 }
 
 // Commands is /github, for Options.Commands. It begins something, so the lock of
@@ -87,27 +118,30 @@ func (c *GitHubChannel) begin(ctx context.Context, call Call) (string, error) {
 		return "O bot ainda não está pronto; tente de novo em instantes.", nil
 	}
 	if old := c.watching[u.ID]; old != nil {
-		old() // a new code replaces the one he was waiting for
+		old.cancel() // a new code replaces the one he was waiting for
 	}
 	wctx, cancel := context.WithCancel(base)
 	if c.watching == nil {
-		c.watching = map[string]context.CancelFunc{}
+		c.watching = map[string]*githubWatch{}
 	}
-	c.watching[u.ID] = cancel
+	w := &githubWatch{cancel: cancel}
+	c.watching[u.ID] = w
 	c.wg.Add(1)
 	c.mu.Unlock()
-	go c.watch(wctx, cancel, u.ID, call.ChatID, ch)
+	go c.watch(wctx, w, u.ID, call.ChatID, ch)
 	return fmt.Sprintf("Para conectar o seu GitHub, abra %s e digite o código %s (vale até %s). Entre com a conta cadastrada para você. Eu aviso aqui quando a conexão estiver feita; o token vai direto para o cofre e não passa por esta conversa.",
-		ch.VerificationURI, ch.UserCode, ch.ExpiresAt.Local().Format("15:04")), nil
+		ch.VerificationURI, ch.UserCode, c.moment(ctx, ch.ExpiresAt)), nil
 }
 
 // watch asks GitHub at the pace it allows, until the end of the connection.
-func (c *GitHubChannel) watch(ctx context.Context, cancel context.CancelFunc, userID string, chat int64, ch github.Challenge) {
+func (c *GitHubChannel) watch(ctx context.Context, w *githubWatch, userID string, chat int64, ch github.Challenge) {
 	defer c.wg.Done()
 	defer func() {
-		cancel()
+		w.cancel()
 		c.mu.Lock()
-		delete(c.watching, userID)
+		if c.watching[userID] == w { // not the entry of the wait that replaced this one
+			delete(c.watching, userID)
+		}
 		c.mu.Unlock()
 	}()
 	interval := ch.Interval

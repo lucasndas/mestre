@@ -320,7 +320,7 @@ func TestTheTokenIsRenewedBeforeItEndsAndARefusedRenewalExpiresTheCredential(t *
 func TestASuspendedUserOrAChangedLoginHasNoCredentialInUseAndRemovingErasesIt(t *testing.T) {
 	t.Parallel()
 	r := newPersonal(t)
-	ana, err := r.users.Create(r.ctx, r.owner, users.NewUser{Name: "Ana", Level: users.Administrator, GitHubLogin: "ana"})
+	ana, err := r.users.Create(r.ctx, r.owner, users.NewUser{Name: "Ana", Level: users.Administrator, GitHubLogin: "ana", Workspaces: []string{"meu-app"}})
 	if err != nil {
 		t.Fatal(err)
 	}
