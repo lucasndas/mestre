@@ -313,6 +313,94 @@ func TestDeliveryWithoutTurnStartIsUnconfirmedAndNotTypedAgain(t *testing.T) {
 	}
 }
 
+// The screen of Codex 0.163.0 on Windows with the first message kept in its
+// input line, not sent (step 2 of the conformance, the Windows round of
+// 2026-10-19, without the blank lines).
+const codexHeldScreen = "  >_ OpenAI Codex (v0.163.0)\n     ~\\AppData\\Local\\Temp\\mconf-1\\mesa\n\n" +
+	"› Teste de conformidade do Mestre. Sem usar nenhuma ferramenta, responda só com estas duas linhas, preenchidas:\n" +
+	"  CODIGOS: <os códigos que começam com M- e com P- que vieram nas suas instruções>\n" +
+	"  PALAVRA: <a palavra-teste que vale para você> SHELL: <o nome exato da sua ferramenta de rodar comandos de shell>\n\n\n" +
+	"  GPT-6.1-Sol default · ~\\AppData\\Local\\Temp\\mconf-1\\mesa\n                ⚠ 1 warning · f2 to view"
+
+// A delivery of Codex still in its input line 2 s later, with no turn_start,
+// gets the send key once more (never the text), and again at each look
+// while the line holds it; one that started, one whose input line is empty
+// and a dialog on the screen get nothing.
+func TestCodexSendsAgainADeliveryLeftInItsInputLine(t *testing.T) {
+	t.Parallel()
+	text := "Teste de conformidade do Mestre. Sem usar nenhuma ferramenta, responda só com estas duas linhas, preenchidas:\nCODIGOS: <…>\nPALAVRA: <…>"
+	sent := "› Teste de conformidade do Mestre. Sem usar nenhuma ferramenta…\n\n• CODIGOS: M-1 P-2\n\n› Ask Codex to do anything\n\n  GPT-6.1-Sol default · ? for shortcuts"
+	for _, tt := range []struct {
+		name      string
+		screen    string
+		turnStart bool
+		again     bool
+	}{
+		{"kept in the input line", codexHeldScreen, false, true},
+		{"the turn started", codexHeldScreen, true, false},
+		{"sent, the input line is empty", sent, false, false},
+		{"a login screen", "Sign in with ChatGPT\n\n› 1. Sign in with ChatGPT", false, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			clk := clock.NewFake(at)
+			w := &world{}
+			a := providers.NewCodex(providers.Options{})
+			sup := supervisor(clk, a, w, nil)
+			defer sup.Close()
+			sup.Start(t.Context())
+			sup.Screen("› Ask Codex to do anything\n\n  GPT-6.1-Sol default · ? for shortcuts", true)
+			if err := sup.Deliver(t.Context(), "d1", text); err != nil {
+				t.Fatal(err)
+			}
+			if tt.turnStart {
+				sup.Hook(providers.Event{Event: providers.EventTurnStart})
+			}
+			sup.Screen(tt.screen, true)
+			clk.Advance(providers.DefaultSendRetry - time.Millisecond)
+			if n := len(w.snapshot().typed); n != 1 {
+				t.Fatalf("before the retry: typed %d times", n)
+			}
+			clk.Advance(time.Millisecond)
+			want, _ := a.TypeMessage(text)
+			wantTyped := []string{string(want)}
+			if tt.again {
+				wantTyped = append(wantTyped, "\r")
+			}
+			if s := w.snapshot(); !slices.Equal(s.typed, wantTyped) {
+				t.Fatalf("typed = %q, want %q", s.typed, wantTyped)
+			}
+			// The key sent, the input line is empty: the next looks type nothing.
+			sup.Screen(sent, true)
+			clk.Advance(time.Minute)
+			if s := w.snapshot(); !slices.Equal(s.typed, wantTyped) {
+				t.Errorf("after the input line emptied: typed = %q, want %q", s.typed, wantTyped)
+			}
+		})
+	}
+}
+
+// While the input line keeps the text, each look sends the key, up to
+// SendRetries; then nothing more, and the delivery waits for its timeout.
+func TestCodexSendsAgainAtMostSendRetriesTimes(t *testing.T) {
+	t.Parallel()
+	clk := clock.NewFake(at)
+	w := &world{}
+	a := providers.NewCodex(providers.Options{})
+	sup := supervisor(clk, a, w, nil)
+	defer sup.Close()
+	sup.Start(t.Context())
+	sup.Screen("› Ask Codex to do anything\n\n  GPT-6.1-Sol default · ? for shortcuts", true)
+	if err := sup.Deliver(t.Context(), "d1", "Teste de conformidade do Mestre. Sem usar nenhuma ferramenta, responda só com estas duas linhas, preenchidas:"); err != nil {
+		t.Fatal(err)
+	}
+	sup.Screen(codexHeldScreen, true)
+	clk.Advance(time.Minute)
+	if s := w.snapshot(); len(s.typed) != 1+providers.SendRetries || !slices.Equal(s.unconfirmed, []string{"d1"}) {
+		t.Errorf("typed %q, unconfirmed %v; want the delivery and %d keys, then unconfirmed", s.typed, s.unconfirmed, providers.SendRetries)
+	}
+}
+
 // The known screens of the adapters: an answer only from a decision, the
 // login as a checklist alert, the rest escalated.
 func TestKnownScreens(t *testing.T) {
