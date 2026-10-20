@@ -21,10 +21,15 @@ const CeilingVersion = 1
 
 // DefaultCeilingYAML is the default ceiling the session zero of the
 // workspace writes: no restriction beyond the fixed rules, but no class asks
-// for a push, sends CI changes or uses the Operador do PC, and no cost block
-// (only the usage limits hold).
+// for a push, sends CI changes or uses the Operador do PC, no class reads the
+// files of secrets (the globs of permissoes_e_segredos of the approval policy,
+// but **/secrets/** and **/*permission*, which there only ask), and no cost
+// block (only the usage limits hold). **/.env* has no exception: it takes
+// .env.example too (docs/classes/teto-do-workspace.md).
 const DefaultCeilingYAML = `version: 1
 permissions:
+  files:
+    deny: ["**/.env*", "**/*.pem", "**/*.key", "**/id_rsa*", "**/id_ed25519*", "**/id_ecdsa*", "**/.npmrc", "**/credentials*.json", "**/service-account*.json"]
   git:
     request_push: false
     workflows: never

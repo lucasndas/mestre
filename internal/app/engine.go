@@ -62,6 +62,9 @@ type Status struct {
 	// the external functions are on.
 	Fence  guild.FenceState `json:"fence,omitempty"`
 	Acting bool             `json:"acting"`
+	// Waiting says why a promoted Citadel does not act yet when GitHub could not be
+	// reconciled ("Cidadela promovida aguardando reconciliação desde HH:MM: <motivo>").
+	Waiting string `json:"waiting,omitempty"`
 	// Failover is true while this machine takes the command.
 	Failover bool `json:"failover"`
 	// Connected is true on a Tower connected to the Citadel.
@@ -122,6 +125,11 @@ type Deps struct {
 	// machine (nil: sessionzero.Character over the accounts of the machine).
 	Spawner       terminal.Spawner
 	CharacterPrep characters.Preparer
+	// TerminalHandshake is how long the engine waits for a mestre-pty to answer
+	// the handshake (zero: ptywire.EngineHandshakeTimeout). The full suite lengthens
+	// it: a starved CI machine can take longer than that to schedule a process
+	// it just started, and that says nothing about the engine.
+	TerminalHandshake time.Duration
 	// Commands is the definition of the commands of the CLI the engine
 	// checks every call against (nil: cli.Default). Profiles gives the level
 	// and the class of a character (nil: an ordinary character, with the
@@ -607,6 +615,7 @@ func (e *Engine) Status() Status {
 	}
 	if run != nil && st.Role == RoleCitadel {
 		st.Fence, st.Acting = run.fence.State(), run.fence.Acting()
+		st.Waiting = e.waitingOf(run)
 	}
 	_ = e.withGuildDB(func(db *store.DB) error {
 		st.LSN, _ = db.LastLSN(context.Background())
@@ -738,10 +747,13 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 // hookEngine is the engine side of the hook dispatcher over the rules kept on
 // this machine, with the gate of the temporary table rules.
 func (e *Engine) hookEngine(rules *classes.Store) *hook.Engine {
-	approvals, tableRules := e.deps.Approvals, e.deps.TableRules
+	approvals, tableRules, classHooks := e.deps.Approvals, e.deps.TableRules, e.deps.ClassHooks
 	if e.deps.HostOrchestration {
-		// the chain and the temporary rules belong to the period of the
-		// Citadel, which comes and goes under this engine
+		// the chain, the temporary rules and the hooks of the classes belong
+		// to the period of the Citadel, which comes and goes under this engine
+		if classHooks == nil {
+			classHooks = periodClassHooks{e}
+		}
 		if approvals == nil {
 			approvals = periodApprovals{e}
 		}
@@ -752,7 +764,7 @@ func (e *Engine) hookEngine(rules *classes.Store) *hook.Engine {
 	return &hook.Engine{
 		Clock: e.clk, Rules: rules, Ledger: rules, Agents: e.paths.Agentes, Logger: e.log,
 		Characters: e.deps.Characters, Approvals: approvals, States: e.deps.States, Contexts: e.deps.Contexts,
-		ClassHooks: e.deps.ClassHooks, OnEvent: e.onHookEvent, TableRules: tableRules,
+		ClassHooks: classHooks, OnEvent: e.onHookEvent, TableRules: tableRules, Masker: e.deps.Masker,
 	}
 }
 
@@ -939,4 +951,14 @@ func (e *Engine) lockRefusal(ctx context.Context, cmd string) (localchan.Respons
 		return localchan.Response{}, true
 	}
 	return cli.LockedResponse(), false
+}
+
+// waitingOf says why a promoted Citadel does not act yet because GitHub could not
+// be reconciled ("" when it does not wait for that).
+func (e *Engine) waitingOf(run *citadelRun) string {
+	f := run.reconcileFail.Load()
+	if f == nil || run.fence == nil || run.fence.State() != guild.FenceWaiting {
+		return ""
+	}
+	return fmt.Sprintf("Cidadela promovida aguardando reconciliação desde %s: %s", f.since.Format("15:04"), f.err)
 }

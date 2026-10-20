@@ -173,7 +173,9 @@ func (w *world) count(table string) int {
 	return n
 }
 
-// CA-DEC-11
+// Part of CA-DEC-11 (the decree of "Negar sempre" is made here by the service; the
+// answer through the flow of approval is in
+// internal/orchestration/chain/delegation_audit_test.go)
 func TestDenyAlwaysNeedsNoPINAndAllowsAskItAndTheTableRulesAreListedWithRevogar(t *testing.T) {
 	t.Parallel()
 	w := decreeWorld(t)

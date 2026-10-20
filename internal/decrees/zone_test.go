@@ -1,6 +1,9 @@
 package decrees_test
 
 import (
+	"go/parser"
+	"go/token"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -90,4 +93,30 @@ func TestTheZoneOnlyChangesTheTextNotTheMomentTheDecreeEnds(t *testing.T) {
 	if got, _ := w.svc.Get(w.ctx, d.Number); got.State != decrees.Expired {
 		t.Fatalf("at the instant: %s", got.State)
 	}
+}
+
+// Part of CA-DEC-13: the zone of the Guild does not depend on the zoneinfo of
+// the host (an installed Windows has none): the package embeds the database of
+// the zones, and with ZONEINFO pointing nowhere the confirmation still says it.
+func TestTheGuildZoneComesFromTheEmbeddedDatabase(t *testing.T) {
+	// not parallel: it sets ZONEINFO for the process
+	t.Setenv("ZONEINFO", filepath.Join(t.TempDir(), "sem-zoneinfo.zip"))
+	f, err := parser.ParseFile(token.NewFileSet(), "zone.go", nil, parser.ImportsOnly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	embedded := false
+	for _, imp := range f.Imports {
+		embedded = embedded || imp.Path.Value == `"time/tzdata"`
+	}
+	if !embedded {
+		t.Fatal("the package that loads the zone of the Guild does not embed time/tzdata")
+	}
+	w := newWorld(t)
+	w.setZone("America/Sao_Paulo")
+	until, err := time.Parse(time.RFC3339, "2026-10-25T23:59:59-03:00")
+	if err != nil {
+		t.Fatal(err)
+	}
+	contains(t, w.confirmationUntil(until), "até 25/10/2026 23:59:59 (America/Sao_Paulo, UTC-03:00)")
 }

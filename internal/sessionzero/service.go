@@ -34,6 +34,9 @@ type Options struct {
 	Analyst       Analyst
 	PullRequests  PullRequests
 	AppReview     AppReview
+	// Verification receives the commands of verification the Grand Master proposes in
+	// the stage analysis (nil: none is kept); the confirmed ones are its own.
+	Verification VerificationProposer
 
 	// Worktree makes the files of the main clone.
 	Worktree Worktree

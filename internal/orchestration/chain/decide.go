@@ -135,7 +135,7 @@ func (s *Service) Decide(ctx context.Context, d Decision) (Outcome, error) {
 	if _, ok := s.claim(ctx, d.Request, &level, c); !ok {
 		return Outcome{}, refuse(CodeNoRequest, "the request #%d was decided meanwhile", d.Request)
 	}
-	applied, ref := s.effect(ctx, r, st, d.By, level, d.Answer, d.Pattern, d.For, d.UntilMissionEnd, true)
+	applied, ref := s.effect(ctx, r, st, d.By, level, d.Answer, d.Pattern, d.For, d.UntilMissionEnd, true, d.Reason)
 	if ref != nil {
 		s.unclaim(ctx, d.Request)
 		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, ref)
@@ -201,7 +201,7 @@ func (s *Service) attenuation(ctx context.Context, r Request, approver string) *
 // effect makes what an approval or a denial does besides closing the request.
 // agent is true for the decision of an agent: an answer that only people give
 // becomes a suggestion for the Owner.
-func (s *Service) effect(ctx context.Context, r Request, st Settings, by string, level Level, ans Answer, pattern string, dur time.Duration, untilEnd, agent bool) (string, *Refusal) {
+func (s *Service) effect(ctx context.Context, r Request, st Settings, by string, level Level, ans Answer, pattern string, dur time.Duration, untilEnd, agent bool, reason string) (string, *Refusal) {
 	if r.Type == classes.RequestGMAction && ans != AnswerApprove && !ans.Denies() || r.Type == classes.RequestGMAction && ans == AnswerDenyAlways {
 		// a question of the Grão-Mestre makes no rule, no decree and no delegation
 		return "", refuse(CodeBadAnswer, "this question is answered with approve or deny: it makes no rule and no decree")
@@ -220,7 +220,7 @@ func (s *Service) effect(ctx context.Context, r Request, st Settings, by string,
 		}
 		if ans == AnswerApproveAlways {
 			if agent {
-				s.suggest(ctx, r, ans, by)
+				s.suggest(ctx, r, ans, by, reason)
 				applied += "+suggestion"
 			} else if ref := s.decree(ctx, r, by, level, ans, pattern, dur); ref != nil {
 				return "", ref
@@ -246,7 +246,7 @@ func (s *Service) effect(ctx context.Context, r Request, st Settings, by string,
 		return s.temp(ctx, r, st, by, level, &ap, dur, untilEnd, agent)
 	case AnswerDenyAlways:
 		if agent {
-			s.suggest(ctx, r, ans, by)
+			s.suggest(ctx, r, ans, by, reason)
 			return "denied+suggestion", nil
 		}
 		return "denied", s.decree(ctx, r, by, level, ans, pattern, dur)
@@ -382,8 +382,8 @@ func (s *Service) decree(ctx context.Context, r Request, by string, level Level,
 	return nil
 }
 
-func (s *Service) suggest(ctx context.Context, r Request, ans Answer, by string) {
-	x := Suggestion{Request: r.ID, At: s.clk.Now(), Kind: ans, By: by, Class: r.Class, Action: r.About}
+func (s *Service) suggest(ctx context.Context, r Request, ans Answer, by, reason string) {
+	x := Suggestion{Request: r.ID, At: s.clk.Now(), Kind: ans, By: by, Class: r.Class, Action: r.About, Reason: strings.TrimSpace(reason)}
 	if r.Event != nil && r.Event.Tool != nil {
 		x.Action = orDefault(r.Event.Tool.Command, orDefault(r.Event.Tool.URL, r.Event.Tool.NativeName))
 	}
@@ -523,7 +523,7 @@ func (s *Service) DecideByPerson(ctx context.Context, d PersonDecision) (Outcome
 	if _, ok := s.claim(ctx, d.Request, nil, c); !ok {
 		return Outcome{}, refuse(CodeNoRequest, "the request #%d was decided meanwhile", d.Request)
 	}
-	applied, ref := s.effect(ctx, r, st, who, level, d.Answer, d.Pattern, d.For, false, false)
+	applied, ref := s.effect(ctx, r, st, who, level, d.Answer, d.Pattern, d.For, false, false, d.Reason)
 	if ref != nil {
 		s.unclaim(ctx, d.Request)
 		return Outcome{}, s.refused(ctx, r, who, d.Answer, ref)

@@ -105,6 +105,15 @@ type FenceConfig struct {
 	// and the wait counts from Run. A Citadel that restarts during the wait
 	// sets Wait to what was left of it (WaitLeft).
 	Promoted bool
+	// Reconcile runs once the lock confirmed the epoch of a promoted machine
+	// and before it acts outside: it brings the GitHub of the old Citadel into
+	// this one (docs/guilda/cidadela-e-torres.md#github-depois-da-troca). Until
+	// it succeeds the fence stays in FenceWaiting, and the next check (30 s)
+	// tries again; nothing goes out, the bot included, meanwhile. It runs while
+	// the fence is waiting, so it must use clients that do not go through the
+	// gate of the fence (Allow refuses them until it ends); it acts under the
+	// check that just confirmed the epoch. Nil: nothing to reconcile.
+	Reconcile func(ctx context.Context) error
 	// OnHigher is told the epoch the lock shows when it is higher than this
 	// one: the engine demotes itself to a Tower.
 	OnHigher func(epoch uint64)
@@ -156,6 +165,8 @@ type Fence struct {
 	tgTold bool
 	queue  []held
 	err    error // the last failure of a check
+	// stopReconcile cancels the reconciliation that runs (nil when none does).
+	stopReconcile context.CancelFunc
 }
 
 // NewFence returns the fence of a Citadel that is starting (or, with
@@ -301,6 +312,9 @@ func (f *Fence) Demote() bool {
 		return false
 	}
 	f.state = FenceDemoted
+	if f.stopReconcile != nil {
+		f.stopReconcile()
+	}
 	dropped := f.queue
 	f.queue = nil
 	f.mu.Unlock()
@@ -448,6 +462,30 @@ func (f *Fence) check(ctx context.Context) bool {
 		return false
 	}
 	epoch := f.cfg.Epoch()
+	if err == nil && n == epoch && f.cfg.Reconcile != nil && f.State() == FenceWaiting {
+		// the first confirmation of a promoted machine: reconcile with GitHub
+		// before the state turns to confirmed, which is what lets it act
+		// it has the time of a lease, by the clock of the fence, and a demotion
+		// cancels it: it must not outlive the epoch it runs under
+		rctx, cancel := clock.WithTimeout(ctx, f.cfg.Clock, f.cfg.Validity)
+		f.mu.Lock()
+		f.stopReconcile = cancel
+		if f.state == FenceDemoted {
+			cancel()
+		}
+		f.mu.Unlock()
+		rerr := f.cfg.Reconcile(rctx)
+		cancel()
+		f.mu.Lock()
+		f.stopReconcile = nil
+		f.mu.Unlock()
+		if rerr != nil {
+			err = fmt.Errorf("guild: the reconciliation with GitHub failed: %w", rerr)
+		}
+		if ctx.Err() != nil {
+			return false
+		}
+	}
 	f.mu.Lock()
 	if f.state == FenceDemoted {
 		f.mu.Unlock()

@@ -186,6 +186,7 @@ func (e *Engine) openRuntime(ctx context.Context) (*machineRuntime, error) {
 		DB: e.mdb, Clock: e.clk, System: sys, Spawner: spawner, Access: e.paths.TerminalAccess, MachineID: e.id.MachineID,
 		SocketDir: filepath.Join(run, "s"), LogDir: filepath.Join(run, "l"),
 		PTYBinary: t.ptyBinary, PTYVersion: t.Version, Masker: e.deps.Masker, Logger: e.log,
+		HandshakeTimeout: e.deps.TerminalHandshake,
 	}, dir)
 	if err != nil {
 		return nil, err

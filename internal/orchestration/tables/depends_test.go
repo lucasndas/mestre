@@ -132,7 +132,7 @@ func TestATableWhoseEpicWaitsForAnotherOpensWithTheRequestHeldAndTheListSaysWhy(
 	}
 }
 
-// CA-DEPMESA-02 (the tables tell the dependencies of the merge that was
+// Part of CA-DEPMESA-02 (the tables tell the dependencies of the merge that was
 // confirmed, once, and of a table that was cancelled)
 func TestTheDependenciesAreToldOfTheMergeThatWasConfirmedAndOfACancelledTable(t *testing.T) {
 	t.Parallel()
@@ -155,7 +155,7 @@ func TestTheDependenciesAreToldOfTheMergeThatWasConfirmedAndOfACancelledTable(t 
 	}
 }
 
-// CA-DEPMESA-05 (a cancelled table is told to the dependencies when the
+// Part of CA-DEPMESA-05 (a cancelled table is told to the dependencies when the
 // cancellation ends, not before)
 func TestTheDependenciesAreToldWhenACancellationEnds(t *testing.T) {
 	t.Parallel()

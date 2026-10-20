@@ -3,6 +3,7 @@ package telegram_test
 import (
 	"context"
 	"errors"
+	"maps"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -259,7 +260,7 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	}
 	if ropt.decrees {
 		for _, slug := range []string{"loja", "blog"} {
-			if _, err := db.Writer().ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+			if _, err := db.Writer().ExecContext(ctx, `INSERT OR IGNORE INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
 				VALUES (?, ?, ?, 'https://example.test/x.git', 'main', 'active', '', 1, 1)`, slug, "lucas/"+slug, "lucas/"+slug); err != nil {
 				t.Fatal(err)
 			}
@@ -280,7 +281,10 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 		pins := &telegram.PINRouter{Users: w.users}
 		w.dc = &telegram.DecreeChannel{Svc: w.ds, Users: w.users, PINs: pins, Rules: telegram.TableRulesOf(w.rules)}
 		w.opts.Commands = append(append([]telegram.Command(nil), w.opts.Commands...), w.dc.Commands()...)
-		w.opts.Actions = map[string]telegram.Action{}
+		w.opts.Actions = maps.Clone(w.opts.Actions) // the actions of the other parts stay
+		if w.opts.Actions == nil {
+			w.opts.Actions = map[string]telegram.Action{}
+		}
 		for k, v := range ropt.actions {
 			w.opts.Actions[k] = v
 		}

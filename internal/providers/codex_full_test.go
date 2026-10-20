@@ -134,9 +134,10 @@ func TestTheHookReviewOfTheFakeCodexBlocksForInputAndAlertsTheChecklist(t *testi
 	spawner := &terminal.DirectSpawner{Suite: "full", System: sys}
 	mgr, err := terminal.NewManager(terminal.ManagerConfig{
 		DB: db, System: sys, MachineID: "m1", SocketDir: filepath.Join(root, "s"), LogDir: filepath.Join(root, "l"),
-		Spawner:    spawner,
-		PTYBinary:  func(string) (string, error) { return ptyBin, nil },
-		PTYVersion: "1.0.0",
+		Spawner:          spawner,
+		HandshakeTimeout: time.Minute, // a loaded CI machine can be slow to schedule the mestre-pty it just started
+		PTYBinary:        func(string) (string, error) { return ptyBin, nil },
+		PTYVersion:       "1.0.0",
 		OnEvent: func(ev terminal.Event) {
 			if ev.Kind == terminal.EventStable {
 				select {

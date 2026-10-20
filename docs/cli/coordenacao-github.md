@@ -1,6 +1,6 @@
 # CLI: issues e PRs da mesa
 
-> **Assunto:** sintaxe de `issue` e `pr`, as operações no GitHub restritas ao épico da mesa · **Componente:** CLI · **Atualizado:** 2026-10-19
+> **Assunto:** sintaxe de `issue` e `pr`, as operações no GitHub restritas ao épico da mesa · **Componente:** CLI · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -42,6 +42,7 @@ mestre pr reply <id-comentário> ("<texto>" | --body-file <arq>)
 - `status`: estado do PR, CI por verificação, revisões (quem, decisão), se pode fazer merge e o motivo quando não pode, comentários sem resposta. `--json` → `{number, state, draft, head_sha, checks: [{name, state}], reviews: [{by, state}], mergeable, blocked_by, unresolved_comments}`.
 - `comment`: comenta na conversa do PR; `reply`: responde a um comentário de revisão (o id vem de `pr status --json`).
 - Sem PR da mesa (`status`, `comment`, `reply`, `update`) → 4 `no_pr`.
+- **A mesa é avisada:** o `open` e o `update` que enviaram contam à mesa (uma mesa em `working` vai a `in_review`; em `in_review` só aprende a cabeça nova). Uma mesa que não pode receber o PR (`closing`, `cancelling`) não faz o comando falhar: o PR já está no GitHub, o motor registra o aviso no log e o comando segue (`executed` é registrado).
 
 ## Regras e erros
 
@@ -60,7 +61,7 @@ mestre pr reply <id-comentário> ("<texto>" | --body-file <arq>)
 | push forçado pedido na branch principal | 3 | `force_main_denied` | push forçado só na branch da mesa |
 | GitHub fora (`5xx`, rede) ou limite secundário (abuso) | 5 | `github_unavailable` | quando tentar de novo (a resposta do GitHub diz); a ação que muda dados não é repetida sozinha |
 | cota primária esgotada ou abaixo de 10% | 0 | `queued: true` | o comando que muda dados espera na fila de saída e sai uma vez na renovação; só as leituras (`issue list`, `pr status`) saem com 5 `github_unavailable` e a hora da renovação ([eventos](../github/eventos.md#regras-e-erros)) |
-| aluguel da trava vencido | 0 | `queued: true` | os comandos que mudam dados esperam na fila de saída; só as leituras saem com 5 `github_unavailable` ([GitHub fora](../guilda/trava-no-github.md#github-fora)) |
+| aluguel da trava vencido | 0 | `queued: true` com o `op_id` | os comandos que mudam dados esperam na fila de saída e, quando ela sai, o resultado vai à caixa de entrada de quem pediu, com o mesmo `op_id` (a mesma regra da cota); só as leituras saem com 5 `github_unavailable` ([GitHub fora](../guilda/trava-no-github.md#github-fora)) |
 
 - Nenhum comando recebe ou mostra token; nenhum agente faz `git push` para o GitHub.
 - Nenhum comando de mesa revisa, aprova ou faz merge: isso é `mestre gh` ([grao-mestre](grao-mestre.md)).

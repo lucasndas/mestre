@@ -21,6 +21,7 @@ import (
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -232,6 +233,15 @@ type controlRequest struct {
 	Agent string `json:"agent,omitempty"`
 	// Command is the shell command of an approval request (op approval).
 	Command string `json:"command,omitempty"`
+	// Args (a JSON list of text) and Flags (a JSON object) go with the command of
+	// op call.
+	Args  string `json:"args,omitempty"`
+	Flags string `json:"flags,omitempty"`
+	// Request, User and Level are the decision of a person on an approval request
+	// (op decide): the answer is "approve".
+	Request string `json:"request,omitempty"`
+	User    string `json:"user,omitempty"`
+	Level   string `json:"level,omitempty"`
 }
 
 type controlAnswer struct {
@@ -320,11 +330,33 @@ func control(ctx context.Context, e *Engine, req controlRequest) controlAnswer {
 	case "call":
 		// the command goes where the CLI of a character goes: the forwarder of
 		// the local channel of the Citadel, which the orchestration registers
-		resp := e.local.Forward(ctx, &localchan.Call{
-			Request: localchan.Request{V: 1, ID: "control-call", AgentID: req.Agent, Cmd: req.Cmd},
-			Caller:  localchan.Caller{Identified: true, AgentID: req.Agent},
-		})
+		lreq := localchan.Request{V: 1, ID: "control-call", AgentID: req.Agent, Cmd: req.Cmd}
+		if req.Args != "" {
+			var args []string
+			if err := json.Unmarshal([]byte(req.Args), &args); err != nil {
+				return fail(fmt.Errorf("args: %w", err))
+			}
+			lreq.Args = localchan.TextArgs(args...)
+		}
+		if req.Flags != "" {
+			if err := json.Unmarshal([]byte(req.Flags), &lreq.Flags); err != nil {
+				return fail(fmt.Errorf("flags: %w", err))
+			}
+		}
+		resp := e.local.Forward(ctx, &localchan.Call{Request: lreq, Caller: localchan.Caller{Identified: true, AgentID: req.Agent}})
 		return controlAnswer{OK: true, Call: &resp}
+	case "decide":
+		// a person answers an approval request: what the flow of approval does
+		// after it has checked the level, the PIN and the quorum
+		p := e.period.Load()
+		id, err := strconv.ParseInt(req.Request, 10, 64)
+		if p == nil || p.chain == nil || err != nil {
+			return fail(errors.New("no chain of approval, or no request number"))
+		}
+		if _, err := p.chain.DecideByPerson(ctx, chain.PersonDecision{Request: id, User: req.User, Level: req.Level, Answer: chain.AnswerApprove}); err != nil {
+			return fail(err)
+		}
+		return controlAnswer{OK: true}
 	case "approval":
 		// what the hook engine does when the rules of a character say ask: it
 		// opens the request through the approvals of the machine, which are the

@@ -354,6 +354,9 @@ type world struct {
 	owner users.User
 	// entries is told what became of the requests to enter the Guild.
 	entries *recordSink
+	// prs is told what became of the requests of a PR (in production, the
+	// sink that approves on GitHub); it stands for "what was approved there".
+	prSink *recordSink
 	// The doubles of the gate of freshness (worldOpts.freshness).
 	ghRules  *fakeRules
 	verifier *fakeVerifier
@@ -469,6 +472,9 @@ type worldOpts struct {
 	// freshness puts the gate of freshness in the chain, over fakes of the
 	// rules of the branch and of the verification (freshness_rig_test.go).
 	freshness bool
+	// policyFile replaces the policy of the tests with the policy file read from a
+	// folder, the way the Citadel reads it.
+	policyFile *chain.PolicyFile
 }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
@@ -503,8 +509,12 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		Epics: orcfakes.Epics{Also: []int{43}}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
 		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerMachine: 40, PerTable: 20, PerWorkspace: 40},
 		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainStallPeople: w.stallers, ChainSupervision: w.sup, ChainDelegations: w.deleg, ChainPolicyDecrees: w.pdec, ChainSubDelegations: w.subs, ChainPRs: w.prs}
+	if opt.policyFile != nil {
+		oo.ChainPolicy = opt.policyFile
+	}
 	w.entries = &recordSink{}
-	oo.ChainSinks = map[classes.RequestType]chain.Sink{classes.RequestGuildEntry: w.entries}
+	w.prSink = &recordSink{}
+	oo.ChainSinks = map[classes.RequestType]chain.Sink{classes.RequestGuildEntry: w.entries, classes.RequestPR: w.prSink}
 	if opt.destructive {
 		oo.Destructive = nil
 	}

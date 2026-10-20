@@ -419,8 +419,8 @@ func (s *Service) deleteBranch(ctx context.Context, t Table) error {
 	if err != nil {
 		return err
 	}
-	if err := mirror.DeleteBranch(ctx, t.Branch); err != nil && !errors.Is(err, gitx.ErrRefNotFound) {
-		return fmt.Errorf("delete the branch %s: %w", t.Branch, err)
+	if err := s.deleteBranchAudited(ctx, mirror, t); err != nil {
+		return err
 	}
 	s.dropBundleRefs(ctx, mirror, t)
 	return s.store.SetBranchDeleted(ctx, t.Workspace, t.ID, s.clk.Now())
@@ -521,13 +521,11 @@ func (s *Service) sweepBranch(ctx context.Context, t Table) error {
 	if err != nil {
 		return err
 	}
-	if err := mirror.DeleteBranch(ctx, t.Branch); err != nil {
-		switch {
-		case errors.Is(err, gitx.ErrBranchInUse):
+	if err := s.deleteBranchAudited(ctx, mirror, t); err != nil {
+		if errors.Is(err, gitx.ErrBranchInUse) {
 			return nil
-		case !errors.Is(err, gitx.ErrRefNotFound):
-			return fmt.Errorf("delete the branch %s: %w", t.Branch, err)
 		}
+		return err
 	}
 	s.dropBundleRefs(ctx, mirror, t)
 	return s.store.SetBranchDeleted(ctx, t.Workspace, t.ID, s.clk.Now())
