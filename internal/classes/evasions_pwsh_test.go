@@ -165,3 +165,24 @@ func TestPowerShellReadsALoneCarriageReturnAsANewLine(t *testing.T) {
 		t.Errorf("%s: %q = fixed denial (%q)", native.name, c, d.Reason)
 	}
 }
+
+// Windows PowerShell 5.1 hands an argument to a program that is not a cmdlet between
+// double quotes it does not escape inside: a quote in the argument reaches the program
+// as several arguments, so what the text shows is not what is run.
+// CA-PERM-33
+func TestAQuoteInAnArgumentOfANativeProgramInPowerShellAsks(t *testing.T) {
+	t.Parallel()
+	r := rules(t, anyYAML)
+	win := evasionEnvs()[1]
+	wantAsk(t, "quote in the argument of a program", win.env, r,
+		`rg 'a" --pre=calc.exe "b c' .`,
+		`rg "a`+"`"+`" --pre=calc.exe `+"`"+`"b c" .`,
+		`git log --format='%H" --output=x "'`,
+		"rg 'a” --pre=calc.exe “b' .",
+	)
+	for _, c := range []string{`rg 'abc' .`, `Select-String -Pattern 'a"b' x.txt`, `echo 'say "hi"'`, `git status`} {
+		if d := judge(win.env, r, c); d.Verdict != classes.Allow {
+			t.Errorf("%q = %s (%q); want allow", c, d.Verdict, d.Reason)
+		}
+	}
+}

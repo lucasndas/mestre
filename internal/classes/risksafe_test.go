@@ -54,7 +54,6 @@ func TestEverydayCommandsAreLowOnBothReadings(t *testing.T) {
 		"eslint src", "prettier --check .", "ruff check .", "tsc --noEmit", "dotnet test", "mvn -q package",
 		"./gradlew build", "cd src && go test ./...", "export NODE_ENV=test && npm test", "NODE_ENV=test npm test",
 		"set -euo pipefail", "npm test 2>&1 | tail -20", "go version", "node --version",
-		"awk '{print $1 | \"sort\"}' a.txt",
 		"cat <<'EOF' > notes.txt\ngit push\nEOF", "git commit -F - <<'EOF'\nfix: x\n\nnever git push\nEOF",
 	}
 	for goos, env := range tableEnvs() {
@@ -65,9 +64,17 @@ func TestEverydayCommandsAreLowOnBothReadings(t *testing.T) {
 			}
 		}
 	}
+	// a quote inside a quoted argument: low on Linux; on Windows PowerShell 5.1 hands it to the
+	// program as several arguments, so it asks (CA-PERM-33)
+	if d := decideOn(t, tableEnvs()["linux"], def, "awk '{print $1 | \"sort\"}' a.txt"); d.Verdict != classes.Allow {
+		t.Errorf("linux: awk with a quote = %s (%s)", d.Verdict, d.Reason)
+	}
+	win := tableEnvs()["windows"]
+	if d := decideOn(t, win, def, "awk '{print $1 | \"sort\"}' a.txt"); d.Verdict != classes.Ask {
+		t.Errorf("windows: awk with a quote = %s (%s); want ask", d.Verdict, d.Reason)
+	}
 	// A PowerShell script of the worktree, and the call operator that a
 	// POSIX shell refuses as a syntax error.
-	win := tableEnvs()["windows"]
 	for _, cmd := range []string{`& .\script.ps1`, `& .\scripts\build.ps1 -Fast`, "Get-ChildItem -Recurse | Select-String foo"} {
 		if d := decideOn(t, win, def, cmd); d.Verdict != classes.Allow {
 			t.Errorf("windows: %q = %s/%s (%s %s); want allow", cmd, d.Verdict, d.Risk.Risk, d.Risk.Rule, d.Reason)

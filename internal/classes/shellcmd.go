@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf16"
 )
 
@@ -29,6 +30,9 @@ type shellState struct {
 	// feed is the legible literal a pipe feeds the current part, which a
 	// shell reading its input runs (pipefeed.go); nil otherwise.
 	feed *string
+	// aliased is set once the PowerShell line sets an alias: from then on every name may
+	// stand for a program.
+	aliased bool
 }
 
 // shell analyses a command line. On Windows it is analysed as POSIX and as
@@ -273,6 +277,41 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 		res.fixedDeny(fmt.Sprintf("%s só nasce pelo motor, nunca pelo shell", cn))
 	case agentRunner(cn, args):
 		res.fixedDeny("um CLI de agente só nasce pelo motor, nunca pelo shell")
+	}
+	if d == dialectPwsh {
+		if st != nil && (redefinesAlias(cn, argText) || loadsDefinitions(name.text, cn)) {
+			st.aliased = true
+		}
+		// A here-string (@'…'@) is read as its content by PowerShell, not as the word the
+		// lexer sees: for a cmdlet as well as for a program.
+		for _, a := range argText {
+			if isHereString(a) {
+				res.atLeastAsk("here-string de PowerShell: o argumento é o conteúdo dela, que não é analisado")
+				break
+			}
+		}
+		if nativeProgram(name.text, st != nil && st.aliased) {
+			if batchProgram(name.text) {
+				// a batch file is run by cmd.exe, which reads & | < > ^ and %VAR% in what it is given
+				for _, a := range argText {
+					if strings.ContainsAny(a, "&|<>^%") {
+						res.atLeastAsk(fmt.Sprintf("um argumento de %s tem caractere que o cmd.exe interpreta", cn))
+						break
+					}
+				}
+			}
+			// Windows PowerShell 5.1 hands an argument to a program that is not a cmdlet
+			// in its own legacy way: it does not escape the quotes inside (rg 'a" --pre=x "b'
+			// reaches the program as several arguments), a space followed by a final
+			// backslash eats the closing quote, and an empty argument is dropped. What
+			// the text shows is not what the program is given.
+			for _, a := range argText {
+				if why := legacyArgument(a); why != "" {
+					res.atLeastAsk(fmt.Sprintf("um argumento de %s %s: o PowerShell 5.1 o repassa de outro jeito, e o programa recebe outros argumentos", cn, why))
+					break
+				}
+			}
+		}
 	}
 	for _, inner := range runnerCommands(cn, args) {
 		// npx git push: what a package runner runs is a command, and a fixed
@@ -1299,4 +1338,113 @@ func findActs(args []string) bool {
 		}
 	}
 	return false
+}
+
+// legacyArgument says why Windows PowerShell 5.1 does not hand a program the argument as
+// the text shows it; it is empty when it does.
+func legacyArgument(a string) string {
+	switch {
+	case a == "":
+		return "é vazio, que o 5.1 descarta"
+	case strings.ContainsAny(a, "\"\U0000201c\U0000201d\U0000201e\U0000ff02"):
+		return "tem aspas, que o 5.1 não escapa"
+	case strings.HasSuffix(a, `\`) && strings.IndexFunc(a, unicode.IsSpace) >= 0:
+		return "tem espaço e termina em barra invertida, que o 5.1 junta à aspa de fechamento"
+	}
+	return ""
+}
+
+// isHereString says whether a word is a PowerShell here-string, which the lexer keeps whole.
+func isHereString(a string) bool {
+	return len(a) >= 3 && a[0] == '@' && a[len(a)-1] == '@' && strings.ContainsAny(a[1:2], "\r\n") && strings.ContainsAny(a[len(a)-2:len(a)-1], "\r\n")
+}
+
+// loadsDefinitions says whether a command brings in aliases and functions the line does not
+// show: a dot-sourced script or an imported module.
+func loadsDefinitions(raw, cn string) bool {
+	return raw == "." || cn == "import-module" || cn == "ipmo"
+}
+
+// batchProgram says whether a program is a batch file or one that is a batch shim on Windows
+// (npm, npx, yarn, pnpm, code), which cmd.exe runs.
+func batchProgram(raw string) bool {
+	n := strings.ToLower(raw)
+	if strings.HasSuffix(n, ".cmd") || strings.HasSuffix(n, ".bat") {
+		return true
+	}
+	switch canonical(raw) {
+	case "npm", "npx", "yarn", "pnpm", "code", "corepack":
+		return true
+	}
+	return false
+}
+
+// redefinesAlias says whether a PowerShell command sets an alias: from then on any name in
+// the line can stand for another program, the name of a cmdlet included.
+func redefinesAlias(cn string, args []string) bool {
+	switch cn {
+	case "set-alias", "sal", "new-alias", "nal", "import-alias", "ipal":
+		return true
+	}
+	for _, a := range args {
+		if strings.HasPrefix(strings.ToLower(strings.Trim(a, `"'`)), "alias:") {
+			return true
+		}
+	}
+	return false
+}
+
+// nativeProgram says whether the command a PowerShell line names is a program and not a
+// cmdlet, by the name as it was written: a name with an extension or a path is a program
+// whatever its base is (sort.exe is not Sort-Object, rm.exe is not Remove-Item); a bare
+// word is a cmdlet only when it is the alias of one or a Verb-Noun with an approved verb,
+// and a hyphen alone does not make one (git-lfs, cross-env, pre-commit). Once the line
+// sets an alias every name may be a program. A script of PowerShell (.ps1) is not.
+func nativeProgram(raw string, aliased bool) bool {
+	if aliased {
+		return true
+	}
+	n := strings.ToLower(raw)
+	if strings.HasSuffix(n, ".ps1") {
+		return false
+	}
+	if strings.ContainsAny(n, `/\.`) {
+		return true
+	}
+	return !pwshAlias[n] && !isCmdletName(n)
+}
+
+// isCmdletName says whether a name is Verb-Noun with an approved verb (Get-Verb).
+func isCmdletName(n string) bool {
+	verb, noun, ok := strings.Cut(n, "-")
+	return ok && noun != "" && pwshVerb[verb]
+}
+
+// pwshVerb are the approved verbs of PowerShell, lower case.
+var pwshVerb = func() map[string]bool {
+	m := map[string]bool{}
+	for _, v := range strings.Fields(`add clear close copy enter exit find format get hide join lock move new open optimize
+		push pop redo remove rename reset resize search select set show skip split step switch undo unlock watch
+		connect disconnect read receive send write
+		backup checkpoint compare compress convert convertfrom convertto dismount edit expand export group import
+		initialize limit merge mount out publish restore save sync unpublish update
+		debug measure ping repair resolve test trace
+		approve assert build complete confirm deny deploy disable enable install invoke register request restart resume
+		start stop submit suspend uninstall unregister wait
+		block grant protect revoke unblock unprotect use
+		sort where foreach tee`) { // the last four are the verbs of Sort-Object, Where-Object, ForEach-Object, Tee-Object
+		m[v] = true
+	}
+	return m
+}()
+
+// pwshAlias are the aliases of cmdlets PowerShell 5.1 has by default (curl and wget are
+// those of Invoke-WebRequest there).
+var pwshAlias = map[string]bool{
+	"echo": true, "write": true, "ls": true, "dir": true, "gci": true, "cat": true, "type": true, "gc": true, "pwd": true, "gl": true,
+	"cd": true, "sl": true, "cp": true, "copy": true, "cpi": true, "mv": true, "move": true, "mi": true, "rm": true, "del": true, "ri": true,
+	"rd": true, "rmdir": true, "mkdir": true, "md": true, "ni": true, "sls": true, "select": true, "where": true, "foreach": true, "sort": true,
+	"measure": true, "group": true, "ft": true, "fl": true, "fw": true, "oh": true, "clear": true, "cls": true, "man": true, "help": true,
+	"ps": true, "kill": true, "sleep": true, "iex": true, "icm": true, "ipcsv": true, "epcsv": true, "sc": true, "curl": true, "wget": true, "%": true, "?": true,
+	"ac": true, "si": true, "sv": true, "gv": true, "set": true, "diff": true, "compare": true, "tee": true, "gm": true, "gal": true, "h": true, "r": true,
 }
