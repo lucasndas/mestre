@@ -99,7 +99,7 @@ func TestOverBudgetFailsAndListsTenSlowest(t *testing.T) {
 		t.Fatalf("exit 0 for a run of %v:\n%s", span.last.Sub(span.first), out)
 	}
 	text := out.String()
-	if !strings.Contains(text, "FAIL fast suite took 31.5s, budget 30s. The 10 slowest tests:") {
+	if !strings.Contains(text, "FAIL fast suite took 37.5s, budget 36s. The 10 slowest tests:") {
 		t.Fatalf("no budget failure:\n%s", text)
 	}
 	var list []string
@@ -207,7 +207,7 @@ func TestQuarantineSkipsAndExpiredFailsFull(t *testing.T) {
 	code := r.RunSuite(context.Background(), Suites["full"])
 
 	main := ex.callsMatching("go test")
-	if len(main) != 1 || !strings.Contains(main[0].String(), "-tags full -timeout 4m30s -skip ^(TestRecent|TestOld)$ ./...") {
+	if len(main) != 1 || !strings.Contains(main[0].String(), "-tags full -timeout 5m24s -skip ^(TestRecent|TestOld)$ ./...") {
 		t.Fatalf("go test call = %v", main)
 	}
 	text := out.String()
@@ -342,7 +342,7 @@ func TestHeavySuiteDoesNotLint(t *testing.T) {
 // heavy suite has none, so go test must not kill it at its default 10 min.
 func TestEverySuiteHasAHardTimeoutExceptHeavy(t *testing.T) {
 	t.Parallel()
-	want := map[string]string{"fast": " -timeout 45s ", "full": " -timeout 4m30s ", "heavy": " -timeout 0 "}
+	want := map[string]string{"fast": " -timeout 54s ", "full": " -timeout 5m24s ", "heavy": " -timeout 0 "}
 	for suite, flag := range want {
 		t.Run(suite, func(t *testing.T) {
 			t.Parallel()

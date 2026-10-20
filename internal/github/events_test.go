@@ -868,3 +868,31 @@ func TestMoreThanAHundredReviewsAndAChecksReRunAreRead(t *testing.T) {
 		t.Fatalf("%d CI events, want the failure and the re-run", ci)
 	}
 }
+
+// Part of CA-DEPMESA-05: an issue closed on GitHub comes as an event that says it is
+// closed, why (completed or not planned) and its labels, so the sink of the epics can
+// tell the dependencies.
+func TestAnIssueClosedOnGitHubComesWithHowItWasClosedAndItsLabels(t *testing.T) {
+	t.Parallel()
+	r := newPoll(t)
+	r.clk.Advance(10 * time.Second)
+	done := r.gh.AddIssue(pollRepo, "Login", "epico")
+	dropped := r.gh.AddIssue(pollRepo, "Busca", "epico")
+	r.gh.CloseIssueAs(pollRepo, done, "completed")
+	r.gh.CloseIssueAs(pollRepo, dropped, "not_planned")
+	r.cycle()
+	r.sink.mu.Lock()
+	defer r.sink.mu.Unlock()
+	got := map[int]github.Event{}
+	for _, b := range r.sink.batches {
+		for _, ev := range b.Events {
+			got[ev.Number] = ev
+		}
+	}
+	if ev := got[done]; ev.Kind != github.EventIssueChanged || !ev.Closed || ev.NotPlanned || len(ev.Labels) != 1 || ev.Labels[0] != "epico" {
+		t.Errorf("the epic closed as completed: %+v", ev)
+	}
+	if ev := got[dropped]; !ev.Closed || !ev.NotPlanned {
+		t.Errorf("the epic closed as not planned: %+v", ev)
+	}
+}
