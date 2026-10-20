@@ -120,7 +120,7 @@ Os itens de M3 e M4 que só o Windows real responde rodam num único script, `to
 | 6 | as 12 etapas nos três provedores, com `tools/conformance` | nada |
 | 7 | telas de permissão que a conformidade encontrou; Bloco de Notas (ou o console, no Sandbox do Windows 11, que não o tem) para colar a tela de permissão do Claude (janela de terminal já aberta) e o menu de limite de uso | o menu de limite só aparece no limite real: se aparecer, cole o texto; senão, deixe vazio |
 | 8 | 33 casos (aspas e espaços tipográficos, travessões, `.`, parêntese, `Start-Process -ArgumentList`, CR solto, `New-ScheduledTaskAction`, `sc.exe`, `schtasks`) em `powershell.exe` e `pwsh.exe`, com um `git` de mentira que registra o que recebeu | nada |
-| 9 | ACL de `maquina\agentes\<id>\` numa conta local de teste, a SID da conta, `go test ./internal/winsvc` e `tools/realaccount` (setgid não existe no Windows; num Windows em outra língua, o grupo S-1-5-32-545 se chama `Users` só enquanto a ferramenta roda, porque ela usa o nome em inglês) | nada |
+| 9 | ACL de `maquina\agentes\<id>\` numa conta local de teste, a SID da conta, `go test ./internal/winsvc` e `tools/realaccount` (setgid não existe no Windows) | nada |
 
 A conformidade roda aqui como o usuário do Sandbox (administrador), não como `mestre-agente`: o que ela confere (hooks, nomes, telas, subagentes) não depende da conta; a conta dos agentes é do item 9.
 
