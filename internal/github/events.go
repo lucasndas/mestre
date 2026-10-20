@@ -120,6 +120,9 @@ type Situation interface {
 type RetryAfterError struct {
 	At     time.Time
 	Status int
+	// Primary says it is the hourly quota of the installation that ran out, not
+	// a limit of abuse: every workspace of the installation waits.
+	Primary bool
 }
 
 func (e *RetryAfterError) Error() string {
@@ -143,6 +146,12 @@ type PollerOptions struct {
 	Situation
 	// Watches are the workspaces to read.
 	Watches func(ctx context.Context) ([]Watch, error)
+	// Quota follows the quota of the App (App is its name): under 10% every
+	// workspace is read at the idle interval until it renews, and at zero all of
+	// them wait. Alert tells the Owner, once for each time the quota runs out.
+	Quota *Quota
+	App   string
+	Alert func(ctx context.Context, text string)
 	// Rand gives a number in [0, 1) for the jitter; nil: the middle (no jitter).
 	Rand   func() float64
 	Logger *slog.Logger
@@ -156,6 +165,10 @@ type Poller struct {
 	mu     sync.Mutex
 	by     map[string]*watchState
 	ciDone map[string]time.Time
+	// hold is when the quota of the installation renews, after it ran out: no
+	// workspace is read before.
+	hold    time.Time
+	alerted bool
 }
 
 type watchState struct {
@@ -203,6 +216,9 @@ func (p *Poller) Acted(workspace string) {
 
 // Mode is how the workspace is read now.
 func (p *Poller) Mode(ctx context.Context, w Watch) Mode {
+	if p.quotaLow() { // under 10% of the quota: parado until it renews
+		return ModeIdle
+	}
 	p.mu.Lock()
 	st := p.state(w.Workspace)
 	now := p.o.Clock.Now()
@@ -485,6 +501,9 @@ func (p *Poller) get(ctx context.Context, path, token, etag string) (int, http.H
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if p.o.Quota != nil {
+		p.o.Quota.Observe(p.o.App, resp.Header)
+	}
 	return resp.StatusCode, resp.Header, raw, nil
 }
 
@@ -500,9 +519,13 @@ func (p *Poller) limited(status int, h http.Header) error {
 			at = t
 		}
 	}
-	if at.IsZero() && h.Get("x-ratelimit-remaining") == "0" {
+	primary := false
+	if h.Get("x-ratelimit-remaining") == "0" {
 		if v, err := strconv.ParseInt(h.Get("x-ratelimit-reset"), 10, 64); err == nil {
-			at = time.Unix(v, 0)
+			primary = true
+			if at.IsZero() {
+				at = time.Unix(v, 0)
+			}
 		}
 	}
 	if at.IsZero() && status == http.StatusTooManyRequests {
@@ -515,10 +538,15 @@ func (p *Poller) limited(status int, h http.Header) error {
 	if lo := now.Add(minRetry); at.Before(lo) {
 		at = lo
 	}
+	if primary { // the hourly quota does not come back in a second: no hot loop on a skewed reset
+		if lo := now.Add(time.Minute); at.Before(lo) {
+			at = lo
+		}
+	}
 	if hi := now.Add(maxRetry); at.After(hi) {
 		at = hi
 	}
-	return &RetryAfterError{At: at, Status: status}
+	return &RetryAfterError{At: at, Status: status, Primary: primary}
 }
 
 // eventOf turns an item into an event; ok is false for what is not an event
@@ -609,6 +637,17 @@ func shorten(s string) string {
 	return s
 }
 
+func (p *Poller) quotaLowLocked() bool { return p.quotaLow() }
+
+// quotaLow says the App is under 10% of its hourly quota.
+func (p *Poller) quotaLow() bool {
+	if p.o.Quota == nil {
+		return false
+	}
+	_, low := p.o.Quota.Low(p.o.App)
+	return low
+}
+
 // Tick reads the workspaces that are due: after a limit nothing is asked before
 // the time GitHub said, after another error the interval grows up to the idle one.
 // A workspace is never read twice at the same time.
@@ -620,6 +659,10 @@ func (p *Poller) Tick(ctx context.Context) error {
 	for _, w := range ws {
 		p.mu.Lock()
 		st := p.state(w.Workspace)
+		if p.o.Clock.Now().Before(p.hold) { // the quota of the installation is over: nobody reads
+			p.mu.Unlock()
+			continue
+		}
 		if st.running || p.o.Clock.Now().Before(st.due) {
 			p.mu.Unlock()
 			continue
@@ -633,13 +676,26 @@ func (p *Poller) Tick(ctx context.Context) error {
 
 		p.mu.Lock()
 		st.running = false
+		alert := ""
 		var lim *RetryAfterError
 		switch {
 		case err == nil:
+			if !now.Before(p.hold) && !p.quotaLowLocked() { // the quota came back: the next time it runs out is another alert
+				p.alerted = false
+			}
 			st.fails = 0
 			st.due = now.Add(iv)
 		case errors.As(err, &lim):
 			st.due = lim.At
+			if lim.Primary {
+				if lim.At.After(p.hold) {
+					p.hold = lim.At
+				}
+				if !p.alerted {
+					p.alerted = true
+					alert = fmt.Sprintf("O limite de requisições do GitHub acabou: as consultas de todos os workspaces voltam às %s UTC.", lim.At.UTC().Format("15:04"))
+				}
+			}
 		case ctx.Err() != nil: // leaving: not a failure of GitHub
 		default:
 			st.fails++
@@ -647,6 +703,9 @@ func (p *Poller) Tick(ctx context.Context) error {
 			p.o.Logger.Warn("github: reading a workspace failed", "workspace", w.Workspace, "err", err)
 		}
 		p.mu.Unlock()
+		if alert != "" && p.o.Alert != nil {
+			p.o.Alert(ctx, alert)
+		}
 	}
 	return nil
 }

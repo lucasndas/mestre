@@ -487,7 +487,7 @@ func TestRetryAfterIsKeptBetweenOneSecondAndOneHour(t *testing.T) {
 	}{
 		{map[string]string{"Retry-After": "0"}, time.Second},
 		{map[string]string{"Retry-After": "99999999"}, time.Hour},
-		{map[string]string{"x-ratelimit-remaining": "0", "x-ratelimit-reset": "1"}, time.Second},
+		{map[string]string{"x-ratelimit-remaining": "0", "x-ratelimit-reset": "1"}, time.Minute}, // the hourly quota: no hot loop
 	} {
 		r := newPoll(t)
 		r.gh.FailNextRead(http.StatusForbidden, tc.hdr)
