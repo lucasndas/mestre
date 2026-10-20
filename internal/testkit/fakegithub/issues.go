@@ -2,9 +2,11 @@ package fakegithub
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // The issues API the guard of the actions uses: the parent of a sub-issue, the
@@ -34,7 +36,9 @@ func (s *Server) AddIssue(full, title string, labels ...string) int {
 	}
 	id := s.nextID
 	s.nextID++
-	rp.issues = append(rp.issues, map[string]any{"id": id, "number": n, "title": title, "state": "open", "labels": ls, "user": map[string]any{"login": "lucas"}})
+	now := s.clk.Now().UTC().Format(time.RFC3339)
+	rp.issues = append(rp.issues, map[string]any{"id": id, "number": n, "title": title, "state": "open", "labels": ls, "user": map[string]any{"login": "lucas"},
+		"created_at": now, "updated_at": now, "html_url": fmt.Sprintf("https://github.com/%s/issues/%d", full, n)})
 	return n
 }
 
@@ -49,6 +53,7 @@ func (s *Server) AddPR(full, title, head, headRepo string) int {
 		rp.pulls = map[int][2]string{}
 	}
 	rp.pulls[n] = [2]string{head, headRepo}
+	rp.issues[n-1]["pull_request"] = map[string]any{"merged_at": nil}
 	return n
 }
 
@@ -100,6 +105,9 @@ func (s *Server) serveIssues(w http.ResponseWriter, r *http.Request) bool {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(parts) < 4 || parts[0] != "repos" {
 		return false
+	}
+	if s.serveEvents(w, r, parts) {
+		return true
 	}
 	full := parts[1] + "/" + parts[2]
 	isIssueSub := len(parts) == 6 && parts[3] == "issues" && (parts[5] == "parent" || parts[5] == "comments" || parts[5] == "sub_issues" || parts[5] == "labels" && r.Method == http.MethodPost)
@@ -188,8 +196,9 @@ func (s *Server) serveIssues(w http.ResponseWriter, r *http.Request) bool {
 		s.mu.Lock()
 		id := s.nextID
 		s.nextID++
-		c := map[string]any{"id": id, "body": in.Body, "user": map[string]any{"login": inst.app + "[bot]"}}
+		c := s.commentView(id, full, n, in.Body, inst.app+"[bot]")
 		x.comments = append(x.comments, c)
+		s.touch(rp, n)
 		s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
 		s.mu.Unlock()
 		s.write(w, r, inst, http.StatusCreated, c)
@@ -441,6 +450,7 @@ func (s *Server) SetIssueState(full string, n int, state string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.repos[full].issues[n-1]["state"] = state
+	s.touch(s.repos[full], n)
 }
 
 // Parent is the parent of a sub-issue (0: none).

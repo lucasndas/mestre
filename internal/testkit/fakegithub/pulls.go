@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/testkit"
 )
@@ -322,13 +323,15 @@ func paginate(list []map[string]any, r *http.Request) []map[string]any {
 func (s *Server) AddReviewComment(full string, n int, path string, line int, body string, replyTo int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	c := map[string]any{"id": s.nextID, "body": body, "path": path, "line": line, "user": map[string]any{"login": "pessoa"}}
+	c := s.commentView(s.nextID, full, n, body, "pessoa")
+	c["path"], c["line"] = path, line
 	s.nextID++
 	if replyTo != 0 {
 		c["in_reply_to_id"] = replyTo
 	}
 	px := s.repos[full].pull(n)
 	px.comments = append(px.comments, c)
+	s.touch(s.repos[full], n)
 }
 
 // createPull is POST /repos/{r}/pulls: the PR of head into base, with the head
@@ -442,4 +445,12 @@ func (s *Server) SetPullState(full string, n int, state string, merged bool, bas
 	if base != "" {
 		p.baseRef = base
 	}
+	if pr, ok := s.repos[full].issues[n-1]["pull_request"].(map[string]any); ok {
+		if merged {
+			pr["merged_at"] = s.clk.Now().UTC().Format(time.RFC3339)
+		} else {
+			pr["merged_at"] = nil
+		}
+	}
+	s.touch(s.repos[full], n)
 }
