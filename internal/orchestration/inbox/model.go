@@ -81,6 +81,10 @@ type Origin struct {
 	RepliedTo    string `json:"replied_to,omitempty"`
 	// Table is the table the message cites (the header says "mesa <mesa>").
 	Table string `json:"table,omitempty"`
+	// Choice is the number of the question of the Grão-Mestre (`mestre choose`) this
+	// message answers (0: it is not an answer): the text of such a message was
+	// written by an agent around the click, so it is no order of the user.
+	Choice int64 `json:"choice,omitempty"`
 	// Transcribed is true for an audio the engine turned into text.
 	Transcribed bool `json:"transcribed,omitempty"`
 }

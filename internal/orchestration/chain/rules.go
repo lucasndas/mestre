@@ -90,7 +90,7 @@ func DefaultRules() PolicyRules {
 	for _, t := range []classes.RequestType{classes.RequestPR, classes.RequestMerge, classes.RequestMissionPoint, classes.RequestClassPermission, classes.RequestExtraCost} {
 		r.Alone[t], r.MinLevel[t] = true, classes.LevelApprover
 	}
-	for _, t := range []classes.RequestType{classes.RequestWorkflows, classes.RequestWorkspaceClass, classes.RequestDestructive, classes.RequestAgentsMD} {
+	for _, t := range []classes.RequestType{classes.RequestWorkflows, classes.RequestWorkspaceClass, classes.RequestDestructive, classes.RequestAgentsMD, classes.RequestGMAction} {
 		r.Alone[t], r.MinLevel[t] = false, classes.LevelAdmin
 	}
 	r.Alone[classes.RequestRepoSettings], r.MinLevel[classes.RequestRepoSettings] = false, classes.LevelOwner
