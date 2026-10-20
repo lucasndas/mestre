@@ -12,7 +12,7 @@ import (
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/store/machine"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/testkit/protorig"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -167,7 +167,7 @@ func TestTheIdentityOfAMachineSurvivesReopeningItsDatabaseAndIsNeverReplacedByAL
 	if err := n.mach.Close(); err != nil {
 		t.Fatal(err)
 	}
-	db, err := machine.Open(ctx, path, store.Options{Clock: r.clk, Synchronous: "OFF"})
+	db, err := guildtpl.OpenMachine(ctx, path, store.Options{Clock: r.clk, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

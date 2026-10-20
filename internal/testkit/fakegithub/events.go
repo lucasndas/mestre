@@ -174,7 +174,11 @@ func (s *Server) failRead(w http.ResponseWriter, r *http.Request) bool {
 
 // reviewView is a review of a PR. The caller holds mu.
 func (s *Server) reviewView(full string, n int, by, state, sha string) map[string]any {
-	return map[string]any{"id": s.nextID, "user": map[string]any{"login": by}, "state": state, "commit_id": sha,
+	assoc := s.approval().assoc[strings.ToLower(by)]
+	if assoc == "" {
+		assoc = "NONE"
+	}
+	return map[string]any{"id": s.nextID, "user": map[string]any{"login": by, "type": s.userType(by)}, "state": state, "commit_id": sha, "author_association": assoc,
 		"submitted_at": s.clk.Now().UTC().Format(time.RFC3339),
 		"html_url":     fmt.Sprintf("https://github.com/%s/pull/%d#pullrequestreview-%d", full, n, s.nextID)}
 }

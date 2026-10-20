@@ -197,6 +197,7 @@ func (e *Engine) openRuntime(ctx context.Context) (*machineRuntime, error) {
 			return nil, err
 		}
 	}
+	prep = e.refreshingLayers(prep)
 	sinks := periodSinks{&e.orc}
 	rt, err := characters.NewRuntime(characters.RuntimeOptions{
 		Machine: e.id.MachineID, Clock: e.clk, DB: e.mdb, Host: host, Prep: prep, Providers: providers.NewRegistry(providers.Options{}),

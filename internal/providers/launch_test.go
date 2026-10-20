@@ -145,7 +145,7 @@ func TestABaseMayNotSetTheVariablesOfTheSafety(t *testing.T) {
 			return providers.NewClaudeCode(providers.Options{}), claudeRequest("u1")
 		},
 		providers.Codex: func() (providers.Adapter, providers.LaunchRequest) {
-			return providers.NewCodex(providers.Options{}), providers.LaunchRequest{Base: providers.Base{Command: "codex"}, Profile: "/profiles/c", AgentID: "a1", ProviderArgs: []string{"-s", "read-only"}}
+			return providers.NewCodex(providers.Options{}), providers.LaunchRequest{OS: "linux", Base: providers.Base{Command: "codex"}, Profile: "/profiles/c", AgentID: "a1", ProviderArgs: []string{"-s", "read-only"}}
 		},
 		providers.Antigravity: func() (providers.Adapter, providers.LaunchRequest) {
 			return providers.NewAntigravity(providers.Options{}), launchRequest(nil)
