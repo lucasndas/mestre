@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -39,6 +40,42 @@ type mm struct {
 	mirror string
 	remote string
 	branch string
+	// lease and onQueued replace the always valid lease and the silence of the
+	// commands that answer queued (nil: the defaults).
+	lease    ghcli.Lease
+	onQueued func(ctx context.Context, opID, agentID, cmd string, resp localchan.Response)
+	// realEpics makes the epics of the tables the ones of the GitHub double, and the
+	// messages of the users the ones of the inbox, as `mestre run` has them.
+	realEpics bool
+}
+
+// mmEpics is GitHub's side of the tables over the double, with the App of the
+// Grand Master.
+type mmEpics struct{ m *mm }
+
+func (e mmEpics) api() *github.REST {
+	return &github.REST{BaseURL: "https://api.github.com", HTTP: &http.Client{Transport: fakenet.HandlerTransport(e.m.gh)},
+		Token: func(context.Context, string) (string, error) { return "tok_gm", nil }, App: "grand_master"}
+}
+
+func (e mmEpics) Epic(ctx context.Context, _ string, number int) (tables.Epic, error) {
+	d, err := e.api().IssueData(ctx, mmRepo, number)
+	if errors.Is(err, github.ErrNotFound) {
+		return tables.Epic{}, fmt.Errorf("%w: #%d", tables.ErrEpicNotFound, number)
+	}
+	if err != nil {
+		return tables.Epic{}, err
+	}
+	return tables.Epic{Number: d.Number, Title: d.Title, Body: github.HideMarkers(d.Body), Labels: d.Labels, Open: d.State == "open"}, nil
+}
+
+func (e mmEpics) CloseEpic(ctx context.Context, _ string, number int) error {
+	closed := "closed"
+	return e.api().UpdateIssue(ctx, mmRepo, number, github.IssueEdit{State: &closed, StateReason: "not_planned"})
+}
+
+func (e mmEpics) ClosePR(ctx context.Context, _ string, number int) error {
+	return e.api().ClosePull(ctx, mmRepo, number)
 }
 
 // setup is the option of newCommWorld that puts GitHub in the world.
@@ -56,6 +93,9 @@ func (m *mm) setup(w *commWorld, oo *app.OrchestrationOptions) {
 	}
 	gh.AddIssue(mmRepo, "Login de usuários", github.EpicLabel) // #42, the epic the world's tables open on
 	m.gh, m.objs = gh, &github.Objects{DB: oo.Guild, Clock: w.clk}
+	if m.realEpics {
+		oo.Epics, oo.Messages = mmEpics{m}, nil
+	}
 	m.hub = &mmHub{m: m}
 	oo.QuestGitHub, oo.QuestIssues = m.hub, mmOwner{m}
 
@@ -71,7 +111,7 @@ func (m *mm) setup(w *commWorld, oo *app.OrchestrationOptions) {
 
 	w.mounts = append(w.mounts, func(fwd *localchan.LocalForwarder) {
 		h := &ghcli.Handlers{Characters: w.orc.Registry, Clients: mmClients{gh}, Repos: mmRepos{}, Tables: mmTables{w}, PRs: mmPRs{w}, Objects: m.objs, Clock: w.clk,
-			Lease: mmLease{},
+			Lease: m.leaseOrValid(), OnQueued: m.onQueued,
 			Opened: func(ctx context.Context, key string, n int, head string) error {
 				ws, id, _ := strings.Cut(key, "/")
 				_, err := w.orc.Tables.PROpened(ctx, ws, id, n, head)
@@ -202,6 +242,13 @@ func (p mmPRs) PRNumber(ctx context.Context, key string) (int, bool, error) {
 		return 0, false, nil
 	}
 	return tb.PRNumber, true, nil
+}
+
+func (m *mm) leaseOrValid() ghcli.Lease {
+	if m.lease != nil {
+		return m.lease
+	}
+	return mmLease{}
 }
 
 type mmLease struct{}

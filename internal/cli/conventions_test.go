@@ -279,10 +279,18 @@ func TestWithoutAnIdTheCLIDoesNotWaitForTheEngine(t *testing.T) {
 	})
 }
 
-// Part of CA-CLI-CONV-08 (it closes in milestone 5, when table, gh, app and
-// notify exist; recruit arrives in milestone 4): an ordinary character's
-// `mestre help` lists none of the commands of a higher level, and the
-// engine decides it by the level and by cli.allow of the class.
+// lists says whether the help lists a command called word or one of its
+// subcommands (`table open` is of `table`).
+func lists(commands []string, word string) bool {
+	return slices.ContainsFunc(commands, func(c string) bool { first, _, _ := strings.Cut(c, " "); return first == word })
+}
+
+// CA-CLI-CONV-08: the `mestre help` of an ordinary character lists no command of
+// the groups table, gh, app, notify and recruit (their subcommands included), and
+// the engine decides it by the level and by cli.allow of the class. The real
+// commands of the CLI are the ones listed (`table open`, `gh epic`, `notify`,
+// `recruit`…); `mestre app create` is not in the CLI yet and has a stand-in
+// (futureCommands), at the level the document gives it.
 func TestHelpListsOnlyWhatTheCallerMayUse(t *testing.T) {
 	t.Parallel()
 	profiles := map[string]cli.Profile{
@@ -321,7 +329,7 @@ func TestHelpListsOnlyWhatTheCallerMayUse(t *testing.T) {
 		hidden := []string{"table", "gh", "app", "notify", "recruit"}
 		alice := listed(t, proc("alice"))
 		for _, h := range hidden {
-			if slices.Contains(alice, h) {
+			if lists(alice, h) {
 				t.Errorf("an ordinary character sees %q in the help: %v", h, alice)
 			}
 		}
@@ -333,19 +341,19 @@ func TestHelpListsOnlyWhatTheCallerMayUse(t *testing.T) {
 		if slices.Contains(alice, "issue comment") || slices.Contains(alice, "reply") {
 			t.Errorf("a class that lists nothing sees %v", alice)
 		}
-		if carol := listed(t, proc("carol")); !slices.Contains(carol, "issue comment") || slices.Contains(carol, "table") {
+		if carol := listed(t, proc("carol")); !slices.Contains(carol, "issue comment") || lists(carol, "table") {
 			t.Errorf("the class that lists `issue comment` sees %v", carol)
 		}
-		if tm := listed(t, proc("tm")); !slices.Contains(tm, "recruit") || slices.Contains(tm, "reply") || slices.Contains(tm, "table") || slices.Contains(tm, "notify") {
+		if tm := listed(t, proc("tm")); !lists(tm, "recruit") || slices.Contains(tm, "reply") || lists(tm, "table") || lists(tm, "notify") {
 			t.Errorf("the Master of the table sees %v", tm)
 		}
-		if gm := listed(t, proc("gm")); !slices.Contains(gm, "table") || !slices.Contains(gm, "notify") || !slices.Contains(gm, "gh") {
+		if gm := listed(t, proc("gm")); !lists(gm, "table") || !lists(gm, "notify") || !lists(gm, "gh") {
 			t.Errorf("the Grand Master sees %v", gm)
 		}
 		// a person in a shell has no character: the commands of every character
 		person := newProc(r, "a-person", "", "")
 		person.commands = extendedRegistry()
-		if got := listed(t, person); slices.Contains(got, "table") || !slices.Contains(got, "list") {
+		if got := listed(t, person); lists(got, "table") || !slices.Contains(got, "list") {
 			t.Errorf("a person sees %v", got)
 		}
 	})

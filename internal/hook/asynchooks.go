@@ -77,6 +77,7 @@ type AsyncRunner struct {
 	// MaxQueued bounds the queue of a character; zero is DefaultMaxAsync.
 	MaxQueued int
 
+	cmu sync.Mutex
 	ctx context.Context
 	wg  sync.WaitGroup
 	mu  sync.Mutex
@@ -89,12 +90,23 @@ type asyncQueue struct {
 }
 
 // Start gives the runner the context its hooks run in; they stop with it.
-func (a *AsyncRunner) Start(ctx context.Context) { a.ctx = ctx }
+func (a *AsyncRunner) Start(ctx context.Context) {
+	a.cmu.Lock()
+	a.ctx = ctx
+	a.cmu.Unlock()
+}
+
+// context is the context given to Start, nil before it.
+func (a *AsyncRunner) context() context.Context {
+	a.cmu.Lock()
+	defer a.cmu.Unlock()
+	return a.ctx
+}
 
 // OnEvent queues the event for the hooks of the class of its character. It
 // does nothing else, so it never holds the answer to the agent.
 func (a *AsyncRunner) OnEvent(ev providers.Event, _ Answer) {
-	if a.ctx == nil || ev.AgentID == "" || a.Source == nil || a.Exec == nil || !hookable(ev.Event) {
+	if ctx := a.context(); ctx == nil || ctx.Err() != nil || ev.AgentID == "" || a.Source == nil || a.Exec == nil || !hookable(ev.Event) {
 		return
 	}
 	limit := a.MaxQueued
@@ -147,7 +159,7 @@ func (a *AsyncRunner) work(agent string, q *asyncQueue) {
 	defer a.wg.Done()
 	for {
 		a.mu.Lock()
-		if len(q.events) == 0 || a.ctx.Err() != nil {
+		if len(q.events) == 0 || a.context().Err() != nil {
 			q.running = false
 			q.events = nil
 			a.mu.Unlock()
@@ -161,7 +173,7 @@ func (a *AsyncRunner) work(agent string, q *asyncQueue) {
 }
 
 func (a *AsyncRunner) handle(ev providers.Event) {
-	hooks, refused, err := a.Source.Async(a.ctx, ev)
+	hooks, refused, err := a.Source.Async(a.context(), ev)
 	if err != nil {
 		a.log().Warn("hook: the asynchronous hooks of the class could not be read", "agent", ev.AgentID, "err", err)
 		return
@@ -181,7 +193,7 @@ func (a *AsyncRunner) handle(ev providers.Event) {
 		// the terminal ends a hook at its time limit and says so; the engine waits a
 		// little longer, so the next hook of the queue does not meet the one that is
 		// still being ended
-		hctx, cancel := clock.WithTimeout(a.ctx, a.Clock, time.Duration(h.Timeout)*time.Second+HookGrace)
+		hctx, cancel := clock.WithTimeout(a.context(), a.Clock, time.Duration(h.Timeout)*time.Second+HookGrace)
 		res, err := a.Exec.Exec(hctx, ev.AgentID, h, ev.Event, stdin)
 		if err == nil && hctx.Err() != nil {
 			err = hctx.Err()
@@ -199,7 +211,7 @@ func (a *AsyncRunner) deliver(h AsyncHook, r AsyncResult) {
 		return
 	}
 	if r.Err != nil || r.Exit != 0 || h.Output == classes.OutputLog {
-		a.Out.Log(a.ctx, r)
+		a.Out.Log(a.context(), r)
 		if r.Err != nil || h.Output == classes.OutputLog {
 			return
 		}
@@ -207,9 +219,9 @@ func (a *AsyncRunner) deliver(h AsyncHook, r AsyncResult) {
 	var err error
 	switch h.Output {
 	case classes.OutputScroll:
-		err = a.Out.Scroll(a.ctx, r)
+		err = a.Out.Scroll(a.context(), r)
 	case classes.OutputAgent:
-		err = a.Out.Agent(a.ctx, r)
+		err = a.Out.Agent(a.context(), r)
 	}
 	if err != nil {
 		a.log().Warn("hook: the output of an asynchronous hook was not delivered", "agent", r.AgentID, "hook", r.Hook, "output", h.Output, "err", err)

@@ -34,7 +34,26 @@ import (
 // what `mestre run` runs: this test binary, started again with
 // MESTRE_TEST_RUN_ENGINE, calls app.Main.
 
+// hookProbe is the asynchronous hook of the class in the full suite: this test
+// binary called as `hookprobe <addr>` connects to the test and holds until the
+// test lets it go (it closes the connection), then prints what a hook of tests
+// prints. It needs no sleep and no file: the test decides when the hook ends.
+func hookProbe(addr string) int {
+	c, err := net.Dial("tcp", addr)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "hookprobe:", err)
+		return 3
+	}
+	defer c.Close()
+	_, _ = c.Read(make([]byte, 1)) // ends when the test closes its side
+	fmt.Println("ok  3 testes")
+	return 0
+}
+
 func TestMain(m *testing.M) {
+	if len(os.Args) == 3 && os.Args[1] == "hookprobe" {
+		os.Exit(hookProbe(os.Args[2]))
+	}
 	if os.Getenv("MESTRE_TEST_RUN_ENGINE") == "1" && len(os.Args) > 1 && os.Args[1] == "run" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		code := app.Main(ctx, os.Args[2:], os.Stderr, os.LookupEnv, "test")

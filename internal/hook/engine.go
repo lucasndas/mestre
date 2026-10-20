@@ -9,11 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -106,9 +108,15 @@ type Engine struct {
 	// afterwards).
 	OnEvent func(providers.Event, Answer)
 	Logger  *slog.Logger
+	// Masker is the one of the engine, with the secrets the vault opened: a
+	// write whose content carries one of them, or a secret of a known format,
+	// is denied before the pipeline (docs/classes/permissoes.md, "Chave
+	// escrita em arquivo"). Nil: the known formats only.
+	Masker *logging.Masker
 
-	mu   sync.Mutex
-	envs map[string]CharacterEnv
+	mu       sync.Mutex
+	envs     map[string]CharacterEnv
+	warnings map[string]string // agent → warning for its next invocation
 }
 
 var _ localchan.Handler = (*Engine)(nil)
@@ -203,6 +211,12 @@ func (e *Engine) log() *slog.Logger {
 // decide runs the permission pipeline for the character
 // (docs/classes/permissoes.md#pipeline-de-decisão).
 func (e *Engine) decide(ctx context.Context, ev providers.Event) Answer {
+	// A key in what is written is denied before the pipeline, which would
+	// otherwise use up an exception on a write that cannot go through.
+	if found := e.secretFindings(ctx, ev); len(found) > 0 {
+		e.log().Info("hook: denied", "agent", ev.AgentID, "event", ev.Event, "tool", ev.Tool.NativeName, "reason", "secret in the content", "places", listFindings(found))
+		return Answer{Verdict: VerdictDeny, Reason: secretDenial(found)}
+	}
 	p := classes.Policy{Source: e.rules(), Env: e.env}
 	d := p.Decide(ctx, ev)
 	var ans Answer
@@ -294,6 +308,15 @@ func (e *Engine) inform(ctx context.Context, ev providers.Event) Answer {
 			e.log().Warn("hook: no context for the turn", "agent", ev.AgentID, "err", err)
 		}
 		ans.Context = text
+	}
+	switch ev.Event {
+	case providers.EventTurnStart:
+		// The warning of a write that went through, for the provider that cannot say it after the tool.
+		if w := e.takeWarning(ev.AgentID); w != "" {
+			ans.Context = strings.TrimSpace(ans.Context + "\n\n" + w)
+		}
+	case providers.EventPostTool:
+		ans.Context = e.writeWarning(ctx, ev)
 	}
 	hooks, err := e.classHooks(ctx, ev)
 	if err != nil {

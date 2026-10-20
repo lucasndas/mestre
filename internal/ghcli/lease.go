@@ -3,6 +3,7 @@ package ghcli
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
@@ -82,33 +83,71 @@ func (h *Handlers) write(name string, f handler) handler {
 		if h.Lease == nil {
 			return unavailable("the lease of the epoch is not set")
 		}
-		run := func(ctx context.Context) localchan.Response {
-			var resp localchan.Response
+		// attempt runs the command now, or leaves it in the queue: then later
+		// gives, once, what it answered when it went out.
+		// then is called with the answer of a command that was queued, once it
+		// went out; nothing waits for it, so a queue that is dropped leaves nothing behind.
+		attempt := func(ctx context.Context, then func(localchan.Response)) (resp localchan.Response, queuedNow bool) {
+			var mu sync.Mutex
+			var got *localchan.Response
+			var handed bool
+			ran := make(chan localchan.Response, 1)
 			queued, err := h.Lease.Do(ctx, name, func(ctx context.Context) error {
 				// it may have waited: the lock is looked at when it goes out
-				if h.isLocked(ctx) {
-					resp = lockedResponse()
+				r := lockedResponse()
+				if !h.isLocked(ctx) {
+					r = f(ctx, c)
+				}
+				mu.Lock()
+				if handed {
+					mu.Unlock()
+					then(r)
 					return nil
 				}
-				resp = f(ctx, c)
+				got = &r
+				mu.Unlock()
+				ran <- r
 				return nil
 			})
 			switch {
 			case err != nil:
 				if errors.Is(err, context.Canceled) {
-					return unavailable("the request was cancelled")
+					return unavailable("the request was cancelled"), false
 				}
-				return unavailable("this Citadel does not act")
+				return unavailable("this Citadel does not act"), false
 			case queued:
-				return localchan.OK(map[string]any{"queued": true})
+				mu.Lock()
+				handed = true
+				r := got
+				mu.Unlock()
+				if r != nil { // it went out before Do returned
+					then(*r)
+				}
+				return localchan.Response{}, true
 			}
-			return resp
+			return <-ran, false
 		}
+		// what went out after the answer "queued" reaches the inbox of the caller,
+		// with the op_id it was given
+		report := func(resp localchan.Response) {
+			if h.OnQueued != nil && c.Caller.Identified && plainOpID(c.Request.ID) {
+				h.OnQueued(context.Background(), c.Request.ID, c.Caller.AgentID, c.Request.Cmd, resp)
+			}
+		}
+		pending := localchan.OK(map[string]any{"queued": true, "op_id": c.Request.ID})
 		// under the quota: it waits for the renewal and goes out once
 		if reset, low := h.quotaLow(ctx, c); low {
-			h.Clock.AfterFunc(max(reset.Sub(h.Clock.Now()), 0), func() { run(context.Background()) })
-			return localchan.OK(map[string]any{"queued": true})
+			h.Clock.AfterFunc(max(reset.Sub(h.Clock.Now()), 0), func() {
+				if resp, queued := attempt(context.Background(), report); !queued {
+					report(resp)
+				}
+			})
+			return pending
 		}
-		return run(ctx)
+		resp, queued := attempt(ctx, report)
+		if !queued {
+			return resp
+		}
+		return pending
 	}
 }
