@@ -374,6 +374,42 @@ type CharacterNotice struct {
 	Screen string `json:"screen,omitempty"`
 }
 
+// TableRef names the worktree of a table on a Tower (`table.where`,
+// `table.remove`, `table.done`).
+type TableRef struct {
+	Workspace string `json:"workspace" proto:"req"`
+	Table     string `json:"table" proto:"req"`
+}
+
+// TableWhere is the answer to `table.where`, in the ack: where the Tower keeps
+// (or would keep) the worktree of the table and, when it exists, its state.
+type TableWhere struct {
+	Dir    string   `json:"dir" proto:"req"`
+	Exists bool     `json:"exists"`
+	Tip    string   `json:"tip,omitempty"`
+	Dirty  []string `json:"dirty,omitempty"`
+}
+
+// TableSent is `table.sent`, the end of a `table.done` (its reply_to): the
+// Tower sent its commits to the Citadel (Sent), up to Tip; Warnings lists what
+// did not travel; Error says why it could not send.
+type TableSent struct {
+	Workspace string   `json:"workspace" proto:"req"`
+	Table     string   `json:"table" proto:"req"`
+	Sent      bool     `json:"sent"`
+	Tip       string   `json:"tip,omitempty"`
+	Warnings  []string `json:"warnings,omitempty"`
+	Error     string   `json:"error,omitempty"`
+}
+
+// TableNotice is `table.notice`: a Tower tells the master of a table something
+// about its worktree (a branch that diverged, a worktree that conflicts).
+type TableNotice struct {
+	Workspace string `json:"workspace" proto:"req"`
+	Table     string `json:"table" proto:"req"`
+	Text      string `json:"text" proto:"req"`
+}
+
 // CharacterTurn is `character.turn`: a turn of a character of the Tower ended,
 // with the last message of the agent in it.
 type CharacterTurn struct {

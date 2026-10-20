@@ -574,6 +574,15 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 			return current && serving && e.epochs.Citadel() == e.id.MachineID
 		},
 	}
+	if hosted := e.orc.Load(); hosted != nil {
+		// the commits a Tower sends back after a done, received for its machine
+		e.tabs.Store(hosted.Tables)
+		defer e.tabs.Store(nil)
+		pcfg.Xfer = &protocol.XferConfig{
+			Dir:        e.paths.transfers(), // the folder the Replica erases when the machine leaves the Guild
+			Finalizers: map[string]protocol.Finalizer{protocol.KindGitBundle: citadelBundles{&e.tabs}},
+		}
+	}
 	var srv *protocol.Server
 	files, err := e.paths.replicationFiles()
 	if err != nil {

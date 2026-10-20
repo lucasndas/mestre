@@ -42,6 +42,11 @@ const (
 	TypeCharacterStop        = "character.stop"
 	TypeCharacterNotice      = "character.notice"
 	TypeCharacterTurn        = "character.turn"
+	TypeTableWhere           = "table.where"
+	TypeTableRemove          = "table.remove"
+	TypeTableDone            = "table.done"
+	TypeTableSent            = "table.sent"
+	TypeTableNotice          = "table.notice"
 	TypeAgentRules           = "agent.rules"
 	TypeAgentSiteLogin       = "agent.site_login"
 	TypeAgentSiteLoginStatus = "agent.site_login_status"
@@ -116,6 +121,11 @@ func DefaultRegistry() *Registry {
 		Spec{Type: TypeCharacterStop, Dir: CitadelToTower, Ack: true, Payload: CharacterStop{}},
 		Spec{Type: TypeCharacterNotice, Dir: TowerToCitadel, Ack: true, Payload: CharacterNotice{}},
 		Spec{Type: TypeCharacterTurn, Dir: TowerToCitadel, Ack: true, Payload: CharacterTurn{}},
+		Spec{Type: TypeTableWhere, Dir: CitadelToTower, Ack: true, Payload: TableRef{}, Reply: TableWhere{}},
+		Spec{Type: TypeTableRemove, Dir: CitadelToTower, Ack: true, Payload: TableRef{}},
+		Spec{Type: TypeTableDone, Dir: CitadelToTower, Ack: true, Payload: TableRef{}},
+		Spec{Type: TypeTableSent, Dir: TowerToCitadel, Ack: true, Payload: TableSent{}},
+		Spec{Type: TypeTableNotice, Dir: TowerToCitadel, Ack: true, Payload: TableNotice{}},
 		Spec{Type: TypeAgentRules, Dir: CitadelToTower, Ack: true, Payload: Object{}},
 		Spec{Type: TypeAgentSiteLogin, Dir: CitadelToTower, Ack: true, Volatile: true, Payload: AgentSiteLogin{}},
 		Spec{Type: TypeAgentSiteLoginStatus, Dir: TowerToCitadel, Ack: true, Payload: AgentSiteLoginStatus{}},
