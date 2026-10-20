@@ -61,7 +61,9 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
   - O `whisper-server` roda em qualquer máquina da Guilda, Linux ou Windows, cuja [ficha da máquina](../guilda/ficha-da-maquina.md) diz que transcreve; havendo mais de uma, a com GPU é preferida.
   - **Padrão: a própria Cidadela, por CPU**, no próprio motor (serviço `mestre`, [componentes](../arquitetura/componentes.md)).
   - Se a máquina preferida estiver offline, a próxima capaz assume.
-  - O motor da Cidadela manda o áudio já convertido ao motor da máquina escolhida pela conexão WSS (`transcribe.request`) e recebe o texto de volta (`transcribe.result`) ([protocolo](../conectividade/protocolo.md)); o motor dela chama o `whisper-server` local. Quando é a própria Cidadela, a chamada é direta, sem WSS.
+  - O motor da Cidadela manda o áudio já convertido ao motor da máquina escolhida pela conexão WSS, em uma transferência `audio`, e o pede por `transcribe.request`; recebe o texto de volta em `transcribe.result` ([protocolo](../conectividade/protocolo.md), [mensagens](../conectividade/mensagens.md)); o motor dela chama o `whisper-server` local, e só um pedido da Cidadela vale. Quando é a própria Cidadela, a chamada é direta, sem WSS.
+  - A escolha lê as fichas: entram a máquina online, não excluída, com `transcricao` na ficha (a Cidadela, com o `whisper-server` dela), sem contar a que o motor sabe fora do ar. A ordem é: com GPU primeiro; entre iguais, a Cidadela antes das Torres. Sem `whisper-server` na Cidadela, a Torre que tem transcreve.
+  - **Falha fechada:** sem máquina que transcreva, ou com todas falhando (fora do ar, conexão perdida no meio, recusa), o áudio segue; texto vazio ou só ruído também o caminho de falha abaixo; nada é inventado e o WAV não vai a máquina que a ficha não aponta.
   - Numa troca de Cidadela, o padrão passa a ser a nova Cidadela.
 - **Áudio longo e formato:** o motor transcreve até 15 minutos (o `ffmpeg` corta aí e a conversão que passa do teto é recusada); um áudio declarado mais longo é guardado e entregue sem transcrição, com o motivo. O `ffmpeg` só lê o contêiner que o conteúdo diz ser (ogg, mp3, wav, aiff, mp4/m4a, webm), só pelo pipe e sem protocolos de rede; qualquer outro formato é recusado antes de iniciar o programa.
 - **Conversão:**
@@ -119,6 +121,9 @@ sequenceDiagram
 - **CA-ANEXO-08** · *pesada* — **Dado** o sistema instalado, **quando** mando um áudio e depois um PDF pelo Telegram (dublê), **então** o áudio é transcrito localmente pelo `whisper-server` real e respondido no Telegram, e o PDF chega à mesa certa e é usado na tarefa (MVP-10).
 - **CA-ANEXO-09** · *rápida* — **Dado** o Telegram falso com `getFile` que falha, **quando** um anexo chega, **então** há 3 tentativas (relógio falso), o usuário é avisado e o Grão-Mestre não recebe nada.
 - **CA-ANEXO-10** · *rápida* — **Dado** um arquivo que declara `image/png` mas é um PDF, **quando** chega, **então** vale o tipo detectado e a divergência fica registrada.
+- **CA-ANEXO-11** · *completa* — **Dado** uma Cidadela sem `whisper-server` e uma Torre real com o whisper falso e `transcricao` na ficha, **quando** chega uma voz, **então** o WAV segue pela WSS, a Torre o transcreve e o texto volta à Cidadela marcado como transcrito.
+- **CA-ANEXO-12** · *rápida* — **Dado** fichas de máquinas com e sem transcrição, com e sem GPU, online, offline e excluídas, **quando** a Cidadela escolhe quem transcreve, **então** só entram as online, não excluídas, com transcrição, com GPU primeiro e a Cidadela antes das Torres sem GPU.
+- **CA-ANEXO-13** · *rápida* — **Dado** nenhuma máquina que transcreva, uma Torre sem `whisper-server`, uma que cai no meio ou um WAV inválido, **quando** a voz chega, **então** o Grão-Mestre recebe `[áudio sem transcrição: …]` com o anexo, e a Torre só aceita áudio e pedido da Cidadela.
 
 ## Depende de
 

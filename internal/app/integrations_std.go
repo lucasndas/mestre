@@ -742,12 +742,20 @@ func (d inboxDeliverer) Deliver(ctx context.Context, m telegram.Delivery) error 
 // client of the bot, the main clone of each workspace, and the transcription of
 // the voice messages by the machines the installation names.
 func (r *stdRun) attachments(orc *Orchestration) telegram.Files {
-	var machines func(context.Context) []attachments.Machine
+	// The Citadel transcribes itself when it has a whisper-server, and the Towers
+	// whose sheets say they transcribe take it too (GPU first); with neither, no
+	// machine transcribes and the voice goes on with the reason.
+	var local *attachments.Machine
 	if r.s.WhisperURL != "" {
 		w := attachments.Whisper{BaseURL: r.s.WhisperURL, HTTP: r.s.HTTP, Prompt: "Conversa em português sobre desenvolvimento de software."}
-		machines = func(context.Context) []attachments.Machine {
-			return []attachments.Machine{{Name: "cidadela", Engine: w}}
+		local = &attachments.Machine{Name: "cidadela", Engine: w}
+	}
+	machines := func(ctx context.Context) []attachments.Machine {
+		var fleet Fleet
+		if r.env.Transcribers != nil {
+			fleet = r.env.Transcribers(ctx)
 		}
+		return orderMachines(local, fleet)
 	}
 	tr := attachments.NewTranscription(r.env.Clock, attachments.FFmpeg{Path: r.s.FFmpeg}, machines, "")
 	svc, err := attachments.New(attachments.Options{DB: r.env.DB, Clock: r.env.Clock, Fetcher: lateFetcher{r}, Limit: r.s.AttachmentLimit, Transcriber: tr,

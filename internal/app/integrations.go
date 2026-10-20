@@ -36,6 +36,9 @@ type IntegrationEnv struct {
 	// the Citadel of the period; GuildID is the id of the Guild.
 	DecideJoin func(ctx context.Context, joinID string, d guild.Decision) error
 	GuildID    string
+	// Transcribers are the Towers that transcribe now, from the sheets of the
+	// Guild and the connections (nil: none; docs/telegram/anexos-e-transcricao.md).
+	Transcribers func(ctx context.Context) Fleet
 }
 
 // GuildApprover is what an IntegrationRun may also be: the question to the Owner
