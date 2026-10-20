@@ -17,7 +17,7 @@ import (
 func TestAMachineWithoutTerminalsRefusesTheStartWithTheReason(t *testing.T) {
 	t.Parallel()
 	e := &Engine{id: guild.Identity{MachineID: "m1"}}
-	m := e.machines()
+	m := e.machines(nil)
 	_, err := m.Start(t.Context(), "m1", characters.StartCommand{Character: "c1"})
 	if !errors.Is(err, errTerminalsNotWired) || !strings.Contains(err.Error(), "terminais") {
 		t.Fatalf("start on the machine without terminals: %v", err)
@@ -64,5 +64,27 @@ func TestTheTerminalsOfTheConfigurationAreChecked(t *testing.T) {
 	}
 	if p, err := good.Terminais.ptyBinary("1.2.3"); err != nil || filepath.Dir(filepath.Dir(p)) != dir {
 		t.Errorf("the mestre-pty of a version: %q, %v", p, err)
+	}
+}
+
+// Part of CA-CIDADELA-16: the Tower writes the files of a character only in the
+// workspaces of its own machine.
+func TestATowerRefusesAWorktreeOutsideItsWorkspaces(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	e := &Engine{paths: Paths{Workspaces: filepath.Join(root, "workspaces")}}
+	for dir, ok := range map[string]bool{
+		filepath.Join(root, "workspaces", "meu-app", "t1"): true,
+		filepath.Join(root, "workspaces"):                  false,
+		filepath.Join(root, "workspaces", "..", "x"):       false,
+		filepath.Join(root, "outro"):                       false,
+		"relativo":                                         false,
+	} {
+		if err := e.towerWorktree(dir); (err == nil) != ok {
+			t.Errorf("%s: %v", dir, err)
+		}
+	}
+	if err := (&Engine{}).towerWorktree(filepath.Join(root, "x")); err == nil {
+		t.Error("a machine with no folder of workspaces took a worktree")
 	}
 }

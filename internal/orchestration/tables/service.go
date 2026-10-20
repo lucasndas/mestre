@@ -51,7 +51,9 @@ type Options struct {
 	Rituals     Rituals
 	Requests    Requests
 	Oversight   Oversight
-	Peers       Peers
+	// Proofs says which criteria of the missions of a table are proved (nil: none).
+	Proofs Proofs
+	Peers  Peers
 	// Dependencies holds a table that waits for another (nil: none does).
 	Dependencies Dependencies
 	// TempDir is a private folder for the bundles while they are sent
