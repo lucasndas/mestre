@@ -1,6 +1,7 @@
 package winsvc
 
 import (
+	"runtime"
 	"testing"
 	"unsafe"
 
@@ -18,6 +19,23 @@ func TestTheCLIAllowsTheEngineToQueryItselfAndNothingMore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// the DACL belongs to the process of the whole test binary: give it back as it was
+	// found, or a second run in the same process (-count) finds the ACE of the first
+	orig, err := windows.GetSecurityInfo(windows.CurrentProcess(), windows.SE_KERNEL_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		t.Fatal(err)
+	}
+	origACL, _, err := orig.DACL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		err := windows.SetSecurityInfo(windows.CurrentProcess(), windows.SE_KERNEL_OBJECT, windows.DACL_SECURITY_INFORMATION, nil, nil, origACL, nil)
+		runtime.KeepAlive(orig)
+		if err != nil {
+			t.Errorf("restore the DACL of the process: %v", err)
+		}
+	})
 	read := func() (n int, mine []uint32) {
 		sd, err := windows.GetSecurityInfo(windows.CurrentProcess(), windows.SE_KERNEL_OBJECT, windows.DACL_SECURITY_INFORMATION)
 		if err != nil {

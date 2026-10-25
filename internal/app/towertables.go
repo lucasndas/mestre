@@ -469,7 +469,7 @@ func absWorkspaces(p string) string {
 	if err != nil {
 		return filepath.Clean(p)
 	}
-	if r, err := filepath.EvalSymlinks(a); err == nil {
+	if r, err := resolveExisting(a); err == nil {
 		return r
 	}
 	return a
