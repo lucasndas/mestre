@@ -28,6 +28,8 @@ type shipped struct {
 	got  []string
 	err  error
 	made func(machine string)
+	// onShip is what the Tower does with the order: the paths it was asked for.
+	onShip func(table string, rels []string)
 }
 
 func (s *shipped) Ship(_ context.Context, machine, workspace, table string, rels []string) error {
@@ -41,6 +43,9 @@ func (s *shipped) Ship(_ context.Context, machine, workspace, table string, rels
 	}
 	if s.made != nil {
 		s.made(machine)
+	}
+	if s.onShip != nil {
+		s.onShip(table, rels)
 	}
 	return nil
 }
@@ -117,6 +122,17 @@ func (r *attachRig) keep(t *testing.T, rel, content string) {
 	}
 }
 
+// towerCopies makes the fake Tower do what the real one does when the Citadel
+// asks (table.attach): copy the attachments of the order into its own worktree.
+func (r *attachRig) towerCopies(t *testing.T) {
+	t.Helper()
+	r.ship.onShip = func(_ string, rels []string) {
+		if err := r.copies.copyInto(t.Context(), attWS, r.towerDir, rels); err != nil {
+			t.Errorf("the Tower did not copy: %v", err)
+		}
+	}
+}
+
 func (r *attachRig) recorded(t *testing.T, rel string) []string {
 	t.Helper()
 	var raw string
@@ -137,6 +153,7 @@ func (r *attachRig) recorded(t *testing.T, rel string) []string {
 func TestTheAttachmentIsInEveryWorktreeOfTheTableBeforeTheMessageIsDelivered(t *testing.T) {
 	t.Parallel()
 	r := newAttachRig(t)
+	r.towerCopies(t)
 	r.keep(t, attRel, "PNG")
 	copies, err := messageAttachments{r.copies}.Forward(t.Context(), attWS, attTable, []string{attRel})
 	if err != nil || !slices.Equal(copies, []string{attRel}) {
@@ -147,6 +164,10 @@ func TestTheAttachmentIsInEveryWorktreeOfTheTableBeforeTheMessageIsDelivered(t *
 	}
 	if want := []string{"torre " + attWS + "/" + attTable + " " + attRel}; !slices.Equal(r.ship.got, want) {
 		t.Errorf("the Tower was asked for %v, want %v", r.ship.got, want)
+	}
+	// and the file is in the worktree of the Tower by the time Forward returns
+	if b, err := os.ReadFile(filepath.Join(r.towerDir, filepath.FromSlash(attRel))); err != nil || string(b) != "PNG" {
+		t.Errorf("the worktree of the Tower: %q, %v", b, err)
 	}
 	if got := r.recorded(t, attRel); !slices.Equal(got, []string{attTable}) {
 		t.Errorf("the tables of the attachment = %v", got)
@@ -184,6 +205,7 @@ func TestTheAttachmentIsInEveryWorktreeOfTheTableBeforeTheMessageIsDelivered(t *
 func TestTheTableThatOpensWithAMessageGetsItsAttachments(t *testing.T) {
 	t.Parallel()
 	r := newAttachRig(t)
+	r.towerCopies(t)
 	r.keep(t, attRel, "PNG")
 	err := openAttachments{r.copies}.Forward(t.Context(), attWS, attTable, []sessionzero.File{
 		{Path: "2026/10/a1b2-print.png"}, {Path: "2026/10/c3d4-nota.txt", Data: []byte("nota")}})
@@ -191,7 +213,7 @@ func TestTheTableThatOpensWithAMessageGetsItsAttachments(t *testing.T) {
 		t.Fatal(err)
 	}
 	for rel, want := range map[string]string{attRel: "PNG", ".mestre/anexos/2026/10/c3d4-nota.txt": "nota"} {
-		for _, dir := range []string{r.citadel, filepath.Join(r.root, attWS, "principal")} {
+		for _, dir := range []string{r.citadel, r.towerDir, filepath.Join(r.root, attWS, "principal")} {
 			if b, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel))); err != nil || string(b) != want {
 				t.Errorf("%s in %s: %q, %v", rel, dir, b, err)
 			}

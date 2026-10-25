@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 )
 
@@ -84,6 +85,15 @@ func TestATableWhoseEpicWaitsForAnotherOpensWithTheRequestHeldAndTheListSaysWhy(
 	for _, d := range w.deliv.typed()[before:] {
 		if d.TerminalID == res.Master.TerminalID {
 			t.Fatalf("the request was handed to the master of the held table: %+v", d)
+		}
+	}
+	alive, err := w.reg.Alive(w.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range alive {
+		if c.Table == res.Table.ID && c.Role != characters.RoleTableMaster {
+			t.Errorf("%s (%s) was recruited for the held table; want only its master", c.Name, c.Role)
 		}
 	}
 	if held, _ := w.svc.Paused(w.ctx, w.slug(), res.Table.ID); !held {

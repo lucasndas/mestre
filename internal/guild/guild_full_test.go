@@ -4,6 +4,7 @@ package guild_test
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"math/rand/v2"
 	"net"
@@ -310,6 +311,33 @@ func TestASecondInstanceFindsTheGuildByBroadcastEntersConnectsByMTLSAndReconnect
 	_, stop := connect(t)
 	waitConnected(t, res.Joined.MachineID)
 	stop()
+
+	// "by mTLS only": the route of the Towers refuses a client that trusts the CA but
+	// has no client certificate, and a client that does not speak TLS at all
+	towerURL := net.JoinHostPort("127.0.0.1", strconv.Itoa(tcpPort)) + transport.RouteTower
+	noCert := &http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{RootCAs: founded.CA.Pool(), MinVersion: tls.VersionTLS13}}}
+	defer noCert.CloseIdleConnections()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+towerURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp, err := noCert.Do(req); err == nil {
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("the Tower route without a client certificate = %d, want 401", resp.StatusCode)
+		}
+	}
+	plainReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+towerURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp, err := (&http.Client{}).Do(plainReq); err == nil {
+		_ = resp.Body.Close()
+		if resp.StatusCode < 400 {
+			t.Errorf("the Tower route over plain HTTP = %d, want a refusal", resp.StatusCode)
+		}
+	}
 
 	b.restart(t)
 	_, stop2 := connect(t)

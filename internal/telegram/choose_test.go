@@ -2,6 +2,7 @@ package telegram_test
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -61,6 +62,34 @@ func TestChooseAsksWithTheRecommendedOptionFirstAndTheAnswerComesOnceAsAMessageO
 	w.click(anaTG, msg, keys["Mesa #12 Login"])
 	if len(w.answers) != 1 {
 		t.Fatalf("a question answered twice: %d answers", len(w.answers))
+	}
+}
+
+// CA-CLI-GM-15, the order of the buttons with --recommend 1 (the handler gives
+// the payload "|1|", and the recommended option is the first one of the list):
+// it comes first and the others keep their order.
+func TestChooseWithRecommendationOneKeepsTheListOrder(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, rigOpts{block: true})
+	ana, anaTG := w.user("Ana", users.Administrator, "loja")
+	options := []string{"Mesa #12 Login", "Nova mesa", "Mesa #15 Relatórios"}
+	if _, err := w.cc.Ask(w.ctx, telegram.ChoiceQuestion{Workspace: "loja", Asker: "gm", UserID: ana.ID, Question: "Esse ajuste é do Login?", Options: options}, 1); err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	var texts []string
+	for _, s := range w.sent("sendMessage") {
+		if s.ChatID != anaTG.ID {
+			continue
+		}
+		for _, row := range s.Params["reply_markup"].(map[string]any)["inline_keyboard"].([]any) {
+			for _, b := range row.([]any) {
+				texts = append(texts, b.(map[string]any)["text"].(string))
+			}
+		}
+	}
+	if !slices.Equal(texts, options) {
+		t.Fatalf("buttons = %v; want %v (#12 first, the recommended one, then the others in order)", texts, options)
 	}
 }
 

@@ -94,6 +94,10 @@ func TestDecreeProposeBuildsTheProposalFromTheMessageAndNothingHoldsBeforeTheCli
 	if want := "Entendi: permitir comandos make deploy-teste para a classe dev, permanente (workspace loja). Confirma?"; shown != want {
 		t.Errorf("the proposal shown to the author = %q, want %q (effect permission, target classe dev, scope)", shown, want)
 	}
+	// the original text of the order is shown with the proposal, unchanged
+	if off.list[0].Order != order || got.Data["order"] != order {
+		t.Errorf("the order shown to the author = %q (reply %v), want the text of the message %q unchanged", off.list[0].Order, got.Data["order"], order)
+	}
 	if got.Data["text"] != shown {
 		t.Errorf("the reply text %v is not the proposal shown to the author %q", got.Data["text"], shown)
 	}

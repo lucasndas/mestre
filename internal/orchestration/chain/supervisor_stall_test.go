@@ -68,7 +68,7 @@ func (w *world) stallItems() []inbox.Item {
 	return out
 }
 
-// CA-SUPCAD-06
+// CA-SUPCAD-06 (the button Pausar mesa and its Approver recipients are those of the bot: internal/telegram/stallchan_test.go)
 func TestATableThatSpinsWarnsTheGrandMasterAndThePeopleOnceAndTheButtonPausesItWithTheAudit(t *testing.T) {
 	t.Parallel()
 	w := newSup(t)
@@ -138,6 +138,37 @@ func TestATableThatSpinsWarnsTheGrandMasterAndThePeopleOnceAndTheButtonPausesItW
 	w.tick()
 	if w.stallers.count() == before {
 		t.Error("no new warning after 3 h more without a delivery")
+	}
+	// the same on the table that was warned (the Approver paused it): resumed, then a
+	// delivery (a commit, a PR or a finished stage all reach Delivered), and the count
+	// starts again
+	warnedTable := func() int {
+		w.stallers.mu.Lock()
+		defer w.stallers.mu.Unlock()
+		c := 0
+		for _, x := range w.stallers.told {
+			if x.Table == w.table.ID {
+				c++
+			}
+		}
+		return c
+	}
+	if err := w.orc.Tables.Resume(w.ctx, w.slug, w.table.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.orc.Tables.Delivered(w.ctx, w.slug, w.table.ID); err != nil {
+		t.Fatal(err)
+	}
+	was := warnedTable()
+	w.clk.Advance(3*time.Hour - time.Minute)
+	w.tick()
+	if warnedTable() != was {
+		t.Error("warned again about the table that delivered after the warning, before 3 h more")
+	}
+	w.clk.Advance(time.Minute)
+	w.tick()
+	if warnedTable() == was {
+		t.Error("no new warning about the warned table after 3 h more without a delivery")
 	}
 }
 

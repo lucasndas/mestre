@@ -3,6 +3,7 @@ package telegram_test
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -119,12 +120,27 @@ func TestA409OfTheGetUpdatesMakesTheBotCheckTheLockAndStopOnlyWithAHigherEpoch(t
 			if q, s, _, _ := lw.bot.OutboxState(lw.ctx); q != 1 || s != 0 || lw.fake.Calls("sendMessage") != 0 {
 				t.Fatalf("suspended: queued %d, sent %d; want the message kept and nothing sent", q, s)
 			}
+			// the engine stops reading and the Citadel is suspended
+			reads := lw.fake.Calls("getUpdates")
+			if err := lw.bot.PollOnce(lw.ctx); err != nil || lw.fake.Calls("getUpdates") != reads {
+				t.Fatalf("a suspended Citadel read the bot: %v", err)
+			}
+			if st := lw.fence.State(); st != guild.FenceDemoted && st != guild.FenceSuspended {
+				t.Fatalf("fence state = %s, want the Citadel suspended", st)
+			}
 			continue
 		}
 		<-lw.own // it goes on reading and sending
 		lw.flush()
 		if q, s, _, _ := lw.bot.OutboxState(lw.ctx); q != 0 || s != 1 {
 			t.Fatalf("own epoch: queued %d, sent %d", q, s)
+		}
+		reads := lw.fake.Calls("getUpdates")
+		if err := lw.bot.PollOnce(lw.ctx); err != nil || lw.fake.Calls("getUpdates") != reads+1 {
+			t.Fatalf("own epoch: the bot did not go on reading: %v", err)
+		}
+		if st := lw.fence.State(); st != guild.FenceConfirmed || lw.fence.TelegramStopped() {
+			t.Fatalf("own epoch: fence state = %s (telegram stopped %v), want confirmed", st, lw.fence.TelegramStopped())
 		}
 	}
 }
@@ -191,6 +207,9 @@ func TestWithTheLeaseGoneA409StopsTheTelegramUntilTheEpochIsConfirmed(t *testing
 	if stopped := <-lw.tgStop; !stopped || !lw.fence.TelegramStopped() {
 		t.Fatal("the Telegram did not stop")
 	}
+	if got := lw.fence.TelegramNotice(); !strings.Contains(got, "Telegram parado") {
+		t.Fatalf("the panel notice = %q, want \"Telegram parado\"", got)
+	}
 	reads, sends := lw.fake.Calls("getUpdates"), lw.fake.Calls("sendMessage")
 	if err := lw.bot.PollOnce(lw.ctx); err != nil {
 		t.Fatal(err)
@@ -204,6 +223,9 @@ func TestWithTheLeaseGoneA409StopsTheTelegramUntilTheEpochIsConfirmed(t *testing
 	lw.clk.Advance(guild.LeaseInterval)
 	if stopped := <-lw.tgStop; stopped {
 		t.Fatal("the Telegram stayed stopped")
+	}
+	if got := lw.fence.TelegramNotice(); got != "" {
+		t.Fatalf("the panel notice = %q after the epoch was confirmed, want none", got)
 	}
 	lw.flush()
 	if err := lw.bot.PollOnce(lw.ctx); err != nil || lw.fake.Calls("getUpdates") != reads+1 || lw.fake.Calls("sendMessage") != sends+1 {

@@ -160,6 +160,12 @@ steps:
 	if !strings.Contains(text, "| ID | Etapa dona | Tipo | Onde | Achado | Estado |") {
 		t.Errorf("the review scroll:\n%s", text)
 	}
+	// the table is born empty: no row of data after the header
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "| R") {
+			t.Errorf("the review scroll is born with a row of data: %q", line)
+		}
+	}
 	w.finish("Dev Claude 1", "v1", map[string]string{"a.go": "1"}, "")
 	if item := w.itemOf("Revisor Codex 1"); strings.Contains(item, "Pergaminho de revisão") {
 		t.Errorf("the first pass already has the review scroll:\n%s", item)
@@ -180,9 +186,19 @@ steps:
 	w.finish("Dev Claude 1", "v2", map[string]string{"a.go": "2"}, "")
 	item := w.itemOf("Revisor Codex 1")
 	review := strings.Index(item, "Pergaminho de revisão")
-	instr := strings.Index(item, "Instruções:")
-	if review < 0 || !strings.Contains(item, "aceita senha vazia") || !strings.Contains(item, "aberto") || !strings.Contains(item, "confira cada achado") || (instr >= 0 && review > instr) {
-		t.Errorf("the second pass of the reviewer does not start by the review scroll:\n%s", item)
+	order := strings.Index(item, "confira cada achado")
+	content := strings.Index(item, "aceita senha vazia")
+	if review < 0 || content < 0 || order < 0 || !strings.Contains(item, "aberto") || order < review || order > content {
+		t.Errorf("the second pass of the reviewer does not carry the review scroll with the order to check the findings:\n%s", item)
+	}
+	// it starts by the scroll: every other section of the item comes after the content of the scroll
+	for _, later := range []string{"Resultado das etapas anteriores", "Issue da missão", "Pergaminho da missão", "Quando terminar", "Instruções:"} {
+		if i := strings.Index(item, later); i >= 0 && i < content {
+			t.Errorf("%q comes before the review scroll in the second pass:\n%s", later, item)
+		}
+	}
+	if head := item[:review]; strings.Count(strings.TrimSpace(head), "\n") > 1 {
+		t.Errorf("something other than the title comes before the review scroll:\n%s", item)
 	}
 	_ = q
 }
@@ -240,7 +256,7 @@ func TestProofDoesNotGoWithReturnAndTheCauseMustBeOneOfTheList(t *testing.T) {
 			t.Errorf("%s = %+v, want usage", name, r)
 		}
 	}
-	if r := w.done("Revisor Codex 1", map[string]any{"proof": []string{"C1=" + strings.Repeat("x", quests.MaxProof+1)}}, "x"); r.OK || r.ExitCode() != localchan.ExitLimit {
+	if r := w.done("Revisor Codex 1", map[string]any{"proof": []string{"C1=" + strings.Repeat("x", quests.MaxProof+1)}}, "x"); r.OK || r.Error.Code != "too_large" || r.ExitCode() != localchan.ExitLimit {
 		t.Errorf("a proof of 501 characters = %+v, want too_large", r)
 	}
 	// a task with no quest takes no proof

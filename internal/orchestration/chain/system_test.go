@@ -55,11 +55,18 @@ func TestARequestToEnterTheGuildGoesOnlyToTheOwnerWhoApprovesOrDeniesWithThePIN(
 	if !strings.Contains(msg.Text, "123 456") && !strings.Contains(msg.Text, "notebook") {
 		t.Errorf("the question does not say what is asked: %q", msg.Text)
 	}
+	untouched := func(when string) {
+		t.Helper()
+		if q := w.request(id); q.State != chain.Open || q.Decision != nil {
+			t.Fatalf("%s the request is %s with decision %+v; nothing may change", when, q.State, q.Decision)
+		}
+	}
 	// a delegation of the Owner does not give it to the Grand Master
 	w.deleg.set(true)
 	if ref := w.refusal(chain.Decision{Request: id, By: w.gm.ID, Answer: chain.AnswerApprove}); ref.Code != chain.CodeHumanRequired {
 		t.Errorf("the Grand Master deciding the entry: %+v", ref)
 	}
+	untouched("after the refusal of the Grand Master")
 	if _, _, err := chain.ParsePolicyFile([]byte("versao: 1\ntipos:\n  promocao_cidadela: { sozinho: nunca }\n")); err == nil {
 		t.Error("a policy file that cites promocao_cidadela was accepted")
 	}
@@ -67,6 +74,7 @@ func TestARequestToEnterTheGuildGoesOnlyToTheOwnerWhoApprovesOrDeniesWithThePIN(
 	if _, err := w.flow.Answer(w.ctx, ana.ID, approvals.Input{Request: id, Answer: chain.AnswerApprove}); !errors.Is(err, approvals.ErrNotYours) {
 		t.Errorf("an Administrator answering: %v", err)
 	}
+	untouched("after the Administrator tapped Approve")
 	for _, a := range []chain.Answer{chain.AnswerApproveAlways, chain.AnswerApprovePattern, chain.AnswerDelegate} {
 		if rep, err := w.flow.Answer(w.ctx, w.owner.ID, approvals.Input{Request: id, Answer: a, Pattern: "x *"}); !errors.Is(err, approvals.ErrLevel) || rep.PIN != "" {
 			t.Errorf("%s: %+v, %v, want it refused before the PIN", a, rep, err)
@@ -82,6 +90,7 @@ func TestARequestToEnterTheGuildGoesOnlyToTheOwnerWhoApprovesOrDeniesWithThePIN(
 	if err != nil || rep.PIN == "" {
 		t.Fatalf("the button: %+v, %v", rep, err)
 	}
+	untouched("after the Owner tapped Approve without the PIN")
 	if got := w.entries.results(); len(got) != 0 {
 		t.Fatalf("the button alone told the owner of the type: %+v", got)
 	}

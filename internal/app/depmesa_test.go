@@ -77,6 +77,20 @@ func TestTheCancelledTableOrTheEpicNotPlannedCancelsTheWaitTheTableMasterIsDenie
 				}
 				return n
 			}
+			epicWait := func() waits.Wait {
+				t.Helper()
+				all, err := (&waits.Store{DB: guild}).ActiveWaits(w.ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, x := range all {
+					if x.Kind == waits.KindEpic && x.Table == waiting.ID {
+						return x
+					}
+				}
+				t.Fatal("the table has no active epic wait")
+				return waits.Wait{}
+			}
 			held := func() bool {
 				t.Helper()
 				h, err := w.orc.EpicDeps.Held(w.ctx, w.slug, dependent)
@@ -113,7 +127,11 @@ func TestTheCancelledTableOrTheEpicNotPlannedCancelsTheWaitTheTableMasterIsDenie
 			}
 
 			// the end of the other: the wait is cancelled, the table stays held, the Grand Master is told
+			theWait := epicWait()
 			tc.end(w)
+			if ended, err := (&waits.Store{DB: guild}).GetWait(w.ctx, theWait.ID); err != nil || ended.State != waits.Cancelled {
+				t.Errorf("the wait is %q (%v) after the end; want cancelled, not satisfied or removed", ended.State, err)
+			}
 			if active() != 0 {
 				t.Errorf("%d active waits after the end; want the wait cancelled", active())
 			}

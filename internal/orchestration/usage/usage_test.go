@@ -114,6 +114,12 @@ func TestPausesAt100PercentWithoutCuttingTheTurn(t *testing.T) {
 	if got := len(w.extra.all()); got != 1 {
 		t.Errorf("%d requests after the turn ended, want 1", got)
 	}
+	if len(w.chars.blocks) != 0 || len(w.chars.frees) != 0 {
+		t.Error("the end of the turn touched the character: it is not blocked or freed")
+	}
+	if got, err := w.svc.OfCharacter(w.ctx, "c1"); err != nil || got.Turns != 1 || got.Active != 2*time.Minute {
+		t.Errorf("the turn recorded = %+v (%v); want 1 turn with 2 min of active time (it ended normally)", got, err)
+	}
 	// approved: the limit of the period goes up and the pause is lifted
 	if err := w.svc.Decided(w.ctx, usage.Decision{Request: 1, Approved: true}); err != nil {
 		t.Fatal(err)
@@ -444,6 +450,7 @@ func TestStartThresholdHoldsUntilTheReset(t *testing.T) {
 func TestOldReadingBelowTheThresholdIsUnknownAndStepGoesWithAWarning(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
+	w.dir.steps = 1
 	w.character("mestre", "Mestre", characters.RoleTableMaster, providers.ClaudeCode)
 	w.character("c1", "Dev", characters.RoleCharacter, providers.ClaudeCode)
 	read := w.clk.Now().Add(-20 * time.Minute)
@@ -459,6 +466,14 @@ func TestOldReadingBelowTheThresholdIsUnknownAndStepGoesWithAWarning(t *testing.
 	}
 	if v, _ := w.svc.Verdict(w.ctx, providers.ClaudeCode, "pessoal", "loja"); v.Hold || !v.Unconfirmed {
 		t.Errorf("verdict = %+v, want unconfirmed and not held", v)
+	}
+	// the step is delivered, not deferred: nothing was held, so no table pause
+	// line went out and a sweep has nothing to bring back, however many steps wait
+	if n := w.said.alertsWith("⏸"); n != 0 {
+		t.Errorf("the table was announced as paused %d times; the step must go", n)
+	}
+	if err := w.svc.Sweep(w.ctx); err != nil || w.pump.count() != 0 {
+		t.Errorf("a sweep pumped %d times (err %v); nothing waited, the step was already delivered", w.pump.count(), err)
 	}
 	// the warning is given once per reading
 	if _, err := w.svc.Held(w.ctx, "c1"); err != nil {

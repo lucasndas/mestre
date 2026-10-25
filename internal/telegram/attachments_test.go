@@ -3,6 +3,8 @@ package telegram_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,7 +101,9 @@ func TestAPDFIsKeptRegisteredAndDelivered(t *testing.T) {
 		t.Fatalf("delivered %+v", got)
 	}
 	f := got[0].File
-	if !strings.HasPrefix(f.Path, ".mestre/anexos/2026/10/") || !strings.HasSuffix(f.Path, "-relatório do mês.pdf") || f.MIME != "application/pdf" || f.Size != int64(len(pdf)) || len(f.SHA256) != 64 {
+	sum := sha256.Sum256(pdf)
+	wantSum := hex.EncodeToString(sum[:])
+	if !strings.HasPrefix(f.Path, ".mestre/anexos/2026/10/") || !strings.HasSuffix(f.Path, "-relatório do mês.pdf") || f.MIME != "application/pdf" || f.Size != int64(len(pdf)) || f.SHA256 != wantSum {
 		t.Fatalf("stored %+v", f)
 	}
 	data, err := os.ReadFile(filepath.Join(w.root, filepath.FromSlash(f.Path)))

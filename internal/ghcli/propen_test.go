@@ -83,16 +83,20 @@ func TestAResendingOfPROpenMakesNoSecondPR(t *testing.T) {
 	}
 }
 
-// CA-CLI-GH-04
+// CA-CLI-GH-04 and CA-GH-ACOES-05 (a character who is not the Mestre da mesa: refused, nothing sent)
 func TestAForcedPushIsOnlyForTheMasterOfTheTable(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	prOfTheTable(t, r)
+	writes := len(r.gh.Actions())
 	if got := r.run("qa", "pr update", map[string]any{"force": true}); got.OK || got.Exit != 3 || got.Code != "level_denied" {
 		t.Errorf("a QA: %+v, want exit 3 level_denied", got)
 	}
 	if len(r.pushes()) != 0 {
 		t.Errorf("a refused force pushed: %q", r.pushes())
+	}
+	if got := len(r.gh.Actions()); got != writes {
+		t.Errorf("GitHub received %d writes from the refused force", got-writes)
 	}
 	if got := r.run("tm", "pr update", map[string]any{"force": true}); !got.OK {
 		t.Errorf("the Master of the table: %+v", got)
@@ -165,21 +169,33 @@ func TestASecretInTheDiffStopsTheSendingAndIsNeverShown(t *testing.T) { //nolint
 	// the reading of the environment sends
 	r2 := newRig(t)
 	r2.mirror.Commit("42-login", "feat: env", map[string]string{"src/x.ts": "const token = process.env.GH_TOKEN\nconst k = \"your_token_here_000000000000\"\n"})
-	if got := r2.run("tm", "pr open", nil); !got.OK {
-		t.Errorf("a read of the environment and an example: %+v", got)
+	if got := r2.run("tm", "pr open", nil); !got.OK || len(r2.pushes()) != 1 {
+		t.Errorf("a read of the environment and an example: %+v pushes %q, want sent once", got, r2.pushes())
 	}
 	// each kind of the formats is found, with its type
-	for kind, line := range map[string]string{
-		"telegram_bot_token": "bot 123456789:" + strings.Repeat("AbC_d", 7),
-		"jwt":                "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc123def456ghi",
-		"aws_access_key":     "AKIA" + strings.Repeat("A1", 8),
+	for kind, tc := range map[string]struct{ line, value string }{
+		"telegram_bot_token": {"bot 123456789:" + strings.Repeat("AbC_d", 7), strings.Repeat("AbC_d", 7)},
+		"jwt":                {"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc123def456ghi", "abc123def456ghi"},
+		"aws_access_key":     {"AKIA" + strings.Repeat("A1", 8), "AKIA" + strings.Repeat("A1", 8)},
 	} {
+		line := tc.line
 		r3 := newRig(t)
 		r3.mirror.Commit("42-login", "feat: "+kind, map[string]string{"src/y.ts": line + "\n"})
 		got := r3.run("tm", "pr open", nil)
-		if got.Code != "secret_detected" || !strings.Contains(got.Error, "src/y.ts:1 "+kind) {
-			t.Errorf("%s: %+v", kind, got)
+		if got.OK || got.Exit != 3 || got.Code != "secret_detected" || !strings.Contains(got.Error, "src/y.ts:1 "+kind) {
+			t.Errorf("%s: %+v, want exit 3 secret_detected", kind, got)
 		}
+		if len(r3.pushes()) != 0 || strings.Contains(got.Raw, tc.value) {
+			t.Errorf("%s: pushes %q, or the value is in the answer: %q", kind, r3.pushes(), got.Raw)
+		}
+	}
+	// the main case also stops `pr update`, at src/x.ts:12
+	r5 := newRig(t)
+	prOfTheTable(t, r5)
+	r5.mirror.Commit("42-login", "feat: oops", map[string]string{"src/x.ts": "// l1\n// l2\n// l3\n// l4\n// l5\n// l6\n// l7\n// l8\n// l9\n// l10\n// l11\nconst token = \"" + token + "\"\n"})
+	got5 := r5.run("tm", "pr update", nil)
+	if got5.OK || got5.Exit != 3 || got5.Code != "secret_detected" || !strings.Contains(got5.Error, "src/x.ts:12 github_token") || len(r5.pushes()) != 0 || strings.Contains(got5.Raw, token) {
+		t.Errorf("update at src/x.ts:12: %+v pushes %q", got5, r5.pushes())
 	}
 	// the update stops the same way
 	r4 := newRig(t)
@@ -406,10 +422,12 @@ func TestPRUpdateBodyKeepsTheBlocksAndTheClosesOfTheEngine(t *testing.T) {
 	}
 }
 
+// CA-GH-ACOES-05 (the force aimed at the main branch: refused, nothing sent)
 func TestTheBranchOfTheMainLineIsNeverSent(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	prOfTheTable(t, r)
+	writes := len(r.gh.Actions())
 	*r.branch = "main" // the Citadel took the main branch for the one of the table
 	for _, force := range []bool{false, true} {
 		got := r.run("tm", "pr update", map[string]any{"force": force})
@@ -424,6 +442,9 @@ func TestTheBranchOfTheMainLineIsNeverSent(t *testing.T) {
 	}
 	if len(r.pushes())+len(r2.pushes()) != 0 {
 		t.Errorf("the main branch was pushed: %q", r.pushes())
+	}
+	if got := len(r.gh.Actions()); got != writes {
+		t.Errorf("GitHub received %d writes from the refused sending", got-writes)
 	}
 }
 

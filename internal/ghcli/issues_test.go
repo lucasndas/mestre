@@ -133,7 +133,7 @@ func TestTheSameProblemIsNotRegisteredTwice(t *testing.T) {
 	}
 	m := int(back.Data["number"].(float64))
 	_, body, _, labels, _ := r.gh.Issue(repoFull, m)
-	if !strings.HasPrefix(body, "Recorrência de #") || !slices.Contains(labels, "recorrencia") {
+	if !strings.HasPrefix(body, "Recorrência de #"+itoa(n)) || !slices.Contains(labels, "recorrencia") {
 		t.Errorf("the recurrence: body %q labels %v", body, labels)
 	}
 	if _, has := r.gh.Labels(repoFull)["recorrencia"]; !has {
@@ -141,7 +141,7 @@ func TestTheSameProblemIsNotRegisteredTwice(t *testing.T) {
 	}
 }
 
-// CA-CLI-GH-12
+// CA-CLI-GH-12 and CA-GH-ACOES-14 (the CLI answer: exit 3 reserved_label for a table and for the Grão-Mestre)
 func TestTheReservedLabelsAreNotChangedByATable(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
@@ -387,5 +387,33 @@ func TestIssueListTakesAFewIssues(t *testing.T) {
 	}
 	if got := r.run("tm", "issue list", nil, args...); got.OK || got.Exit != 2 {
 		t.Errorf("21 issues: %+v", got)
+	}
+}
+
+// CA-GH-ACOES-10: the request that reached GitHub and whose answer was lost comes
+// again with the same uuid (the queue of the output keeps it): the engine finds
+// the marker in the comment that is there, records it and makes no second one.
+func TestAResentCommentFindsItsMarkerOnGitHubAndMakesNoSecondOne(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	n := r.gh.AddIssue(repoFull, "da mesa")
+	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: n, Table: "meu-app/42-login"}); err != nil {
+		t.Fatal(err)
+	}
+	uuid := "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+	existing := r.gh.AddIssueComment(repoFull, n, "mestre[bot]", github.WithMarker("feito", uuid))
+	if !strings.Contains(r.gh.Comments(repoFull, n)[0], "<!-- mestre:op="+uuid+" -->") {
+		t.Fatalf("the comment on GitHub has no marker: %q", r.gh.Comments(repoFull, n))
+	}
+	got := r.runID(uuid, "tm", "issue comment", nil, itoa(n), "feito")
+	if !got.OK || int64(got.Data["comment_id"].(float64)) != existing {
+		t.Fatalf("resend = %+v, want the id %d of the comment that was there", got, existing)
+	}
+	if cs := r.gh.Comments(repoFull, n); len(cs) != 1 || !strings.Contains(cs[0], "mestre:op="+uuid) {
+		t.Fatalf("comments = %q, want the one carrying the marker", cs)
+	}
+	obj, found, err := r.objs.ByOp(r.ctx, uuid)
+	if err != nil || !found || obj.GitHubID != existing || obj.Kind != github.KindComment {
+		t.Fatalf("github_objects = %+v, %v, %v", obj, found, err)
 	}
 }

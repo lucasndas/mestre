@@ -84,6 +84,7 @@ func (w *world) lastEdit(u faketelegram.User) string {
 	return text
 }
 
+// CA-APROV-FLUXO-14 (the buttons of an Approver are the four answers and Ver detalhes, which sends the whole text of the request)
 func TestTheQuestionReachesEachUserWithTheButtonsOfTheirLevel(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, rigOpts{approvals: true})
@@ -99,7 +100,7 @@ func TestTheQuestionReachesEachUserWithTheButtonsOfTheirLevel(t *testing.T) {
 		}
 	}
 	_, a := w.buttons(ana)
-	want := []string{"Aprovar agora", "Negar agora", "Negar com instrução", "Perguntar de volta"}
+	want := []string{"Aprovar agora", "Negar agora", "Negar com instrução", "Perguntar de volta", "Ver detalhes"}
 	if len(a) != len(want) {
 		t.Errorf("Ana's buttons = %v, want %v", a, want)
 	}
@@ -107,6 +108,15 @@ func TestTheQuestionReachesEachUserWithTheButtonsOfTheirLevel(t *testing.T) {
 		if a[b] == "" {
 			t.Errorf("Ana has no %q", b)
 		}
+	}
+	msg, a := w.buttons(ana)
+	w.click(ana, msg, a["Ver detalhes"])
+	var gotDetails bool
+	for _, m := range w.sent("sendMessage") {
+		gotDetails = gotDetails || (m.ChatID == ana.ID && strings.Contains(m.Text, "Detalhes do pedido 1"))
+	}
+	if !gotDetails {
+		t.Error("Ver detalhes sent nothing to Ana")
 	}
 	_, d := w.buttons(adm)
 	for _, b := range []string{"Aprovar por um tempo", "Aprovar sempre", "Negar sempre"} {

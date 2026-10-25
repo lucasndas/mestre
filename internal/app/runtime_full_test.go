@@ -382,6 +382,16 @@ func TestTheCitadelStartsACharacterOnATowerAndHearsItBack(t *testing.T) {
 		n, err := orc.Inbox.Pending(ctx, master.ID)
 		return err == nil && n > 0
 	})
+	// the item is the one the registry makes it: for the master, in the table of
+	// the character, naming Dev-1 (the registry's name) and not the decoy
+	items, err := orc.Inbox.Store().All(ctx, master.ID)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("the inbox of the master has %d items (err %v), want the notice", len(items), err)
+	}
+	if it := items[0]; it.Target != master.ID || it.Refs.Table != "t1" || it.Kind != inbox.KindSystem ||
+		!strings.Contains(it.Text, "Dev-1") || strings.Contains(it.Text+it.Sender, "outro nome") {
+		t.Errorf("the item of the notice = %+v, want a system item for %s, of table t1, naming Dev-1 and not the decoy name", it, master.ID)
+	}
 	// a Tower tells nothing else to anyone else
 	if err := sk.Notify(ctx, characters.Notice{Kind: characters.NoticeSystem, To: characters.Recipient{Kind: characters.ToOwner}, Character: dev.ID, Text: "x"}); err == nil {
 		t.Error("a Tower sent a notice to the Owner")

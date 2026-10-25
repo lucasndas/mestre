@@ -125,8 +125,12 @@ type Pending struct {
 	// Text is what the confirmation says; PIN says the author must give the
 	// PIN to confirm, and Why says why.
 	Text string
-	PIN  bool
-	Why  string
+	// Order is the text of the order of the user, as he wrote it (without the
+	// blanks at the ends): shown with the proposal so he sees what was understood
+	// next to what he said.
+	Order string
+	PIN   bool
+	Why   string
 	// Author is the only user whose click counts; Workspace and Mesa are the
 	// scope that will be stored, and the one the message must name.
 	Author          string

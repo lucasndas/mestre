@@ -99,6 +99,9 @@ func (c *DecreeChannel) Offer(ctx context.Context, p decrees.Pending) error {
 		return errors.New("telegram: the author has no Telegram")
 	}
 	text := p.Text
+	if p.Order != "" {
+		text += "\nSua ordem: " + p.Order
+	}
 	if p.PIN {
 		text += "\nPara confirmar vou pedir o seu PIN (" + p.Why + ")."
 	}

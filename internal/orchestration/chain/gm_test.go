@@ -62,7 +62,11 @@ func TestAMergeThatThePolicyDoesNotLetTheGrandMasterApproveAloneIsHumanRequiredA
 				t.Fatalf("after the refusal the request is %s with decision %+v; nothing may be approved", r.State, r.Decision)
 			}
 			if !tc.quorum {
-				w.decide(w.gm, id, chain.AnswerClimb, "a política não me deixa aprovar")
+				got := w.cli(w.gm, "approval ask", map[string]any{"action": itoa(id), "summary": "merge que a política não me deixa aprovar", "details": "PR 60",
+					"recommend": "approve", "reason": tc.name, "motive": "decisao_humana"})
+				if got.OK || got.Exit != 9 || got.Code != "pending" {
+					t.Fatalf("approval ask = %+v, want exit 9 pending", got)
+				}
 			}
 			if w.level(id) != chain.LevelPeople {
 				t.Fatalf("after asking, the request is at %+v; want the people", w.request(id).Level)
@@ -206,6 +210,11 @@ func TestTheGrandMasterApprovesRepositorySettingsOnlyWithADelegationOfTheOwner(t
 		t.Fatalf("approval without a delegation = %+v, want human_required", ref)
 	}
 	w.deleg.set(true)
+	// the scope is the repository of the workspace: a request about another repository is not opened
+	if _, err := w.ch.Request(w.ctx, chain.OpenRequest{Type: classes.RequestRepoSettings, Workspace: w.slug, About: "regra de outro repositório",
+		Target: json.RawMessage(`{"kind":"ruleset","repo":"lucas/Outro","branch":"main"}`)}); err == nil {
+		t.Fatal("a request about a repository outside the workspace was opened")
+	}
 	covered := w.repoSettings("outra regra")
 	if w.level(covered) != chain.LevelGrandMaster {
 		t.Fatalf("with a delegation the request is at %+v, want the Grand Master", w.request(covered).Level)
@@ -215,6 +224,14 @@ func TestTheGrandMasterApprovesRepositorySettingsOnlyWithADelegationOfTheOwner(t
 	}
 	if got := w.deleg.usedBy(); len(got) != 1 || got[0] != covered {
 		t.Fatalf("uses of the delegation = %v, want the request %d", got, covered)
+	}
+	// no PIN is asked: the decision of the Grand Master has no challenge and nobody
+	// was asked (the PIN is the button of the people, which this request never reached)
+	if r := w.request(covered); r.State != chain.Approved || r.Decision == nil {
+		t.Fatalf("the covered request is %s with decision %+v", r.State, r.Decision)
+	}
+	if asked := w.users.askedFor(covered); len(asked) != 0 {
+		t.Fatalf("a PIN or any question went to the people for a request inside the delegation: %+v", asked)
 	}
 }
 

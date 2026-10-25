@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -12,6 +13,8 @@ import (
 	"github.com/lucasndas/mestre/internal/attachments"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/lucasndas/mestre/internal/store"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -79,6 +82,37 @@ func TestOnlyTheMachinesWhoseSheetsSayTheyTranscribeAreChosenGPUFirst(t *testing
 		if got := machineNames(orderMachines(c.local, c.fleet)); !equal(got, c.want) {
 			t.Errorf("%s: order = %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+// CA-ANEXO-12: the path from the sheets to the machines asked: the sheets of the Guild go
+// through the assembly of the fleet (offline, excluded and no-whisper sheets are
+// dropped; a GPU in the resources of the sheet is a GPU of the machine; a Tower
+// with no name is told by its id) and then through the ordering.
+func TestTheSheetsOfTheGuildBecomeTheMachinesInTheOrderTheyAreAsked(t *testing.T) {
+	t.Parallel()
+	gpu := machinesheet.Resources{GPUs: []machinesheet.GPU{{}}}
+	sheets := []machinesheet.Sheet{
+		{MachineID: "cit", Name: "cidadela", Online: true, Transcricao: true},
+		{MachineID: "cpu", Name: "torre-cpu", Online: true, Transcricao: true},
+		{MachineID: "gpu", Name: "torre-gpu", Online: true, Transcricao: true, Resources: gpu},
+		{MachineID: "noname", Online: true, Transcricao: true},
+		{MachineID: "off", Name: "torre-off", Transcricao: true, Resources: gpu},
+		{MachineID: "excl", Name: "torre-excl", Online: true, Transcricao: true, Excluded: true, Resources: gpu},
+		{MachineID: "nowhisper", Name: "torre-sem", Online: true, Resources: gpu},
+		{MachineID: "unreachable", Name: "torre-fora", Online: true, Transcricao: true, Resources: gpu},
+	}
+	reachable := func(m string) bool { return m != "unreachable" }
+	fleet := fleetOf(sheets, "cit", towerClient{}, reachable)
+	local := &attachments.Machine{Name: "cidadela", Engine: nopEngine{}}
+	if got, want := machineNames(orderMachines(local, fleet)), []string{"torre-gpu", "cidadela", "torre-cpu", "noname"}; !equal(got, want) {
+		t.Errorf("order = %v, want %v", got, want)
+	}
+	// a GPU in the sheet of the Citadel puts it first among the GPUs
+	sheets[0].Resources = gpu
+	fleet = fleetOf(sheets, "cit", towerClient{}, reachable)
+	if got, want := machineNames(orderMachines(local, fleet)), []string{"cidadela", "torre-gpu", "torre-cpu", "noname"}; !equal(got, want) {
+		t.Errorf("order with a GPU in the Citadel = %v, want %v", got, want)
 	}
 }
 
@@ -215,5 +249,110 @@ func TestWithNoMachineThatTranscribesTheVoiceGoesOnWithTheReason(t *testing.T) {
 	}, "")
 	if got := out.Transcribe(t.Context(), []byte("ogg"), 3*time.Second); got.Text != "" || got.Err != "servidor fora" {
 		t.Errorf("a Tower out of reach: %+v", got)
+	}
+}
+
+// voiceFetcher serves one voice message (the bytes are only an ogg header: the
+// converter of the test turns them into the WAV).
+type voiceFetcher struct{}
+
+func (voiceFetcher) GetFile(context.Context, string) (string, int64, error) {
+	return "voice/v1", 4, nil
+}
+func (voiceFetcher) Download(context.Context, string, int64) ([]byte, error) {
+	return []byte("OggS"), nil
+}
+
+// voiceService is the attachments service of the Citadel, over a workspace "loja",
+// with the transcription given.
+func voiceService(t *testing.T, tr *attachments.Transcription) *attachments.Service {
+	t.Helper()
+	ctx := t.Context()
+	db, err := guildtpl.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Writer().ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+		VALUES ('loja', 'lucas/loja', 'lucas/loja', 'https://example.test/x.git', 'main', 'active', '', 1, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	svc, err := attachments.New(attachments.Options{DB: db, Clock: clock.Real{}, Fetcher: voiceFetcher{}, Transcriber: tr,
+		Root: func(context.Context, string) (string, error) { return root, nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return svc
+}
+
+type failingConverter struct{}
+
+func (failingConverter) ToWAV(context.Context, []byte) ([]byte, error) {
+	return nil, errors.New("ffmpeg: invalid data found")
+}
+
+// CA-ANEXO-13: whatever makes the transcription fail (no machine, a Tower out of
+// reach, an audio that cannot be turned into a WAV), the Grand Master gets the
+// line `[áudio sem transcrição: reason]` followed by the line of the attachment.
+func TestAVoiceThatCannotBeTranscribedReachesTheGrandMasterWithTheReasonAndTheAttachment(t *testing.T) {
+	t.Parallel()
+	clk := clock.NewFake(time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC))
+	gone := remoteTranscriber{c: towerClient{srv: &atomic.Pointer[protocol.Server]{}, clk: clk, ids: protocol.NewIDGen(clk), rep: &replies{}}, machine: "b"}
+	for _, c := range []struct {
+		name   string
+		conv   attachments.Converter
+		fleet  Fleet
+		reason string
+	}{
+		{"no machine", fixedConverter{wav: wavOf(1)}, Fleet{}, "nenhuma máquina transcreve"},
+		{"a Tower out of reach", fixedConverter{wav: wavOf(1)}, Fleet{Towers: []attachments.Machine{{Name: "b", Engine: gone}}}, "servidor fora"},
+		{"an invalid audio", failingConverter{}, Fleet{Towers: []attachments.Machine{{Name: "b", Engine: gone}}}, "a conversão do áudio falhou"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			tr := attachments.NewTranscription(clk, c.conv, func(context.Context) []attachments.Machine { return orderMachines(nil, c.fleet) }, "")
+			st, err := voiceService(t, tr).Receive(t.Context(), attachments.Request{Workspace: "loja", File: attachments.Ref{ID: "v1", Size: 4, Kind: attachments.KindVoice, Duration: 3 * time.Second}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			lines := st.Lines()
+			if len(lines) != 2 || !strings.HasPrefix(lines[0], "[áudio sem transcrição: ") || !strings.Contains(lines[0], c.reason) || !strings.HasPrefix(lines[1], "[anexo] .mestre/anexos/") {
+				t.Errorf("lines = %q, want the mark with %q and then the attachment", lines, c.reason)
+			}
+		})
+	}
+}
+
+// CA-ANEXO-13: a Tower takes as an audio only a WAV: bytes of any other type
+// (an image, a document, an ogg) sent as an audio are refused and kept nowhere,
+// and the receiver of the audios is the one of that kind only.
+func TestATowerTakesOnlyAWAVAsAnAudio(t *testing.T) {
+	t.Parallel()
+	clk := clock.NewFake(time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC))
+	audio := newTowerAudio(clk, nopEngine{})
+	dir := t.TempDir()
+	for name, body := range map[string][]byte{
+		"png": append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, wavHeader)...),
+		"pdf": append([]byte("%PDF-1.7\n"), make([]byte, wavHeader)...),
+		"ogg": append([]byte("OggS"), make([]byte, wavHeader)...),
+		"zip": append([]byte("PK\x03\x04"), make([]byte, wavHeader)...),
+	} {
+		file := filepath.Join(dir, name)
+		if err := os.WriteFile(file, body, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		b := protocol.XferBegin{XferID: name, Kind: protocol.KindAudio, Size: int64(len(body))}
+		var pe *protocol.Error
+		if err := audio.Finalize(t.Context(), b, file); !errors.As(err, &pe) || pe.Code != protocol.CodeInvalidPayload {
+			t.Errorf("%s as an audio: %v, want invalid_payload", name, err)
+		}
+		if _, ok := audio.take(name); ok {
+			t.Errorf("%s is held as an audio", name)
+		}
+	}
+	fin := withAudio(map[string]protocol.Finalizer{}, audio, func() string { return "citadel-1" })
+	if len(fin) != 1 || fin[protocol.KindAudio] == nil {
+		t.Errorf("the audio receiver was registered for kinds %v, want only %q", fin, protocol.KindAudio)
 	}
 }

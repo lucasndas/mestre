@@ -69,6 +69,11 @@ func TestSimilarRequestsAreOneQuestionAndThePatternApprovesTheOnesItCovers(t *te
 			if d.Pattern != "npm install *" {
 				t.Errorf("the pattern of the decree is %q", d.Pattern)
 			}
+			// no validity asked: the chain turns it into a permanent decree of the
+			// class of the request (proved in internal/orchestration/chain)
+			if d.For != 0 {
+				t.Errorf("the decision carries a validity (%v): the decree must be permanent", d.For)
+			}
 		case chain.AnswerApprove:
 			plain++
 		}

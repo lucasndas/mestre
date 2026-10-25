@@ -1,13 +1,16 @@
 package chain_test
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/lucasndas/mestre/internal/users"
 )
 
 // green is a PR the policy lets the Grão-Mestre approve: green CI, a finished
@@ -86,8 +89,10 @@ func TestAPRThatTouchesAMigrationGoesToThePeopleOnlyWhenTheGrandMasterAsksOrHisT
 		}
 	}
 	noGitHubApproval("after human_required")
-	// asking is his answer "Subir agora": same id, now with the people
-	w.decide(w.gm, id, chain.AnswerClimb, "migração")
+	// asking is `mestre approval ask`: same id, now with the people
+	if out, err := w.ch.Ask(w.ctx, chain.AskRequest{Request: id, By: w.gm.ID, Note: chain.AskNote{Summary: "migração", Details: "db/migrations/0003.sql", Recommend: "approve", Reason: "toca migrações"}}); err != nil || out.Level.Kind != chain.LevelPeople {
+		t.Fatalf("Ask = %+v, %v; want the request on the people", out, err)
+	}
 	if r := w.request(id); r.State != chain.Open || r.Level.Kind != chain.LevelPeople || len(w.users.askedFor(id)) == 0 {
 		t.Fatalf("after asking: %s at %+v, asked %d times", r.State, r.Level, len(w.users.askedFor(id)))
 	}
@@ -127,17 +132,34 @@ func TestAQuorumRuleSendsAGreenMergeToThePeopleAskingForTheApprovals(t *testing.
 // CA-APROV-POL-15
 func TestAnAltoPermissionAsksOnlyAdministratorsAndTheOwner(t *testing.T) {
 	t.Parallel()
-	w := newWorld(t)
+	w := newWorld(t, worldOpts{flow: true})
+	appr, err := w.usvc.Create(w.ctx, w.owner, users.NewUser{Name: "Ana", Level: users.Approver, Workspaces: []string{w.slug}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adm, err := w.usvc.Create(w.ctx, w.owner, users.NewUser{Name: "Bia", Level: users.Administrator, Workspaces: []string{w.slug}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	dev := w.recruit("Dev")
 	id := w.shell(dev, `psql -c "DROP TABLE users"`)
-	if w.level(id) != chain.LevelPeople {
-		t.Fatalf("alto is at %+v, want the people", w.request(id).Level)
+	if r := w.request(id); r.Type != classes.RequestClassPermission || r.Risk.Risk != classes.RiskHigh || r.Level.Kind != chain.LevelPeople {
+		t.Fatalf("the request is %q of risk %q at %+v; want a permissao_de_classe of risco alto at the people", r.Type, r.Risk.Risk, r.Level)
 	}
-	asked := w.users.askedFor(id)
-	if len(asked) == 0 || asked[0].MinLevel != classes.LevelAdmin {
-		t.Fatalf("question = %+v, want the minimum level Administrator", asked)
+	// only the Administrators and the Owner receive it; an Approver does not
+	if _, _, ok := w.chn.To(appr.ID); ok {
+		t.Error("an Approver was asked about an alto permission")
 	}
-	_, err := w.ch.DecideByPerson(w.ctx, chain.PersonDecision{Request: id, User: "ana", Level: "approver", Answer: chain.AnswerApprove})
+	if _, _, ok := w.chn.To(adm.ID); !ok {
+		t.Error("the Administrator was not asked")
+	}
+	if _, _, ok := w.chn.To(w.owner.ID); !ok {
+		t.Error("the Owner was not asked")
+	}
+	if _, err := w.flow.Answer(w.ctx, appr.ID, approvals.Input{Request: id, Answer: chain.AnswerApprove}); !errors.Is(err, approvals.ErrNotYours) {
+		t.Fatalf("an Approver tapping Approve = %v, want it refused", err)
+	}
+	_, err = w.ch.DecideByPerson(w.ctx, chain.PersonDecision{Request: id, User: "ana", Level: "approver", Answer: chain.AnswerApprove})
 	if ref, ok := err.(*chain.Refusal); !ok || ref.Code != chain.CodeHumanRequired {
 		t.Fatalf("an Approver approving alto = %v, want human_required", err)
 	}
@@ -146,6 +168,11 @@ func TestAnAltoPermissionAsksOnlyAdministratorsAndTheOwner(t *testing.T) {
 	}
 	if out, err := w.ch.DecideByPerson(w.ctx, chain.PersonDecision{Request: id, User: "bia", Level: "administrator", Answer: chain.AnswerApprove}); err != nil || out.State != chain.Approved {
 		t.Fatalf("an Administrator approving alto = %+v, %v", out, err)
+	}
+	// the Owner is accepted too
+	owned := w.shell(dev, `psql -c "DROP TABLE orders"`)
+	if out, err := w.ch.DecideByPerson(w.ctx, chain.PersonDecision{Request: owned, User: w.owner.ID, Level: "owner", Answer: chain.AnswerApprove}); err != nil || out.State != chain.Approved {
+		t.Fatalf("the Owner approving alto = %+v, %v", out, err)
 	}
 }
 

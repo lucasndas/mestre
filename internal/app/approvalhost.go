@@ -51,9 +51,17 @@ var errNoApproval = errors.New("app: the approval on GitHub is not composed in t
 // lateSink gives the chain a sink made after it (the approvers need the chain).
 // An approval of people that could not be applied on GitHub is told to the
 // Owner: the people saw "approved", and nothing went out.
+//
+// What the sink does on GitHub (a review, a merge, a ruleset) starts only under
+// the lease of the epoch (docs/guilda/trava-no-github.md#aluguel): with the lease
+// gone it waits in the queue of the fence and goes out once the epoch is
+// confirmed. The sink re-reads the head it approves, so a late run is safe.
 type lateSink struct {
 	get   func() chain.Sink
 	alert func(ctx context.Context, text string)
+	// lease runs fn under the lease or keeps it for when the lease is back
+	// (queued); nil runs it now.
+	lease func(ctx context.Context, name string, fn func(context.Context) error) (queued bool, err error)
 }
 
 func (l lateSink) Decided(ctx context.Context, res chain.Result) error {
@@ -61,15 +69,22 @@ func (l lateSink) Decided(ctx context.Context, res chain.Result) error {
 	if s == nil {
 		return errNoApproval
 	}
-	err := s.Decided(ctx, res)
-	if err != nil && res.Approved && l.alert != nil {
-		var ref *chain.Refusal
-		why := "veja o log do motor"
-		if errors.As(err, &ref) && ref.Code == chain.CodeHumanRequired {
-			why = ref.Message
+	apply := func(ctx context.Context) error {
+		err := s.Decided(ctx, res)
+		if err != nil && res.Approved && l.alert != nil {
+			var ref *chain.Refusal
+			why := "veja o log do motor"
+			if errors.As(err, &ref) && ref.Code == chain.CodeHumanRequired {
+				why = ref.Message
+			}
+			l.alert(ctx, fmt.Sprintf("A aprovação do pedido #%d foi dada, mas não foi aplicada no GitHub: %s.", res.Request.ID, why))
 		}
-		l.alert(ctx, fmt.Sprintf("A aprovação do pedido #%d foi dada, mas não foi aplicada no GitHub: %s.", res.Request.ID, why))
+		return err
 	}
+	if l.lease == nil {
+		return apply(ctx)
+	}
+	_, err := l.lease(ctx, fmt.Sprintf("approval:%d", res.Request.ID), apply)
 	return err
 }
 

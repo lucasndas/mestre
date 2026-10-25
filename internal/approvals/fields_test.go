@@ -71,11 +71,11 @@ func TestTheOwnerOfARequestIsTheRequiredUsersOrTheMinimumLevelAndNeverSomebody(t
 	ana := w.add("Ana", users.Administrator, "loja")
 	lucas := w.add("lucas", users.Administrator, "loja")
 	w.ask(chain.Request{Type: classes.RequestMerge}, "Mesclar", classes.LevelAdmin)
-	if got := w.textTo(ana); !strings.Contains(got, "\nDono: um Administrador") || strings.Contains(got, "Dono: lucas") {
+	if got := w.textTo(ana); !strings.Contains(got, "\nDono: um Administrador") || strings.Contains(got, "Dono: lucas") || strings.Contains(strings.ToLower(got), "alguém") {
 		t.Errorf("the owner of a merge with no required users:\n%s", got)
 	}
 	w.ask(chain.Request{Type: classes.RequestMerge}, "Mesclar", classes.LevelAdmin, lucas.ID)
-	if got := w.textTo(ana); !strings.Contains(got, "\nDono: lucas") || strings.Contains(got, "Dono: um Administrador") {
+	if got := w.textTo(ana); !strings.Contains(got, "\nDono: lucas") || strings.Contains(got, "Dono: um Administrador") || strings.Contains(strings.ToLower(got), "alguém") {
 		t.Errorf("the owner of a merge that requires lucas:\n%s", got)
 	}
 	for min, want := range map[classes.Level]string{classes.LevelApprover: "um Aprovador", classes.LevelAdmin: "um Administrador", classes.LevelOwner: "o Dono"} {

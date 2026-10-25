@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -99,9 +100,22 @@ func TestACitadelWithoutWhisperHasTheTowerTranscribeTheVoice(t *testing.T) {
 		t.Fatalf("transcript = %+v", got)
 	}
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	if len(w.sums) != 1 || w.sums[0] != sha256.Sum256(wav) || w.langs[0] != "pt" {
 		t.Errorf("the whisper of the Tower got %d audios (language %v), want the WAV as it left the Citadel", len(w.sums), w.langs)
+	}
+	w.mu.Unlock()
+
+	// the text reaches the Grand Master marked as a transcribed audio: the
+	// delivery of the Citadel (the attachments service) builds the lines
+	ctx := t.Context()
+	svc := voiceService(t, transcription(a, wav))
+	st, err := svc.Receive(ctx, attachments.Request{Workspace: "loja", File: attachments.Ref{ID: "v1", Size: 4, Kind: attachments.KindVoice, Duration: 40 * time.Second}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Join(st.Lines(), "\n")
+	if !strings.Contains(lines, "[áudio transcrito · 0:40 · idioma pt] olá, mestre, abra o PR do login") || strings.Contains(lines, "sem transcrição") {
+		t.Errorf("the lines for the Grand Master = %q, want the text marked as a transcribed audio", lines)
 	}
 }
 

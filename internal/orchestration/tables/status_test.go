@@ -21,6 +21,8 @@ func TestTableStatusOfTheOpenTablesHasTheEpicTheIssuesThePullRequestAndTheFolder
 	w.gh.add(20, "Velho", "epico")
 	w.gh.setBody(12, "Texto.\n\n## Critérios\n\n- [ ] Dado A, quando B, então C\n")
 	w.gh.issues[12] = []tables.IssueRef{{Number: 31, Title: "Tela de login"}}
+	w.gh.setBody(15, "Texto.\n\n## Critérios\n\n- [ ] Dado X, quando Y, então Z\n- [ ] Dado P, quando Q, então R\n")
+	w.gh.issues[15] = []tables.IssueRef{{Number: 41, Title: "Tabela"}, {Number: 42, Title: "Exportar"}}
 	t12, t15, t20 := w.open(12).Table, w.open(15).Table, w.open(20).Table
 	repo := w.repoOf(t12)
 	commit(t, w.be, w.git, repo, "src/login/form.ts", "export const f = 1\n", "feat: form")
@@ -74,8 +76,19 @@ func TestTableStatusOfTheOpenTablesHasTheEpicTheIssuesThePullRequestAndTheFolder
 	if len(folders) != 2 || folders[0] != "src/login" || folders[1] != "docs" || row["state"] != "in_review" {
 		t.Errorf("folders = %v, state %v; want src/login first (two files) and docs", folders, row["state"])
 	}
-	// the other table has no pull request and no folders
+	// the other table has its own epic, criteria and open issues, not the first one repeated
 	other := by[t15.ID]
+	oepic := other["epic"].(map[string]any)
+	if oepic["title"] != "Relatórios" || oepic["number"] != float64(15) || len(oepic["criteria"].([]any)) != 2 {
+		t.Errorf("epic of the second table = %v, want Relatórios #15 with its two criteria", oepic)
+	}
+	if issues := other["issues_open"].([]any); len(issues) != 2 || issues[0].(map[string]any)["number"] != float64(41) || issues[1].(map[string]any)["number"] != float64(42) {
+		t.Errorf("issues_open of the second table = %v, want #41 and #42", issues)
+	}
+	if other["state"] != "working" {
+		t.Errorf("state of the second table = %v", other["state"])
+	}
+	// and it has no pull request and no folders
 	if p := other["pr"].(map[string]any); p["number"] != float64(0) || p["ci"] != "none" || len(other["folders"].([]any)) != 0 {
 		t.Errorf("a table with nothing: pr %v folders %v", p, other["folders"])
 	}

@@ -271,6 +271,17 @@ func TestAPolicyDecreeNeverLoosensAHighType(t *testing.T) {
 	if err != nil || chain.DefaultRules().WithDecrees(adj).AsksAlways(destructive) == "" {
 		t.Fatalf("the decree that tightens acao_destrutiva does not reach the request: %+v, %v", adj, err)
 	}
+	// "me pergunte tudo" (every type) also holds for the high types
+	if d := w.confirm(pol("*", false)); d.State != decrees.Active {
+		t.Fatalf("%+v", d)
+	}
+	for _, typ := range []classes.RequestType{classes.RequestDestructive, classes.RequestWorkflows, classes.RequestOperator} {
+		req := w.request(20, typ, nil)
+		adj, err := w.svc.PolicyFor(w.ctx, req)
+		if err != nil || chain.DefaultRules().WithDecrees(adj).AsksAlways(req) == "" {
+			t.Errorf("the ask-everything decree does not reach %s: %+v, %v", typ, adj, err)
+		}
+	}
 	if d := w.confirm(pol("migracoes", true)); d.State != decrees.Active {
 		t.Fatalf("%+v", d)
 	}

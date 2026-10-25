@@ -258,9 +258,18 @@ func TestTheHumanLabelIsTakenOnlyByThePeople(t *testing.T) {
 	if err := github.CheckLabels(github.Actor{Kind: github.ActorPerson}, nil, []string{github.HumanLabel}); err != nil {
 		t.Errorf("a person taking the label: %v", err)
 	}
+	// the Grão-Mestre puts the label with the action of the issue in a repository
+	// that has none: the engine creates it, with its description, before
 	r := newActionsRig(t, tables{})
-	if err := r.guard.EnsureLabels(r.ctx, repoFull, []string{github.HumanLabel}); err != nil {
+	if _, has := r.gh.Labels(repoFull)[github.HumanLabel]; has {
+		t.Fatal("the repository already had the label")
+	}
+	target := r.gh.AddIssue(repoFull, "pede uma pessoa")
+	if _, err := r.issues.Update(r.ctx, github.Actor{Kind: github.ActorGrandMaster}, repoFull, target, github.IssueUpdate{AddLabels: []string{github.HumanLabel}}); err != nil {
 		t.Fatal(err)
+	}
+	if _, _, _, labels, _ := r.gh.Issue(repoFull, target); !slices.Contains(labels, github.HumanLabel) {
+		t.Fatalf("the issue has the labels %v", labels)
 	}
 	if r.gh.Labels(repoFull)[github.HumanLabel] != "Só uma pessoa aprova" {
 		t.Fatalf("the label was not created: %v", r.gh.Labels(repoFull))

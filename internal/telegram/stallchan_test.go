@@ -69,8 +69,8 @@ func TestTheWarningOfAStalledTableHasTheButtonToPauseItForAnApproverOfTheWorkspa
 // The bot half of the criterion: an Approver taps Pausar mesa and the table is
 // paused in his name; /pausar and Foi um erro are refused with the level that
 // they need (Administrador); an Observer has none of the three. The resume of the
-// pause of a person by an Approver is the Supervisor's (CA-SUPCAD-05, in
-// internal/orchestration/chain: an Approver resumes it, an Observer is refused).
+// pause of a person by an Approver is proved in autonomy_test.go
+// (TestAnApproverResumesThePauseOfAPersonAndTheEngineAccepts, also CA-USR-10).
 func TestAnApproverPausesTheTableByTheButtonButIsRefusedTheCommandAndTheMistakeButtonAndAnObserverHasNone(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, rigOpts{block: true, decrees: true, digest: true, commands: []telegram.Command{
@@ -115,8 +115,8 @@ func TestAnApproverPausesTheTableByTheButtonButIsRefusedTheCommandAndTheMistakeB
 	// the Observer: not the command, and a button that reached him is refused too
 	w.say(observer, "/pausar")
 	w.drain()
-	if got := lastText(w, observer); strings.Contains(got, "pausado") || got == "" {
-		t.Errorf("/pausar by an Observer answered %q", got)
+	if got := lastText(w, observer); strings.Contains(got, "pausado") || !strings.Contains(got, "Administrador") {
+		t.Errorf("/pausar by an Observer answered %q; want the refusal with the level Administrador", got)
 	}
 	for _, b := range []telegram.Button{
 		{Text: "Pausar mesa", Action: telegram.PauseTableAction, Arg: "loja:42-login", Capability: users.PauseButtons},

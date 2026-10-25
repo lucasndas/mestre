@@ -128,6 +128,11 @@ func (c *cloneCommands) run(r quests.VerifyRequest) quests.VerifyResult {
 }
 
 // CA-GH-ACOES-15
+// The choice of the commands is the executor's, proved on the real one in
+// internal/app (TestTheExecutorHonorsTheBaseAndTheHeadOfTheRequest: the branch
+// carries a verificacao.yaml with `true` and only the confirmed command runs); here
+// the gate and the step sync are proved to ask for the verification of the
+// right base and head and to stay red on the commands of the clone.
 func TestTheGateAndTheStepSyncRunTheCommandsOfTheMainCloneNotTheOnesOfThePRBranch(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, worldOpts{freshness: true})

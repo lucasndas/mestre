@@ -20,6 +20,8 @@ import (
 // until the quota is back, and a window at the start threshold holds the
 // deliveries of its inbox. (CA-USO-03, CA-USO-05 and CA-USO-10 have their own
 // tests in internal/orchestration/usage, over fakes of the pieces.)
+//
+// CA-USO-04 (the block with the reason quota, on the real character)
 func TestTheLimitsOfUseActOnTheRealServices(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()

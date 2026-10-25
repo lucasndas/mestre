@@ -481,9 +481,9 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		o.ChainPRs = r.source()
 	}
 	sinks := map[classes.RequestType]chain.Sink{
-		classes.RequestPR:           lateSink{func() chain.Sink { return soft(r.approver.Load()) }, r.alert.OwnerAlert},
-		classes.RequestMerge:        lateSink{func() chain.Sink { return soft(r.approver.Load()) }, r.alert.OwnerAlert},
-		classes.RequestRepoSettings: lateSink{func() chain.Sink { return soft(r.settings.Load()) }, r.alert.OwnerAlert},
+		classes.RequestPR:           r.lateSink(func() chain.Sink { return soft(r.approver.Load()) }),
+		classes.RequestMerge:        r.lateSink(func() chain.Sink { return soft(r.approver.Load()) }),
+		classes.RequestRepoSettings: r.lateSink(func() chain.Sink { return soft(r.settings.Load()) }),
 		classes.RequestAgentsMD:     szDecisions{r},
 	}
 	for t, s := range o.ChainSinks { // a test that gives its own keeps it
@@ -812,6 +812,12 @@ func (r *stdRun) ownerName(ctx context.Context, _ string) string {
 		}
 	}
 	return "o Dono"
+}
+
+// lateSink is the sink of an approval that ends on GitHub: it goes out under the
+// lease of the epoch like every other call to GitHub.
+func (r *stdRun) lateSink(get func() chain.Sink) lateSink {
+	return lateSink{get: get, alert: r.alert.OwnerAlert, lease: stdLease{r}.Do}
 }
 
 // stdLease is the lease of the epoch over GitHub: the fence of the period.

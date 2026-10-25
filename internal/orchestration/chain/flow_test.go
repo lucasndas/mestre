@@ -75,10 +75,14 @@ func TestARequestThatNobodyAnswersExpiresAndTheQuestionsSayIt(t *testing.T) {
 }
 
 // CA-APROV-FLUXO-14
+// (Ver detalhes, the fifth button, is in internal/telegram: the channel adds it to every question)
 func TestAnApproverOfAClassPermissionHasOnlyTheAnswersOfItsLevel(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, worldOpts{flow: true})
 	id, ana := peopleRequest(t, w)
+	if typ := w.request(id).Type; typ != classes.RequestClassPermission {
+		t.Fatalf("the request is of type %q, want %q", typ, classes.RequestClassPermission)
+	}
 	_, msg, _ := w.chn.To(ana.ID)
 	want := map[chain.Answer]bool{chain.AnswerApprove: true, chain.AnswerDeny: true, chain.AnswerDenyInstruction: true, chain.AnswerAskBack: true}
 	for _, a := range msg.Answers {

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -58,11 +59,17 @@ func TestAQuickCommandIsAnsweredByTheEngineWithoutTheInbox(t *testing.T) {
 	w := newWorld(t, rigOpts{commands: []telegram.Command{{Name: "status", Description: "estado", Capability: users.Status,
 		Run: func(context.Context, telegram.Call) (string, error) { return "Cidadela online", nil }}}})
 	_, tg := w.user("Ana", users.Approver)
+	// the Grand Master is busy: an ordinary message is in his inbox and he has not
+	// taken it (the fake router only records what is delivered, never consumes it)
+	w.say(tg, "faça a revisão do módulo")
+	if w.router.count() != 1 {
+		t.Fatalf("the ordinary message was delivered %d times, want 1 (queued for the busy Grand Master)", w.router.count())
+	}
 	w.say(tg, "/status")
 	w.flush()
 	got := w.sent("sendMessage")
-	if len(got) != 1 || !strings.Contains(got[0].Text, "Cidadela online") || w.router.count() != 0 {
-		t.Fatalf("sent %+v, delivered %d; want the engine's answer and nothing in the inbox", got, w.router.count())
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Cidadela online") || w.router.count() != 1 {
+		t.Fatalf("sent %+v, delivered %d; want the engine's answer and nothing more in the inbox", got, w.router.count())
 	}
 }
 
@@ -82,6 +89,9 @@ func TestALongAnswerGoesAsASummaryAndTheWholeTextAsAFile(t *testing.T) {
 	msgs, docs := w.sent("sendMessage"), w.sent("sendDocument")
 	if len(msgs) != 1 || len(docs) != 1 || len([]rune(msgs[0].Text)) > telegram.MaxMessage {
 		t.Fatalf("messages %d, documents %d; want a summary and a file", len(msgs), len(docs))
+	}
+	if sum := msgs[0].Text; sum == "" || !strings.Contains(sum, "linha de texto do Grão-Mestre") || len([]rune(sum)) >= len([]rune(long)) {
+		t.Fatalf("summary = %q, want a non-empty text derived from the answer and shorter than it", sum)
 	}
 	f, ok := docs[0].Params["document"].(faketelegram.File)
 	if !ok || !strings.HasSuffix(f.Name, ".md") || string(f.Content) != "Sistema\n\n"+long {
@@ -264,6 +274,15 @@ func TestOnlyTheLongestTermIsExplainedAndACommonWordNeedsACapital(t *testing.T) 
 		strings.Contains(text, "Mestre (") || strings.Contains(text, "cidadela (") {
 		t.Fatalf("text = %q", text)
 	}
+	// only those two terms are explained: with them removed, no other term
+	// (nor the shorter ones inside them) is followed by an explanation
+	rest := strings.ReplaceAll(strings.ReplaceAll(text, "Mestre da mesa (", ""), "cidadela suspensa (", "")
+	if strings.Contains(rest, " (") || strings.Contains(rest, "mesa (") || strings.Contains(rest, "suspensa (") {
+		t.Fatalf("another term is explained in %q", text)
+	}
+	if n := strings.Count(text, "("); n != 2 {
+		t.Fatalf("text has %d explanations, want exactly 2: %q", n, text)
+	}
 }
 
 // CA-BOT-15
@@ -361,9 +380,17 @@ func TestThePINAnswerIsDeletedNeverKeptAndNeverInTheInbox(t *testing.T) {
 		t.Fatal(err)
 	}
 	w.flush()
+	prompts := w.sent("sendMessage")
+	if len(prompts) == 0 {
+		t.Fatal("the PIN prompt was not sent")
+	}
+	promptID := prompts[len(prompts)-1].MessageID
 	if _, err := w.fake.UserSendsText(tg, faketelegram.Private(tg), "482913"); err != nil {
 		t.Fatal(err)
 	}
+	// the fake numbers the messages of the bot and of the users in one sequence,
+	// so the message with the PIN is the one right after the prompt
+	pinMsgID := promptID + 1
 	// the update is recorded without the PIN
 	raw, err := w.bot.Store().DB.Reader().QueryContext(w.ctx, `SELECT body FROM telegram_updates`)
 	if err != nil {
@@ -374,8 +401,10 @@ func TestThePINAnswerIsDeletedNeverKeptAndNeverInTheInbox(t *testing.T) {
 	if len(done) != 1 || done[0] != nil {
 		t.Fatalf("PIN check = %v, want right", done)
 	}
-	if w.router.count() != 0 || len(w.fake.Deleted()) != 2 {
-		t.Fatalf("delivered %d, deleted %+v; want nothing delivered and the PIN and the prompt deleted", w.router.count(), w.fake.Deleted())
+	wantDeleted := []faketelegram.Deleted{{ChatID: tg.ID, MessageID: pinMsgID}, {ChatID: tg.ID, MessageID: promptID}}
+	deleted := w.fake.Deleted()
+	if w.router.count() != 0 || len(deleted) != 2 || !slices.Contains(deleted, wantDeleted[0]) || !slices.Contains(deleted, wantDeleted[1]) {
+		t.Fatalf("delivered %d, deleted %+v; want nothing delivered and exactly %+v (the PIN and the prompt) deleted", w.router.count(), deleted, wantDeleted)
 	}
 	var bodies int
 	if err := w.db.Reader().QueryRowContext(w.ctx, `SELECT COUNT(*) FROM telegram_updates WHERE body LIKE '%482913%'`).Scan(&bodies); err != nil || bodies != 0 {
@@ -428,6 +457,41 @@ func TestAStrangerIsIgnoredAGroupIsLeftAndAPairingCodeWorks(t *testing.T) {
 	}
 	if _, err := w.users.ByTelegram(w.ctx, caio.ID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// CA-USR-09
+func TestTheSixthWrongPairingCodeInAnHourGetsNoAnswerAtAllNotEvenWithTheRightCode(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	stranger := faketelegram.User{ID: 999, FirstName: "Intruso", Username: "intruso"}
+	for i := range users.PairingFailures {
+		w.say(stranger, "AAAAAAA"+string(users.CodeAlphabet[i]))
+		w.flush()
+		w.clk.Advance(time.Second)
+		if got := w.sent("sendMessage"); len(got) != i+1 || !strings.Contains(got[i].Text, "inválido") {
+			t.Fatalf("after wrong code %d the bot sent %+v, want one refusal each", i+1, got)
+		}
+	}
+	// the sixth, even a right one: silence, no message to the sender
+	nu, err := w.users.Create(w.ctx, w.owner, users.NewUser{Name: "Caio", Level: users.Approver})
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, err := w.users.NewCode(w.ctx, w.owner, nu.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sentBefore := len(w.fake.Sent())
+	w.say(stranger, "/start "+code.Code)
+	w.flush()
+	w.clk.Advance(time.Minute)
+	w.flush()
+	if got := w.fake.Sent(); len(got) != sentBefore {
+		t.Fatalf("the sixth attempt got an answer: %+v", got[sentBefore:])
+	}
+	if _, err := w.users.ByTelegram(w.ctx, stranger.ID); !errors.Is(err, users.ErrNoUser) {
+		t.Errorf("the silenced sender was paired: %v", err)
 	}
 }
 

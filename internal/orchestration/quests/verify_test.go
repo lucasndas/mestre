@@ -320,7 +320,7 @@ func TestASecondDoneDuringTheVerificationIsRefusedAndATimeoutIsRed(t *testing.T)
 		t.Errorf("returns = %d", got)
 	}
 	// the limits of the text of the done and of the cause
-	if r := w.done("Dev Claude 1", map[string]any{"proof": []string{"C1=" + strings.Repeat("x", quests.MaxProof+1)}}, "x"); r.OK || r.ExitCode() != localchan.ExitLimit {
+	if r := w.done("Dev Claude 1", map[string]any{"proof": []string{"C1=" + strings.Repeat("x", quests.MaxProof+1)}}, "x"); r.OK || r.Error.Code != "too_large" || r.ExitCode() != localchan.ExitLimit {
 		t.Errorf("a proof of 501 characters = %+v", r)
 	}
 	if r := w.done("Dev Claude 1", map[string]any{"cause": "urgente"}, "x"); r.OK || r.ExitCode() != localchan.ExitUsage {

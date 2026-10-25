@@ -65,6 +65,17 @@ func TestAnInboxDeliverToATerminalThatBecameBusyIsAckedOKWithBusyAndTheItemGoesB
 	if err != nil {
 		t.Fatal(err)
 	}
+	// the Citadel did try: the Tower took an inbox.deliver of this very item and
+	// answered it busy (the queue is the initial state, so only this shows the
+	// way back was by the busy of the Tower)
+	var ack []byte
+	if err := x.b.e.mdb.Reader().QueryRowContext(ctx, `SELECT ack FROM processed_commands WHERE type = ? AND CAST(ack AS TEXT) LIKE ?`,
+		protocol.TypeInboxDeliver, `%"`+it.ID+`"%`).Scan(&ack); err != nil {
+		t.Fatalf("the Tower has no inbox.deliver of %s in what it processed: %v", it.ID, err)
+	}
+	if !strings.Contains(string(ack), `"busy"`) || strings.Contains(string(ack), `"delivered"`) {
+		t.Errorf("the Tower answered the delivery of %s with %s; want busy", it.ID, ack)
+	}
 	if cur, err := x.orc.Inbox.Store().Get(ctx, it.ID); err != nil || cur.State != inbox.Queued {
 		t.Fatalf("the item delivered to a busy terminal is %+v (%v); want it back in the queue", cur, err)
 	}

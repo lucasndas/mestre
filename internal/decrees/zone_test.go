@@ -73,25 +73,34 @@ func TestASubSecondLimitIsKeptInWholeSecondsSoTheShownMomentIsTheEnd(t *testing.
 // CA-DEC-13
 func TestTheZoneOnlyChangesTheTextNotTheMomentTheDecreeEnds(t *testing.T) {
 	t.Parallel()
-	w := newWorld(t)
-	w.setZone("America/Sao_Paulo")
-	ana := w.person("Ana", users.Administrator, "loja")
-	p := allowCmd(ana, "dev", "npm install *")
-	p.Until = time.Date(2026, 10, 26, 2, 59, 59, 0, time.UTC)
-	d := w.confirm(p)
-	w.clk.Advance(p.Until.Add(-time.Second).Sub(w.clk.Now()))
-	if err := w.svc.Sweep(w.ctx); err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := w.svc.Get(w.ctx, d.Number); got.State != decrees.Active {
-		t.Fatalf("one second before: %s", got.State)
-	}
-	w.clk.Advance(time.Second)
-	if err := w.svc.Sweep(w.ctx); err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := w.svc.Get(w.ctx, d.Number); got.State != decrees.Expired {
-		t.Fatalf("at the instant: %s", got.State)
+	for _, zone := range []string{"America/Sao_Paulo", "America/New_York", "Asia/Kolkata", "UTC", "", "Mars/Olympus"} {
+		name := zone
+		if name == "" {
+			name = "no zone"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			w := newWorld(t)
+			w.setZone(zone)
+			ana := w.person("Ana", users.Administrator, "loja")
+			p := allowCmd(ana, "dev", "npm install *")
+			p.Until = time.Date(2026, 10, 26, 2, 59, 59, 0, time.UTC)
+			d := w.confirm(p)
+			w.clk.Advance(p.Until.Add(-time.Second).Sub(w.clk.Now()))
+			if err := w.svc.Sweep(w.ctx); err != nil {
+				t.Fatal(err)
+			}
+			if got, _ := w.svc.Get(w.ctx, d.Number); got.State != decrees.Active {
+				t.Fatalf("one second before: %s", got.State)
+			}
+			w.clk.Advance(time.Second)
+			if err := w.svc.Sweep(w.ctx); err != nil {
+				t.Fatal(err)
+			}
+			if got, _ := w.svc.Get(w.ctx, d.Number); got.State != decrees.Expired {
+				t.Fatalf("at the instant: %s", got.State)
+			}
+		})
 	}
 }
 

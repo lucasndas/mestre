@@ -72,7 +72,7 @@ func TestTheAuthorConfirmsWithTheButtonAndThePINAndTheDecreeIsActive(t *testing.
 	if keys["Confirmar"] == "" || keys["Cancelar"] == "" {
 		t.Fatalf("no buttons: %v", keys)
 	}
-	if text := texts(w, anaTG.ID)[0]; !strings.Contains(text, "Entendi: permitir comandos npm install * para a classe dev, permanente (workspace loja). Confirma?") || !strings.Contains(text, "PIN") {
+	if text := texts(w, anaTG.ID)[0]; !strings.Contains(text, "Entendi: permitir comandos npm install * para a classe dev, permanente (workspace loja). Confirma?") || !strings.Contains(text, "PIN") || !strings.Contains(text, "Sua ordem: ") {
 		t.Fatalf("the confirmation says %q", text)
 	}
 	// the click of another user is not the author's

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/orchestration/epicdeps"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/waits"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
@@ -76,6 +77,8 @@ func TestAMergeWithoutTheCommitInTheBaseKeepsTheWaitActiveAndWithItTheWaitIsSati
 		t.Fatalf("before the merge: held=%v, %d active waits; want held and one wait", held(), len(active()))
 	}
 
+	waitID := active()[0].ID
+
 	// merged on GitHub; the merge commit is on the remote but not in the mirror yet
 	merge := c.remote.Handle(c.rdir).Data().Commit("main", "feat: login (merge)", map[string]string{"login.txt": "x\n"})
 	c.clk.Advance(time.Minute)
@@ -102,6 +105,18 @@ func TestAMergeWithoutTheCommitInTheBaseKeepsTheWaitActiveAndWithItTheWaitIsSati
 	}
 	if held() || len(active()) != 0 {
 		t.Fatalf("merge with the commit in the base: held=%v, %d active waits; want released and satisfied", held(), len(active()))
+	}
+	// the wait ended as satisfied (not cancelled or released) and so did the dependency
+	end, err := (&waits.Store{DB: c.db}).GetWait(c.ctx, waitID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if end.State != waits.Satisfied {
+		t.Errorf("the wait ended as %q, want %q", end.State, waits.Satisfied)
+	}
+	dep, ok, err := (epicdeps.Store{DB: c.db}).Get(c.ctx, c.ws.Slug, dependent, on)
+	if err != nil || !ok || dep.State != epicdeps.Satisfied {
+		t.Errorf("the dependency = %+v (found %v, err %v), want state %q", dep, ok, err, epicdeps.Satisfied)
 	}
 	items, err := c.orc.Inbox.Store().All(c.ctx, gm.ID)
 	if err != nil {

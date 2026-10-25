@@ -181,6 +181,9 @@ func (h *Handlers) sendReview(ctx context.Context, who caller, pr github.PullDat
 	if requestChanges {
 		event = "REQUEST_CHANGES"
 	}
+	if bad := h.leaseHeld(); bad != nil {
+		return *bad
+	}
 	id, err := rv.CreateReview(ctx, who.repo, pr.Number, read, event, github.WithMarker(github.StripMarkers(body), op))
 	if err != nil {
 		if errors.Is(err, github.ErrNotFound) {

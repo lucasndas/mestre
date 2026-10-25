@@ -44,6 +44,8 @@ type mergesFake struct {
 	mu sync.Mutex
 	// approved is the request approved for a commit and a base (0: none); open the one that waits.
 	approved, open int64
+	// afterStanding runs once Standing answered (a slow read of the command).
+	afterStanding func()
 	// stands are the arguments Standing was asked with.
 	stands []string
 	asked  []chain.OpenRequest
@@ -67,6 +69,9 @@ func (m *mergesFake) Standing(_ context.Context, ws, repo string, n int, sha, ba
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.stands = append(m.stands, strings.Join([]string{ws, repo, itoa(n), sha, base}, "|"))
+	if m.afterStanding != nil {
+		m.afterStanding()
+	}
 	return m.approved, m.open, nil
 }
 
@@ -378,4 +383,55 @@ func TestGhMergeSpendsTheExceptionOfAnApproverInsteadOfOpeningARequest(t *testin
 	if got = r4.run("gm", "gh merge", nil, itoa(pr4)); got.OK || len(r4.gh.Merges(repoFull)) != 0 || len(mg4.asked) != 0 {
 		t.Errorf("an error of the exceptions: %+v", got)
 	}
+}
+
+// expiringHeads expires the lease once the commit that was read is looked up, as
+// a command that takes long past the start of its lease.
+type expiringHeads struct {
+	*headsLog
+	lease *lease
+}
+
+func (h expiringHeads) Get(ctx context.Context, repo string, pr int) (string, error) {
+	got, err := h.headsLog.Get(ctx, repo, pr)
+	h.lease.expire()
+	return got, err
+}
+
+// The lease is looked at again right before the call that changes GitHub: a
+// lease that expired while the command ran does not let the write out.
+func TestGhMergeApproveAndReviewDoNotWriteWhenTheLeaseExpiredOnTheWay(t *testing.T) {
+	t.Parallel()
+	t.Run("merge", func(t *testing.T) {
+		t.Parallel()
+		r, _, mg, _, pr := approveRig(t)
+		mg.approved = 90
+		mg.afterStanding = r.lease.expire
+		got := r.run("gm", "gh merge", nil, itoa(pr))
+		if got.OK || got.Code != "github_unavailable" {
+			t.Errorf("merge: %+v, want github_unavailable", got)
+		}
+		if len(r.gh.Merges(repoFull)) != 0 {
+			t.Error("merged with an expired lease")
+		}
+	})
+	t.Run("approve", func(t *testing.T) {
+		t.Parallel()
+		r, ap, _, _, pr := approveRig(t)
+		r.h.Heads = expiringHeads{headsLog: r.h.Heads.(*headsLog), lease: r.lease}
+		got := r.run("gm", "gh approve", map[string]any{"reason": "ok"}, itoa(pr))
+		if got.OK || got.Code != "github_unavailable" || len(ap.got) != 0 {
+			t.Errorf("approve: %+v (%d calls), want github_unavailable and no approval", got, len(ap.got))
+		}
+	})
+	t.Run("review", func(t *testing.T) {
+		t.Parallel()
+		r, heads, pr := reviewRig(t)
+		heads.got[pr] = "aaaabbbbccccdddd"
+		r.h.Heads = expiringHeads{headsLog: heads, lease: r.lease}
+		got := r.run("gm", "gh review", map[string]any{"comment": true, "body": "x"}, itoa(pr))
+		if got.OK || got.Code != "github_unavailable" {
+			t.Errorf("review: %+v, want github_unavailable", got)
+		}
+	})
 }

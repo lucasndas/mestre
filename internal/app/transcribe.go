@@ -326,13 +326,22 @@ func (e *Engine) transcribers(ctx context.Context) Fleet {
 		return Fleet{}
 	}
 	client := e.towerClient()
+	return fleetOf(sheets, e.id.MachineID, client, func(machine string) bool {
+		_, err := client.link(machine)
+		return err == nil
+	})
+}
+
+// fleetOf is the Fleet the sheets describe: self is the Citadel, the others are
+// Towers offered only when reachable says their connection is open.
+func fleetOf(sheets []machinesheet.Sheet, self string, c towerClient, reachable func(machine string) bool) Fleet {
 	var f Fleet
 	for _, s := range sheets {
-		if s.MachineID == e.id.MachineID {
+		if s.MachineID == self {
 			f.CitadelGPU = len(s.Resources.GPUs) > 0
 			continue
 		}
-		if m, ok := towerTranscriber(s, client); ok {
+		if m, ok := towerTranscriber(s, c, reachable); ok {
 			f.Towers = append(f.Towers, m)
 		}
 	}
@@ -344,11 +353,8 @@ func (e *Engine) transcribers(ctx context.Context) Fleet {
 func transcribes(s machinesheet.Sheet) bool { return !s.Excluded && s.Online && s.Transcricao }
 
 // towerTranscriber is the sheet of a Tower as a machine that transcribes, or not.
-func towerTranscriber(s machinesheet.Sheet, c towerClient) (attachments.Machine, bool) {
-	if !transcribes(s) {
-		return attachments.Machine{}, false
-	}
-	if _, err := c.link(s.MachineID); err != nil {
+func towerTranscriber(s machinesheet.Sheet, c towerClient, reachable func(machine string) bool) (attachments.Machine, bool) {
+	if !transcribes(s) || !reachable(s.MachineID) {
 		return attachments.Machine{}, false
 	}
 	name := s.Name

@@ -48,6 +48,7 @@ func TestTheRepositoryOfTheLockIsMadePrivateWithAutoInitAndRecorded(t *testing.T
 	}
 }
 
+// CA-GH-ID-10, the 403 side
 func TestWhenGitHubRefusesTheCreationTheOwnerGetsTheLinkAndNoLockIsRecorded(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)

@@ -382,6 +382,20 @@ func (f *Fence) TelegramStopped() bool {
 	return f.tgStopped
 }
 
+// TelegramStoppedNotice is the warning the panel shows while the Telegram is
+// stopped by a 409 with the lease gone (docs/guilda/trava-no-github.md#o-409-do-telegram).
+const TelegramStoppedNotice = "Telegram parado: outro leitor no bot e GitHub fora"
+
+// TelegramNotice is the warning of the panel for the Telegram: the text of
+// TelegramStoppedNotice while it is stopped, and "" once a check confirmed the
+// epoch (or showed a higher one).
+func (f *Fence) TelegramNotice() string {
+	if f.TelegramStopped() {
+		return TelegramStoppedNotice
+	}
+	return ""
+}
+
 // Gate is what the bot asks before each call to the Telegram.
 type Gate struct {
 	f    *Fence

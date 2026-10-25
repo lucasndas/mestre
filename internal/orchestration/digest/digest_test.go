@@ -324,6 +324,7 @@ func TestRepeatedApprovalsBecomeASuggestionAcceptedWithThePIN(t *testing.T) {
 	}
 }
 
+// CA-APROV-RES-02, the half of Recusar (30 days) and of the week
 func TestADeclinedPatternComesBackOnlyAfterThirtyDays(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, 1)
@@ -357,6 +358,23 @@ func TestADeclinedPatternComesBackOnlyAfterThirtyDays(t *testing.T) {
 	w.tick()
 	if count() != 2 {
 		t.Fatalf("the pattern did not come back after 30 days: %d", count())
+	}
+}
+
+// CA-APROV-RES-02, the window of 7 days: three approvals spread over more than
+// a week are not a pattern.
+func TestApprovalsSpreadOverMoreThanAWeekMakeNoSuggestion(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, 1)
+	w.tick()
+	for _, pkg := range []string{"a", "b", "c"} {
+		w.decided(chain.LevelMesa, true, "42-login", "dev", "npm install "+pkg, classes.RiskLow)
+		w.clk.Advance(4 * 24 * time.Hour)
+	}
+	w.toSlot()
+	w.tick()
+	if list, _ := w.svc.Suggestions(w.ctx, "loja", ""); len(list) != 0 {
+		t.Fatalf("suggestions = %+v; want none for approvals spread over 12 days", list)
 	}
 }
 
@@ -663,6 +681,20 @@ func TestTheSampleIsPerLevelInSeparateParts(t *testing.T) {
 	}
 	if len(seen) != 5 {
 		t.Errorf("the five are %v", got["Mestre da mesa"])
+	}
+	// both actions of the Grão-Mestre, each once
+	wantGM := map[int64]bool{}
+	for id, a := range made {
+		if a.level == "Grão-Mestre" {
+			wantGM[id] = true
+		}
+	}
+	gotGM := map[int64]bool{}
+	for _, id := range got["Grão-Mestre"] {
+		gotGM[id] = true
+	}
+	if !maps.Equal(gotGM, wantGM) {
+		t.Errorf("the Grão-Mestre part has %v; want exactly its two actions %v", got["Grão-Mestre"], wantGM)
 	}
 }
 

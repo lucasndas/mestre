@@ -29,7 +29,14 @@ func TestTheOwnerSeesOpenInThePanelAndAnAdministratorSeesNoButtonToRegisterTheSe
 	_, adm := w.user("Ana", users.Administrator, "loja")
 	_, other := w.user("Bia", users.Administrator, "blog")
 	_, approver := w.user("Caio", users.Approver, "loja")
-	id, sent, err := w.bc.Notify(w.ctx, stripeNotice("loja"))
+	// the owner of the field is derived as the engine does for a credential: the
+	// Owner of the workspace, never an Administrator
+	notice := stripeNotice("loja")
+	notice.Owner = blocking.NoticeOwner(blocking.Credential, w.owner.Name)
+	if notice.Owner != w.owner.Name || blocking.NoticeOwner(blocking.Quota, w.owner.Name) != "um Administrador" {
+		t.Fatalf("owner of the notice = %q", notice.Owner)
+	}
+	id, sent, err := w.bc.Notify(w.ctx, notice)
 	if err != nil || sent != 2 {
 		t.Fatalf("notice %d sent to %d: %v", id, sent, err)
 	}
@@ -63,10 +70,13 @@ func TestTheOwnerSeesOpenInThePanelAndAnAdministratorSeesNoButtonToRegisterTheSe
 		}
 	}
 	for name, text := range map[string]string{"Owner": ownerMsg, "Administrator": admMsg} {
-		for _, want := range []string{"<b>loja · Mesa #42 checkout</b>", "🔐 falta a chave STRIPE_TEST_KEY", "Dono: Lucas", "<pre>"} {
+		for _, want := range []string{"<b>loja · Mesa #42 checkout</b>", "🔐 falta a chave STRIPE_TEST_KEY", "Dono: " + w.owner.Name, "<pre>"} {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s: the message lacks %q:\n%s", name, want, text)
 			}
+		}
+		if strings.Contains(text, "Dono: Ana") {
+			t.Errorf("%s: an Administrator is named as the owner of the field:\n%s", name, text)
 		}
 		if strings.Contains(text, "ghp_") || strings.Contains(text, "linha 4") {
 			t.Errorf("%s: the evidence is not cut or masked:\n%s", name, text)

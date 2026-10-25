@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/quests"
 	"github.com/lucasndas/mestre/internal/orchestration/verification"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/terminal"
@@ -153,5 +154,55 @@ func TestAVerificationTerminalLeftByAFallIsEndedAndForgottenAtTheNextStart(t *te
 		if row.ID == id {
 			t.Errorf("the row of the left terminal stayed: %+v", row)
 		}
+	}
+}
+
+// Part of CA-GH-ACOES-11 (the chain half, with a double of the verifier, is in
+// internal/orchestration/chain): the real executor integrates the base in an
+// ephemeral worktree: the command runs in a folder of the verifications that holds
+// the base merged, and afterwards neither the folder nor the branch of the
+// verification is left, and the branch of the table has not moved.
+func TestTheVerificationIntegratesTheBaseInAnEphemeralWorktreeThatIsGoneAfterwards(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	rg := newVerifyRig(t)
+	mirror := rg.mirror(t)
+	branch := rg.opened.Table.Branch
+	head := rg.commitOn(t, branch, "feature.txt", "table\n")
+	base := rg.commitOn(t, "main", "base.txt", "base\n")
+	store := verification.Store{DB: rg.db, Clock: rg.clk}
+	if _, err := store.Confirm(ctx, rg.ws.Slug, "u1", []byte("version: 1\ncomandos: [\"make check\"]\n")); err != nil {
+		t.Fatal(err)
+	}
+	var ranIn string
+	var baseMerged bool
+	run := &recordingRunner{}
+	run.seen = func(r verification.Run) {
+		ranIn = r.Dir
+		refs, _ := mirror.ListRefs(ctx, "refs/heads/mestre")
+		if len(refs) == 1 {
+			b, err := mirror.ReadFile(ctx, refs[0].Name, "base.txt")
+			baseMerged = err == nil && string(b) == "base\n"
+		}
+	}
+	ex := &verification.Executor{Store: store, Worktrees: rg.w, Runner: run}
+	res, err := ex.Verify(ctx, quests.VerifyRequest{Workspace: rg.ws.Slug, Table: rg.opened.Table.ID, Branch: branch, Head: string(head), Base: string(base)})
+	if err != nil || !res.OK {
+		t.Fatalf("Verify = %+v, %v", res, err)
+	}
+	if want := rg.orc.Workspaces.Layout().Verifications(rg.ws.Slug); filepath.Dir(ranIn) != want {
+		t.Errorf("the command ran in %q, want a folder of %s (ephemeral)", ranIn, want)
+	}
+	if !baseMerged {
+		t.Error("the base was not merged in the worktree the command ran in")
+	}
+	if _, err := os.Stat(ranIn); err == nil {
+		t.Error("the ephemeral worktree stayed after the verification")
+	}
+	if refs, _ := mirror.ListRefs(ctx, "refs/heads/mestre"); len(refs) != 0 {
+		t.Errorf("the branch of the verification stayed: %v", refs)
+	}
+	if now, _ := mirror.ResolveRef(ctx, "refs/heads/"+branch); now != head {
+		t.Errorf("the branch of the table moved from %s to %s", head, now)
 	}
 }
