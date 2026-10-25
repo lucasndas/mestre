@@ -40,6 +40,22 @@ func (h *Handlers) quotaLow(ctx context.Context, c *localchan.Call) (time.Time, 
 	return h.Quota.Low(ctx, ch)
 }
 
+// leaseHeld is nil while the lease of the epoch is still valid. A command that
+// takes long (the reads of the mirror, the freshness gate of the chain) asks it
+// again right before the call that changes GitHub, so a lease that expired on
+// the way does not let the write out while another Citadel may already act.
+func (h *Handlers) leaseHeld() *localchan.Response {
+	if h.Lease == nil {
+		r := unavailable("the lease of the epoch is not set")
+		return &r
+	}
+	if err := h.Lease.Allow(); err != nil {
+		r := unavailable("the lease of the epoch expired while the command ran")
+		return &r
+	}
+	return nil
+}
+
 func (h *Handlers) isLocked(ctx context.Context) bool { return h.Locked != nil && h.Locked(ctx) }
 
 func lockedResponse() localchan.Response {

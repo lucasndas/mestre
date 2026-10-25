@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -313,6 +314,12 @@ func TestHelpListsOnlyWhatTheCallerMayUse(t *testing.T) {
 		for _, c := range v.Data.Commands {
 			if !strings.Contains(text.stdout, "mestre "+c) {
 				t.Errorf("%q is in the JSON list but not in the text", c)
+			}
+		}
+		// and the other way: the text shows no command of a group the JSON hides
+		for _, h := range []string{"table", "gh", "app", "notify", "recruit"} {
+			if !lists(v.Data.Commands, h) && regexp.MustCompile(`mestre `+h+`\b`).MatchString(text.stdout) {
+				t.Errorf("the text of the help shows %q, which the JSON list does not have:\n%s", "mestre "+h, text.stdout)
 			}
 		}
 		return v.Data.Commands

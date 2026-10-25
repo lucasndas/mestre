@@ -41,6 +41,8 @@ type ghCompose struct {
 	// machines are the machines of the orchestration (their start can be made to check).
 	machines *orcfakes.Machines
 	gm       characters.Character
+	// root is the folder of the test (the workspaces are in root/workspaces).
+	root string
 }
 
 func newGHCompose(t *testing.T) *ghCompose { return newGHComposeWith(t, false) }
@@ -91,6 +93,7 @@ func newGHComposeCfg(t *testing.T, withChain, integrationPeople bool) *ghCompose
 	c := &ghCompose{integ: i, gh: double, run: i.open()}
 	t.Cleanup(c.run.Close)
 	root := t.TempDir()
+	c.root = root
 	c.remote = fakegit.NewGit(i.clk)
 	remote, err := c.remote.Init(i.ctx, filepath.Join(root, "remote", "meu-app"), gitx.InitOptions{})
 	if err != nil {

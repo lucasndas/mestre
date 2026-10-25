@@ -75,8 +75,12 @@ func TestATowerReadsItsCharactersAndTheCitadelTakesTheReading(t *testing.T) {
 	if err := r.Pass(ctx); err != nil || len(citadel.readings) != 2 {
 		t.Fatalf("the next lines: %v, %d readings", err, len(citadel.readings))
 	}
+	if got := citadel.readings[1]; got.InputTokens != 8000 || got.OutputTokens != 100 {
+		t.Errorf("second reading = %d in / %d out, want 8000 / 100 (the tokens of lines 3-6 only, not the first batch again)", got.InputTokens, got.OutputTokens)
+	}
 }
 
+// CA-USO-14
 func TestTheCitadelTakesAUsageReadingOnlyFromTheTowerOfTheCharacter(t *testing.T) {
 	t.Parallel()
 	spy := &usageSpy{}

@@ -60,6 +60,10 @@ func (c *ApprovalChannel) Captures() map[string]CaptureFunc {
 	return map[string]CaptureFunc{ApprovalTextKind: c.text, PINKind: PINCapture(c.Users, c.pinDone)}
 }
 
+// detailsArg is the answer part of the argument of "Ver detalhes": not an answer
+// of the chain, so it is taken before any answer is read.
+const detailsArg = "details"
+
 func buttonsFor(request int64, answers []chain.Answer) [][]Button {
 	var rows [][]Button
 	var row []Button
@@ -68,6 +72,9 @@ func buttonsFor(request int64, answers []chain.Answer) [][]Button {
 		if len(row) == 2 {
 			rows, row = append(rows, row), nil
 		}
+	}
+	if len(answers) > 0 { // a message with its answers taken away has no details either
+		row = append(row, Button{Text: "Ver detalhes", Action: ApprovalAction, Arg: fmt.Sprintf("%d:%s", request, detailsArg), Capability: users.DecideApprovals})
 	}
 	if len(row) > 0 {
 		rows = append(rows, row)
@@ -128,6 +135,20 @@ func (c *ApprovalChannel) click(ctx context.Context, k Click) (string, string, e
 	request, ans, ok := parseArg(k.Arg)
 	if !ok {
 		return "", "", errors.New("botão inválido")
+	}
+	if ans == detailsArg {
+		text, err := c.flow.Details(ctx, k.User.ID, request)
+		if err != nil {
+			return "", "", err
+		}
+		u, err := c.Users.Get(ctx, k.User.ID)
+		if err != nil || u.TelegramID == 0 {
+			return "", "", approvals.ErrNoChannel
+		}
+		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: fmt.Sprintf("Detalhes do pedido %d:\n%s", request, text), Origin: "aprovacao"}); err != nil {
+			return "", "", err
+		}
+		return "Enviei os detalhes.", "", nil
 	}
 	if prompt := needs(ans); prompt != "" {
 		if err := c.bot.Ask(ctx, k.User.ID, ApprovalTextKind, k.Arg, prompt, promptTTL); err != nil {

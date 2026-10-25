@@ -116,3 +116,43 @@ func TestTheGrandMasterPausesTheAutonomyByTheCommandAndAnApproverByTheButtonOfTh
 		t.Errorf("an Observer was given %v", keys)
 	}
 }
+
+// CA-USR-10
+//
+// The resume clause of the criterion: an Approver taps
+// (Pausar autonomia) and the pause is of a person; resuming it as an Approver
+// is accepted by the engine, and an Observer is refused.
+func TestAnApproverResumesThePauseOfAPersonAndTheEngineAccepts(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, rigOpts{block: true})
+	w.pairOwnerTelegram()
+	approverU, approver := w.user("Caio", users.Approver, "loja")
+	gm := characters.Character{ID: "gm1", Name: "Grão", Workspace: "loja", Role: characters.RoleGrandMaster}
+	sup, err := chain.NewSupervisor(chain.SupervisorOptions{Store: &chain.Store{DB: w.db}, Clock: w.clk, Characters: supChars{gm: gm}, Inbox: &supInbox{},
+		Policy: chain.StaticPolicy{}, QueuePeople: w.sc})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.sc.Autonomy = sup
+	if err := w.sc.QueueAccumulating(w.ctx, chain.QueueNotice{Workspace: "loja", Table: "43-busca", Text: "Fila acumulando: Mestre da mesa 43-busca tem 11 pedidos."}); err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	msg, keys := w.buttons(approver)
+	w.click(approver, msg, keys["Pausar autonomia"])
+	if p, ok, _ := sup.PauseOf(w.ctx, "loja", "43-busca"); !ok || p.Kind != "person" || p.By != "user:"+approverU.ID {
+		t.Fatalf("pause = %+v, %v; want the pause of the Approver", p, ok)
+	}
+	// an Observer is refused; the pause stays
+	if _, err := sup.ResumeAutonomy(w.ctx, chain.PauseRequest{Workspace: "loja", Table: "43-busca", Reason: "x", By: chain.Actor{User: "u-obs", UserLevel: characters.LevelObserver}}); err == nil {
+		t.Error("an Observer resumed the pause of a person")
+	}
+	// the Approver resumes: the engine accepts
+	changed, err := sup.ResumeAutonomy(w.ctx, chain.PauseRequest{Workspace: "loja", Table: "43-busca", Reason: "voltar", By: chain.Actor{User: approverU.ID, UserLevel: characters.LevelApprover}})
+	if err != nil || !changed {
+		t.Fatalf("resume by an Approver = %v, %v; want accepted", changed, err)
+	}
+	if paused, _ := sup.AutonomyPaused(w.ctx, "loja", "43-busca"); paused {
+		t.Error("the table is still paused after the Approver resumed it")
+	}
+}

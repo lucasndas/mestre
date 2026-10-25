@@ -47,6 +47,23 @@ type credWorld struct {
 	broker *CredentialBroker
 	reg    characters.Registry
 	vault  *vault.Vault
+	// tower is what the Tower keeps: its outbox and the ids it has processed.
+	tower *protorig.MemStore
+	kept  *keptEnvelopes
+}
+
+// keptEnvelopes is the outbox of the Tower, recording every message put in it.
+type keptEnvelopes struct {
+	*protorig.MemStore
+	mu   sync.Mutex
+	puts []protocol.Envelope
+}
+
+func (k *keptEnvelopes) Put(ctx context.Context, peer string, env protocol.Envelope) error {
+	k.mu.Lock()
+	k.puts = append(k.puts, env)
+	k.mu.Unlock()
+	return k.MemStore.Put(ctx, peer, env)
 }
 
 func newCredWorld(t *testing.T) *credWorld {
@@ -111,7 +128,10 @@ func newCredWorld(t *testing.T) *credWorld {
 	var sctx, cctx context.Context
 	sctx, w.stopS = context.WithCancel(ctx)
 	w.wgS.Go(func() { _ = w.server.Serve(sctx, lis) })
-	cfgT, _ := protorig.Config(clk, "tower1", 1, "citadel")
+	cfgT, towerParts := protorig.Config(clk, "tower1", 1, "citadel")
+	w.tower = towerParts.Store
+	w.kept = &keptEnvelopes{MemStore: towerParts.Store}
+	cfgT.Outbox = w.kept
 	cfgT.Router = protocol.NewRouter()
 	if w.client, err = protocol.NewClient(cfgT, w.nw.Dialer("tower1", "citadel:7443", protocol.Peer{Role: protocol.RoleMachine, ID: "tower1"})); err != nil {
 		t.Fatal(err)
@@ -177,6 +197,27 @@ func TestATowerGetsASiteCredentialOnlyForACharacterWhoseClassReleasesItAndEveryt
 		}
 		if fmt.Sprint(got) != logging.Redacted || fmt.Sprintf("%#v", got) == siteValue {
 			t.Errorf("the value prints as %v", got)
+		}
+		// the value lives only in memory on the Tower: nothing of it reached what the
+		// Tower keeps (outbox, ids processed) after the request was answered
+		for _, peer := range []string{"citadel", "tower1"} {
+			pending, err := w.tower.Pending(w.ctx, peer)
+			if err != nil || len(pending) != 0 || w.tower.Waiting(peer) != 0 {
+				t.Errorf("the Tower keeps %d messages for %s (err %v); a credential request is never kept", len(pending), peer, err)
+			}
+			if n := w.tower.Remembered(peer); n != 0 {
+				t.Errorf("the Tower remembers %d ids from %s", n, peer)
+			}
+		}
+		w.kept.mu.Lock()
+		for _, env := range w.kept.puts {
+			if env.Type == protocol.TypeVaultRequest || strings.Contains(string(env.Payload), "Abc123") {
+				t.Errorf("the Tower put a %s in its outbox: %s", env.Type, env.Payload)
+			}
+		}
+		w.kept.mu.Unlock()
+		if n := w.tower.Claims(); n != 0 {
+			t.Errorf("the Tower claimed %d ids; the value came in an ack and nothing was kept", n)
 		}
 		// a Tower speaks only of its own characters: a character that is not on that machine
 		if _, err := RequestSiteCredential(w.ctx, clock.Real{}, link, "ghost", siteName, "x"); err == nil {

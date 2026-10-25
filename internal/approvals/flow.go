@@ -531,6 +531,25 @@ func (f *Flow) ConfirmPIN(ctx context.Context, userID, pinRequest string) (Reply
 	return f.apply(ctx, u, r, fr, in)
 }
 
+// Details is the text behind "Ver detalhes": the whole question as the engine
+// builds it, with the exact target of the request (the files and the PR link). It
+// is for a user who acts in the workspace of the request and may decide approvals.
+func (f *Flow) Details(ctx context.Context, userID string, request int64) (string, error) {
+	u, err := f.o.Users.Get(ctx, userID)
+	if err != nil {
+		return "", ErrNotYours
+	}
+	r, err := f.o.Chain.Get(ctx, request)
+	if err != nil || !u.Acts(r.Workspace) || !users.Can(u.Level, users.DecideApprovals) {
+		return "", ErrNotYours
+	}
+	text := chain.Text(r, r.Level, nil)
+	if len(r.Target) > 0 {
+		text += "\nAlvo exato: " + string(r.Target) + "\n"
+	}
+	return text, nil
+}
+
 // check is everything that must hold for the answer of a user to count.
 func (f *Flow) check(ctx context.Context, userID string, request int64, a chain.Answer) (users.User, chain.Request, flowRow, error) {
 	u, err := f.o.Users.Get(ctx, userID)

@@ -86,6 +86,7 @@ func TestAQuorumNeedsTheRequiredUsersAndEachUserCountsOnce(t *testing.T) {
 }
 
 // CA-APROV-FLUXO-05
+// CA-USR-05
 //
 // Part of CA-USR-05: the half of the criterion that needs the approvals (the
 // action is not executed after the suspension); the marker and the
@@ -108,6 +109,10 @@ func TestWhatASuspendedUserApprovedStopsCounting(t *testing.T) {
 	}
 	if w.state(r.ID) != chain.Open {
 		t.Fatalf("the approval of Ana still counted: %s", w.state(r.ID))
+	}
+	// the action does not run: the chain recorded no decision at all
+	if n := len(w.ch.Decisions()); n != 0 {
+		t.Errorf("the chain recorded %d decisions, want none (the action must not run)", n)
 	}
 	// and the suspended user answers nothing
 	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); !errors.Is(err, approvals.ErrNotYours) {
@@ -193,6 +198,35 @@ func TestAnApprovalOfAnotherTargetIsInvalidatedAndNothingIsApplied(t *testing.T)
 	// ...but a denial stands
 	if _, err := w.answer(ana, r3.ID, chain.AnswerDeny); err != nil || w.state(r3.ID) != chain.Denied {
 		t.Errorf("deny with an unreadable target: %v, %s", err, w.state(r3.ID))
+	}
+}
+
+// CA-APROV-FLUXO-01
+// The Dado of the criterion: a request already approved for one target (it
+// counts, 1 of 2) and the target changes afterwards.
+func TestAnApprovalAlreadyCountedForTheOldTargetIsDroppedWhenTheTargetMoves(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ana := w.add("Ana", users.Approver, "loja")
+	bia := w.add("Bia", users.Approver, "loja")
+	r := w.open(openOpts{typ: classes.RequestPR, quorum: 2, target: `{"repo":"lucas/loja","pr":7,"head":"aaa"}`})
+	w.tg.set(r.ID, `{"head":"aaa","pr":7,"repo":"lucas/loja"}`) // still the target that was asked
+	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); err != nil || w.state(r.ID) != chain.Open {
+		t.Fatalf("the first approval at head aaa: %v, %s; want it counted (1 of 2, still open)", err, w.state(r.ID))
+	}
+	w.tg.set(r.ID, `{"head":"bbb","pr":7,"repo":"lucas/loja"}`) // the head moves
+	if _, err := w.answer(bia, r.ID, chain.AnswerApprove); !errors.Is(err, approvals.ErrTargetChanged) {
+		t.Fatalf("the second answer after the move: %v", err)
+	}
+	if w.state(r.ID) != chain.Invalidated || len(w.ch.Decisions()) != 0 {
+		t.Fatalf("state = %s, decisions = %d; want invalidated and nothing applied", w.state(r.ID), len(w.ch.Decisions()))
+	}
+	// the approval of Ana does not count for anyone any more
+	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); err == nil {
+		t.Error("an invalidated request took another answer")
+	}
+	if len(w.ch.Decisions()) != 0 {
+		t.Errorf("a decision was recorded after the invalidation: %d", len(w.ch.Decisions()))
 	}
 }
 

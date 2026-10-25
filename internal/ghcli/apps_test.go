@@ -34,7 +34,7 @@ func appsRig(t *testing.T) (*rig, *github.Registry, *creatorLog) {
 	return r, reg, cr
 }
 
-// CA-CLI-GM-06 and `app list|status|create`.
+// `app list|status|create`.
 func TestAppCreatePreparesTheAppOfAClassAndSendsTheLinkToTheOwnerOnly(t *testing.T) {
 	t.Parallel()
 	r, reg, cr := appsRig(t)
@@ -75,6 +75,26 @@ func TestAppCreatePreparesTheAppOfAClassAndSendsTheLinkToTheOwnerOnly(t *testing
 	// only the Grand Master
 	if tm := r.run("tm", "app create", map[string]any{"class": "Dev"}); tm.OK || tm.Code != "level_denied" {
 		t.Fatalf("a table master: %+v", tm)
+	}
+}
+
+// CA-CLI-GM-06
+// The command as written, `app create --class QA`, on an account that holds
+// exactly 100 Apps (the 99 of others and the Grand Master's own).
+func TestAppCreateOfQAOnAFullAccountIsExit8AppLimit(t *testing.T) {
+	t.Parallel()
+	r, reg, cr := appsRig(t)
+	if err := reg.SetOthers(r.ctx, 99); err != nil {
+		t.Fatal(err)
+	}
+	if full := r.run("gm", "app create", map[string]any{"class": "QA"}); full.OK || full.Code != "app_limit" || full.Exit != 8 {
+		t.Fatalf("100 Apps: %+v, want exit 8 app_limit", full)
+	}
+	if len(cr.began) != 0 {
+		t.Errorf("a link was started for a refused creation: %v", cr.began)
+	}
+	if _, err := reg.Get(r.ctx, "lucas-mestre-qa"); err == nil {
+		t.Error("an App was registered by a refused creation")
 	}
 }
 

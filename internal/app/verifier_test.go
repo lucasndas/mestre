@@ -290,6 +290,7 @@ func (r *recordingRunner) Run(_ context.Context, run verification.Run) (verifica
 	return verification.Result{ExitCode: r.code, Output: "feito"}, nil
 }
 
+// CA-GH-ACOES-15
 // The executor, over the worktrees of the mirror, honors the Base and the Head
 // of the request (the gate of freshness depends on it): the commands run in a
 // worktree that holds the base merged into the head, the commands are the ones

@@ -79,6 +79,7 @@ cadeia:
   mesa_decide: [rede]
 areas_sensiveis:
   mestre: ["docs/interno/**"]
+  permissoes_e_segredos: ["**/*.pem"]
 risco:
   ajustes:
     - { comando: "make deploy-teste", risco: alto }
@@ -90,8 +91,15 @@ risco:
 		t.Fatalf("settings = %+v (version %q)", st, v2)
 	}
 	risk := r.file.Risk("meu-app")
-	if risk == nil || risk.Adjustments == nil || len(risk.Adjustments.Items) != 1 || !slices.Equal(risk.Mestre, []string{"docs/interno/**"}) || risk.Secrets != nil {
+	if risk == nil || risk.Adjustments == nil || len(risk.Adjustments.Items) != 1 || !slices.Equal(risk.Mestre, []string{"docs/interno/**"}) || !slices.Equal(risk.Secrets, []string{"**/*.pem"}) {
 		t.Fatalf("risk policy = %+v", risk)
+	}
+	// the version is the hash of the content: stable for the same content, another for another
+	r.write("versao: 1\nexpiracao: 6h\n")
+	_, vOther := r.chain()
+	r.write("versao: 1\nexpiracao: 6h\n")
+	if _, vAgain := r.chain(); vAgain != vOther || vOther == v2 || !strings.HasPrefix(vOther, "sha256:") {
+		t.Fatalf("versions %q, %q, %q; want a stable sha256 per content", v2, vOther, vAgain)
 	}
 	// a workspace without a folder has the default content and the default table
 	if st, v, _ := r.file.Chain(context.Background(), "outro"); v != "default" || st.PeopleDeadline != 24*time.Hour || r.file.Risk("outro") != nil {
@@ -99,6 +107,7 @@ risco:
 	}
 }
 
+// CA-APROV-POL-21 (the invalid file: the last valid version holds, nothing loosens, the Owner is told once)
 func TestAnInvalidPolicyFileNeverLoosensWhatHeldBeforeAndTheOwnerIsToldOnce(t *testing.T) {
 	t.Parallel()
 	r := newPolicyRig(t)
@@ -153,6 +162,7 @@ func TestAnInvalidPolicyFileNeverLoosensWhatHeldBeforeAndTheOwnerIsToldOnce(t *t
 	}
 }
 
+// CA-APROV-POL-21 (unreadable or a link: the default content holds and the Owner is told)
 func TestAnInvalidFirstPolicyFileHoldsTheDefaultAndALinkIsNotFollowed(t *testing.T) {
 	t.Parallel()
 	r := newPolicyRig(t)
@@ -243,8 +253,8 @@ func TestAPolicyFileWithASyntaxErrorKeepsThePreviousRulesAndTellsTheOwner(t *tes
 	if after.MaxFiles != 3 || v2 != v {
 		t.Fatalf("after the broken file the rules are %+v (version %q, was %q), want the previous", after, v2, v)
 	}
-	if len(r.alerts) != 1 {
-		t.Fatalf("alerts = %v, want one", r.alerts)
+	if len(r.alerts) != 1 || !errors.Is(r.alerts[0], chain.ErrInvalidPolicy) {
+		t.Fatalf("alerts = %v, want one invalid policy", r.alerts)
 	}
 }
 
@@ -258,7 +268,8 @@ func TestAPolicyThatLetsADestructiveActionBeDecidedAloneIsInvalid(t *testing.T) 
 	if st, _ := r.chain(); st.PeopleDeadline != 6*time.Hour {
 		t.Fatalf("settings = %+v, want the previous version", st)
 	}
-	if len(r.alerts) != 1 || !strings.Contains(r.alerts[0].Error(), "acao_destrutiva") {
+	if len(r.alerts) != 1 || !strings.Contains(r.alerts[0].Error(), "acao_destrutiva") ||
+		!strings.Contains(r.alerts[0].Error(), "tipos.acao_destrutiva.sozinho") || !strings.Contains(r.alerts[0].Error(), "risco alto não se decide sozinho") {
 		t.Fatalf("alerts = %v, want one naming the item", r.alerts)
 	}
 	if _, err := chain.ParsePolicyRules([]byte("versao: 1\ntipos:\n  acao_destrutiva: { sozinho: se_condicoes }\n")); err == nil {

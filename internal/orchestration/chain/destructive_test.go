@@ -129,6 +129,37 @@ func TestANoteDeleteByACharacterWaitsForTheApprovalOfThePeopleAndThenRuns(t *tes
 	}
 }
 
+// CA-APROV-FLUXO-10 (the real scroll: its revision moves after the approval)
+func TestAScrollThatChangesAfterTheApprovalOfItsDeletionIsInvalidatedAndNothingIsDeleted(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOpts{destructive: true})
+	dev := w.recruit("Dev")
+	if r := w.cmd("note create", dev.ID, "# Plano\nfazer"); !r.OK {
+		t.Fatalf("create: %+v", r.Error)
+	}
+	first := w.cmd("note delete", dev.ID, "Plano")
+	id, _ := first.Error.Details["request"].(int64)
+	if first.OK || id == 0 {
+		t.Fatalf("the first delete: %+v", first)
+	}
+	w.approveAsOwner(id)
+	// the scroll moves to another revision before the deletion is applied
+	if r := w.cmd("note write", dev.ID, "Plano", "# Plano\nfazer mais"); !r.OK {
+		t.Fatalf("write: %+v", r.Error)
+	}
+	again := w.cmd("note delete", dev.ID, "Plano")
+	next, _ := again.Error.Details["request"].(int64)
+	if again.OK || again.Error == nil || again.Error.Code != "approval_required" || next == 0 || next == id {
+		t.Fatalf("delete of the changed scroll = %+v, want approval_required with a new request (was #%d)", again, id)
+	}
+	if got := w.request(id); got.State != chain.Invalidated {
+		t.Fatalf("the approval of the old revision is %s, want invalidated", got.State)
+	}
+	if r := w.cmd("note read", dev.ID, "Plano"); !r.OK {
+		t.Fatalf("the scroll was deleted: %+v", r.Error)
+	}
+}
+
 // A ritual is deleted the same way: the character is told it waits, and the
 // approved deletion runs once.
 func TestARitualDeleteByTheMasterWaitsForTheApprovalOfThePeopleAndThenRuns(t *testing.T) {
@@ -224,6 +255,9 @@ func TestADestructiveRequestHasTheCommandAsTargetAsksOnlyAdministratorsAndIsNotT
 		t.Fatalf("ask = %v, %d, %v", ok, id, err)
 	}
 	r := w.request(id)
+	if r.Type != "acao_destrutiva" {
+		t.Fatalf("the request is of type %q, want acao_destrutiva", r.Type)
+	}
 	var tg chain.DestructiveTarget
 	if err := json.Unmarshal(r.Target, &tg); err != nil || tg.Command != "note delete" || tg.Object != "loja/42-login/p0003" {
 		t.Fatalf("target = %s (%v); want the command and the scroll", r.Target, err)

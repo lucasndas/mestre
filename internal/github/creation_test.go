@@ -269,8 +269,8 @@ func TestALinkNobodyOpenedExpiresAfter24HoursAndTheOwnerCanAskAnother(t *testing
 	if _, err := r.c.Open(r.ctx, tokenOf(link), r.owner); !errors.Is(err, github.ErrLinkGone) {
 		t.Errorf("the expired link opened: %v", err)
 	}
-	if told := r.tells(); len(told) != 1 || !strings.Contains(told[0], app.Name) {
-		t.Errorf("the Owner was told %q", told)
+	if told := r.tells(); len(told) != 1 || !strings.Contains(told[0], app.Name) || !strings.Contains(told[0], "Peça outro") {
+		t.Errorf("the Owner was told %q, want the notice naming the App and offering another link", told)
 	}
 	again, err := r.c.Begin(r.ctx, app.Name, "gm")
 	if err != nil {

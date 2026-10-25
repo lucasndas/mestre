@@ -3,6 +3,7 @@ package approvals_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -90,8 +91,15 @@ func newReviewsRig(t *testing.T) *reviewsRig {
 func (r *reviewsRig) request(o openOpts) chain.Request {
 	r.t.Helper()
 	o.typ = classes.RequestMerge
-	o.pr = &chain.PRRef{Repo: loja, Number: r.pr, SHA: r.sha}
 	o.target = string(approvals.PRTarget(loja, r.pr, r.sha, "main"))
+	return r.track(o)
+}
+
+// track opens the request described by o (with its type and target) bound to the PR
+// and makes the intake find it.
+func (r *reviewsRig) track(o openOpts) chain.Request {
+	r.t.Helper()
+	o.pr = &chain.PRRef{Repo: loja, Number: r.pr, SHA: r.sha}
 	req := r.open(o)
 	r.reqs.mu.Lock()
 	r.reqs.reqs = append(r.reqs.reqs, req)
@@ -241,7 +249,12 @@ func TestAReviewMadeOnGitHubOnlyAnswersTheRequestUnderEveryCondition(t *testing.
 	// the Owner is asked the PIN by the channel, and only the PIN concludes it
 	p := newReviewsRig(t)
 	owner := p.pinOwner("lucas-dono")
-	preq := p.request(openOpts{min: classes.LevelOwner, pin: true})
+	// the request is a configuracao_repositorio, with the target of its own (SettingsTarget)
+	settings, err := json.Marshal(approvals.SettingsTarget{Kind: approvals.KindRuleset, Repo: loja, Branch: "main", Body: map[string]any{"name": "mestre-review"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preq := p.track(openOpts{typ: classes.RequestRepoSettings, target: string(settings), min: classes.LevelOwner, pin: true})
 	p.deliver(p.review("lucas-dono", "APPROVED", p.sha))
 	if p.state(preq.ID) != chain.Open || len(p.ch.Decisions()) != 0 {
 		t.Fatalf("a review concluded a request that asks the PIN: %s", p.state(preq.ID))

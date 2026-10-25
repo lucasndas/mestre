@@ -121,6 +121,19 @@ func TestTheSourcesOfUseAreReadPeriodicallyAndAMissingOneIsReported(t *testing.T
 	if len(spy.readings) != 2 {
 		t.Fatalf("readings = %d, want the new turn read", len(spy.readings))
 	}
+	// only the lines 3-6 were read: the delta, not the whole file again (the first reading was 12000)
+	if got := spy.readings[1]; got.InputTokens != 8000 || got.OutputTokens != 100 {
+		t.Errorf("second reading = %d in / %d out, want 8000 / 100 (the tokens of lines 3-6 only)", got.InputTokens, got.OutputTokens)
+	}
+	// and the cursor stays at the end of the file
+	var cur struct {
+		Offset int64 `json:"offset"`
+	}
+	if st, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	} else if err := json.Unmarshal([]byte(spy.readings[1].Cursor), &cur); err != nil || cur.Offset != st.Size() {
+		t.Errorf("cursor = %q (%v), want the offset at the end of the file (%d)", spy.readings[1].Cursor, err, st.Size())
+	}
 
 	if len(spy.unavailable) != 1 {
 		t.Errorf("unavailable = %v, a missing source is told once", spy.unavailable)

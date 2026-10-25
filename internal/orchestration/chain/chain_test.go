@@ -713,6 +713,34 @@ func TestApprovingAPatternIsLimitedToTheCeilingAndTheBreadthAndAlwaysBecomesASug
 	}
 }
 
+// CA-APROV-FLUXO-13
+// The decree half of the criterion: the "Aprovar o padrão" of an Administrator
+// (a person) makes a decree with the pattern, in the class of the request, with
+// no validity (permanent), and no temporary table rule.
+func TestAPersonApprovingAPatternMakesAPermanentDecreeOfTheClassOfTheRequest(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.recruit("Dev")
+	id := w.shell(dev, "npm install x")
+	req := w.request(id)
+	if req.Class == "" {
+		t.Fatal("the request has no class")
+	}
+	if _, err := w.ch.DecideByPerson(w.ctx, chain.PersonDecision{Request: id, User: "ana", Level: "administrator", Answer: chain.AnswerApprovePattern, Pattern: "npm install *"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.grants.decrees) != 1 {
+		t.Fatalf("%d decrees, want one", len(w.grants.decrees))
+	}
+	d := w.grants.decrees[0]
+	if d.Pattern != "npm install *" || d.For != 0 || d.Class != req.Class || d.Table != req.Table || d.By != "user:ana" || d.Level.Kind != chain.LevelPeople {
+		t.Errorf("decree = %+v; want the pattern, no validity, the class %q and the person", d, req.Class)
+	}
+	if len(w.temp.rules) != 0 {
+		t.Errorf("a person's pattern made %d temporary rules", len(w.temp.rules))
+	}
+}
+
 // CA-CADEIA-10
 func TestAskingBackKeepsTheRequestWhereItIsAndTheTimeOfTheLevelStartsAgainWithTheAnswer(t *testing.T) {
 	t.Parallel()

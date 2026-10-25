@@ -132,10 +132,16 @@ func TestTheLimitOfReturnsPausesTheSyncAndTheSameFailureAgainPausesBefore(t *tes
 			if got := w.syncState().State; got != quests.Running {
 				t.Fatalf("the sync is %s after %d failures; want it back with the Dev", got, i+1)
 			}
+			if steps, err := w.orc.Quests.Store().Steps(w.ctx, w.syncState().ID); err != nil || len(steps) != 1 || steps[0].Returns != i+1 {
+				t.Fatalf("steps after the failure %d = %+v, %v; want %d returns", i+1, steps, err, i+1)
+			}
 		}
 		w.doneOfSync(dev)
 		w.orc.Quests.WaitVerifications()
 		q := w.syncState()
+		if q.MaxReturns != 3 {
+			t.Errorf("max_returns = %d; want the default 3", q.MaxReturns)
+		}
 		if q.State != quests.Paused || q.PausedReason != "limite de voltas" {
 			t.Fatalf("the sync is %s (%q); want paused by the limit of returns", q.State, q.PausedReason)
 		}
@@ -192,6 +198,9 @@ func TestTheBaseMovingAgainRedoesTheGateAndNoCommandAsksTheMaster(t *testing.T) 
 		w.moveBase("later.go") // a fetch while the verification runs
 		close(v.hold)
 		w.orc.Quests.WaitVerifications()
+		if got := v.count(); got != 1 {
+			t.Errorf("verifications = %d after the first round; want 1 (it ran and did not conclude)", got)
+		}
 		if got := w.syncState().State; got != quests.Running {
 			t.Fatalf("the sync is %s; the base moved again, so it must not end", got)
 		}
@@ -203,6 +212,9 @@ func TestTheBaseMovingAgainRedoesTheGateAndNoCommandAsksTheMaster(t *testing.T) 
 		}
 		w.doneOfSync(dev) // integrates the new tip and gives the done again
 		w.orc.Quests.WaitVerifications()
+		if got := v.count(); got != 2 {
+			t.Errorf("verifications = %d; want 2 (the gate ran again before the end)", got)
+		}
 		if got := w.syncState().State; got != quests.Completed {
 			t.Errorf("the sync is %s after the gate passed; want completed", got)
 		}

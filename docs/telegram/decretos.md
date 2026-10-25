@@ -28,7 +28,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 
 1. O usuário dá a ordem em linguagem natural (texto, áudio ou painel).
 2. O Grão-Mestre interpreta e envia ao motor uma **proposta estruturada** com `mestre decree propose`: tipo, efeito (`--effect`), alvo (`--target`), escopo (`--scope`), validade (`--until`) e o texto original da mensagem (`--text`). A sintaxe está em [CLI do Grão-Mestre](../cli/grao-mestre.md).
-3. O motor confere o nível do autor e mostra o que vai valer, com os botões **Confirmar** e **Cancelar**. Exemplo: "Entendi: permitir o envio da branch da mesa para a classe Dev, permanente. Confirma?".
+3. O motor confere o nível do autor e mostra o que vai valer, com os botões **Confirmar** e **Cancelar**. Exemplo: "Entendi: permitir o envio da branch da mesa para a classe Dev, permanente. Confirma?", seguido da ordem original, sem alteração ("Sua ordem: ...").
    - Mensagens ambíguas: o Grão-Mestre pergunta antes de propor.
    - Ordens vindas de **áudio** sempre passam por essa confirmação, com o texto transcrito à vista ([transcrição](anexos-e-transcricao.md)). O mesmo vale para aprovações dadas por áudio.
 4. Se for preciso, o motor pede a **confirmação reforçada** (abaixo).

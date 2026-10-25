@@ -3,6 +3,7 @@ package guild_test
 import (
 	"context"
 	"errors"
+	"net"
 	"slices"
 	"strings"
 	"testing"
@@ -193,6 +194,12 @@ func TestTheOwnerAcceptsAnEntryThroughTheButtonAndThePINAndNothingIsIssuedWithou
 	}
 	if !slices.Equal(got.Motor.DNSNames, []string{"desktop-ana.local"}) || !slices.Equal(got.Guardian.DNSNames, []string{"desktop-ana.local"}) {
 		t.Errorf("certificate names = %v %v, want only desktop-ana.local (never mestre.local)", got.Motor.DNSNames, got.Guardian.DNSNames)
+	}
+	// the IP SAN of the entry request is in both certificates, and only it
+	for name, ips := range map[string][]net.IP{"motor": got.Motor.IPAddresses, "guardian": got.Guardian.IPAddresses} {
+		if len(ips) != 1 || !ips[0].Equal(net.ParseIP("192.168.1.20")) {
+			t.Errorf("%s certificate IPs = %v, want only 192.168.1.20", name, ips)
+		}
 	}
 	if ew.count("machines") != 2 || ew.count("machine_credentials") != 4 {
 		t.Errorf("registry: %d machines, %d credentials", ew.count("machines"), ew.count("machine_credentials"))

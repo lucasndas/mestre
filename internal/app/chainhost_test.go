@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/classes"
@@ -83,5 +85,57 @@ func TestTheAlertOfTheChainAboutAWorkspaceKeepsTheWorkspaceForTheHeader(t *testi
 	p := &plainTeller{}
 	if err := (chainOwnerAlerts{p}).Notify(t.Context(), "loja", "x"); err != nil || len(p.got) != 1 || p.got[0] != "[loja] x" {
 		t.Errorf("a teller with no workspaces: %v, %q", err, p.got)
+	}
+}
+
+// chanTeller hands each alert to the test over a channel: the production
+// callback sends the alert in its own goroutine.
+type chanTeller struct{ got chan string }
+
+func (c chanTeller) OwnerAlert(_ context.Context, text string) { c.got <- text }
+
+// ownerHearsOfThePolicyFile writes the content as the policy file of the
+// workspace "loja", reads it through the production policyFileFor and returns
+// the one message the Owner gets.
+func ownerHearsOfThePolicyFile(t *testing.T, content string) string {
+	t.Helper()
+	layout := workspaces.Layout{Root: filepath.Join(t.TempDir(), "workspaces")}
+	dir := filepath.Join(layout.Principal("loja"), ".mestre", "regras")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "politica-de-aprovacao.yaml"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tell := chanTeller{got: make(chan string, 4)}
+	pf := policyFileFor(layout, tell, nil)
+	if _, v, err := pf.Chain(t.Context(), "loja"); err != nil || v != "default" {
+		t.Fatalf("Chain = %q, %v; want the default content to hold", v, err)
+	}
+	if _, _, err := pf.Chain(t.Context(), "loja"); err != nil { // the same content is told once
+		t.Fatal(err)
+	}
+	msg := <-tell.got
+	if len(tell.got) != 0 {
+		t.Fatalf("the Owner got more than one message: %q and %d more", msg, len(tell.got))
+	}
+	if !strings.Contains(msg, "loja") || !strings.Contains(msg, "última versão válida") {
+		t.Fatalf("message = %q, want it to name the workspace and say the last valid version holds", msg)
+	}
+	return msg
+}
+
+// CA-APROV-POL-04 (the Owner is told, through the production path, of a file with a syntax error)
+func TestTheOwnerIsToldOfAPolicyFileWithASyntaxError(t *testing.T) {
+	t.Parallel()
+	ownerHearsOfThePolicyFile(t, "versao: 1\ncondicoes: [oops\n")
+}
+
+// CA-APROV-POL-16 (the Owner is told, through the production path, why the file is invalid)
+func TestTheOwnerIsToldWhyAPolicyFileThatLetsADestructiveActionBeDecidedAloneIsInvalid(t *testing.T) {
+	t.Parallel()
+	msg := ownerHearsOfThePolicyFile(t, "versao: 1\ntipos:\n  acao_destrutiva: { sozinho: se_condicoes }\n")
+	if !strings.Contains(msg, "acao_destrutiva") || !strings.Contains(msg, "risco alto não se decide sozinho") {
+		t.Fatalf("message = %q, want the reason: acao_destrutiva does not take sozinho", msg)
 	}
 }

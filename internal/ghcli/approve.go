@@ -103,6 +103,9 @@ func (h *Handlers) approve(ctx context.Context, c *localchan.Call) localchan.Res
 	if h.isLocked(ctx) {
 		return lockedResponse()
 	}
+	if bad := h.leaseHeld(); bad != nil {
+		return *bad
+	}
 	ap, err := h.Approver.Approve(ctx, approvals.ApproveOrder{Workspace: who.char.Workspace, Repo: who.repo, Number: n, SHA: read, Reason: github.StripMarkers(reason), OnBehalf: onBehalf})
 	var ref *chain.Refusal
 	switch {
@@ -213,6 +216,9 @@ func (h *Handlers) merge(ctx context.Context, c *localchan.Call) localchan.Respo
 	}
 	if h.isLocked(ctx) {
 		return lockedResponse()
+	}
+	if bad := h.leaseHeld(); bad != nil {
+		return *bad
 	}
 	res, err := mc.MergePull(ctx, who.repo, n, pr.HeadSHA, method)
 	switch {

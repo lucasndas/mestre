@@ -50,8 +50,12 @@ func TestANoteGoesOnALineOfTheDiffAtTheHeadOfThePR(t *testing.T) {
 		}
 	}
 	for _, bad := range []string{"src/login.ts:9", "src/login.ts:14", "src/login.ts:0", "README.md:1", "src/login.ts"} {
-		if got := r.run("tm", "pr note", nil, bad, "x"); got.OK || got.Exit != 2 {
-			t.Errorf("%s: %+v, want exit 2", bad, got)
+		before := len(r.gh.ReviewComments(repoFull, pr))
+		if got := r.run("tm", "pr note", nil, bad, "x"); got.OK || got.Exit != 2 || got.Code != "usage" {
+			t.Errorf("%s: %+v, want exit 2 usage", bad, got)
+		}
+		if after := len(r.gh.ReviewComments(repoFull, pr)); after != before {
+			t.Errorf("%s: a review comment was created (%d -> %d)", bad, before, after)
 		}
 	}
 }

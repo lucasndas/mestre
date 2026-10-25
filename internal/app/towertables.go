@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -395,23 +397,10 @@ var scrollRel = regexp.MustCompile(`^\.mestre/mesas/([A-Za-z0-9][A-Za-z0-9_.-]{0
 // machine, at the one path the scrolls use.
 func (e *Engine) registerTowerScrolls(router *protocol.Router) {
 	check := func(typ, dir, rel string, from protocol.Peer) error {
-		switch {
-		case !e.fromCitadel(from):
+		if !e.fromCitadel(from) {
 			return protocol.NewError(protocol.CodeForbidden, "%s: only the Citadel gives this command", typ)
-		case !scrollRel.MatchString(rel):
-			return protocol.NewError(protocol.CodeInvalidPayload, "%s: %q is not the path of the copy of a scroll", typ, rel)
 		}
-		if err := e.towerWorktree(dir); err != nil {
-			return protocol.NewError(protocol.CodeForbidden, "%s: %v", typ, err)
-		}
-		// the worktree of that very table: <workspaces>/<workspace>/mesas/<table>
-		table := scrollRel.FindStringSubmatch(rel)[1]
-		clean := filepath.Clean(dir)
-		if filepath.Base(clean) != table || filepath.Base(filepath.Dir(clean)) != "mesas" ||
-			filepath.Dir(filepath.Dir(filepath.Dir(clean))) != absWorkspaces(e.paths.Workspaces) {
-			return protocol.NewError(protocol.CodeForbidden, "%s: %q is not the worktree of the table %s", typ, dir, table)
-		}
-		return nil
+		return e.checkScrollDir(typ, dir, rel)
 	}
 	router.HandleFunc(protocol.TypeScrollPut, func(_ context.Context, m *protocol.Message) (*protocol.Reply, error) {
 		p, ok := m.Payload.(*protocol.ScrollPut)
@@ -439,6 +428,40 @@ func (e *Engine) registerTowerScrolls(router *protocol.Router) {
 		}
 		return nil, nil
 	})
+}
+
+// checkScrollDir says whether dir is the worktree of the table the scroll path
+// names, in the workspaces of this machine. Both sides of the comparison are the
+// real paths (links resolved, on Windows the case and the long names of the
+// disk), so a workspaces folder spelled another way than the disk has it does
+// not make the Tower refuse its own worktrees.
+func (e *Engine) checkScrollDir(typ, dir, rel string) error {
+	if !scrollRel.MatchString(rel) {
+		return protocol.NewError(protocol.CodeInvalidPayload, "%s: %q is not the path of the copy of a scroll", typ, rel)
+	}
+	if err := e.towerWorktree(dir); err != nil {
+		return protocol.NewError(protocol.CodeForbidden, "%s: %v", typ, err)
+	}
+	// the worktree of that very table: <workspaces>/<workspace>/mesas/<table>
+	table := scrollRel.FindStringSubmatch(rel)[1]
+	real, err := resolveExisting(filepath.Clean(dir))
+	if err != nil {
+		return protocol.NewError(protocol.CodeForbidden, "%s: %v", typ, err)
+	}
+	if filepath.Base(real) != table || filepath.Base(filepath.Dir(real)) != "mesas" ||
+		!samePath(filepath.Dir(filepath.Dir(filepath.Dir(real))), absWorkspaces(e.paths.Workspaces)) {
+		return protocol.NewError(protocol.CodeForbidden, "%s: %q is not the worktree of the table %s", typ, dir, table)
+	}
+	return nil
+}
+
+// samePath compares two real paths: the file systems of Windows do not tell
+// upper case from lower case.
+func samePath(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 func absWorkspaces(p string) string {

@@ -185,7 +185,7 @@ func (s *Service) Propose(ctx context.Context, p Proposal) (Pending, error) {
 	}); err != nil {
 		return Pending{}, err
 	}
-	return Pending{ID: id, Author: u.ID, PIN: why != "", Why: why, Text: confirmationText(p, s.Moment(ctx, p.Until)), Workspace: p.Workspace, Mesa: p.Mesa}, nil
+	return Pending{ID: id, Author: u.ID, PIN: why != "", Why: why, Text: confirmationText(p, s.Moment(ctx, p.Until)), Order: p.Text, Workspace: p.Workspace, Mesa: p.Mesa}, nil
 }
 
 // normalize fills what an exception implies.
