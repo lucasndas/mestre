@@ -15,7 +15,8 @@ import (
 )
 
 // WebBudget is the time of the web side of a suite, apart from the Go
-// budgets; the owner set it after the first measurements on the CI
+// budgets; the owner set it after the first measurements on the CI. It counts
+// only the execution of the tests, never the preparation of Vitest
 // (docs/qualidade/testes.md#executor-testrun).
 const WebBudget = 15 * time.Second
 
@@ -49,9 +50,11 @@ func (r *Runner) hasModules() bool {
 type vitestJSON struct {
 	NumFailedTests int `json:"numFailedTests"`
 	TestResults    []struct {
-		Name       string `json:"name"`
-		Message    string `json:"message"`
-		Status     string `json:"status"`
+		Name       string  `json:"name"`
+		Message    string  `json:"message"`
+		Status     string  `json:"status"`
+		StartTime  float64 `json:"startTime"`
+		EndTime    float64 `json:"endTime"`
 		Assertions []struct {
 			FullName string   `json:"fullName"`
 			Status   string   `json:"status"`
@@ -73,16 +76,27 @@ type webTest struct {
 
 // parseVitest reads the JSON of one run; the reporter prints it on standard
 // output among other lines, so it is cut from the first "{" to the last "}".
-func parseVitest(out []byte) (tests []webTest, suiteErrors []string, ok bool) {
+// exec is the wall time of the execution of the tests: from the first test
+// file starting to run its tests to the last one ending. Vitest stamps a file
+// when its tests start, after the transform of the code, the environment and
+// the setup files, so the preparation falls outside it.
+func parseVitest(out []byte) (tests []webTest, suiteErrors []string, exec time.Duration, ok bool) {
 	i, j := bytes.IndexByte(out, '{'), bytes.LastIndexByte(out, '}')
 	if i < 0 || j < i {
-		return nil, nil, false
+		return nil, nil, 0, false
 	}
 	var v vitestJSON
 	if json.Unmarshal(out[i:j+1], &v) != nil {
-		return nil, nil, false
+		return nil, nil, 0, false
 	}
+	var first, last float64
 	for _, f := range v.TestResults {
+		if f.StartTime > 0 && f.EndTime >= f.StartTime && len(f.Assertions) > 0 {
+			if first == 0 || f.StartTime < first {
+				first = f.StartTime
+			}
+			last = max(last, f.EndTime)
+		}
 		if f.Status == "failed" && len(f.Assertions) == 0 {
 			suiteErrors = append(suiteErrors, f.Name+": "+f.Message)
 		}
@@ -94,7 +108,7 @@ func parseVitest(out []byte) (tests []webTest, suiteErrors []string, ok bool) {
 			})
 		}
 	}
-	return tests, suiteErrors, true
+	return tests, suiteErrors, time.Duration((last - first) * float64(time.Millisecond)), true
 }
 
 // webQuarantine is the quarantine entries for the Vitest tests: each names a
@@ -187,12 +201,13 @@ func (r *Runner) RunWeb(ctx context.Context, s Suite, q []QuarantineEntry) int {
 	code := 0
 	byTest := map[string]*tally{}
 	var last []webTest
-	var vitestWall time.Duration
+	var vitestWall, vitestExec time.Duration
 	for run := 0; run < count; run++ {
 		t0 := r.Clock.Now()
 		c, report, err := r.runVitest(ctx, r.vitestArgs(r.Shuffle, q), nil)
 		vitestWall += clock.Since(r.Clock, t0)
-		tests, suiteErrs, ok := parseVitest(report)
+		tests, suiteErrs, exec, ok := parseVitest(report)
+		vitestExec += exec
 		switch {
 		case err != nil:
 			r.printf("testrun: vitest did not run: %v\n", err)
@@ -241,14 +256,21 @@ func (r *Runner) RunWeb(ctx context.Context, s Suite, q []QuarantineEntry) int {
 		}
 	}
 	wall := clock.Since(r.Clock, start)
+	// The budget counts the execution of the tests. Biome and tsc run while
+	// Vitest prepares, so they only count if one of them alone is slower than
+	// the budget of a run; each is on the info line.
+	measured := vitestExec
+	for _, c := range checks {
+		measured = max(measured, c.took)
+	}
 
 	r.reportWebMixed(byTest, count)
 	if count == 1 && !r.Race {
 		r.flagWebSlow(last)
 	}
 	budget := WebBudget * time.Duration(count)
-	if wall > budget {
-		r.printf("FAIL web side of %s took %v, budget %v. The %d slowest tests:\n", s.Name, wall.Round(time.Millisecond), budget, slowestShown)
+	if measured > budget {
+		r.printf("FAIL web side of %s took %v, budget %v. The %d slowest tests:\n", s.Name, measured.Round(time.Millisecond), budget, slowestShown)
 		sort.SliceStable(last, func(i, j int) bool { return last[i].Elapsed > last[j].Elapsed })
 		for i, t := range last {
 			if i == slowestShown {
@@ -258,8 +280,11 @@ func (r *Runner) RunWeb(ctx context.Context, s Suite, q []QuarantineEntry) int {
 		}
 		code = 1
 	}
+	prepare := max(vitestWall-vitestExec, 0)
+	r.printf("info: vitest prepare took %v, not counted in the budget (transform, environment, setup; whole run %v, total side by side %v)\n",
+		prepare.Round(time.Millisecond), vitestWall.Round(time.Millisecond), wall.Round(time.Millisecond))
 	var parts []string
-	parts = append(parts, fmt.Sprintf("vitest %v", vitestWall.Round(time.Millisecond)))
+	parts = append(parts, fmt.Sprintf("vitest tests %v", vitestExec.Round(time.Millisecond)))
 	for _, c := range checks {
 		parts = append(parts, fmt.Sprintf("%s %v", c.name, c.took.Round(time.Millisecond)))
 	}
@@ -268,7 +293,7 @@ func (r *Runner) RunWeb(ctx context.Context, s Suite, q []QuarantineEntry) int {
 	if code != 0 {
 		status = "FAIL"
 	}
-	r.printf("%s %s web: %d tests in %v (budget %v)\n", status, s.Name, len(last), wall.Round(time.Millisecond), budget)
+	r.printf("%s %s web: %d tests in %v (budget %v)\n", status, s.Name, len(last), measured.Round(time.Millisecond), budget)
 	return code
 }
 
@@ -366,7 +391,7 @@ func (r *Runner) AffectedWeb(ctx context.Context, q []QuarantineEntry) int {
 	}
 	start := r.Clock.Now()
 	c, report, err := r.runVitest(ctx, args, files)
-	tests, suiteErrs, ok := parseVitest(report)
+	tests, suiteErrs, _, ok := parseVitest(report)
 	code := 0
 	switch {
 	case err != nil:

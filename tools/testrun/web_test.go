@@ -27,8 +27,14 @@ func webFS(extra map[string]string) fstest.MapFS {
 // vitestReport is the JSON of the Vitest reporter for the given tests: each
 // "name:status:ms".
 func vitestReport(tests ...string) string {
+	return vitestReportSpan(0, tests...)
+}
+
+// vitestReportSpan is vitestReport with the tests running for span ms between
+// the start and the end of the file (the sum of the tests when span is 0).
+func vitestReportSpan(span int, tests ...string) string {
 	var as []string
-	failed := 0
+	failed, sum := 0, 0
 	for _, t := range tests {
 		parts := strings.Split(t, ":")
 		name, status := parts[0], parts[1]
@@ -36,6 +42,7 @@ func vitestReport(tests ...string) string {
 		if err != nil {
 			panic(err)
 		}
+		sum += ms
 		msgs := "[]"
 		if status == "failed" {
 			failed++
@@ -43,9 +50,12 @@ func vitestReport(tests ...string) string {
 		}
 		as = append(as, fmt.Sprintf(`{"fullName":%q,"status":%q,"duration":%d,"failureMessages":%s}`, name, status, ms, msgs))
 	}
+	if span == 0 {
+		span = sum
+	}
 	return fmt.Sprintf(`some noise
-{"numFailedTests":%d,"testResults":[{"name":"/w/src/a.test.ts","status":"passed","assertionResults":[%s]}]}
-`, failed, strings.Join(as, ","))
+{"numFailedTests":%d,"startTime":1000,"testResults":[{"name":"/w/src/a.test.ts","status":"passed","startTime":5000,"endTime":%d,"assertionResults":[%s]}]}
+`, failed, 5000+span, strings.Join(as, ","))
 }
 
 func isNpx(c Cmd, tool string) bool {
@@ -85,7 +95,7 @@ func TestWebSideRunsVitestBiomeAndTscSideBySide(t *testing.T) {
 			t.Errorf("%q: calls %v", want, calls)
 		}
 	}
-	if !strings.Contains(out.String(), "PASS fast web: 1 tests in 3s (budget 15s)") || len(ex.callsMatching("tool test2json")) != 1 {
+	if !strings.Contains(out.String(), "PASS fast web: 1 tests in 5ms (budget 15s)") || len(ex.callsMatching("tool test2json")) != 1 {
 		t.Fatalf("output:\n%s", out)
 	}
 
@@ -155,17 +165,23 @@ func TestWebSideHasItsOwnBudgetAndTheGoOnesStay(t *testing.T) {
 	if WebBudget != 15*time.Second || Suites["fast"].Budget != 36*time.Second || Suites["full"].Budget != 216*time.Second {
 		t.Fatalf("budgets: web %v, fast %v, full %v", WebBudget, Suites["fast"].Budget, Suites["full"].Budget)
 	}
-	run := func(vitest time.Duration) (int, string) {
+	run := func(wall time.Duration, execMs int) (int, string) {
 		clk := clock.NewFake(today)
-		ex := webExec(clk, vitest, func() string { return vitestReport("a:passed:300", "b:passed:20") })
+		ex := webExec(clk, wall, func() string { return vitestReportSpan(execMs, "a:passed:300", "b:passed:20") })
 		r, out := newRunner(webFS(nil), clk, ex)
 		return r.RunSuite(context.Background(), Suites["fast"]), out.String()
 	}
-	// Go takes 20 s (under its 36 s) and the web side 14 s (under 15 s).
-	if code, text := run(14 * time.Second); code != 0 || !strings.Contains(text, "PASS fast web") || !strings.Contains(text, "slow: 1 web test(s)") {
+	// Go takes 20 s (under its 36 s) and the tests 14 s (under 15 s).
+	if code, text := run(15*time.Second, 14000); code != 0 || !strings.Contains(text, "PASS fast web") || !strings.Contains(text, "slow: 1 web test(s)") {
 		t.Fatalf("exit %d:\n%s", code, text)
 	}
-	code, text := run(16 * time.Second)
+	// The preparation does not count: 40 s in all, 14 s of them in the tests.
+	code, text := run(40*time.Second, 14000)
+	if code != 0 || !strings.Contains(text, "vitest prepare took 26s, not counted in the budget") || !strings.Contains(text, "PASS fast web: 2 tests in 14s (budget 15s)") {
+		t.Fatalf("exit %d:\n%s", code, text)
+	}
+	// The execution does: 16 s in the tests fail even with a short preparation.
+	code, text = run(17*time.Second, 16000)
 	if code != 1 || !strings.Contains(text, "FAIL web side of fast took 16s, budget 15s. The 10 slowest tests:") || !strings.Contains(text, "a") {
 		t.Fatalf("exit %d:\n%s", code, text)
 	}
