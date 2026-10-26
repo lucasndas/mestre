@@ -15,6 +15,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/guild"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/basesync"
+	"github.com/mestre-ia/mestre/internal/orchestration/canvas"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/connections"
@@ -261,6 +262,8 @@ type Orchestration struct {
 	EpicDeps *epicdeps.Service
 	// Registry is the registry of the characters of the Guild.
 	Registry characters.Registry
+	// Presets gives the sheets of the machines (the badge of the canvas).
+	Presets characters.Presets
 	// Observers are told of every change of state of a character, in the
 	// order the document asks: the inbox first, then the waits, then the
 	// tables.
@@ -676,7 +679,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	}
 	obs := characters.Observers{ib, wt, tbl, questsRef{&qs}, chainRef{&ch}, ritualsRef{&rit}}
 	chars, err = characters.NewService(characters.ServiceOptions{Registry: reg, Clock: o.Clock, Presets: o.Presets, Tables: tbl, Machines: o.Machines, Builder: o.Builder,
-		Notifier: ib, Scrolls: scr, Inbox: ib, Usage: o.Usage, Connections: conns, Observer: obs, Limits: o.Limits,
+		Notifier: ib, Scrolls: scr, Inbox: ib, Usage: o.Usage, Connections: conns, Canvas: canvasPlacer{canvas.Store{DB: o.Guild, Clock: o.Clock}}, Observer: obs, Limits: o.Limits,
 		Ceiling: ceilingOf(o.Ceiling, o.ClassLibraries), Operator: o.Operator, Settings: o.Settings, Classes: classCheck(o.ClassLibraries), ScrollCopies: scrollsRef{&scr}, Logger: o.Logger,
 		Brief:      &grandMasterBrief{reg: reg, tables: tables.Store{DB: o.Guild}, inbox: &inbox.Store{DB: o.Guild}, waits: &waits.Store{DB: o.Guild}, chain: &chain.Store{DB: o.Guild}},
 		TableBrief: &tableMasterBrief{reg: reg, quests: &quests.Store{DB: o.Guild}, inbox: &inbox.Store{DB: o.Guild}, waits: &waits.Store{DB: o.Guild}}})
@@ -795,6 +798,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	}
 	orc.Usage = us
 	orc.Registry = reg
+	orc.Presets = o.Presets
 	orc.Quests = qs
 	orc.Chain = ch
 	orc.Supervisor = sup

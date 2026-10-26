@@ -78,3 +78,33 @@ test("the Owner registers a user and sees the code of first access", async ({ pa
   await page.getByRole("button", { name: "Já anotei" }).click();
   await expect(page.getByTestId("shown-once")).toHaveCount(0);
 });
+
+// The canvas step of the smoke: the table of the engine double is drawn with its
+// characters, the machine badge, the mission arrow with its number, the wait and the
+// scroll with its Markdown, and the terminal of the character whose agent is the fake one.
+test("the canvas of a table draws its nodes and the terminal of a character", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Nome de login").fill("maria");
+  await page.getByLabel("Senha").fill("uma senha bem longa");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page.getByRole("heading", { name: "Sua Guilda está pronta" })).toBeVisible();
+  await page.goto("/workspaces/e2e/mesas/mesa-e2e");
+  const canvas = page.getByRole("region", { name: "Canvas da mesa mesa-e2e" });
+  await expect(canvas).toBeVisible();
+  const dev = canvas.getByRole("article", { name: "Personagem Dev-1" });
+  await expect(dev).toBeVisible();
+  await expect(dev.getByText("Máquina e2e")).toBeVisible();
+  await expect(dev.getByRole("status")).toHaveText("ocupado");
+  await expect(canvas.getByRole("article", { name: "Personagem Revisor" })).toBeAttached();
+  await expect(canvas.getByRole("article", { name: "Pergaminho Plano" })).toBeAttached();
+  // the terminal of Dev-1 is the real one, over the socket
+  await expect(dev.getByRole("region", { name: "Terminal de Dev-1" })).toBeVisible();
+  await expect(dev.locator(".xterm")).toBeVisible();
+  // the lines: the number of the step of the mission (the arrow into step 2, highlighted because step 1 is under way) and the reason of the wait
+  await expect(canvas.locator('[data-edge-kind="step"]')).toHaveText("2");
+  await expect(canvas.locator('[data-edge-kind="step"]')).toHaveAttribute("data-current", "true");
+  await expect(canvas.locator('[data-edge-kind="wait"]')).toHaveText("aguardando Dev-1");
+  // an action goes to the engine and the canvas shows its answer: pin Dev-1
+  await dev.getByRole("button", { name: "Fixar Dev-1" }).click();
+  await expect(dev.getByRole("button", { name: "Desafixar Dev-1" })).toBeVisible();
+});

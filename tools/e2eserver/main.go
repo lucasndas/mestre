@@ -133,7 +133,7 @@ func runWith(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, o r
 		// the real integration, with no bot (no token in the vault) and GitHub
 		// pointed at a closed port: no network is ever used
 		HostOrchestration: true, Integration: app.StandardIntegration{GitHubBase: "http://127.0.0.1:1", GitHubWeb: "http://127.0.0.1:1", TelegramBase: "http://127.0.0.1:1"},
-		PanelAssets: panel.Assets(), PanelTerminals: terms,
+		PanelAssets: panel.Assets(), PanelTerminals: terms, PanelCanvas: newFakeCanvas(),
 	}
 	e, err := app.New(cfg, paths, deps)
 	if err != nil {

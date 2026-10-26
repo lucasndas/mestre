@@ -375,3 +375,61 @@ func (s *Service) Forget(ctx context.Context, ref Ref) error {
 	_, err := s.store.RemoveNode(ctx, ref)
 	return err
 }
+
+// ConnectByUser makes a manual connection as a user does at the canvas, by
+// dragging one element onto another. Only the Owner and the Administrators do
+// it; the two ends must be in the table, and the Grand Master is never one of
+// them. The reason is manual, by the user.
+func (s *Service) ConnectByUser(ctx context.Context, by User, workspace, table string, a, b Ref) (ConnectResult, error) {
+	if by.Level != characters.LevelOwner && by.Level != characters.LevelAdministrator {
+		return ConnectResult{}, ErrLevelDenied
+	}
+	if a == b {
+		return ConnectResult{}, ErrSame
+	}
+	for _, x := range []Ref{a, b} {
+		if err := s.inTable(ctx, workspace, table, x); err != nil {
+			return ConnectResult{}, err
+		}
+	}
+	res, err := s.add(ctx, workspace, table, a, b, ReasonManual, by.ID)
+	if err != nil {
+		return ConnectResult{}, err
+	}
+	return ConnectResult{Connection: res.Connection, AlreadyConnected: res.Existed}, nil
+}
+
+// inTable checks that the end is a living character, a scroll or a tome of the
+// table.
+func (s *Service) inTable(ctx context.Context, workspace, table string, x Ref) error {
+	switch x.Kind {
+	case KindCharacter:
+		c, err := s.o.Registry.Get(ctx, x.ID)
+		switch {
+		case errors.Is(err, characters.ErrNoCharacter), err == nil && !c.State.Alive():
+			return notFound(x.ID)
+		case err != nil:
+			return err
+		case c.Role == characters.RoleGrandMaster:
+			return ErrGrandMaster
+		case c.Workspace != workspace || c.Table != table:
+			return fmt.Errorf("%w: %s", ErrDifferentTables, c.Name)
+		}
+		return nil
+	case KindScroll, KindTome:
+		if s.o.Scrolls == nil {
+			return notFound(x.ID)
+		}
+		sc, ok, err := s.o.Scrolls.Get(ctx, x)
+		switch {
+		case err != nil:
+			return err
+		case !ok:
+			return notFound(x.ID)
+		case sc.Table != table:
+			return fmt.Errorf("%w: %s", ErrDifferentTables, sc.Name)
+		}
+		return nil
+	}
+	return notFound(x.ID)
+}

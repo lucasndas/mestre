@@ -252,6 +252,23 @@ func (h *Hub) PublishFrame(topic string, frame []byte) {
 	}
 }
 
+// Topics lists the topics of the kind ("canvas") that some socket follows now.
+func (h *Hub) Topics(kind string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, c := range h.snapshot() {
+		c.mu.Lock()
+		for t := range c.topics {
+			if k, _, _ := strings.Cut(t, ":"); k == kind && !seen[t] {
+				seen[t] = true
+				out = append(out, t)
+			}
+		}
+		c.mu.Unlock()
+	}
+	return out
+}
+
 // Subscribers is how many sockets follow the topic.
 func (h *Hub) Subscribers(topic string) int {
 	n := 0

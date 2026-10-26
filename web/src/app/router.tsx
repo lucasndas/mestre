@@ -24,6 +24,7 @@ import { Overview } from "../screens/Overview";
 import { Password } from "../screens/Password";
 import { Sessions } from "../screens/Sessions";
 import { Setup } from "../screens/Setup";
+import { TableScreen } from "../screens/TableScreen";
 import { Shell } from "./Shell";
 
 export interface RouterContext {
@@ -153,6 +154,16 @@ const terminalRoute = createRoute({
   },
 });
 
+// The canvas of a table (docs/painel/canvas.md); the notices of the panel link here
+const tableRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/workspaces/$workspace/mesas/$table",
+  component: function TablePage() {
+    const { workspace, table } = tableRoute.useParams();
+    return <TableScreen workspace={workspace} table={table} />;
+  },
+});
+
 // The screens before the login go to the panel when there is a session already.
 async function leaveIfSignedIn(qc: QueryClient) {
   if (await sessionOrNull(qc)) throw redirect({ to: "/" });
@@ -207,6 +218,7 @@ const routeTree = rootRoute.addChildren([
     terminalRoute,
     approvalsRoute,
     approvalHistoryRoute,
+    tableRoute,
   ]),
   loginRoute,
   firstAccessRoute,

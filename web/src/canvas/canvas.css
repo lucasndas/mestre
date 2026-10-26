@@ -1,0 +1,55 @@
+/* React Flow wears the tokens of the panel (docs/painel/design.md): paper, ink and the brick accent. */
+.react-flow {
+  --xy-background-color: var(--color-paper);
+  --xy-node-border-radius: var(--radius-field);
+  --xy-controls-button-background-color: var(--color-surface);
+  --xy-controls-button-background-color-hover: var(--color-accent-wash);
+  --xy-controls-button-color: var(--color-ink);
+  --xy-controls-button-border-color: var(--color-line);
+  --xy-minimap-background-color: var(--color-surface);
+  --xy-minimap-mask-background-color: rgb(42 33 24 / 0.12);
+  --xy-selection-background-color: rgb(138 59 30 / 0.08);
+  --xy-selection-border: 1px dotted var(--color-accent);
+  --xy-edge-label-background-color: var(--color-surface);
+  --xy-attribution-background-color: rgb(251 246 234 / 0.8);
+  font-family: var(--font-body);
+}
+.react-flow__controls-button {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+.react-flow__node-group,
+.react-flow__node {
+  /* the node draws its own border and shadow */
+  border: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+.canvas-handle {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-accent);
+  background: var(--color-surface);
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--color-accent);
+}
+/* the Markdown editor of a scroll */
+.md-editor .cm-editor {
+  height: 100%;
+  background: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+.md-editor .cm-editor.cm-focused {
+  outline: 2px solid var(--color-accent);
+}
+.md-editor .cm-content {
+  caret-color: var(--color-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__edge-path {
+    animation: none;
+  }
+}

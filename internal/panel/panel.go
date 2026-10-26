@@ -87,6 +87,9 @@ type Panel struct {
 	handler http.Handler
 	// terminals are the terminals of the Guild (SetTerminals).
 	terminals atomic.Pointer[terminalHolder]
+	stopWatch context.CancelFunc
+	// canvas is the engine of the tables for the canvas (SetCanvas).
+	canvas atomic.Pointer[canvasHolder]
 	// slots bound the argon2 hashes at once: each takes 64 MiB, and the routes
 	// that hash are open to anybody
 	slots chan struct{}
@@ -127,6 +130,10 @@ func New(o Options) (*Panel, error) {
 	}, false))
 	mux.Handle("/", static(o.Assets))
 	p.handler = secure(mux)
+	// the canvas follows the commits from the start, so none is missed
+	watchCtx, stop := context.WithCancel(context.Background())
+	p.stopWatch = stop
+	go p.watchCanvas(watchCtx, p.db.LogWatch())
 	return p, nil
 }
 
@@ -157,6 +164,7 @@ func (p *Panel) Close() {
 	for _, stop := range p.stop {
 		stop()
 	}
+	p.stopWatch()
 	p.hub.closeAll()
 }
 

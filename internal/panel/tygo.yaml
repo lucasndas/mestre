@@ -14,3 +14,4 @@ packages:
       - types_admin.go
       - terminals_types.go
       - types_approvals.go
+      - types_canvas.go

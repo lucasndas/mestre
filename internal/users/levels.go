@@ -68,6 +68,7 @@ const (
 	Unlock               Capability = "unlock"                // /destravar (with PIN)
 	EndOperatorSession   Capability = "end_operator_session"  // /operador encerrar
 	TypeInTerminal       Capability = "type_in_terminal"      // from the canvas
+	EditCanvas           Capability = "edit_canvas"           // connections, missions, pins, scrolls, grimoires and rituals at the canvas
 	CreateWorkspace      Capability = "create_workspace"      //
 	ConfigureWorkspace   Capability = "configure_workspace"   //
 	ApproveWorkspaceCls  Capability = "approve_workspace_cls" // a class of the workspace
@@ -92,7 +93,7 @@ var minimum = map[Capability]Level{
 	Notifications: Observer, Status: Observer,
 	TalkToGrandMaster: Approver, DecideApprovals: Approver, OneOffException: Approver, PauseButtons: Approver, ConnectOwnGitHub: Approver,
 	PermanentDecree: Administrator, Pause: Administrator, RevokeTemporaryRules: Administrator, Lock: Administrator, EndOperatorSession: Administrator,
-	TypeInTerminal: Administrator, CreateWorkspace: Administrator, ConfigureWorkspace: Administrator, ApproveWorkspaceCls: Administrator,
+	TypeInTerminal: Administrator, EditCanvas: Administrator, CreateWorkspace: Administrator, ConfigureWorkspace: Administrator, ApproveWorkspaceCls: Administrator,
 	RaiseCeiling: Administrator, ApproveHealing: Administrator, ActivateClasses: Administrator, Transcription: Administrator,
 	Unlock: Owner, ManageUsers: Owner, ManageMachines: Owner, BasesVaultPolicy: Owner, GitHubApps: Owner, AccountProfiles: Owner,
 	OperatorActivation: Owner, DelegateHigh: Owner, GuildSettings: Owner, TransferOwner: Owner,

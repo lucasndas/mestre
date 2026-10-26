@@ -1,6 +1,7 @@
 import approvals from "./approvals";
 import audit from "./audit";
 import auth from "./auth";
+import canvas from "./canvas";
 import common from "./common";
 import errors from "./errors";
 import github from "./github";
@@ -22,4 +23,5 @@ export const ptBR = {
   github,
   errors,
   terminal,
+  canvas,
 } as const;

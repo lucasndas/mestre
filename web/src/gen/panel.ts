@@ -101,6 +101,14 @@ export const CodeTooManyStreams: Code = "too_many_streams";
  */
 export const CodeInternal: Code = "internal";
 /**
+ * CodeRefused: the engine refused an action of the canvas; params.reason says why.
+ */
+export const CodeRefused: Code = "refused";
+/**
+ * CodeConflict: the thing changed under the request (a scroll edited by somebody else).
+ */
+export const CodeConflict: Code = "conflict";
+/**
  * APIError is the body of every error of the API: {"error": {...}}.
  */
 export interface APIError {
@@ -983,6 +991,313 @@ export interface NoticeReadRequest {
  */
 export interface NoticesSnapshot {
   unread: number /* int */;
+}
+
+//////////
+// source: types_canvas.go
+
+/**
+ * EventChanged is the event of a canvas topic: something of the table changed.
+ */
+export const EventChanged = "changed";
+/**
+ * CanvasState is GET /api/workspaces/{ws}/tables/{table}/canvas.
+ */
+export interface CanvasState {
+  workspace: string;
+  table: string;
+  /**
+   * TableState is the state of the table (open, working, in_review…).
+   */
+  table_state: string;
+  characters: CanvasCharacter[];
+  scrolls: CanvasScroll[];
+  tomes: CanvasTome[];
+  connections: CanvasConnection[];
+  quests: CanvasQuest[];
+  waits: CanvasWait[];
+  /**
+   * Deadlocks are the cycles of waits, written "A → B → A".
+   */
+  deadlocks: CanvasDeadlock[];
+  /**
+   * Layout is where each element stands and the free groups.
+   */
+  layout: CanvasItem[];
+  /**
+   * CanEdit says the user may act on the canvas (the server checks again).
+   */
+  can_edit: boolean;
+}
+/**
+ * CanvasItem is the place of an element: its key is "<kind>:<id>" (a group is
+ * "group:<id>" with its Label). Sizes of 0 are the default size of the kind.
+ * Parent is the key of the group it sits in; X and Y are then relative to it.
+ */
+export interface CanvasItem {
+  key: string;
+  label?: string;
+  x: number /* float64 */;
+  y: number /* float64 */;
+  w?: number /* float64 */;
+  h?: number /* float64 */;
+  parent?: string;
+}
+/**
+ * CanvasCharacter is a character (or a simple terminal, with no class) of the table.
+ */
+export interface CanvasCharacter {
+  id: string;
+  name: string;
+  /**
+   * Kind is "character" or "terminal"; Role is the role in the table (character, table_master…).
+   */
+  kind: string;
+  role: string;
+  class?: string;
+  sheet?: string;
+  base?: string;
+  /**
+   * Machine is the id of the machine and MachineName the name its badge shows.
+   */
+  machine: string;
+  machine_name: string;
+  state: string;
+  reason?: string;
+  pinned: boolean;
+  /**
+   * Reduced is why its monitoring is reduced ("" when it is not).
+   */
+  reduced?: string;
+  /**
+   * Operator says it is the character of an Operator do PC session, and OperatorUntil when it ends.
+   */
+  operator?: boolean;
+  operator_until?: string;
+  /**
+   * HasTerminal says there is a terminal to show.
+   */
+  has_terminal: boolean;
+}
+/**
+ * CanvasScroll is a scroll with its content; Revision grows with each change.
+ */
+export interface CanvasScroll {
+  id: string;
+  name: string;
+  tome?: string;
+  content: string;
+  revision: number /* int64 */;
+  author?: string;
+}
+/**
+ * CanvasTome is a group of scrolls.
+ */
+export interface CanvasTome {
+  id: string;
+  name: string;
+  scrolls: number /* int */;
+}
+/**
+ * CanvasRef is the end of a connection: Kind is character, scroll or tome.
+ */
+export interface CanvasRef {
+  kind: string;
+  id: string;
+}
+/**
+ * CanvasConnection is a line between two ends, with the reasons that keep it.
+ */
+export interface CanvasConnection {
+  a: CanvasRef;
+  b: CanvasRef;
+  reasons: string[];
+  /**
+   * Manual says a user can remove it (it has the reason "manual").
+   */
+  manual: boolean;
+}
+/**
+ * CanvasQuest is a mission of the table with its steps, in order.
+ */
+export interface CanvasQuest {
+  id: string;
+  name: string;
+  state: string;
+  round: number /* int */;
+  /**
+   * Editable says the mission is a draft the canvas can still change.
+   */
+  editable: boolean;
+  steps: CanvasStep[];
+}
+/**
+ * CanvasStep is a step of a mission. Character is the id of who does it ("" while
+ * no character has it); Name is the name the definition gives to who does it.
+ */
+export interface CanvasStep {
+  id: string;
+  title: string;
+  state: string;
+  character?: string;
+  assignee?: string;
+  after?: string[];
+  /**
+   * ReturnTo is the step it may hand the work back to.
+   */
+  return_to?: string;
+  returns: number /* int */;
+  /**
+   * Current says it is the step in progress.
+   */
+  current: boolean;
+  /**
+   * Waiting is what holds the step before it starts, in words.
+   */
+  waiting?: string;
+}
+/**
+ * CanvasWait is a dashed line from who waits to what it waits for. Target is the
+ * id of a character of the table, or "" when it waits for something else
+ * (a time, an approval): the Reason says what.
+ */
+export interface CanvasWait {
+  id: string;
+  waiter: string;
+  target?: string;
+  kind: string;
+  reason: string;
+  /**
+   * Deadlock says the wait is part of a cycle.
+   */
+  deadlock: boolean;
+}
+/**
+ * CanvasDeadlock is a cycle of waits.
+ */
+export interface CanvasDeadlock {
+  text: string;
+}
+/**
+ * LayoutRequest is PUT /api/workspaces/{ws}/tables/{table}/canvas/layout: the
+ * elements that moved, were resized or grouped, and the keys to forget.
+ */
+export interface LayoutRequest {
+  items: CanvasItem[];
+  remove?: string[];
+}
+/**
+ * ConnectRequest is POST and DELETE .../canvas/connections.
+ */
+export interface ConnectRequest {
+  a: CanvasRef;
+  b: CanvasRef;
+}
+/**
+ * PinRequest is PUT .../canvas/characters/{id}/pin.
+ */
+export interface PinRequest {
+  pinned: boolean;
+}
+/**
+ * ScrollWriteRequest is PUT .../canvas/scrolls/{id}: the new content, written over
+ * the revision Base; a scroll that is no longer at Base is a conflict.
+ */
+export interface ScrollWriteRequest {
+  content: string;
+  base: number /* int64 */;
+}
+/**
+ * QuestRequest is POST .../canvas/quests (a new mission, as a draft) and PUT
+ * .../canvas/quests/{id} (the steps of a draft, replaced).
+ */
+export interface QuestRequest {
+  name: string;
+  steps: QuestStepDrawn[];
+  run?: boolean;
+}
+/**
+ * QuestStepDrawn is a step drawn on the canvas: the character that does it (its
+ * name) and the ids of the steps it comes after.
+ */
+export interface QuestStepDrawn {
+  id: string;
+  name?: string;
+  character: string;
+  after?: string[];
+  instructions?: string;
+  can_return_to?: string;
+}
+/**
+ * GrimoireSaveRequest is POST .../canvas/grimoires: the selection saved as a team.
+ */
+export interface GrimoireSaveRequest {
+  name: string;
+  selection: CanvasItem[];
+  quests?: string[];
+  structure_only?: boolean;
+  replace?: boolean;
+}
+/**
+ * GrimoireInfo is a saved grimoire as the list shows it.
+ */
+export interface GrimoireInfo {
+  name: string;
+  author: string;
+  workspace: string;
+  table: string;
+  saved_at: string;
+  characters: number /* int */;
+  scrolls: number /* int */;
+  tomes: number /* int */;
+  connections: number /* int */;
+  quests: number /* int */;
+}
+/**
+ * GrimoireRestoreRequest is POST .../canvas/grimoires/restore: Confirm false only
+ * plans, and the answer lists what would be made and renamed.
+ */
+export interface GrimoireRestoreRequest {
+  name: string;
+  confirm: boolean;
+  choices?: { [key: string]: string};
+}
+/**
+ * GrimoirePlan is what restoring a grimoire makes (and, when Done, what it made).
+ */
+export interface GrimoirePlan {
+  name: string;
+  renamed: string[];
+  /**
+   * Choose are the classes the destination does not have: the user decides
+   * for each (copy, map or cancel).
+   */
+  choose: string[];
+  /**
+   * Failed is what could not be made, with the reason.
+   */
+  failed?: string[];
+  done: boolean;
+}
+/**
+ * RitualInfo is a ritual of the table.
+ */
+export interface RitualInfo {
+  id: string;
+  name: string;
+  target: string;
+  action: string;
+  content: string;
+  schedule: string;
+  enabled: boolean;
+  next_run?: string;
+}
+/**
+ * RitualEditRequest is PUT .../canvas/rituals/{id}: nil keeps the field.
+ */
+export interface RitualEditRequest {
+  enabled?: boolean;
+  content?: string;
 }
 
 //////////
