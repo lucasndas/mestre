@@ -1,7 +1,10 @@
 # CI of the repository: the fast and full suites on Linux and Windows, in
 # parallel, required by the ruleset of main (docs/desenvolvimento/ambiente.md
-# and docs/qualidade/testes.md). Both jobs build and vet with cgo off, like
-# the release builds. A pull request that changes only documents runs the
+# and docs/qualidade/testes.md). The `test` jobs run the Go side only and need
+# no Node; the `web` jobs run the web side (Vitest, Biome, tsc, the build) and
+# always run, because a required check that is skipped blocks the merge queue;
+# `e2e` smoke-tests the bundle `web` built, in a real browser. The `test` jobs
+# build and vet with cgo off, like the release builds. A pull request that changes only documents runs the
 # document checks and the tests that read documents. The race detector
 # (budgets times 3) runs in its own job, in parallel with the tests and with a
 # cache of its own, on the batches of the merge queue, on the pushes to main
@@ -203,11 +206,11 @@ jobs:
 
       - name: Fast suite
         if: env.CODE == 'true'
-        run: go run ./tools/testrun fast
+        run: go run ./tools/testrun fast -only go
 
       - name: Full suite
         if: env.CODE == 'true'
-        run: go run ./tools/testrun full
+        run: go run ./tools/testrun full -only go
 
       # Only main's runs save: a cache saved on the temporary branch of a
       # batch of the merge queue is seen by no other branch.
@@ -220,6 +223,127 @@ jobs:
             ${{ runner.temp }}/go-mod
             ${{ runner.temp }}/golangci-lint
           key: ci-${{ runner.os }}-${{ env.GOLANGCI_LINT_VERSION }}-${{ hashFiles('go.sum', '.golangci.yml') }}-${{ github.sha }}
+
+  # The web side of the fast suite (docs/qualidade/testes.md#executor-testrun)
+  # and the production build, on both systems. No path filter: it runs on every
+  # change, so the required check always exists. Needs no Go cache: the runner
+  # is a small program.
+  web:
+    name: web (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - name: No real-time scan (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # The version is the one of web/.nvmrc and engines (Node 26).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install the packages
+        working-directory: web
+        run: npm ci
+
+      # Vitest, Biome and tsc side by side, inside the 15 s budget of the web
+      # side; the Go side does not run here.
+      - name: Web side of the fast suite
+        run: go run ./tools/testrun fast -only web
+
+      - name: Build the bundle
+        working-directory: web
+        run: npm run build
+
+      # One bundle is enough for the smoke tests: the build is the same on
+      # both systems.
+      - name: Upload the bundle
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-dist
+          path: internal/panel/webdist/
+          if-no-files-found: error
+          retention-days: 3
+
+  # Smoke test of the panel in a real browser (headless Chromium), on the
+  # bundle of the `web` job. The time of the job is measured, not limited
+  # (docs/qualidade/testes.md#smoke-do-painel).
+  e2e:
+    name: e2e (${{ matrix.os }})
+    needs: web
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web-dist
+          path: internal/panel/webdist
+
+      - name: Install the packages
+        working-directory: web
+        run: npm ci
+
+      - name: Install Chromium (Linux)
+        if: runner.os == 'Linux'
+        working-directory: web
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: Install Chromium (Windows)
+        if: runner.os == 'Windows'
+        working-directory: web
+        run: npx --no-install playwright install chromium
+
+      - name: Smoke test
+        working-directory: web
+        run: |
+          start=$SECONDS
+          npm run e2e
+          took=$((SECONDS - start))
+          echo "e2e smoke test: ${took}s"
+          echo "### e2e smoke test (${{ matrix.os }}): ${took}s" >> "$GITHUB_STEP_SUMMARY"
 
   # The race detector (docs/qualidade/testes.md, step 9) in a job of its own:
   # off the path of the required checks, which are the jobs above. Its build

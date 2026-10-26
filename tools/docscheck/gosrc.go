@@ -136,6 +136,7 @@ func scanGo(fsys fs.FS) *goScan {
 	}
 	wg.Wait()
 	out := &goScan{}
+	out.markers = append(out.markers, scanWeb(fsys)...)
 	for i := range parts { // in path order: the same result on every run
 		out.markers = append(out.markers, parts[i].markers...)
 		out.comments = append(out.comments, parts[i].comments...)
@@ -283,4 +284,63 @@ func scanConfigRefs(fsys fs.FS) []docRef {
 		return nil
 	})
 	return append(out, scan.refs...)
+}
+
+// webTestRe is the file a marker may sit in: a Vitest test or an e2e spec of
+// the panel.
+var webTestRe = regexp.MustCompile(`\.(test|spec)\.tsx?$`)
+
+// webTestLineRe is the line a marker may sit above in TypeScript: a test,
+// a group of tests or a subtest.
+var webTestLineRe = regexp.MustCompile(`^(test|it|describe)(\.\w+)*\(`)
+
+// scanWeb reads the `// CA-…` markers of the tests of the panel (web/**/*.test.ts(x)
+// and the e2e specs), without node_modules and the generated types. The
+// e2e specs run a real browser: the suite is the pesada.
+func scanWeb(fsys fs.FS) []codeMarker {
+	var out []codeMarker
+	_ = fs.WalkDir(fsys, "web", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil //nolint:nilerr // no web/ folder, or an unreadable entry
+		}
+		if d.IsDir() {
+			if d.Name() == "node_modules" || d.Name() == "gen" || d.Name() == "dist" {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !webTestRe.MatchString(p) {
+			return nil
+		}
+		src, err := fs.ReadFile(fsys, p)
+		if err != nil {
+			return nil //nolint:nilerr // unreadable files are skipped
+		}
+		suite := "rápida"
+		if strings.HasPrefix(p, "web/e2e/") {
+			suite = "pesada"
+		}
+		lines := strings.Split(string(src), "\n")
+		for i, l := range lines {
+			l = strings.TrimSpace(l)
+			if !strings.HasPrefix(l, "//") {
+				continue
+			}
+			if m := markerRe.FindStringSubmatch(strings.TrimSpace(strings.TrimPrefix(l, "//"))); m != nil {
+				out = append(out, codeMarker{ID: m[1], File: p, Line: i + 1, Test: true, Suite: suite, Placed: aboveATSTest(lines, i+1)})
+			}
+		}
+		return nil
+	})
+	return out
+}
+
+// aboveATSTest is aboveATest for TypeScript: the comment lines that follow
+// end right above a test, `describe(` or `it(`.
+func aboveATSTest(lines []string, line int) bool {
+	i := line
+	for i < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[i]), "//") {
+		i++
+	}
+	return i < len(lines) && webTestLineRe.MatchString(strings.TrimSpace(lines[i]))
 }

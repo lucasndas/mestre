@@ -76,11 +76,26 @@ jobs:
       - name: Warm the build cache
         run: go test -run '^$' ./...
 
+      # The web side too: Vitest shuffled five times, with the same "mixed:"
+      # lines. It is a separate step, so a Go failure does not hide it.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install the packages
+        working-directory: web
+        run: npm ci
+
       - name: Run the fast suite five times, shuffled
         run: |
           set +e
-          go run ./tools/testrun fast -count 5 -shuffle 2>&1 | tee hunt.log
+          go run ./tools/testrun fast -count 5 -shuffle -only go 2>&1 | tee hunt.log
           code=${PIPESTATUS[0]}
+          go run ./tools/testrun fast -count 5 -shuffle -only web 2>&1 | tee -a hunt.log
+          web=${PIPESTATUS[0]}
+          [ "$code" -ne 0 ] || code=$web
           mkdir -p flaky
           grep '^mixed: ' hunt.log > "flaky/${{ matrix.os }}.txt" || true
           exit "$code"

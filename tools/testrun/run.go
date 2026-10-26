@@ -80,11 +80,6 @@ const (
 	timeoutNum, timeoutDen = 3, 2
 )
 
-// VitestMsg is printed when web/ exists: the runner does not drive Vitest yet.
-const VitestMsg = "testrun: web/ found, but Vitest support is deferred to M6 (it still lacks the quarantine exclude, " +
-	"shuffle and count, the slow-test flag and retry: 0; docs/qualidade/testes.md#executor-testrun). " +
-	"Run the panel tests by hand until then."
-
 // Runner runs the suites.
 type Runner struct {
 	Exec      Exec
@@ -96,6 +91,9 @@ type Runner struct {
 	Shuffle   bool
 	Race      bool      // go test -race, with the budget times RaceFactor
 	Stdin     io.Reader // the changed files of `prepush`, one per line
+	// Remove deletes a file relative to the root (the Vitest reports); nil keeps it.
+	Remove func(path string) error
+	Only   string // "go" or "web": run one side only ("" runs both)
 
 	// Getenv reads the CI variables (GITHUB_STEP_SUMMARY); nil reads none.
 	Getenv func(string) string
@@ -155,15 +153,28 @@ func goTimeout(s Suite, runs int) string {
 
 // RunSuite runs fast, full or heavy and returns the exit code.
 func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
-	if r.hasWeb() {
-		r.printf("%s\n", VitestMsg)
-		return 2
-	}
 	quarantine, err := loadQuarantine(r.FS)
 	if err != nil {
 		r.printf("testrun: %v\n", err)
 		return 2
 	}
+	if r.Only == OnlyWeb && !r.hasWeb() {
+		r.printf("testrun: --only web, but there is no web/package.json\n")
+		return 2
+	}
+	code := 0
+	if r.wantGo() {
+		code = r.runGo(ctx, s, quarantine)
+	}
+	// The heavy suite has no web side: the browser tests run in the e2e job.
+	if s.Name != "heavy" && r.wantWeb() {
+		code = max(code, r.RunWeb(ctx, s, quarantine))
+	}
+	return code
+}
+
+// runGo is the Go side of a suite.
+func (r *Runner) runGo(ctx context.Context, s Suite, quarantine []QuarantineEntry) int {
 	count := r.count()
 	args := []string{"test", "-json", fmt.Sprintf("-count=%d", count)}
 	if r.Shuffle {
@@ -178,7 +189,7 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	if to := goTimeout(s, r.runs()); to != "" {
 		args = append(args, "-timeout", to)
 	}
-	if p := skipPattern(quarantine); p != "" {
+	if p := skipPattern(goQuarantine(quarantine)); p != "" {
 		args = append(args, "-skip", p)
 	}
 	args = append(args, "./...")
@@ -411,15 +422,26 @@ func (r *Runner) recordHeavy(start time.Time, wall time.Duration) {
 // Affected runs only what the changes may have broken
 // (docs/qualidade/testes.md#testes-afetados). It honours the quarantine.
 func (r *Runner) Affected(ctx context.Context) int {
-	if r.hasWeb() {
-		r.printf("%s\n", VitestMsg)
-		return 2
-	}
 	quarantine, err := loadQuarantine(r.FS)
 	if err != nil {
 		r.printf("testrun: %v\n", err)
 		return 2
 	}
+	if r.Only == OnlyWeb && !r.hasWeb() {
+		r.printf("testrun: --only web, but there is no web/package.json\n")
+		return 2
+	}
+	code := 0
+	if r.wantGo() {
+		code = r.affectedGo(ctx, goQuarantine(quarantine))
+	}
+	if r.wantWeb() {
+		code = max(code, r.AffectedWeb(ctx, quarantine))
+	}
+	return code
+}
+
+func (r *Runner) affectedGo(ctx context.Context, quarantine []QuarantineEntry) int {
 	args := []string{"test", "-json", "-timeout", goTimeout(Suites["fast"], 1)}
 	if p := skipPattern(quarantine); p != "" {
 		args = append(args, "-skip", p)
@@ -449,6 +471,10 @@ func (r *Runner) Quarantine(ctx context.Context) int {
 		r.printf("testrun: %v\n", err)
 		return 2
 	}
+	if wq := webQuarantine(q); len(wq) > 0 {
+		r.printf("quarantine: %d web entr(ies) are not re-run here; the nightly flaky hunt (`fast -count 5 -shuffle`) covers them\n", len(wq))
+	}
+	q = goQuarantine(q)
 	if len(q) == 0 {
 		r.printf("quarantine is empty\n")
 		return 0

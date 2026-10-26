@@ -58,7 +58,7 @@ docs/                esta documentação
 - **Guardião isolado:** `guardian/` só importa a biblioteca padrão, `pkg/clock` e as dependências permitidas: `golang.org/x/sys`, `golang.org/x/crypto` (argon2id do login e do PIN da página reserva), `kardianos/service`, `coder/websocket`, `go-systemd`, `aead.dev/minisign` (verificação no `apply-update`) e `brutella/dnssd` (mDNS). O protocolo motor ↔ Guardião mora em `guardian/protocol`, que o motor importa (nunca o contrário). Regra verificada pelo linter (`depguard`). Binários, subcomandos e portas: [componentes](../arquitetura/componentes.md).
 - **Dependências escolhidas:** mDNS e DNS-SD com `github.com/brutella/dnssd` (consulta em toda máquina, anúncio de reserva no Guardião de máquina Windows); minisign com `aead.dev/minisign`; emulador de terminal com `github.com/charmbracelet/x/vt` ([terminal](../arquitetura/terminal.md)); git pelo binário do sistema, na versão mínima do ADR 0001, só por `internal/gitx`, nunca por biblioteca Go (worktrees, bundles e `info/exclude` precisam de fidelidade total), sempre com ambiente controlado (sem configuração do usuário nem do sistema, sem hooks, sem prompts, mensagens em inglês, a configuração do repositório impedida de rodar comandos), credenciais só pelo `gitx.Auth`, no ambiente do processo e nunca na URL nem nos argumentos ([git do motor](../arquitetura/seguranca.md#git-do-motor)), e as operações que mudam o repositório em série por repositório ([ADR 0004](../decisoes/0004-mesa-igual-worktree.md)); YAML (quarentena, roteiros do agente falso, `permissions.yaml`) com `go.yaml.in/yaml/v3` (MIT e Apache 2.0, o fork mantido do `gopkg.in/yaml.v3`). O resto da stack está no [ADR 0001](../decisoes/0001-stack-go.md).
 - **Código por sistema:** um código só para os dois sistemas sempre que der; o que muda vai em arquivos `_linux.go` e `_windows.go` atrás de uma interface, e o resto compila nos dois. No `terminal`, só três coisas são por sistema: iniciar o processo como `mestre-agente`, matar a árvore (`cgroup.kill` ou Job Object) e identificar um processo pelo horário de início ([terminal](../arquitetura/terminal.md#mestre-pty)).
-- **Painel embutido:** o build do painel vai para `internal/panel/webdist/` (fora do git, exceto um arquivo marcador para o `go build` funcionar sem o build do painel). Em desenvolvimento, o servidor do Vite encaminha a API para um `mestre run` local, Cidadela de uma Guilda de teste.
+- **Painel embutido:** o build do painel vai para `internal/panel/webdist/` (fora do git, exceto um arquivo marcador para o `go build` funcionar sem o build do painel). O build de release terá de construir `web/` (`npm ci` e `vite build`) antes do `go build`; é trabalho do M7, ainda não feito. O Vite escreve nessa pasta sem apagar o marcador. Em desenvolvimento, o servidor do Vite encaminha a API para um `mestre run` local, Cidadela de uma Guilda de teste.
 
 ## Idioma
 
@@ -99,7 +99,7 @@ Exceções herdadas, mantidas como estão: identificadores de protocolo, variáv
 - Sem estado global; dependências passadas por construtor. Interfaces pequenas, declaradas por quem as usa.
 
 **TypeScript**
-- `strict: true`; ESLint e Prettier com a configuração do repositório; componentes React em função; testes com Vitest.
+- TypeScript 7 com `strict: true`; Biome (lint e formato) e `tsc --noEmit`, no lugar de ESLint e Prettier ([ADR 0027](../decisoes/0027-pilha-do-painel.md)); componentes React em função; testes com Vitest, sem `setTimeout`, `setInterval` nem `Date` (regra do Biome). Versões exatas, `package-lock.json` no git.
 
 ## Código gerado
 

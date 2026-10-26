@@ -20,8 +20,8 @@ const QuarantineDays = 14
 // QuarantineEntry is one quarantined test. Test is the top-level Go test
 // name, as used by `go test -skip`.
 type QuarantineEntry struct {
-	Test   string `yaml:"test"`
-	Suite  string `yaml:"suite"` // fast, full (default) or heavy: the build tags `testrun quarantine` runs it with
+	Test   string `yaml:"test"`  // for suite web: a Vitest test file, relative to web/
+	Suite  string `yaml:"suite"` // fast, full (default), heavy: the build tags `testrun quarantine` runs it with; web: a Vitest file
 	Issue  string `yaml:"issue"`
 	Added  string `yaml:"added"` // AAAA-MM-DD
 	Reason string `yaml:"reason"`
@@ -48,10 +48,17 @@ func loadQuarantine(fsys fs.FS) ([]QuarantineEntry, error) {
 	}
 	for i, e := range f.Tests {
 		switch {
+		case e.Suite == webSuite:
+			if e.Test == "" || strings.ContainsAny(e.Test, `\ `) || strings.HasPrefix(e.Test, "/") {
+				return nil, fmt.Errorf("%s: entry %d: web test %q is not a file path relative to web/, with slashes", QuarantinePath, i+1, e.Test)
+			}
+			if e.Issue == "" || e.Reason == "" {
+				return nil, fmt.Errorf("%s: entry %d (%s): issue and reason are required", QuarantinePath, i+1, e.Test)
+			}
 		case !topLevelTestRe.MatchString(e.Test):
 			return nil, fmt.Errorf("%s: entry %d: test %q is not a top-level Go test name", QuarantinePath, i+1, e.Test)
 		case e.Suite != "" && Suites[e.Suite].Name == "":
-			return nil, fmt.Errorf("%s: entry %d (%s): suite %q is not fast, full or heavy", QuarantinePath, i+1, e.Test, e.Suite)
+			return nil, fmt.Errorf("%s: entry %d (%s): suite %q is not fast, full, heavy or web", QuarantinePath, i+1, e.Test, e.Suite)
 		case e.Issue == "" || e.Reason == "":
 			return nil, fmt.Errorf("%s: entry %d (%s): issue and reason are required", QuarantinePath, i+1, e.Test)
 		}

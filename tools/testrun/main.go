@@ -1,7 +1,7 @@
 // Command testrun runs the test suites and measures them
 // (docs/qualidade/testes.md#executor-testrun):
 //
-//	go run ./tools/testrun fast|full|heavy|affected|quarantine [-count n] [-shuffle] [-race]
+//	go run ./tools/testrun fast|full|heavy|affected|quarantine [-count n] [-shuffle] [-race] [-only go|web]
 //	go run ./tools/testrun prepush < changed-files.txt
 package main
 
@@ -25,7 +25,7 @@ func main() {
 
 func run(args []string, out io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(out, "usage: go run ./tools/testrun fast|full|heavy|affected|quarantine|prepush [-count n] [-shuffle] [-race]")
+		fmt.Fprintln(out, "usage: go run ./tools/testrun fast|full|heavy|affected|quarantine|prepush [-count n] [-shuffle] [-race] [-only go|web]")
 		return 2
 	}
 	mode := args[0]
@@ -33,8 +33,13 @@ func run(args []string, out io.Writer) int {
 	fl.SetOutput(out)
 	count := fl.Int("count", 1, "go test -count (the nightly flaky hunt uses 5)")
 	shuffle := fl.Bool("shuffle", false, "go test -shuffle=on")
+	only := fl.String("only", "", "run one side only: go or web (the CI jobs and the pre-commit hook use it)")
 	race := fl.Bool("race", false, "go test -race, with the budget times 3 (fast, full and heavy)")
 	if err := fl.Parse(args[1:]); err != nil {
+		return 2
+	}
+	if *only != "" && *only != OnlyGo && *only != OnlyWeb {
+		fmt.Fprintf(out, "testrun: -only %q is not go or web\n", *only)
 		return 2
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -46,7 +51,8 @@ func run(args []string, out io.Writer) int {
 	}
 	r := &Runner{
 		Exec: osExec{root: root}, Clock: clock.Real{}, FS: os.DirFS(root), Out: out,
-		Count: *count, Shuffle: *shuffle, Race: *race, Stdin: os.Stdin, Getenv: os.Getenv, AppendFile: appendFile,
+		Count: *count, Shuffle: *shuffle, Race: *race, Only: *only, Stdin: os.Stdin, Getenv: os.Getenv, AppendFile: appendFile,
+		Remove: func(p string) error { return os.Remove(filepath.Join(root, filepath.FromSlash(p))) },
 		WriteFile: func(p string, data []byte) error {
 			full := filepath.Join(root, filepath.FromSlash(p))
 			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {

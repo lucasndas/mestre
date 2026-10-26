@@ -43,10 +43,6 @@ type pkgInfo struct {
 // one per line, from the pre-push hook. It honours the quarantine and has no
 // budget of its own: it prints the time.
 func (r *Runner) Prepush(ctx context.Context) int {
-	if r.hasWeb() {
-		r.printf("%s\n", VitestMsg)
-		return 2
-	}
 	files := r.changedFiles()
 	var relevant []string
 	for _, f := range files {

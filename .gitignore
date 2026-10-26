@@ -1,2 +1,10 @@
 # testrun: local history of heavy-suite timings (docs/qualidade/testes.md)
 /.testrun/
+
+# The panel bundle built by `vite build` (web/); .gitkeep keeps the folder for
+# the go:embed pattern (docs/desenvolvimento/convencoes.md).
+/internal/panel/webdist/*
+!/internal/panel/webdist/.gitkeep
+/web/node_modules/
+/web/test-results/
+/web/.vitest/

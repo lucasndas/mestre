@@ -252,30 +252,6 @@ func TestEscapeWorkflowCommands(t *testing.T) {
 }
 
 // CA-TESTES-06
-// Vitest is deferred to M6: with a web/ folder the runner says so and runs nothing.
-func TestVitestIsRefusedUntilM6(t *testing.T) {
-	t.Parallel()
-	for _, mode := range []string{"suite", "affected"} {
-		t.Run(mode, func(t *testing.T) {
-			t.Parallel()
-			ex := &fakeExec{handle: func(Cmd, io.Writer) int { return 0 }}
-			r, out := newRunner(fstest.MapFS{"web/package.json": {Data: []byte("{}")}}, clock.NewFake(today), ex)
-			var code int
-			if mode == "suite" {
-				code = r.RunSuite(context.Background(), Suites["fast"])
-			} else {
-				code = r.Affected(context.Background())
-			}
-			if code != 2 || !strings.Contains(out.String(), "Vitest support is deferred to M6") {
-				t.Fatalf("code %d:\n%s", code, out)
-			}
-			if len(ex.calls) != 0 {
-				t.Fatalf("commands ran: %v", ex.calls)
-			}
-		})
-	}
-}
-
 // The quarantine applies to `affected` too.
 func TestAffectedSkipsTheQuarantine(t *testing.T) {
 	t.Parallel()

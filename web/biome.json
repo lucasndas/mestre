@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": false },
+  "files": { "includes": ["**", "!node_modules", "!src/gen"] },
+  "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "correctness": {
+        "useExhaustiveDependencies": "error",
+        "useHookAtTopLevel": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "e2e/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "setTimeout": "No sleeping in tests: use vi.useFakeTimers() and advance the clock (docs/qualidade/testes.md).",
+                  "setInterval": "No sleeping in tests: use vi.useFakeTimers() and advance the clock (docs/qualidade/testes.md).",
+                  "Date": "Tests do not read the real clock: use vi.useFakeTimers() and vi.setSystemTime()."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

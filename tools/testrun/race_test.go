@@ -5,7 +5,6 @@ import (
 	"io"
 	"strings"
 	"testing"
-	"testing/fstest"
 	"time"
 
 	"github.com/mestre-ia/mestre/pkg/clock"
@@ -178,15 +177,6 @@ func TestPrepushRunsTheChangedPackagesAndTheirDependents(t *testing.T) {
 		}
 		if !strings.Contains(text, "in 42s (tags full)") {
 			t.Fatalf("a failing push does not print the time:\n%s", text)
-		}
-	})
-	t.Run("the panel is not supported yet", func(t *testing.T) {
-		t.Parallel()
-		ex := &fakeExec{handle: func(Cmd, io.Writer) int { return 0 }}
-		r, out := newRunner(fstest.MapFS{"web/package.json": {}}, clock.NewFake(today), ex)
-		r.Stdin = strings.NewReader("internal/a/a.go\n")
-		if code := r.Prepush(context.Background()); code != 2 || !strings.Contains(out.String(), "M6") {
-			t.Fatalf("exit %d:\n%s", code, out)
 		}
 	})
 }

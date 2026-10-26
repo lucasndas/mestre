@@ -1,6 +1,6 @@
 # Escopo do MVP
 
-> **Assunto:** o que é o MVP, o ambiente e os 16 critérios globais de aceite · **Componente:** Projeto · **Atualizado:** 2026-10-18
+> **Assunto:** o que é o MVP, o ambiente e os 16 critérios globais de aceite · **Componente:** Projeto · **Atualizado:** 2026-10-26
 
 ## O que é o MVP
 
@@ -11,7 +11,7 @@ O MVP é a especificação original mais as decisões do usuário registradas de
 - Linux: Ubuntu na versão LTS atual, registrada na instalação. Windows: 11 ou superior. Os dois conferidos pelo [checklist](../plataforma/checklist.md).
 - Rede local. Uma máquina de outra rede usa o endereço da Guilda configurado à mão ([descoberta](../conectividade/descoberta.md)).
 - Repositórios na conta pessoal do GitHub do Dono ([ADR 0015](../decisoes/0015-epico-como-rotulo.md)).
-- Sem interface gráfica além do painel no navegador; os agentes são de terminal.
+- Sem interface gráfica além do painel no navegador; os agentes são de terminal. O painel é bilíngue (pt-BR e en), por decisão do Dono em 2026-10-26 ([ADR 0028](../decisoes/0028-painel-bilingue-e-marco-m6-mais.md)).
 
 ## Critérios globais (MVP-1 a MVP-16)
 

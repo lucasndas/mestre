@@ -1,6 +1,6 @@
 # Decisões (ADRs)
 
-> **Assunto:** índice dos registros de decisão de arquitetura · **Componente:** Todos · **Atualizado:** 2026-10-18
+> **Assunto:** índice dos registros de decisão de arquitetura · **Componente:** Todos · **Atualizado:** 2026-10-26
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|
@@ -30,3 +30,5 @@
 | [0024-cadeia-de-aprovacao-por-risco.md](0024-cadeia-de-aprovacao-por-risco.md) | Risco de cada pedido dado pelo motor (baixo, médio, alto, fixo), cadeia do superior de quem pediu até as pessoas com teto de risco por nível, salvaguardas, respostas, regras temporárias de mesa, delegação, `default` ausente vale `ask`; revisão: sinais de risco, `medio` decidido na mesa com condições, Grão-Mestre supervisor, classe `orquestrador`; mantém a parte do GitHub do 0008 | Ao mexer em aprovações, na política, em delegação ou nos padrões das permissões |
 | [0025-padroes-seguem-os-provedores.md](0025-padroes-seguem-os-provedores.md) | O campo ausente numa classe vale o que a maioria dos provedores faz num terminal comum: `baixo` sem regra roda direto, escrita no worktree, internet, subagentes, commit e envio como pedido; as regras fixas não são padrões | Ao mexer nos padrões das permissões, no pipeline ou no reforço nativo |
 | [0026-mcp-por-classe.md](0026-mcp-por-classe.md) | A classe declara os servidores MCP de que precisa, de um catálogo do workspace aprovado por Administrador; o gateway do Mestre, único servidor que cada CLI conhece, entrega só esses, igual nos três provedores | Antes de mudar como um personagem recebe servidores MCP |
+| [0027-pilha-do-painel.md](0027-pilha-do-painel.md) | Vite 8, Vitest 5, Biome 2.6 e TypeScript 7 em Node 26, versões exatas, orçamento web de 15 s, jobs `web` e `e2e`, bibliotecas das próximas unidades | Ao mexer em `web/`, no CI ou nas ferramentas do painel |
+| [0028-painel-bilingue-e-marco-m6-mais.md](0028-painel-bilingue-e-marco-m6-mais.md) | Painel em pt-BR e en no M6; marco M6+ com recusas em código e parâmetros, Telegram e CLI traduzidos e Grão-Mestre no idioma do usuário | Ao escrever texto do painel ou mexer em mensagens ao usuário |
