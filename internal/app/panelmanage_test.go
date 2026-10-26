@@ -218,3 +218,35 @@ func TestTheAppCreatorMakesTheLinkAndTellsOnlyTheOwner(t *testing.T) {
 		t.Error("a creator without the creation says it is available")
 	}
 }
+
+// An Administrator of another workspace cannot reach the proposal of "loja" by leaving the
+// workspace empty: "" approves global proposals only.
+func TestAnEmptyWorkspaceApprovesOnlyGlobalProposals(t *testing.T) {
+	t.Parallel()
+	r := newClassRig(t)
+	other := r.cp.orc.Libraries("outra")
+	if other == nil {
+		t.Fatal("no library for the second workspace")
+	}
+	if _, err := r.cp.db.Writer().ExecContext(r.ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at) VALUES ('outra', 'o/outra', 'o/outra', 'u', 'main', 'active', 'done', 0, 0)`); err != nil {
+		t.Fatal(err)
+	}
+	res, err := r.lib.Save(r.ctx, classes.SaveRequest{Name: "qa", Scope: classes.ClassWorkspace, App: "novo", Files: panelPkg(t, "qa", "Teste."), By: classes.Author{Level: classes.LevelGrandMaster, ID: "gm-1"}})
+	if err != nil || res.Proposal == nil {
+		t.Fatalf("save = %+v, %v", res, err)
+	}
+	p := res.Proposal
+	for _, ws := range []string{"", "outra"} {
+		if err := r.cp.Approve(r.ctx, ws, p.ID, p.Hash, admin); !errors.Is(err, classes.ErrClassChanged) {
+			t.Fatalf("approve in workspace %q = %v, want it refused", ws, err)
+		}
+	}
+	if _, ok := r.listed(t, "qa"); ok {
+		if c, _ := r.listed(t, "qa"); c.State == "approved" {
+			t.Fatal("the proposal of loja was approved from another workspace")
+		}
+	}
+	if err := r.cp.Approve(r.ctx, "loja", p.ID, p.Hash, admin); err != nil {
+		t.Fatalf("approve in its own workspace: %v", err)
+	}
+}

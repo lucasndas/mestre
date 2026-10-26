@@ -144,7 +144,7 @@ func New(o Options) (*Panel, error) {
 		// the three pages of the creation of an App: the link, the return of the manifest
 		// and the return of the installation; they say who is logged in through the panel
 		web := &github.Web{Creation: o.Creation, Who: p.whoIs}
-		mux.Handle("/github/", web.Handler())
+		mux.Handle("/github/", continueCrossSite(web.Handler()))
 	}
 	mux.Handle("/api/", p.require(func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, Err(CodeNotFound, "não encontrado", nil))

@@ -1,9 +1,12 @@
 package panel
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
@@ -58,6 +61,15 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 			open[q.App] = q.Status
 		}
 	}
+	// the Owner sees every App; the others, the fixed ones and the ones installed on the
+	// repositories of the workspaces they act in, with only those repositories
+	list, all := actingIn(me)
+	mine, err := p.repoSet(ctx, list)
+	if err != nil {
+		p.log.Error("panel: the repositories of the workspaces", "err", err)
+		WriteError(w, errInternal())
+		return
+	}
 	for _, a := range apps {
 		repos, err := reg.Repos(ctx, a.Name)
 		if err != nil {
@@ -65,11 +77,33 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, errInternal())
 			return
 		}
+		if !all {
+			repos = slices.DeleteFunc(slices.Clone(repos), func(r string) bool { return !mine[strings.ToLower(r)] })
+			if a.Role == github.RoleClass && len(repos) == 0 {
+				continue
+			}
+		}
 		linkable := a.State == classes.AppAwaitingCreation || a.State == classes.AppExpired
 		page.Apps = append(page.Apps, AppRow{Name: a.Name, Slug: a.Slug, Role: a.Role, Class: a.Class, State: string(a.State), StateLabel: a.State.Label(),
 			Repos: orEmpty(repos), Request: open[a.Name], CanLink: owner && p.creation != nil && linkable})
 	}
 	WriteJSON(w, http.StatusOK, page)
+}
+
+// repoSet is the repositories (lower case) of the workspaces.
+func (p *Panel) repoSet(ctx context.Context, workspaces []string) (map[string]bool, error) {
+	out := map[string]bool{}
+	for _, ws := range workspaces {
+		var repo string
+		switch err := p.db.Reader().QueryRowContext(ctx, `SELECT repo FROM workspaces WHERE slug = ?`, ws).Scan(&repo); {
+		case errors.Is(err, sql.ErrNoRows):
+		case err != nil:
+			return nil, err
+		default:
+			out[strings.ToLower(repo)] = true
+		}
+	}
+	return out, nil
 }
 
 // appRequests are the latest request of each App that has not ended well: the link

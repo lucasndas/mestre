@@ -166,6 +166,14 @@ func (c classPanel) Approve(ctx context.Context, workspace string, proposal int6
 	if lib == nil {
 		return classes.ErrClassChanged
 	}
+	// the proposal must belong to the workspace the approver names ("" is the global classes
+	// only): the library looks an id up in its own workspace first, so without this a
+	// workspace left empty would reach the proposals of another
+	if _, ok, err := lib.Records.Proposal(ctx, workspace, proposal); err != nil {
+		return err
+	} else if !ok {
+		return classes.ErrClassChanged
+	}
 	return lib.Approve(ctx, proposal, hash, classes.Author{Level: classLevelOf(by.Level), ID: by.ID})
 }
 

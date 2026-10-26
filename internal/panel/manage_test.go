@@ -203,7 +203,7 @@ func TestOnlyTheOwnerOpensTheLinkOfCreationAndNoFormIsMadeForAnAdministrator(t *
 	if len(apps.Apps) != 1 || apps.Apps[0].StateLabel != "em criação" || len(apps.Requests) != 1 || apps.Requests[0].Status != "opened" || !apps.Apps[0].CanLink {
 		t.Fatalf("Apps for the Owner = %+v", apps)
 	}
-	if a := decodeInto[panel.AppsPage](t, m.call("GET", "/api/github/apps", nil, opts{cookie: adm})); len(a.Requests) != 0 || a.Apps[0].CanLink || a.Count.Total != 1 {
+	if a := decodeInto[panel.AppsPage](t, m.call("GET", "/api/github/apps", nil, opts{cookie: adm})); len(a.Requests) != 0 || len(a.Apps) != 0 || a.Count.Total != 1 {
 		t.Fatalf("Apps for the Administrator = %+v", a)
 	}
 	if strings.Contains(m.auditText(), strings.TrimPrefix(path, "/github/apps/novo/")) {
@@ -347,4 +347,85 @@ func TestTheUsageScreenShowsTheTableAndTheCharactersWithGapsAndByWorkspace(t *te
 		t.Fatalf("Observer usage = %+v; want only loja, no accounts, no total of the day", ob)
 	}
 	m.wantErr(m.call("GET", "/api/usage?days=0", nil, opts{cookie: owner}), 400, panel.CodeBadRequest)
+}
+
+// Each user sees only what belongs to the workspaces they act in: an Administrator of "loja"
+// sees the fixed Apps with the repository of "loja" alone, and not the class App that is
+// installed only on another workspace's repository; the Owner sees everything.
+func TestTheAppsAreScopedToTheWorkspacesOfTheUser(t *testing.T) {
+	t.Parallel()
+	m := newManage(t)
+	if _, err := m.db.Writer().ExecContext(m.ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at) VALUES ('outra', 'o/outra', 'o/outra', 'u', 'main', 'active', 'done', 0, 0)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range []struct {
+		app   github.App
+		repos []string
+	}{
+		{github.App{Name: "mestre-grao-mestre", Role: github.RoleGrandMaster}, []string{"o/loja", "o/outra"}},
+		{github.App{Name: "mestre-dev", Role: github.RoleClass, Class: "dev"}, []string{"o/outra"}},
+		{github.App{Name: "mestre-qa", Role: github.RoleClass, Class: "qa"}, []string{"o/loja"}},
+	} {
+		if _, err := m.apps.Request(m.ctx, a.app); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.apps.Created(m.ctx, a.app.Name, a.app.Name, 1, "cid"); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.apps.Installed(m.ctx, a.app.Name, 1, a.repos); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, adm := m.member("Bruno", "bruno", users.Administrator) // acts in loja
+	names := func(p panel.AppsPage) map[string][]string {
+		out := map[string][]string{}
+		for _, a := range p.Apps {
+			out[a.Name] = a.Repos
+		}
+		return out
+	}
+	got := names(decodeInto[panel.AppsPage](t, m.call("GET", "/api/github/apps", nil, opts{cookie: adm})))
+	if len(got) != 2 || strings.Join(got["mestre-grao-mestre"], ",") != "o/loja" || strings.Join(got["mestre-qa"], ",") != "o/loja" {
+		t.Fatalf("Administrator sees %v; want the fixed App and mestre-qa, both only with o/loja", got)
+	}
+	if all := names(decodeInto[panel.AppsPage](t, m.call("GET", "/api/github/apps", nil, opts{cookie: m.ownerSession()}))); len(all) != 3 || len(all["mestre-grao-mestre"]) != 2 {
+		t.Fatalf("Owner sees %v", all)
+	}
+}
+
+// The session cookie is SameSite=Strict: the return of GitHub arrives without it. The panel
+// answers that request with a page that continues by itself and exchanges nothing; the same
+// address, now with the session, reaches the page of the return.
+func TestTheReturnOfGitHubWithoutTheCookieContinuesInThePanelAndExchangesNothing(t *testing.T) {
+	t.Parallel()
+	m := newManage(t)
+	owner := m.ownerSession()
+	get := func(path, cookie, site string) *httptest.ResponseRecorder {
+		req := m.request("GET", path, nil, opts{cookie: cookie})
+		if site != "" {
+			req.Header.Set("Sec-Fetch-Site", site)
+		}
+		rec := httptest.NewRecorder()
+		m.panel.ServeHTTP(rec, req)
+		return rec
+	}
+	for _, path := range []string{"/github/manifest/callback?code=c&state=s", "/github/apps/instalado?installation_id=7", "/github/apps/novo/abc"} {
+		w := get(path, "", "cross-site")
+		body := w.Body.String()
+		if w.Code != http.StatusOK || !strings.Contains(body, `http-equiv="refresh"`) || !strings.Contains(body, "Continuar") || strings.Contains(body, "<form") ||
+			!strings.Contains(w.Header().Get("Content-Security-Policy"), "default-src 'none'") || w.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("%s without the cookie: %d %v %s", path, w.Code, w.Header(), body)
+		}
+		// the second navigation starts in the panel: it is not continued again, and without a session it is refused
+		if again := get(path, "", "same-origin"); again.Code != http.StatusUnauthorized || strings.Contains(again.Body.String(), "refresh") {
+			t.Fatalf("%s again without the cookie: %d %s", path, again.Code, again.Body)
+		}
+		// with the session it reaches the page (an unknown return is refused by it, not continued)
+		if got := get(path, owner, "same-origin"); got.Code == http.StatusOK && strings.Contains(got.Body.String(), "refresh") || got.Code == http.StatusUnauthorized {
+			t.Fatalf("%s with the cookie: %d %s", path, got.Code, got.Body)
+		}
+	}
+	if w := get("/github/manifest/callback", "", "cross-site"); strings.Contains(w.Body.String(), "refresh") {
+		t.Error("a return with no code was continued")
+	}
 }
