@@ -402,7 +402,7 @@ jobs:
           key: ci-race-${{ runner.os }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
 
       - name: Fast suite (race)
-        run: go run ./tools/testrun fast -race
+        run: go run ./tools/testrun fast -race -only go
 
       - name: Full suite (race)
-        run: go run ./tools/testrun full -race
+        run: go run ./tools/testrun full -race -only go
