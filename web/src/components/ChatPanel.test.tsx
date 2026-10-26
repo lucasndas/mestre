@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { ChatConversation, ChatEntry, ChatOverview } from "../gen/panel";
 import { emit, installFakeSocket, openSocket } from "../test-socket";
-import { fakeServer, ME, renderApp } from "../test-utils";
+import { fakeServer, fill, ME, renderApp } from "../test-utils";
 
 beforeEach(() => installFakeSocket());
 afterEach(() => vi.unstubAllGlobals());
@@ -63,12 +63,6 @@ async function openPanel(user: ReturnType<typeof userEvent.setup>) {
   return screen.findByRole("complementary", { name: "Conversa com o Grão-Mestre" });
 }
 
-// paste is much cheaper than typing key by key
-async function fill(user: ReturnType<typeof userEvent.setup>, el: HTMLElement, text: string) {
-  await user.click(el);
-  await user.paste(text);
-}
-
 function online() {
   let s: ReturnType<typeof openSocket> | undefined;
   act(() => {
@@ -99,7 +93,7 @@ test("the panel shows the state, the history of both channels and the Markdown o
       }),
     ),
   );
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   online();
@@ -125,7 +119,7 @@ test("the panel shows the state, the history of both channels and the Markdown o
 // The input is off, with the reason, for the level that may not talk to the Grão-Mestre.
 test("a level that cannot talk sees the input off with the reason", async () => {
   fakeServer(base(conv({ can_talk: false })));
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   online();
@@ -150,7 +144,7 @@ test("a message is sent with its files, the field is cleared and the conversatio
       return { status: 201, body: { id: "in-9", held: false } };
     },
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   online();
@@ -179,7 +173,7 @@ test("a message is sent with its files, the field is cleared and the conversatio
 // A file over the limit is refused before the send, with the limit shown.
 test("a file over the limit is refused before sending, with the limit", async () => {
   const { calls } = fakeServer(base(conv({ limit: 10 })));
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   online();
@@ -199,7 +193,7 @@ test("a file over the limit is refused before sending, with the limit", async ()
 // With the WebSocket down, what is typed stays in the field and nothing is sent blind.
 test("with the channel down the typed message stays in the field and is not sent", async () => {
   const { calls } = fakeServer(base());
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   const send = () => within(panel).getByRole("button", { name: "Enviar" }) as HTMLButtonElement;
@@ -228,7 +222,7 @@ test("a refusal keeps what was typed and says why", async () => {
       body: { error: { code: "chat_blocked", message: "x", params: { minutes: 10 } } },
     }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   online();
@@ -255,7 +249,7 @@ test("with the system locked the send says it is kept until it is unlocked", asy
       return { status: 201, body: { id: "in-4", held: true } };
     },
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   online();
@@ -298,7 +292,7 @@ test("the unread answers are counted, shown as new and marked as read when the p
       return { status: 204 };
     },
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const toggle = await screen.findByRole("button", { name: "Conversa com o Grão-Mestre, 2 novas" });
   await user.click(toggle);
@@ -356,7 +350,7 @@ test("the question shows a button per option and the choice goes once", async ()
       return { status: 204 };
     },
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   online();
@@ -395,7 +389,7 @@ test("a second click on the same question is refused with the reason", async () 
       body: { error: { code: "chat_choice_answered", message: "x" } },
     }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   online();
@@ -415,7 +409,7 @@ test("the progress is one card at the top, updated in place", async () => {
     },
   });
   fakeServer({ ...base(c), "GET /api/chat/loja": () => ({ body: c }) });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   const sock = online();
@@ -432,7 +426,7 @@ test("the progress is one card at the top, updated in place", async () => {
 // The state of the Grão-Mestre follows the events, with no new read.
 test("the state at the top follows the events of the channel", async () => {
   const { calls } = fakeServer(base());
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   const sock = online();
@@ -466,7 +460,7 @@ test("replying to a message sends its id as the quote", async () => {
     ...base(c),
     "POST /api/chat/loja/messages": () => ({ status: 201, body: { id: "in-2", held: false } }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   online();
@@ -506,7 +500,7 @@ test("the files of the Grão-Mestre are downloads", async () => {
       }),
     ),
   );
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   const link = await within(panel).findByRole("link", { name: "Baixar plano.pdf" });
@@ -520,7 +514,7 @@ test("the files of the Grão-Mestre are downloads", async () => {
 
 test("the panel speaks English with the same screens", async () => {
   fakeServer(base(conv({ status: { state: "idle", ahead: 0, locked: false } })));
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/", "en");
   await user.click(
     await screen.findByRole("button", { name: "Open the chat with the Grand Master" }),
@@ -541,7 +535,7 @@ test("when the filter held the message the user is told to change the secret", a
       body: { id: "in-5", held: false, secret: "held" },
     }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const panel = await openPanel(user);
   online();

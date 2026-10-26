@@ -25,7 +25,7 @@ import (
 // workspace "loja").
 const (
 	fakeGrandMaster = "e2e-grao-mestre"
-	fakeWorkspace   = "loja"
+	chatWorkspace   = "loja"
 )
 
 type noFiles struct{}
@@ -62,7 +62,7 @@ func startFakeChat(ctx context.Context, guildDB, filesDir string, mask func(stri
 		return fail(err)
 	}
 	ib := &inbox.Store{DB: db}
-	gm := characters.Character{ID: fakeGrandMaster, Role: characters.RoleGrandMaster, Workspace: fakeWorkspace, State: characters.Idle}
+	gm := characters.Character{ID: fakeGrandMaster, Role: characters.RoleGrandMaster, Workspace: chatWorkspace, State: characters.Idle}
 	var svc *panelchat.Service
 	svc, err = panelchat.New(panelchat.Options{
 		DB: db, Clock: clk, Users: us, Inbox: ib, Mask: mask,
@@ -77,7 +77,7 @@ func startFakeChat(ctx context.Context, guildDB, filesDir string, mask func(stri
 			return it, nil
 		},
 		GrandMaster: func(_ context.Context, ws string) (characters.Character, bool, error) {
-			return gm, ws == fakeWorkspace, nil
+			return gm, ws == chatWorkspace, nil
 		},
 		Character: func(context.Context, string) (characters.Character, error) { return gm, nil },
 		Pending:   func(context.Context, string) (int, error) { return 0, nil },
