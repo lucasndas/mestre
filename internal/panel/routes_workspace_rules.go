@@ -88,16 +88,38 @@ func versionOf(b []byte) string {
 
 // readRule reads a file under the rules; a file that does not exist is (nil, nil).
 func readRule(path string, limit int64) ([]byte, error) {
-	data, _, err := safefile.Read(path, limit)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
+	data, _, err := readRuleInfo(path, limit)
 	return data, err
+}
+
+// readRuleInfo is readRule with the state of the file it read, for the guard of the write.
+func readRuleInfo(path string, limit int64) ([]byte, safefile.Info, error) {
+	data, info, err := safefile.Read(path, limit)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, safefile.Info{}, nil
+	}
+	return data, info, err
+}
+
+// errChangedOnDisk is what the guard of a write says: the file is not the one that was read.
+var errChangedOnDisk = errors.New("the file changed on disk since it was read")
+
+// unchangedSince stops the write when the file is not the version that was read, checked
+// right before the rename: an edit made by hand in between is never overwritten.
+func unchangedSince(read safefile.Info) safefile.Options {
+	return safefile.Options{Sync: true, Guard: func(cur safefile.Info) error {
+		if !cur.Same(read) {
+			return errChangedOnDisk
+		}
+		return nil
+	}}
 }
 
 // fileError answers for a file the engine does not touch or that is too large.
 func (p *Panel) fileError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, errChangedOnDisk):
+		WriteError(w, Err(CodeFileChanged, "o arquivo mudou desde que você o abriu; abra de novo", nil))
 	case errors.Is(err, safefile.ErrTooLarge):
 		WriteError(w, Err(CodeTooLarge, "o arquivo é maior do que o limite", nil))
 	case safefile.Refused(err):
@@ -287,7 +309,7 @@ func (p *Panel) handleSavePolicy(w http.ResponseWriter, r *http.Request) {
 	path := filepath.Join(dir, policyFile)
 	fileMu.Lock()
 	defer fileMu.Unlock()
-	current, err := readRule(path, chain.MaxPolicyBytes)
+	current, read, err := readRuleInfo(path, chain.MaxPolicyBytes)
 	if err != nil {
 		p.fileError(w, err)
 		return
@@ -299,7 +321,7 @@ func (p *Panel) handleSavePolicy(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, Err(CodeFileChanged, "o arquivo mudou desde que você o abriu; abra de novo", nil))
 		return
 	}
-	if err := safefile.Write(path, data, safefile.Options{Sync: true}); err != nil {
+	if err := safefile.Write(path, data, unchangedSince(read)); err != nil {
 		p.fileError(w, err)
 		return
 	}
@@ -362,12 +384,12 @@ func (p *Panel) handleSaveInstructions(w http.ResponseWriter, r *http.Request) {
 	path := filepath.Join(dir, "instrucoes", name)
 	fileMu.Lock()
 	defer fileMu.Unlock()
-	before, err := readRule(path, maxInstructions)
+	before, read, err := readRuleInfo(path, maxInstructions)
 	if err != nil {
 		p.fileError(w, err)
 		return
 	}
-	if err := safefile.Write(path, []byte(in.Text), safefile.Options{Sync: true}); err != nil {
+	if err := safefile.Write(path, []byte(in.Text), unchangedSince(read)); err != nil {
 		p.fileError(w, err)
 		return
 	}

@@ -141,8 +141,12 @@ func (f *fakeEngine) ResumeAutonomy(_ context.Context, r chain.PauseRequest) (bo
 		return false, chain.ErrLevelDenied
 	}
 	k := r.Workspace + "/" + r.Table
-	if _, ok := f.pauses[k]; !ok {
+	p, ok := f.pauses[k]
+	if !ok {
 		return false, nil
+	}
+	if r.RefuseCharacterPause && p.Kind == "character" {
+		return false, chain.ErrCharacterPause
 	}
 	delete(f.pauses, k)
 	return true, nil

@@ -125,15 +125,14 @@ func (p *Panel) handlePause(pause bool) http.HandlerFunc {
 			return
 		}
 		req := chain.PauseRequest{Workspace: ws, Table: table, Reason: reason,
-			By: chain.Actor{User: me.ID, UserLevel: characters.UserLevel(me.Level)}}
-		before, paused, err := b.PauseOf(ctx, ws, table)
+			By: chain.Actor{User: me.ID, UserLevel: characters.UserLevel(me.Level)},
+			// the pause of the Grand Master is resumed by the Grand Master alone; the
+			// supervisor checks it under its lock, so a pause that changes hands cannot slip by
+			RefuseCharacterPause: true}
+		before, _, err := b.PauseOf(ctx, ws, table)
 		if err != nil {
 			p.log.Error("panel: reading the pause of a table", "err", err)
 			WriteError(w, errInternal())
-			return
-		}
-		if !pause && paused && before.Kind == "character" {
-			WriteError(w, Err(CodeGrandMasterOnly, "a pausa do Grão-Mestre só ele retoma", nil))
 			return
 		}
 		var changed bool
@@ -144,6 +143,9 @@ func (p *Panel) handlePause(pause bool) http.HandlerFunc {
 		}
 		switch {
 		case err == nil:
+		case errors.Is(err, chain.ErrCharacterPause):
+			WriteError(w, Err(CodeGrandMasterOnly, "a pausa do Grão-Mestre só ele retoma", nil))
+			return
 		case errors.Is(err, chain.ErrLevelDenied):
 			WriteError(w, Err(CodeForbiddenLevel, "ação não permitida a este nível", nil))
 			return

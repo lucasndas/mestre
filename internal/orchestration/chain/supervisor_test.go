@@ -1,6 +1,7 @@
 package chain_test
 
 import (
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"slices"
@@ -497,3 +498,34 @@ func TestAnAccumulatingQueueWarnsWhoIsAboveOnceUntilItGoesBackBelowTheLimits(t *
 func person(level characters.UserLevel) chain.Actor {
 	return chain.Actor{User: "u-" + string(level), UserLevel: level}
 }
+
+// A panel resume that refuses the pause of the Grão-Mestre checks it under the lock that
+// reads the pause: the Approver does not resume it, the Grão-Mestre does, and without the
+// option the Approver still can (the Telegram path).
+func TestAResumeThatRefusesTheGrandMastersPauseLeavesItInPlace(t *testing.T) {
+	t.Parallel()
+	w := newSup(t)
+	approver := chain.Actor{User: "u-approver", UserLevel: characters.LevelApprover}
+	if _, err := w.pause(w.gmActor(), w.table.ID, "muitas falhas"); err != nil {
+		t.Fatal(err)
+	}
+	req := chain.PauseRequest{Workspace: w.slug, Table: w.table.ID, Reason: "voltem", By: approver, RefuseCharacterPause: true}
+	if changed, err := w.supervisor.ResumeAutonomy(w.ctx, req); !errors.Is(err, chain.ErrCharacterPause) || changed {
+		t.Fatalf("resume = %v, %v, want ErrCharacterPause", changed, err)
+	}
+	if paused, _ := w.supervisor.AutonomyPaused(w.ctx, w.slug, w.table.ID); !paused {
+		t.Fatal("the refused resume ended the pause")
+	}
+	req.By, req.Reason = chain.Actor{Character: ptr(w.get(w.gm.ID))}, "ok"
+	if changed, err := w.supervisor.ResumeAutonomy(w.ctx, req); err != nil || !changed {
+		t.Fatalf("the Grão-Mestre resume = %v, %v", changed, err)
+	}
+	if _, err := w.pause(w.gmActor(), w.table.ID, "de novo"); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := w.resume(approver, w.table.ID, "telegram"); err != nil || !changed {
+		t.Fatalf("an Approver resume without the option = %v, %v", changed, err)
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
