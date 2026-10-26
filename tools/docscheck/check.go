@@ -56,6 +56,7 @@ const (
 	warnLines      = 150
 	docsDir        = "docs"
 	glossaryPath   = "docs/produto/glossario.md"
+	glossaryENPath = "docs/produto/glossario-en.md"
 	orderPath      = "docs/desenvolvimento/ordem-de-implementacao.md"
 	orderMapHeader = "Mapa de documentos por marco e etapa"
 	adrDir         = "docs/decisoes"
@@ -517,8 +518,23 @@ func (c *checker) checkGlossary() {
 	if d == nil {
 		return
 	}
-	_, problems := glossary.Parse(bytes.NewReader([]byte(strings.Join(d.lines, "\n"))))
+	terms, problems := glossary.Parse(bytes.NewReader([]byte(strings.Join(d.lines, "\n"))))
 	for _, p := range problems {
 		c.errf(glossaryPath, p.Line, ckGlossary, "%s", p.Msg)
+	}
+	en := c.docs[glossaryENPath]
+	if en == nil {
+		c.errf(glossaryPath, 1, ckGlossary, "falta %s, a versão em inglês dos termos", glossaryENPath)
+		return
+	}
+	rows, enProblems := glossary.ParseEnglish(bytes.NewReader([]byte(strings.Join(en.lines, "\n"))))
+	for _, p := range enProblems {
+		c.errf(glossaryENPath, p.Line, ckGlossary, "%s", p.Msg)
+	}
+	if len(problems) == 0 && len(enProblems) == 0 {
+		_, pairing := glossary.Combine(terms, rows)
+		for _, p := range pairing {
+			c.errf(glossaryENPath, p.Line, ckGlossary, "%s", p.Msg)
+		}
 	}
 }
