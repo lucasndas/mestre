@@ -22,6 +22,9 @@ export default {
   not_found: "Não encontrado.",
   unknown_topic: "Assunto desconhecido.",
   unavailable: "A Cidadela não está disponível agora. Tente em instantes.",
+  permission_prompt:
+    "O agente espera a sua decisão numa tela de permissão. Responda pela aprovação, não pelo teclado do terminal.",
+  too_many_streams: "Há terminais demais abertos nesta conta. Feche algum e tente de novo.",
   internal: "Algo deu errado na Cidadela. Tente de novo.",
   mismatch_password: "As duas senhas não são iguais.",
   mismatch_pin: "Os dois PINs não são iguais.",

@@ -45,7 +45,7 @@ Mostrar, em tempo real, tudo o que acontece numa mesa: o Mestre da mesa, a party
 - Só **Administrador ou acima** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)). Para os outros, o terminal é só leitura (cursor oculto, sem foco de teclado).
 - A digitação vai ao PTY pelo motor da máquina, sem passar pela caixa de entrada ([digitação](../arquitetura/terminal.md#digitação)). Antes de liberar o teclado num personagem ocupado, o painel mostra o aviso "o agente está trabalhando".
 - Cada sessão de digitação fica na auditoria (`panel.terminal_typing_started` e `panel.terminal_typing_ended`): usuário, personagem, início e fim (o conteúdo digitado não é guardado na auditoria; ele já está no log do terminal). A sessão começa na primeira entrada aceita e termina em "Parar de digitar", ao sair do terminal ou ao fechar o socket; uma entrada recusada também a encerra e vai à auditoria (`panel.terminal_input_refused`, sem o conteúdo).
-- O servidor confere o nível de novo a cada mensagem de entrada; o bloqueio no navegador é só conveniência.
+- O servidor confere o nível de novo a cada mensagem de entrada; o bloqueio no navegador é só conveniência. Personagem parado numa tela nativa de permissão não recebe teclas (`permission_prompt`): a decisão vai pela aprovação ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). As respostas automáticas do xterm.js às perguntas do programa (posição do cursor, atributos, cores) nunca vão como digitação. Cada usuário segue no máximo 16 terminais ao mesmo tempo (`too_many_streams`), e quem perde o workspace do terminal tem as sessões encerradas, como numa mudança de nível.
 
 ### Ações no canvas
 

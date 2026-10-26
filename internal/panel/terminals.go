@@ -25,6 +25,8 @@ var (
 	ErrNoTerminal = errors.New("panel: no such terminal")
 	// ErrNoSignal: the machine of the terminal cannot be reached now.
 	ErrNoSignal = errors.New("panel: the machine of the terminal has no signal")
+	// ErrPermissionPrompt: the agent waits on a permission prompt, which keys do not answer.
+	ErrPermissionPrompt = errors.New("panel: the agent waits on a permission prompt")
 )
 
 // Terminal size the panel draws when the source does not say: the default of
@@ -83,11 +85,15 @@ func (p *Panel) terminalSource() TerminalSource {
 
 func init() { RegisterArea("terminals", mountTerminals) }
 
-type terminalArea struct{ p *Panel }
+type terminalArea struct {
+	p       *Panel
+	mu      sync.Mutex
+	follows map[string]int // terminals followed now, by user
+}
 
 func mountTerminals(r *Router) {
 	p := r.Panel()
-	a := &terminalArea{p: p}
+	a := &terminalArea{p: p, follows: map[string]int{}}
 	p.hub.Provide("terminal", Topic{Authorize: a.authorize, Snapshot: a.snapshot, Open: a.open})
 	p.hub.HandleMessage(TypeTerminalInput, a.input)
 	p.hub.HandleMessage(TypeTerminalTypingEnd, a.typingEnd)
@@ -186,12 +192,46 @@ func (a *terminalArea) open(ctx context.Context, sub *Subscription, u users.User
 		sub.Event(sub.Topic, EventSignal, TerminalSignal{Signal: false})
 		return nil
 	}
-	info, _ := src.Info(ctx, id)
+	info, err := src.Info(ctx, id)
+	if err != nil {
+		// no terminal, no stream, and nothing can be typed into it (input needs the open terminal)
+		sub.Event(sub.Topic, EventSignal, TerminalSignal{Signal: false})
+		return nil
+	}
+	if !a.reserve(u.ID) {
+		sub.Reply(TypeUIError, "", Err(CodeTooManyStreams, "terminais demais abertos nesta conta", map[string]any{"max": maxStreamsPerUser}))
+		return nil
+	}
 	cctx, cancel := context.WithCancel(context.Background())
 	ts := &termSub{a: a, sub: sub, user: u, id: id, info: info, frameID: frameIDOf(id), ctx: cctx, cancel: cancel}
 	sub.State = ts
 	ts.follow(0)
-	return ts.end
+	return func() {
+		ts.end()
+		a.release(u.ID)
+	}
+}
+
+// maxStreamsPerUser bounds the terminals one user follows at once: each opens a
+// replay of up to 1 MiB on a machine.
+const maxStreamsPerUser = 16
+
+func (a *terminalArea) reserve(user string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.follows[user] >= maxStreamsPerUser {
+		return false
+	}
+	a.follows[user]++
+	return true
+}
+
+func (a *terminalArea) release(user string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.follows[user] > 0 {
+		a.follows[user]--
+	}
 }
 
 // follow starts (or restarts) the stream from offset from.
@@ -240,6 +280,9 @@ func (ts *termSub) end() {
 // the output it lost, and goes on from the byte the picture shows.
 func (ts *termSub) resync() {
 	ts.stopFollow()
+	if !ts.stillVisible() {
+		return
+	}
 	text, off, err := ts.a.p.terminalSource().Screen(ts.ctx, ts.id)
 	if err != nil {
 		text, off = "", 0 // no picture: the whole buffer comes again
@@ -247,6 +290,19 @@ func (ts *termSub) resync() {
 	ts.sub.Event(ts.sub.Topic, EventScreen, TerminalScreenEvent{Text: text, Offset: off})
 	ts.lagging.Store(false)
 	ts.follow(off)
+}
+
+// stillVisible reads the user and the terminal again: a user who lost the
+// workspace (or the account) stops getting its output, and the socket closes.
+func (ts *termSub) stillVisible() bool {
+	u, err := ts.a.p.users.Get(ts.ctx, ts.user.ID)
+	if err == nil && u.State == users.Active {
+		if info, err := ts.a.p.terminalSource().Info(ts.ctx, ts.id); err == nil && visible(u, info.Workspace) {
+			return true
+		}
+	}
+	ts.sub.c.close(CloseSessionEnded, "terminal not visible")
+	return false
 }
 
 type termSink struct {
@@ -379,6 +435,8 @@ func (a *terminalArea) input(ctx context.Context, s Socket, env UIEnvelope) {
 		s.Fail(env.ID, Err(CodeUnavailable, "a máquina do terminal está sem sinal", map[string]any{"reason": "no_signal"}))
 	case errors.Is(err, ErrNoTerminal):
 		s.Fail(env.ID, Err(CodeNotFound, "terminal não encontrado", nil))
+	case errors.Is(err, ErrPermissionPrompt):
+		s.Fail(env.ID, Err(CodePermissionPrompt, "o agente espera uma decisão de permissão; responda pela aprovação", nil))
 	default:
 		a.p.log.Warn("panel: typing into a terminal", "terminal", in.TerminalID, "err", err)
 		s.Fail(env.ID, errInternal())

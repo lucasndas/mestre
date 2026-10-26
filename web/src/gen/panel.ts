@@ -91,6 +91,14 @@ export const CodeUnavailable: Code = "unavailable";
 /**
  * The codes of the errors of the API.
  */
+export const CodePermissionPrompt: Code = "permission_prompt";
+/**
+ * The codes of the errors of the API.
+ */
+export const CodeTooManyStreams: Code = "too_many_streams";
+/**
+ * The codes of the errors of the API.
+ */
 export const CodeInternal: Code = "internal";
 /**
  * APIError is the body of every error of the API: {"error": {...}}.

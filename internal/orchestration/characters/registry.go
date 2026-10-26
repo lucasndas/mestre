@@ -118,6 +118,9 @@ func (r Registry) ByTerminal(ctx context.Context, terminal string) (Character, e
 		return Character{}, err
 	case len(cs) == 0 || terminal == "":
 		return Character{}, fmt.Errorf("%w: terminal %s", ErrNoCharacter, terminal)
+	case len(cs) > 1:
+		// two living characters with one terminal id: never guess whose it is
+		return Character{}, fmt.Errorf("terminal %s belongs to %d living characters", terminal, len(cs))
 	}
 	return cs[0], nil
 }

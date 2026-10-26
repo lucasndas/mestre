@@ -30,7 +30,10 @@ type fakeTerminals struct {
 	screen  string
 	offset  uint64
 	// followed gets a tick at each Follow (the restart of a slow browser is async)
-	followed chan struct{}
+	followed  chan struct{}
+	stoppedCh chan struct{}
+	// infoFailsAfter makes Info fail after that many calls (0: never)
+	infoFailsAfter, infoCalls int
 }
 
 type followCall struct {
@@ -41,7 +44,7 @@ type followCall struct {
 
 func newFakeTerminals() *fakeTerminals {
 	id := protocol.NewIDGen(clock.Real{}).NewString() + "-1" // the terminals of the characters are <character>-<n>
-	return &fakeTerminals{followed: make(chan struct{}, 64), info: panel.TerminalInfo{TerminalID: id, Character: "c1", Name: "Dev-1", Machine: "t1", Workspace: "loja", State: "idle", Signal: true}}
+	return &fakeTerminals{followed: make(chan struct{}, 64), stoppedCh: make(chan struct{}, 64), info: panel.TerminalInfo{TerminalID: id, Character: "c1", Name: "Dev-1", Machine: "t1", Workspace: "loja", State: "idle", Signal: true}}
 }
 
 func (f *fakeTerminals) ByCharacter(_ context.Context, id string) (panel.TerminalInfo, error) {
@@ -52,6 +55,13 @@ func (f *fakeTerminals) ByCharacter(_ context.Context, id string) (panel.Termina
 }
 
 func (f *fakeTerminals) Info(_ context.Context, id string) (panel.TerminalInfo, error) {
+	f.mu.Lock()
+	f.infoCalls++
+	fail := f.infoFailsAfter > 0 && f.infoCalls > f.infoFailsAfter
+	f.mu.Unlock()
+	if fail {
+		return panel.TerminalInfo{}, panel.ErrNoTerminal
+	}
 	if id != f.info.TerminalID {
 		return panel.TerminalInfo{}, panel.ErrNoTerminal
 	}
@@ -68,6 +78,7 @@ func (f *fakeTerminals) Follow(_ context.Context, _ string, from uint64, sink pa
 		f.mu.Lock()
 		c.stopped = true
 		f.mu.Unlock()
+		f.stoppedCh <- struct{}{}
 	}, nil
 }
 
@@ -396,6 +407,76 @@ func TestASlowBrowserGetsTheScreenInsteadOfTheQueue(t *testing.T) {
 			break
 		}
 	}
+}
+
+// A user who loses the workspace of a terminal stops getting its output: the socket is closed
+// (the sessions end, as in a change of level), and what he had open is not followed any more.
+func TestAUserWhoLosesTheWorkspaceStopsFollowingItsTerminal(t *testing.T) {
+	t.Parallel()
+	r := newTerminalRig(t)
+	u, obs := r.member("Obi", "obi", users.Observer)
+	c := r.browser(obs)
+	none := []string{}
+	if _, err := r.users.Edit(r.ctx, r.owner, u.ID, users.Edit{Workspaces: &none}); err != nil {
+		t.Fatal(err)
+	}
+	if code := closedWith(t, c); code != panel.CloseSessionEnded {
+		t.Fatalf("closed with %d, want the end of the session", code)
+	}
+	<-r.ft.stoppedCh // the stream stops when the socket is gone
+}
+
+// A terminal whose information cannot be read opens no stream and takes no typing.
+func TestATerminalWhoseInfoFailsOpensNoStreamAndTakesNoTyping(t *testing.T) {
+	t.Parallel()
+	r := newTerminalRig(t)
+	_, admin := r.member("Adm", "adm", users.Administrator)
+	r.ft.infoFailsAfter = 1 // the authorization reads it, the opening does not
+	srv := r.wsServer()
+	c, _, err := r.dial(srv, admin, okOrigin(srv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.CloseNow() }()
+	send(t, c, panel.TypeUISubscribe, "s", panel.UISubscribe{Topics: []string{"terminal:" + r.ft.info.TerminalID}})
+	read(t, c) // the signal event
+	read(t, c) // the answer to the subscription
+	if r.ft.followCount() != 0 {
+		t.Fatal("a stream was opened without the terminal")
+	}
+	if e := r.errorOf(r.input(c, "x", "ls\r")); e.Code != panel.CodeBadRequest {
+		t.Fatalf("code = %s", e.Code)
+	}
+	if got := r.ft.typedSoFar(); len(got) != 0 {
+		t.Fatalf("typed = %q", got)
+	}
+}
+
+// One user follows at most 16 terminals at once: the 17th is refused, and a place is
+// back when a socket closes.
+func TestOneUserFollowsAtMostSixteenTerminals(t *testing.T) {
+	t.Parallel()
+	r := newTerminalRig(t)
+	_, obs := r.member("Obi", "obi", users.Observer)
+	var socks []*websocket.Conn
+	for range 16 {
+		socks = append(socks, r.browser(obs))
+	}
+	srv := r.wsServer()
+	c, _, err := r.dial(srv, obs, okOrigin(srv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.CloseNow() }()
+	send(t, c, panel.TypeUISubscribe, "s", panel.UISubscribe{Topics: []string{"terminal:" + r.ft.info.TerminalID}})
+	read(t, c) // snapshot
+	if e := r.errorOf(read(t, c)); e.Code != panel.CodeTooManyStreams {
+		t.Fatalf("code = %s", e.Code)
+	}
+	if n := r.ft.followCount(); n != 16 {
+		t.Fatalf("%d streams, want 16", n)
+	}
+	_ = socks
 }
 
 // GET /api/characters/{id}/terminal: the terminal of a character, with whether

@@ -9,6 +9,7 @@ import { formatTime } from "../lib/format";
 import { defaultBudget, type WebglBudget } from "./budget";
 import { type LiveTerm, type TermFactory, termColors, xtermFactory } from "./factory";
 import type { TerminalFeed } from "./feed";
+import { isTerminalReply } from "./replies";
 import { OutputCursor } from "./stream";
 
 /** How often the snapshot of a terminal that is not live is drawn again, in ms. */
@@ -104,7 +105,8 @@ export function TerminalView({
       const live = factory.live(hostRef.current, size, termColors(), { readable });
       liveRef.current = live;
       live.onData((d) => {
-        if (typingRef.current) feed.type(terminalId, d);
+        // the answers of xterm.js to the program are not typing (see replies.ts)
+        if (typingRef.current && !isTerminalReply(d)) feed.type(terminalId, d);
       });
       live.setTyping(typingRef.current);
       ({ write, reset } = live);

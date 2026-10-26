@@ -7,6 +7,8 @@ import {
   type RouterHistory,
   redirect,
 } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
+import { useTranslation } from "react-i18next";
 import { ApiError } from "../lib/api";
 import { meQuery, statusQuery } from "../lib/queries";
 import { Audit } from "../screens/admin/Audit";
@@ -20,7 +22,6 @@ import { Overview } from "../screens/Overview";
 import { Password } from "../screens/Password";
 import { Sessions } from "../screens/Sessions";
 import { Setup } from "../screens/Setup";
-import { TerminalScreen } from "../screens/TerminalScreen";
 import { Shell } from "./Shell";
 
 export interface RouterContext {
@@ -106,11 +107,29 @@ const transferRoute = createRoute({
   component: Transfer,
 });
 
+// xterm.js is most of the weight of the panel: the terminal screen loads when it is opened
+const TerminalScreen = lazy(() =>
+  import("../screens/TerminalScreen").then((m) => ({ default: m.TerminalScreen })),
+);
+
+function TerminalLoading() {
+  const { t } = useTranslation("terminal");
+  return (
+    <p role="status" className="text-muted">
+      {t("loading")}
+    </p>
+  );
+}
+
 const terminalRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/terminal/$character",
   component: function TerminalPage() {
-    return <TerminalScreen character={terminalRoute.useParams().character} />;
+    return (
+      <Suspense fallback={<TerminalLoading />}>
+        <TerminalScreen character={terminalRoute.useParams().character} />
+      </Suspense>
+    );
   },
 });
 

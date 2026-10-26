@@ -71,6 +71,10 @@ func (rt *Runtime) Type(ctx context.Context, agentID string, data []byte) error 
 		return fmt.Errorf("characters: %s does not run on this machine", agentID)
 	}
 	st := s.status()
+	if st.State == Blocked && st.Reason == ReasonPermission {
+		// a native permission prompt is answered by the approval flow, never by keys
+		return fmt.Errorf("%w: %s", ErrPermissionPrompt, agentID)
+	}
 	s.mu.Lock()
 	p := s.proc
 	if st.State == Blocked {

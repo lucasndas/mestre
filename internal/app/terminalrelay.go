@@ -239,6 +239,9 @@ func (r *terminalRelay) Type(ctx context.Context, terminalID string, data []byte
 
 // noSignal turns "the machine is not reachable" into what the panel says.
 func noSignal(err error) error {
+	if errors.Is(err, characters.ErrPermissionPrompt) {
+		return panel.ErrPermissionPrompt
+	}
 	var unreachable *characters.MachineUnreachableError
 	if errors.As(err, &unreachable) || errors.Is(err, protocol.ErrNotConnected) {
 		return panel.ErrNoSignal
