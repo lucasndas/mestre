@@ -66,12 +66,13 @@
   * {
     scrollbar-color: var(--color-line) transparent;
   }
-  /* biome-ignore-all lint/complexity/noImportantStyles: reduced motion has to win over every utility */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
     *::after {
+      /* biome-ignore lint/complexity/noImportantStyles: reduced motion has to win over every utility */
       animation-duration: 0.01ms !important;
+      /* biome-ignore lint/complexity/noImportantStyles: reduced motion has to win over every utility */
       transition-duration: 0.01ms !important;
     }
   }

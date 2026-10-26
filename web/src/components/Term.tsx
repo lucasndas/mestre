@@ -30,7 +30,7 @@ export function Term({ name }: { name: TermKey }) {
           pinned.current = !pinned.current || !open;
           setOpen(pinned.current);
         }}
-        className="ml-1 inline-grid size-[1.1em] translate-y-[-0.1em] place-items-center rounded-full border border-muted align-middle text-[0.7em] font-semibold leading-none text-muted hover:bg-accent-wash hover:text-ink"
+        className="relative ml-1 inline-grid size-[1.1em] translate-y-[-0.1em] place-items-center rounded-full border border-muted align-middle text-[0.7em] font-semibold leading-none text-muted hover:bg-accent-wash hover:text-ink before:absolute before:-inset-3.5 before:content-['']"
       >
         ?
       </Button>

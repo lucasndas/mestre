@@ -81,12 +81,20 @@ test("the Owner sees everyone's sessions and the times are in the Guild time zon
     "GET /api/me": () => ({ body: ME }),
     "GET /api/admin/sessions": () => ({
       body: {
-        sessions: [{ ...ME.session, current: false, id: "s2", user_name: "Ana", device: "Chrome" }],
+        sessions: [
+          {
+            ...ME.session,
+            current: false,
+            id: "s2",
+            user_name: "Ana",
+            device: "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/130.0 Safari/537.36",
+          },
+        ],
       },
     }),
   });
   renderApp("/sessoes?todas=true");
-  expect(await screen.findByText(/Ana · Chrome/)).toBeTruthy();
+  expect(await screen.findByText(/Ana · Chrome · Windows/)).toBeTruthy();
   // 2026-10-26T12:00Z is 09:00 in São Paulo
   expect(screen.getByText(/09:00/)).toBeTruthy();
 });
@@ -100,7 +108,16 @@ test("ending a session asks the server and reloads the list", async () => {
       body: {
         sessions: ended
           ? [ME.session]
-          : [ME.session, { ...ME.session, id: "s2", current: false, device: "Chrome" }],
+          : [
+              ME.session,
+              {
+                ...ME.session,
+                id: "s2",
+                current: false,
+                device:
+                  "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/130.0 Safari/537.36",
+              },
+            ],
       },
     }),
     "DELETE /api/sessions/s2": () => {
@@ -110,10 +127,14 @@ test("ending a session asks the server and reloads the list", async () => {
   });
   const user = userEvent.setup();
   renderApp("/sessoes");
-  await user.click(await screen.findByRole("button", { name: "Encerrar a sessão de Chrome" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Encerrar a sessão de Chrome · Windows" }),
+  );
   expect(await screen.findByText("Sessão encerrada.")).toBeTruthy();
   expect(calls.some((c) => c.method === "DELETE" && c.path === "/api/sessions/s2")).toBe(true);
-  await waitFor(() => expect(screen.queryByRole("button", { name: /Chrome/ })).toBeNull());
+  await waitFor(() =>
+    expect(screen.queryByRole("button", { name: /Chrome · Windows/ })).toBeNull(),
+  );
 });
 
 test("logout goes to the login", async () => {

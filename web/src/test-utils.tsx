@@ -73,7 +73,7 @@ export const ME = {
   session: {
     id: "s1",
     user_id: "u1",
-    device: "Firefox",
+    device: "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0",
     ip: "192.0.2.1",
     created_at: "2026-10-26T12:00:00Z",
     last_used_at: "2026-10-26T12:30:00Z",

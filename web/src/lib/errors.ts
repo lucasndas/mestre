@@ -8,6 +8,11 @@ export function isErrorKey(code: string): code is ErrorKey {
   return code in ptBR.errors;
 }
 
+/** A problem the form found before asking the server, in the same shape as the server's. */
+export function localError(code: ErrorKey): ApiError {
+  return new ApiError(0, code, "");
+}
+
 /** The text of an error in the language of the user, from the code and params of the server. */
 export function errorText(t: TFunction<"errors">, err: unknown): string {
   if (err instanceof ApiError) {

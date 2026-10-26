@@ -50,7 +50,7 @@ function NavLink({ to, children }: { to: "/" | "/sessoes" | "/senha"; children: 
       to={to}
       search={to === "/sessoes" ? { todas: false } : undefined}
       activeOptions={{ exact: true }}
-      className="block rounded-field px-3 py-2 whitespace-nowrap text-muted transition-colors hover:bg-accent-wash [&.active]:bg-accent-wash [&.active]:font-semibold [&.active]:text-ink"
+      className="block min-h-11 rounded-field px-3 py-2.5 whitespace-nowrap text-muted transition-colors hover:bg-accent-wash [&.active]:bg-accent-wash [&.active]:font-semibold [&.active]:text-ink"
     >
       {children}
     </Link>
@@ -97,7 +97,7 @@ function TopBar() {
       <MenuTrigger>
         <AriaButton
           aria-label={t("top.menu")}
-          className="grid size-9 place-items-center rounded-full bg-accent-wash text-sm font-semibold hover:bg-line"
+          className="grid size-11 place-items-center rounded-full bg-accent-wash text-sm font-semibold hover:bg-line"
         >
           {me.user.name.slice(0, 2).toUpperCase()}
         </AriaButton>
@@ -130,7 +130,7 @@ export function Shell() {
     document.documentElement.lang = i18n.language;
   }, [i18n.language]);
   return (
-    <div className="grid min-h-dvh grid-rows-[auto_auto_1fr] md:grid-cols-[14rem_1fr] md:grid-rows-[auto_auto_1fr]">
+    <div className="grid min-h-dvh grid-rows-[auto_auto_1fr] md:grid-cols-[14rem_1fr] md:grid-rows-[auto_1fr]">
       <a
         href="#content"
         className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-surface focus:p-2"

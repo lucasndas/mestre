@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AuthLayout } from "../app/AuthLayout";
-import { Term } from "../components/Term";
 import { Alert, Button, Field } from "../components/ui";
 import type { Me, SetupRequest } from "../gen/panel";
 import { api } from "../lib/api";
+import { errorText, localError } from "../lib/errors";
 import { useAuthForm } from "../lib/forms";
 
 /** The wizard of the Owner: the Guild has no user yet. */
 export function Setup() {
   const { t } = useTranslation("auth");
+  const { t: te } = useTranslation("errors");
   const [f, setF] = useState({
     code: "",
     name: "",
@@ -20,19 +21,17 @@ export function Setup() {
     pin2: "",
   });
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
-  const { error, busy, submit, te } = useAuthForm();
+  const { error, busy, submit } = useAuthForm();
   return (
     <AuthLayout title={t("setup.title")} subtitle={t("setup.subtitle")} wide>
-      <p className="-mt-3 mb-5 text-sm text-muted">
-        <Term name="Guilda" /> · <Term name="Cidadela" />
-      </p>
       <form
         className="flex flex-col gap-4"
         onSubmit={submit(
           () => {
-            if (!f.code || !f.name || !f.login || !f.password || !f.pin) return te("required");
-            if (f.password !== f.password2) return te("mismatch_password");
-            if (f.pin !== f.pin2) return te("mismatch_pin");
+            if (!f.code || !f.name || !f.login || !f.password || !f.pin)
+              return localError("required");
+            if (f.password !== f.password2) return localError("mismatch_password");
+            if (f.pin !== f.pin2) return localError("mismatch_pin");
             return null;
           },
           () =>
@@ -102,7 +101,7 @@ export function Setup() {
             onChange={set("pin2")}
           />
         </div>
-        {error ? <Alert>{error}</Alert> : null}
+        {error ? <Alert>{errorText(te, error)}</Alert> : null}
         <Button type="submit" isDisabled={busy} className="mt-2">
           {t("setup.submit")}
         </Button>

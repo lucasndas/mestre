@@ -5,6 +5,7 @@ import { AuthLayout } from "../app/AuthLayout";
 import { Alert, Button, Field } from "../components/ui";
 import type { FirstAccessRequest, Me } from "../gen/panel";
 import { api } from "../lib/api";
+import { errorText, localError } from "../lib/errors";
 import { useAuthForm } from "../lib/forms";
 
 /**
@@ -13,6 +14,7 @@ import { useAuthForm } from "../lib/forms";
  */
 export function FirstAccess({ code }: { code?: string }) {
   const { t } = useTranslation("auth");
+  const { t: te } = useTranslation("errors");
   const [f, setF] = useState({
     code: code ?? "",
     login: "",
@@ -22,16 +24,16 @@ export function FirstAccess({ code }: { code?: string }) {
     pin2: "",
   });
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
-  const { error, busy, submit, te } = useAuthForm();
+  const { error, busy, submit } = useAuthForm();
   return (
     <AuthLayout title={t("first.title")} subtitle={t("first.subtitle")} wide>
       <form
         className="flex flex-col gap-4"
         onSubmit={submit(
           () => {
-            if (!f.code || !f.login || !f.password) return te("required");
-            if (f.password !== f.password2) return te("mismatch_password");
-            if (f.pin !== f.pin2) return te("mismatch_pin");
+            if (!f.code || !f.login || !f.password) return localError("required");
+            if (f.password !== f.password2) return localError("mismatch_password");
+            if (f.pin !== f.pin2) return localError("mismatch_pin");
             return null;
           },
           () =>
@@ -94,7 +96,7 @@ export function FirstAccess({ code }: { code?: string }) {
             onChange={set("pin2")}
           />
         </div>
-        {error ? <Alert>{error}</Alert> : null}
+        {error ? <Alert>{errorText(te, error)}</Alert> : null}
         <Button type="submit" isDisabled={busy} className="mt-2">
           {t("first.submit")}
         </Button>

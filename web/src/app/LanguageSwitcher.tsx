@@ -25,7 +25,7 @@ export function LanguageSwitcher() {
           key={l}
           id={l}
           aria-label={l === "en" ? t("language.en") : t("language.pt")}
-          className="min-h-9 min-w-10 px-2 text-muted transition-colors data-[selected]:bg-accent data-[selected]:text-accent-ink"
+          className="min-h-11 min-w-11 px-2 text-muted transition-colors data-[selected]:bg-accent data-[selected]:text-accent-ink"
         >
           {labels[l]}
         </ToggleButton>

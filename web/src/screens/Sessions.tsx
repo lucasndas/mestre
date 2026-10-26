@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useCan, useFormatDateTime } from "../app/session";
 import { Alert, Button } from "../components/ui";
 import { api } from "../lib/api";
+import { deviceLabel } from "../lib/device";
 import { errorText } from "../lib/errors";
 import { sessionsQuery } from "../lib/queries";
 
@@ -63,7 +64,7 @@ export function Sessions({ all }: { all: boolean }) {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">
                   {showAll && s.user_name ? `${s.user_name} · ` : ""}
-                  {s.device || "—"}
+                  {deviceLabel(s.device)}
                   {s.current ? (
                     <span className="ml-2 rounded-full bg-accent-wash px-2 py-0.5 text-xs">
                       {t("current")}
@@ -78,7 +79,7 @@ export function Sessions({ all }: { all: boolean }) {
               {s.current ? null : (
                 <Button
                   variant="secondary"
-                  aria-label={t("endNamed", { device: s.device || s.ip })}
+                  aria-label={t("endNamed", { device: deviceLabel(s.device) })}
                   isDisabled={end.isPending}
                   onPress={() => end.mutate(s.id)}
                 >

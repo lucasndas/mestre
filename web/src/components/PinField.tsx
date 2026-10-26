@@ -21,7 +21,7 @@ export function SensitiveButton({
   const { t: te } = useTranslation("errors");
   const [asking, setAsking] = useState(false);
   const [pin, setPin] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
   if (!asking) {
@@ -42,7 +42,7 @@ export function SensitiveButton({
           await onConfirm(pin);
           setAsking(false);
         } catch (err) {
-          setError(errorText(te, err));
+          setError(err);
         } finally {
           setPin("");
           setBusy(false);
@@ -59,7 +59,7 @@ export function SensitiveButton({
         value={pin}
         onChange={setPin}
       />
-      {error ? <Alert>{error}</Alert> : null}
+      {error ? <Alert>{errorText(te, error)}</Alert> : null}
       <div className="flex gap-2">
         <Button type="submit" variant={variant} isDisabled={busy || pin.length === 0}>
           {children}
