@@ -49,7 +49,7 @@ function NavLink({ to, children }: { to: "/" | "/sessoes" | "/senha"; children: 
     <Link
       to={to}
       search={to === "/sessoes" ? { todas: false } : undefined}
-      activeOptions={{ exact: true }}
+      activeOptions={{ exact: true, includeSearch: false }}
       className="block min-h-11 rounded-field px-3 py-2.5 whitespace-nowrap text-muted transition-colors hover:bg-accent-wash [&.active]:bg-accent-wash [&.active]:font-semibold [&.active]:text-ink"
     >
       {children}
