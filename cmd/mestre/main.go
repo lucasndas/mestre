@@ -44,6 +44,11 @@ func main() {
 		stop()
 		os.Exit(code)
 	}
+	if len(os.Args) > 1 && os.Args[1] == "attach" {
+		code := attachMain(ctx, os.Args[2:], os.Stdout, os.Stderr, os.LookupEnv)
+		stop()
+		os.Exit(code)
+	}
 	allowEngine() // Windows: the engine must be able to open this process to identify it
 	cwd, err := os.Getwd()
 	if err != nil {

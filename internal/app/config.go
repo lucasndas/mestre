@@ -134,7 +134,13 @@ func DirPaths(dir string) Paths {
 }
 
 // The files of an instance.
-func (p Paths) configFile() string    { return filepath.Join(p.Config, "config.json") }
+func (p Paths) configFile() string { return filepath.Join(p.Config, "config.json") }
+
+// GuildCAFile is the name of the CA of the Guild (PEM) in the configuration
+// folder: the engine keeps it there and `mestre attach` checks the panel by it.
+const GuildCAFile = "ca.crt" // attach.CAFile
+
+func (p Paths) guildCA() string       { return filepath.Join(p.Config, GuildCAFile) }
 func (p Paths) engineKey() string     { return filepath.Join(p.Config, "motor.key") }
 func (p Paths) pendingKey() string    { return filepath.Join(p.Config, "motor.key.nova") }
 func (p Paths) vaultKey() string      { return filepath.Join(p.Config, "cofre.key") }

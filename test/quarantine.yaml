@@ -21,3 +21,7 @@ tests:
     issue: https://github.com/mestre-ia/mestre/issues/363
     added: 2026-10-26
     reason: on the Windows full suite of a PR that touched no conformance code the fake Claude Code step 4 did not see the denied pre_tool after 27 s
+  - test: TestTheSweepEndsTheProcessesOfTheSession
+    issue: https://github.com/mestre-ia/mestre/issues/369
+    added: 2026-10-26
+    reason: "on the Windows full suite of a PR that touched no winsvc code the sweep ended 2 processes of the session, not only the helper"
