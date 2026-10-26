@@ -18,6 +18,18 @@ test("the Owner creates the Guild, signs out and signs in again", async ({ page 
   await page.getByRole("button", { name: "Criar a Guilda" }).click();
   await expect(page.getByRole("heading", { name: "Sua Guilda está pronta" })).toBeVisible();
 
+  // the request the throwaway Guild has waiting (tools/e2eserver/seed.go): the counter says
+  // so, the central shows it, and it is approved with the PIN
+  await expect(page.getByRole("link", { name: "Aprovações pendentes: 1" })).toBeVisible();
+  await page.getByRole("link", { name: "Aprovações pendentes: 1" }).click();
+  const card = page.getByRole("article", { name: /Pedido #\d+/ });
+  await expect(card).toBeVisible();
+  await card.getByRole("button", { name: "Aprovar agora" }).click();
+  await card.getByLabel("PIN").fill("123456");
+  await card.getByRole("button", { name: "Confirmar" }).click();
+  await expect(card.getByText(/Você respondeu: Aprovado/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Aprovações, nenhuma pendente" })).toBeVisible();
+
   // logout
   await page.getByRole("button", { name: "Menu da conta" }).click();
   await page.getByRole("menuitem", { name: "Sair" }).click();

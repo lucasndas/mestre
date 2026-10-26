@@ -93,6 +93,10 @@ type Options struct {
 	// Location is where the hours of the messages are said (UTC by default).
 	Location *time.Location
 	Logger   *slog.Logger
+	// OnChange is told after a question was put to the people, edited, counted or
+	// taken back: the panel updates what it shows (nil: nobody listens). It runs in
+	// the goroutine of the change and must not block.
+	OnChange func(ctx context.Context, request int64)
 }
 
 // Flow is the flow of approval over the people.
@@ -158,7 +162,19 @@ func asksPIN(a chain.Answer) bool {
 	return false
 }
 
-func (f *Flow) may(u users.User, a chain.Answer) bool { return users.Can(u.Level, Capability(a)) }
+// CapabilityFor is Capability for an answer to a request: Delegar on a request of risk
+// medio makes a decree of policy, which an Administrator or above makes
+// (docs/aprovacoes/delegacao.md#delegação-de-decisão); the rest follows the answer.
+func CapabilityFor(r chain.Request, a chain.Answer) users.Capability {
+	if a == chain.AnswerDelegate && r.Risk.Risk == classes.RiskMedium {
+		return users.PermanentDecree
+	}
+	return Capability(a)
+}
+
+func (f *Flow) mayFor(u users.User, r chain.Request, a chain.Answer) bool {
+	return users.Can(u.Level, CapabilityFor(r, a))
+}
 
 // atLeast says whether the level of a user is at least min, the minimum of the policy.
 func atLeast(l users.Level, min classes.Level) bool {
@@ -235,7 +251,7 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 		}
 		var answers []chain.Answer
 		for _, a := range q.Answers {
-			if f.may(u, a) {
+			if f.mayFor(u, q.Request, a) {
 				answers = append(answers, a)
 			}
 		}
@@ -278,7 +294,15 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 	if sent == 0 {
 		f.log.Warn("approvals: nobody can answer the request", "request", q.Request.ID, "min", q.MinLevel)
 	}
+	f.changed(ctx, q.Request.ID)
 	return nil
+}
+
+// changed tells the panel that a request changed.
+func (f *Flow) changed(ctx context.Context, request int64) {
+	if f.o.OnChange != nil {
+		f.o.OnChange(ctx, request)
+	}
 }
 
 // render is the text of the question, with the count of the quorum when it is
@@ -365,6 +389,7 @@ func (f *Flow) voters(ctx context.Context, request int64) ([]string, error) {
 // Withdraw implements chain.UserAsker: the request ended (or went up), so each
 // recipient reads how, and the buttons go away.
 func (f *Flow) Withdraw(ctx context.Context, request int64, why string) error {
+	defer f.changed(ctx, request)
 	r, err := f.o.Chain.Get(ctx, request)
 	if err != nil {
 		return err
@@ -444,6 +469,43 @@ type Reply struct {
 // Answer takes the answer of a user to a request: the user, the level, the
 // state and the target are checked again here, at the click.
 func (f *Flow) Answer(ctx context.Context, userID string, in Input) (Reply, error) {
+	return f.answer(ctx, userID, in, nil)
+}
+
+// ErrPINNeeded is what AnswerWithPIN answers when the answer asks the PIN and the
+// caller did not check one.
+var ErrPINNeeded = errors.New("approvals: the answer asks the PIN of the user")
+
+// AnswerWithPIN is Answer for a channel that checks the PIN of the user in the very
+// request of the answer (the panel). pinOK says the caller checked it, and spent it.
+// An answer that asks the PIN without it is refused with ErrPINNeeded and nothing
+// is recorded (the group the answer stands for is read again here, so one that
+// grew meanwhile cannot be approved with a PIN that was not asked for it); one that
+// asks none is as in Answer.
+func (f *Flow) AnswerWithPIN(ctx context.Context, userID string, in Input, pinOK bool) (Reply, error) {
+	return f.answer(ctx, userID, in, &pinOK)
+}
+
+// NeedsPIN says whether the answer of the user asks the PIN: the request or the
+// group it is answered with does, or the answer makes a rule that frees or a
+// delegation. It checks nothing else.
+func (f *Flow) NeedsPIN(ctx context.Context, userID string, in Input) (bool, error) {
+	fr, ok, err := f.row(ctx, in.Request)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, ErrNotOpen
+	}
+	for _, m := range f.sharedWith(ctx, userID, in) {
+		if other, ok, err := f.row(ctx, m.ID); err == nil && ok && other.PIN {
+			fr.PIN = true
+		}
+	}
+	return (in.Answer.Approves() || in.Answer == chain.AnswerDelegate) && (fr.PIN || asksPIN(in.Answer)), nil
+}
+
+func (f *Flow) answer(ctx context.Context, userID string, in Input, pinChecked *bool) (Reply, error) {
 	if f.o.Locked(ctx) {
 		return Reply{}, ErrLocked
 	}
@@ -458,6 +520,12 @@ func (f *Flow) Answer(ctx context.Context, userID string, in Input) (Reply, erro
 		}
 	}
 	if (in.Answer.Approves() || in.Answer == chain.AnswerDelegate) && (fr.PIN || asksPIN(in.Answer)) {
+		if pinChecked != nil {
+			if !*pinChecked {
+				return Reply{}, ErrPINNeeded
+			}
+			return f.applyAnswer(ctx, u, r, fr, members, userID, in)
+		}
 		if f.o.PINs == nil {
 			return Reply{}, ErrPIN
 		}
@@ -474,6 +542,11 @@ func (f *Flow) Answer(ctx context.Context, userID string, in Input) (Reply, erro
 		}
 		return Reply{Text: "Digite o seu PIN para confirmar.", PIN: pr.ID}, nil
 	}
+	return f.applyAnswer(ctx, u, r, fr, members, userID, in)
+}
+
+// applyAnswer applies an answer whose PIN, if it asks one, is settled.
+func (f *Flow) applyAnswer(ctx context.Context, u users.User, r chain.Request, fr flowRow, members []chain.Request, userID string, in Input) (Reply, error) {
 	if len(members) > 1 {
 		return f.applyGroup(ctx, userID, members, in)
 	}
@@ -573,7 +646,7 @@ func (f *Flow) check(ctx context.Context, userID string, request int64, a chain.
 	if !eligible(u, r.Workspace, fr.Min) {
 		return users.User{}, chain.Request{}, flowRow{}, ErrNotYours
 	}
-	if !f.may(u, a) {
+	if !f.mayFor(u, r, a) {
 		return users.User{}, chain.Request{}, flowRow{}, ErrLevel
 	}
 	if !a.Valid() || a == chain.AnswerClimb {
@@ -757,6 +830,7 @@ func (f *Flow) unvote(ctx context.Context, request int64, user string) error {
 
 // refresh edits the question of every recipient with the count of the quorum.
 func (f *Flow) refresh(ctx context.Context, request int64, fr flowRow) {
+	defer f.changed(ctx, request)
 	text, err := f.render(ctx, request, fr.Text, fr.Approvals)
 	if err != nil {
 		return

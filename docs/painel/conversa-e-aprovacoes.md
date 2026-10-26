@@ -1,6 +1,6 @@
 # Conversa e aprovações no painel
 
-> **Assunto:** conversa com o Grão-Mestre pelo painel, central de aprovações e área de avisos · **Componente:** Painel · **Atualizado:** 2026-10-19
+> **Assunto:** conversa com o Grão-Mestre pelo painel, central de aprovações e área de avisos · **Componente:** Painel · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
@@ -41,6 +41,14 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - Cada aviso tem workspace e mesa (ou "Sistema"), horário e link para o lugar certo (mesa, máquina, pedido).
 - Lido/não lido por usuário, guardado na Cidadela.
 - O alerta de remetente desconhecido do bot ([segurança do canal](../telegram/seguranca-do-canal.md)) aparece aqui, para o Dono e os Administradores, além do Telegram do Dono (CA-CANAL-07, M6).
+
+### Implementação
+
+- **Central e avisos (M6, unidade 2C):** o painel é mais um canal do [fluxo](../aprovacoes/fluxo.md), não um segundo fluxo. `internal/panel/routes_approvals.go` lê as perguntas que o Telegram recebe (`approvals.Flow.PendingFor`, `Question`, `AnswersOf`, com os botões pelo nível e pelo tipo do pedido) e responde por `Flow.AnswerWithPIN`, que confere de novo usuário, nível, estado, alvo e trava; o PIN vai no cabeçalho da própria requisição e `ErrPINNeeded` recusa a resposta que o pede sem a conferência. `Flow.OnChange` avisa o painel de toda pergunta feita, editada, contada ou retirada, e ele publica `changed` e `count` no assunto `approvals:<usuário>` de `/ws/ui` para quem pode responder (o item já encerrado diz quem respondeu e a que horas).
+- **Avisos de bloqueio:** `blocking.Store` guarda as partes mascaradas do aviso (evidência inteira, passos, dono, bloco do agente) em `blocking_notices`; a central mostra os dos últimos 7 dias para o Dono e os Administradores do workspace, sem estado próprio, e o botão do passo do cofre sai com `can_do` só para o Dono (o PIN é pedido na tela de Segredos).
+- **Sino:** `internal/notices` (`panel_notices`, `panel_notice_reads`) guarda o que o bot também diz (`OwnerAlerts`, `BlockChannel`): o público de cada aviso (workspace, Dono e Administradores, Dono, um usuário) é decidido na leitura, o lido é por usuário e a lista olha os últimos 30 dias. O texto passa pelo mascarador antes de ser guardado. O link de um aviso leva ao pedido (`/aprovacoes?pedido=`), ao aviso de bloqueio (`?aviso=`), à mesa ou à Guilda; as rotas de mesa e de Guilda são das telas dessas áreas.
+- **Máscara e nível:** todo texto de pedido que o painel devolve (pergunta, bloco do agente, `About`, alvo exato, diff, histórico) passa pelo mascarador do motor (`ApprovalSource.Mask`) logo antes de sair. O servidor confere de novo as respostas do tipo (regra permanente só em permissão de classe com ação; **Delegar** só em risco `alto` ou `medio`, e em `medio` um Administrador basta, porque vira decreto de política) e a visibilidade (pedido sem workspace é de quem atua em "", o Dono).
+- **Motor:** `mestre notify` e `mestre approval ask` dizem em `delivered.panel` quantos usuários o painel guardou o aviso para (uma gravação que falhou não conta) (`not_delivered` só quando nem o Telegram nem o painel alcançam ninguém).
 
 ## Regras e erros
 

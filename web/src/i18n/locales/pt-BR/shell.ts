@@ -1,5 +1,6 @@
 export default {
   nav: {
+    approvals: "Aprovações",
     overview: "Visão geral",
     sessions: "Minhas sessões",
     password: "Trocar a senha",

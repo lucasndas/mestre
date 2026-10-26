@@ -29,20 +29,24 @@ type fakeChannel struct {
 	said []string
 	got  []blocking.Notice
 	sent int
-	err  error
+	// panel is how many users the channel stored the notice for in the panel.
+	panel int
+	err   error
 }
 
-func (f *fakeChannel) Notify(_ context.Context, n blocking.Notice) (int64, int, error) {
+func (f *fakeChannel) Notify(ctx context.Context, n blocking.Notice) (int64, int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.got = append(f.got, n)
+	blocking.Stored(ctx, f.panel)
 	return int64(len(f.got)), f.sent, f.err
 }
 
-func (f *fakeChannel) Say(_ context.Context, workspace, mesa, text string) (int, error) {
+func (f *fakeChannel) Say(ctx context.Context, workspace, mesa, text string) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.said = append(f.said, workspace+"|"+mesa+"|"+text)
+	blocking.Stored(ctx, f.panel)
 	return f.sent, f.err
 }
 
@@ -372,5 +376,34 @@ func TestTheFieldsOfTheAgentOfNotifyBlockedAreInItsBlockOfTheBuiltMessage(t *tes
 	}
 	if !strings.HasPrefix(text, "🔐 credencial\n") {
 		t.Errorf("the motive of the message:\n%s", text)
+	}
+}
+
+// Part of CA-BLOQ-02 and CA-GM-07 (the panel is part of the delivery): `notify`, with and
+// without --blocked, says how many users the panel stored the notice for; a notice
+// nobody on the Telegram can be told is still delivered when the panel stored it, and is
+// `not_delivered` when neither did, also when the write for the panel failed.
+func TestNotifyCountsWhoTheBellOfThePanelWasStoredFor(t *testing.T) {
+	t.Parallel()
+	for _, flags := range []map[string]any{nil, {"blocked": "credencial"}} {
+		h, ch := handlerRig()
+		ch.panel = 3
+		r := notify(h, "gm", flags, "falta a chave")
+		var data map[string]any
+		_ = json.Unmarshal(r.Data, &data)
+		if d, _ := data["delivered"].(map[string]any); !r.OK || d["panel"] != float64(3) || d["telegram"] != float64(2) {
+			t.Fatalf("flags %v: %+v %v", flags, r.Error, data)
+		}
+		ch.sent = 0
+		r = notify(h, "gm", flags, "falta a chave")
+		_ = json.Unmarshal(r.Data, &data)
+		if d, _ := data["delivered"].(map[string]any); !r.OK || d["panel"] != float64(3) || d["telegram"] != float64(0) {
+			t.Fatalf("with nobody on the Telegram: %+v %v", r.Error, data)
+		}
+		// the write for the panel failed: nothing is stored, so nothing is counted
+		ch.panel = 0
+		if r = notify(h, "gm", flags, "falta a chave"); r.OK || r.Error.Code != "not_delivered" {
+			t.Fatalf("nobody at all: %+v", r)
+		}
 	}
 }

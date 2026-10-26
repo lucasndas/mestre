@@ -666,6 +666,326 @@ export interface AuditPerson {
 }
 
 //////////
+// source: types_approvals.go
+
+/**
+ * ApprovalAnswer is a button of the answers a user is given for a request.
+ */
+export interface ApprovalAnswer {
+  /**
+   * Answer is the name of the answer ("approve", "approve_for", "approve_pattern",
+   * "approve_always", "delegate", "deny", "deny_instruction", "deny_always",
+   * "ask_back"); the front end writes its label.
+   */
+  answer: string;
+  /**
+   * Field is the data the answer asks before it is confirmed: "duration"
+   * ("approve_for"), "pattern" ("approve_pattern"), "text" ("deny_instruction",
+   * "ask_back") or "scope" ("delegate", which only shows the scope of the
+   * delegation); "" for an answer that asks none.
+   */
+  field?: string;
+  /**
+   * Suggested is the pattern the engine suggests, which the user may edit.
+   */
+  suggested?: string;
+  /**
+   * NeedsPIN says the answer asks the PIN of the user, after the button.
+   */
+  needs_pin: boolean;
+}
+/**
+ * ApprovalMember is a request that shares the question with others (similar requests).
+ */
+export interface ApprovalMember {
+  id: number /* int64 */;
+  about: string;
+}
+/**
+ * ApprovalScope is what a delegation made from the request covers.
+ */
+export interface ApprovalScope {
+  workspace: string;
+  table: string;
+  type: string;
+  days: number /* int */;
+}
+/**
+ * ApprovalClosed is how a request ended: "Já respondido por <nome>: Aprovado às 14:32".
+ */
+export interface ApprovalClosed {
+  /**
+   * State is approved, denied, expired, cancelled or invalidated.
+   */
+  state: string;
+  /**
+   * By is the name of the user who decided ("" when no user did) and ByID his id.
+   */
+  by?: string;
+  by_id?: string;
+  at: string;
+  answer?: string;
+  /**
+   * Self says the user of the view was the one who decided.
+   */
+  self: boolean;
+}
+/**
+ * ApprovalItem is a request waiting for the people (or one that ended, in the answer
+ * of GET /api/approvals/{id}).
+ */
+export interface ApprovalItem {
+  id: number /* int64 */;
+  workspace: string;
+  table: string;
+  /**
+   * Type is the type of the request ("permissao_de_classe", "pr"…) and Risk its risk.
+   */
+  type: string;
+  risk: string;
+  state: string;
+  about: string;
+  /**
+   * Text is the question as the Telegram message has it, the fields of the engine;
+   * Agent is the text of the agents, which the screen shows in the block
+   * "texto do agente, não verificado".
+   */
+  text: string;
+  agent: string;
+  /**
+   * Requester is who asked ("" for a request of the engine).
+   */
+  requester: string;
+  created_at: string;
+  deadline?: string;
+  /**
+   * Approvals is the quorum and Counted the approvals that stand.
+   */
+  approvals: number /* int */;
+  counted: number /* int */;
+  voted: boolean;
+  /**
+   * Answers are the buttons of this user for this request, by his level and its type.
+   */
+  answers: ApprovalAnswer[];
+  scope?: ApprovalScope;
+  /**
+   * Members are the similar requests that share the question (this one included).
+   */
+  members: ApprovalMember[];
+  closed?: ApprovalClosed;
+}
+/**
+ * BlockingStep is a step of "para destravar". Action is what the panel can do for it
+ * ("open_vault": register the secret, on the screen of the secrets); CanDo says the
+ * user of the view has the level of the step, and the button shows only then.
+ */
+export interface BlockingStep {
+  text: string;
+  action?: string;
+  can_do: boolean;
+}
+/**
+ * BlockingView is a notice that a table stopped, with the whole evidence, masked.
+ */
+export interface BlockingView {
+  id: number /* int64 */;
+  workspace: string;
+  table: string;
+  motive: string;
+  stopped: string;
+  evidence: string;
+  steps: BlockingStep[];
+  owner: string;
+  /**
+   * Agent is the text of the agent, for the block "texto do agente, não verificado".
+   */
+  agent: string;
+  created_at: string;
+}
+/**
+ * ApprovalList is GET /api/approvals.
+ */
+export interface ApprovalList {
+  requests: ApprovalItem[];
+  blocking: BlockingView[];
+  /**
+   * Pending is how many requests wait for this user, whatever the filters.
+   */
+  pending: number /* int */;
+}
+/**
+ * ApprovalCount is GET /api/approvals/count.
+ */
+export interface ApprovalCount {
+  pending: number /* int */;
+}
+/**
+ * ApprovalAnswerRequest is POST /api/approvals/{id}/answer. The PIN, when the
+ * answer asks it, goes in the header PINHeader.
+ */
+export interface ApprovalAnswerRequest {
+  answer: string;
+  /**
+   * Text is the instruction of "deny_instruction" and the question of "ask_back".
+   */
+  text?: string;
+  /**
+   * Pattern is the pattern of "approve_pattern" and For the time of "approve_for"
+   * ("90m", "3h", "2d").
+   */
+  pattern?: string;
+  for?: string;
+}
+/**
+ * ApprovalAnswered is the answer to an answer.
+ */
+export interface ApprovalAnswered {
+  /**
+   * State is the state of the request after it: approved, denied or open (a
+   * quorum that is not complete, a question back).
+   */
+  state: string;
+}
+/**
+ * ApprovalDiffFile is a file of the diff of a PR.
+ */
+export interface ApprovalDiffFile {
+  path: string;
+  previous_path?: string;
+  status: string;
+  added: number /* int */;
+  removed: number /* int */;
+  patch: string;
+  /**
+   * PatchMissing says the file changed and GitHub gave no patch (it is too big).
+   */
+  patch_missing: boolean;
+}
+/**
+ * ApprovalDetails is GET /api/approvals/{id}/details: "Ver detalhes".
+ */
+export interface ApprovalDetails {
+  /**
+   * Text is the whole question with the exact target of the request.
+   */
+  text: string;
+  /**
+   * Files are the whole diff, when the request is about a PR and GitHub answers.
+   */
+  files: ApprovalDiffFile[];
+  /**
+   * DiffUnavailable says the diff could not be read now.
+   */
+  diff_unavailable: boolean;
+}
+/**
+ * ApprovalHistoryItem is a request that ended, read from the audit of the flow.
+ */
+export interface ApprovalHistoryItem {
+  id: number /* int64 */;
+  workspace: string;
+  table: string;
+  type: string;
+  risk: string;
+  state: string;
+  about: string;
+  created_at: string;
+  closed_at: string;
+  /**
+   * LevelKind is where the chain stood when it ended: agent, mesa, grand_master or
+   * people; Level is its name as the people read it.
+   */
+  level_kind: string;
+  level: string;
+  /**
+   * By is the name of who decided: a user, or the character of the chain ("" when
+   * nobody did: it expired or was cancelled), and ByUser says it was a user.
+   */
+  by: string;
+  by_user: boolean;
+  /**
+   * ByID is the id of the user, for the filter "by".
+   */
+  by_id?: string;
+  answer?: string;
+  /**
+   * Reason is the reason of the decision (the agents give one).
+   */
+  reason?: string;
+}
+/**
+ * ApprovalHistory is GET /api/approvals/history.
+ */
+export interface ApprovalHistory {
+  items: ApprovalHistoryItem[];
+  /**
+   * Next is the id to ask for the next page with ?before= (0: no more).
+   */
+  next: number /* int64 */;
+}
+/**
+ * ApprovalEvent is the event "changed" of the topic "approvals:<user>": a request
+ * changed, ended, or got a vote. The screen reloads what it shows; the event
+ * carries only what an item that ended needs to say who answered.
+ */
+export interface ApprovalEvent {
+  request: number /* int64 */;
+  state: string;
+  closed?: ApprovalClosed;
+}
+/**
+ * ApprovalsSnapshot is the snapshot of the topic "approvals:<user>" and the event
+ * "count": how many requests wait for the user.
+ */
+export interface ApprovalsSnapshot {
+  pending: number /* int */;
+}
+/**
+ * NoticeLink says where a notice leads.
+ */
+export interface NoticeLink {
+  /**
+   * Kind is request, table, blocking, machine or "" for none.
+   */
+  kind: string;
+  ref: string;
+}
+/**
+ * NoticeView is a notice of the bell.
+ */
+export interface NoticeView {
+  id: number /* int64 */;
+  kind: string;
+  workspace: string;
+  table: string;
+  text: string;
+  link: NoticeLink;
+  created_at: string;
+  read: boolean;
+}
+/**
+ * NoticeList is GET /api/notices.
+ */
+export interface NoticeList {
+  notices: NoticeView[];
+  unread: number /* int */;
+}
+/**
+ * NoticeReadRequest is POST /api/notices/read: the ids to mark as read, none for all.
+ */
+export interface NoticeReadRequest {
+  ids: number /* int64 */[];
+}
+/**
+ * NoticesSnapshot is the snapshot of the topic "notices:<user>" and its event
+ * "unread": how many notices the user did not read.
+ */
+export interface NoticesSnapshot {
+  unread: number /* int */;
+}
+
+//////////
 // source: ws.go
 
 /**

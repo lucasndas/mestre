@@ -62,6 +62,24 @@ func PRTarget(repo string, n int, head, base string) json.RawMessage {
 	return b
 }
 
+// Diff is the whole diff of the PR, file by file with its patch, at the commit of the
+// request: the panel shows it in "Ver detalhes". A PR whose head moved has none at
+// that commit.
+func (g GitHubSource) Diff(ctx context.Context, workspace string, ref chain.PRRef) ([]github.PullFile, error) {
+	rd, err := g.Reader(ctx, workspace)
+	if err != nil {
+		return nil, err
+	}
+	p, err := rd.PullData(ctx, ref.Repo, ref.Number)
+	if err != nil {
+		return nil, err
+	}
+	if p.HeadSHA != ref.SHA {
+		return nil, fmt.Errorf("the head of #%d is %.8s, not the %.8s of the request", ref.Number, p.HeadSHA, ref.SHA)
+	}
+	return rd.PullFiles(ctx, ref.Repo, ref.Number)
+}
+
 // PullRequest implements chain.PRSource. The facts are those of the commit of the
 // request: a PR whose head moved has no facts at that commit, and the decision
 // goes to a person.

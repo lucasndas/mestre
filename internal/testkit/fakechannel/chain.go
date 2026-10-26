@@ -36,7 +36,7 @@ func (c *Chain) Add(ctx context.Context, r chain.Request) error {
 	c.mu.Lock()
 	c.reqs[r.ID] = &r
 	c.mu.Unlock()
-	_, err := c.db.Writer().ExecContext(ctx, `INSERT INTO approval_requests (id, workspace, type, state, body, created_at) VALUES (?, ?, ?, 'open', '{}', 1)`, r.ID, r.Workspace, string(r.Type))
+	_, err := c.db.Writer().ExecContext(ctx, `INSERT INTO approval_requests (id, workspace, type, state, level_kind, body, created_at) VALUES (?, ?, ?, 'open', ?, '{}', 1)`, r.ID, r.Workspace, string(r.Type), string(r.Level.Kind))
 	return err
 }
 

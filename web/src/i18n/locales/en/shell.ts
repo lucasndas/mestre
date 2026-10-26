@@ -3,6 +3,7 @@ import type pt from "../pt-BR/shell";
 
 const shell: Widen<typeof pt> = {
   nav: {
+    approvals: "Approvals",
     overview: "Overview",
     sessions: "My sessions",
     password: "Change password",

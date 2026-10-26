@@ -71,14 +71,32 @@ func parseReady(line string) (url, code string, ok bool) {
 	return url, code, found && url != "" && code != ""
 }
 
+// runOptions say where the Guild lives and what is in it.
+type runOptions struct {
+	// Dir is the folder of the Guild. Empty makes a temporary one, removed when the
+	// server ends; a folder that has a Guild already is started, not founded again
+	// (the restart of the Citadel in a test).
+	Dir string
+	// Seed puts a request of extra cost waiting for the people, which asks the PIN,
+	// in a Guild that is new: what the smoke test of the central of approvals answers.
+	Seed bool
+}
+
 // run founds the Guild, starts the engine and returns when ctx ends (or stdin,
 // if given, is closed) after the engine has stopped.
 func run(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader) error {
-	dir, err := os.MkdirTemp("", "mestre-e2e")
-	if err != nil {
-		return err
+	return runWith(ctx, stdout, stderr, stdin, runOptions{Seed: true})
+}
+
+func runWith(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, o runOptions) error {
+	dir := o.Dir
+	if dir == "" {
+		var err error
+		if dir, err = os.MkdirTemp("", "mestre-e2e"); err != nil {
+			return err
+		}
+		defer os.RemoveAll(dir)
 	}
-	defer os.RemoveAll(dir)
 	port, err := freePort()
 	if err != nil {
 		return err
@@ -88,11 +106,21 @@ func run(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader) error {
 		EnginePort: port, NoDiscovery: true, Synchronous: "OFF",
 	}
 	paths := app.DirPaths(dir)
-	_, rk, err := app.Found(ctx, cfg, paths, clock.Real{})
-	if err != nil {
-		return fmt.Errorf("founding the Guild: %w", err)
+	guildDB := filepath.Join(paths.Banco, "mestre.db")
+	_, statErr := os.Stat(guildDB)
+	restart := statErr == nil
+	if !restart {
+		_, rk, err := app.Found(ctx, cfg, paths, clock.Real{})
+		if err != nil {
+			return fmt.Errorf("founding the Guild: %w", err)
+		}
+		rk.Destroy()
+		if o.Seed {
+			if err := seedRequest(ctx, guildDB); err != nil {
+				return fmt.Errorf("seeding the request: %w", err)
+			}
+		}
 	}
-	rk.Destroy()
 
 	// the terminal of a fake agent, which the panel shows as the one of a character
 	terms, err := startFakeTerminal(ctx, filepath.Join(dir, "agent"))
@@ -129,7 +157,10 @@ func run(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader) error {
 		return err
 	}
 	var code strings.Builder
-	if rc := app.SetupCodeWith(ctx, []string{"--dir", dir}, &code, stderr, func(string) (string, bool) { return "", false }, func() bool { return true }); rc != 0 {
+	if restart {
+		// the Owner exists already: there is no code of setup to make
+		code.WriteString("restart")
+	} else if rc := app.SetupCodeWith(ctx, []string{"--dir", dir}, &code, stderr, func(string) (string, bool) { return "", false }, func() bool { return true }); rc != 0 {
 		cancel()
 		<-done
 		return fmt.Errorf("setup-code exited with %d", rc)

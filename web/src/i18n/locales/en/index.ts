@@ -1,5 +1,6 @@
 import type { Widen } from "../../shape";
 import type { ptBR } from "../pt-BR";
+import approvals from "./approvals";
 import audit from "./audit";
 import auth from "./auth";
 import common from "./common";
@@ -19,6 +20,7 @@ export const en: Widen<typeof ptBR> = {
   users,
   secrets,
   audit,
+  approvals,
   github,
   errors,
   terminal,
