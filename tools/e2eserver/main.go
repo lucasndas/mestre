@@ -18,6 +18,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -35,6 +36,8 @@ import (
 	"github.com/mestre-ia/mestre/internal/app"
 	"github.com/mestre-ia/mestre/internal/logging"
 	"github.com/mestre-ia/mestre/internal/panel"
+	"github.com/mestre-ia/mestre/internal/store"
+	guilddb "github.com/mestre-ia/mestre/internal/store/guild"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
@@ -115,6 +118,9 @@ func runWith(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, o r
 			return fmt.Errorf("founding the Guild: %w", err)
 		}
 		rk.Destroy()
+		if err := seedWorkspace(ctx, paths); err != nil {
+			return fmt.Errorf("seeding the workspace: %w", err)
+		}
 		if o.Seed {
 			if err := seedRequest(ctx, guildDB); err != nil {
 				return fmt.Errorf("seeding the request: %w", err)
@@ -175,6 +181,22 @@ func runWith(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, o r
 		return err
 	}
 	return nil
+}
+
+// seedWorkspace puts one paused workspace in the Guild, so the screens of the rules have a
+// workspace to work on. Paused, it is left alone by the loops of the engine: it has no
+// repository to clone, and nothing leaves the machine.
+func seedWorkspace(ctx context.Context, paths app.Paths) error {
+	db, err := guilddb.Open(ctx, filepath.Join(paths.Banco, "mestre.db"), store.Options{Clock: clock.Real{}, Synchronous: "OFF"})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	now := clock.Real{}.Now().UnixMilli()
+	return db.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at) VALUES ('loja', 'o/loja', 'o/loja', 'http://127.0.0.1:1/o/loja.git', 'main', 'paused', 'done', ?, ?)`, now, now)
+		return err
+	})
 }
 
 // waitForPanel polls /api/status until the Citadel answers 200, or the engine

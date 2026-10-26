@@ -120,3 +120,37 @@ test("the canvas of a table draws its nodes and the terminal of a character", as
   await dev.getByRole("button", { name: "Fixar Dev-1" }).click();
   await expect(dev.getByRole("button", { name: "Desafixar Dev-1" })).toBeVisible();
 });
+
+// The rules step of the smoke: the Owner opens the decrees screen, makes a rule (a
+// proposal first, then the click) and revokes it. The engine is the real one.
+test("the Owner makes a decree and revokes it", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Nome de login").fill("maria");
+  await page.getByLabel("Senha").fill("uma senha bem longa");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.getByRole("link", { name: "Decretos" }).click();
+  await expect(page.getByRole("heading", { name: "Decretos", level: 1 })).toBeVisible();
+  await expect(page.getByText("Nenhum decreto em vigor neste workspace.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Novo decreto" }).click();
+  await page.getByLabel("Nome", { exact: true }).fill("dev");
+  await page.getByLabel("Padrão").fill("npm test*");
+  await page
+    .getByLabel("A ordem, com as suas palavras")
+    .fill("dev pode rodar npm test sem perguntar");
+  await page.getByRole("button", { name: "Ver o que o Mestre entendeu" }).click();
+  // a proposal is not a decree: nothing is in force before the click
+  await expect(page.getByText("Isto ainda não é um decreto")).toBeVisible();
+  const confirm = page.getByRole("button", { name: "Confirmar decreto" });
+  await confirm.click();
+  await page.getByLabel("PIN").fill("123456");
+  await page.getByRole("button", { name: "Confirmar decreto" }).click();
+  await expect(page.getByText("Decreto feito.")).toBeVisible();
+  const card = page.getByRole("article", { name: "Decreto 1" });
+  await expect(card).toContainText("dev pode rodar npm test sem perguntar");
+
+  await card.getByRole("button", { name: "Revogar" }).click();
+  await card.getByRole("button", { name: "Sim, revogar" }).click();
+  await expect(page.getByText("Decreto 1 revogado.")).toBeVisible();
+  await expect(page.getByText("Nenhum decreto em vigor neste workspace.")).toBeVisible();
+});

@@ -68,7 +68,13 @@ function NavLink({
     | "/usuarios"
     | "/segredos"
     | "/auditoria"
-    | "/github";
+    | "/github"
+    | "/decretos"
+    | "/delegacoes"
+    | "/cadeia"
+    | "/teto"
+    | "/politica"
+    | "/instrucoes";
   children: string;
 }) {
   return (
@@ -90,6 +96,8 @@ function Nav() {
   const canUsers = useCan("manage_users");
   const canSecrets = useCan("bases_vault_policy");
   const canAudit = useCan("activate_classes");
+  const canRules = useCan("status");
+  const canInstructions = useCan("configure_workspace");
   return (
     <nav
       aria-label={t("nav.main")}
@@ -103,6 +111,12 @@ function Nav() {
       {canUsers ? <NavLink to="/usuarios">{t("nav.users")}</NavLink> : null}
       {canSecrets ? <NavLink to="/segredos">{t("nav.secrets")}</NavLink> : null}
       {canAudit ? <NavLink to="/auditoria">{t("nav.audit")}</NavLink> : null}
+      {canRules ? <NavLink to="/decretos">{t("nav.decrees")}</NavLink> : null}
+      {canRules ? <NavLink to="/delegacoes">{t("nav.delegations")}</NavLink> : null}
+      {canRules ? <NavLink to="/cadeia">{t("nav.chain")}</NavLink> : null}
+      {canRules ? <NavLink to="/teto">{t("nav.ceiling")}</NavLink> : null}
+      {canSecrets ? <NavLink to="/politica">{t("nav.policy")}</NavLink> : null}
+      {canInstructions ? <NavLink to="/instrucoes">{t("nav.instructions")}</NavLink> : null}
     </nav>
   );
 }

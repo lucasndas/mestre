@@ -1506,6 +1506,437 @@ export interface ChatChoice {
 }
 
 //////////
+// source: types_rules.go
+
+/**
+ * The codes of the errors of those screens.
+ */
+export const CodeDecreeRefused: Code = "decree_refused";
+/**
+ * The codes of the errors of those screens.
+ */
+export const CodeDecreeEnded: Code = "decree_ended";
+/**
+ * The codes of the errors of those screens.
+ */
+export const CodeDecreeLocked: Code = "mestre_locked";
+/**
+ * The codes of the errors of those screens.
+ */
+export const CodeNoProposal: Code = "no_proposal";
+/**
+ * The codes of the errors of those screens.
+ */
+export const CodeGrandMasterOnly: Code = "grand_master_only";
+/**
+ * The codes of the errors of those screens.
+ */
+export const CodeNoTable: Code = "no_table";
+/**
+ * The codes of the errors of those screens.
+ */
+export const CodeTableOver: Code = "table_over";
+/**
+ * The codes of the errors of those screens.
+ */
+export const CodeReasonRequired: Code = "reason_required";
+/**
+ * The codes of the errors of those screens.
+ */
+export const CodeInvalidPolicy: Code = "invalid_policy";
+/**
+ * The codes of the errors of those screens.
+ */
+export const CodeFileChanged: Code = "file_changed";
+/**
+ * The codes of the errors of those screens.
+ */
+export const CodeFileRefused: Code = "file_refused";
+/**
+ * The codes of the errors of those screens.
+ */
+export const CodeTooLarge: Code = "too_large";
+/**
+ * The codes of the errors of those screens.
+ */
+export const CodeNoFolder: Code = "no_folder";
+/**
+ * DecreeRow is a decree as the screen shows it.
+ */
+export interface DecreeRow {
+  number: number /* int64 */;
+  kind: string; // rule or exception
+  state: string; // active, suspended, used, expired or revoked
+  workspace: string;
+  mesa: string;
+  scope: string;
+  /**
+   * Effect is the kind of effect (permission, behavior, policy, ceiling, delegation).
+   */
+  effect: string;
+  /**
+   * Summary is what the decree does, in the words of the engine.
+   */
+  summary: string;
+  /**
+   * Text is the order as the author gave it.
+   */
+  text: string;
+  author: string;
+  author_name: string;
+  /**
+   * Level is the level that counts now (the one the author has today).
+   */
+  level: string;
+  created_at: string;
+  until?: string;
+  ended_at?: string;
+  /**
+   * Frozen says the Mestre is locked: every decree in force is shown as suspended.
+   */
+  frozen: boolean;
+  /**
+   * Uses is what the decree freed, in the order it happened (the last ones).
+   */
+  uses: DecreeUse[];
+  use_count: number /* int */;
+  /**
+   * CanRevoke says the level of who asks may revoke it (the server decides again);
+   * RevokeNeedsPIN says revoking it loosens something.
+   */
+  can_revoke: boolean;
+  revoke_needs_pin: boolean;
+}
+/**
+ * DecreeUse is something done on the strength of a decree.
+ */
+export interface DecreeUse {
+  at: string;
+  character: string;
+  action: string;
+}
+/**
+ * DecreeWorkspace is the decrees of one workspace.
+ */
+export interface DecreeWorkspace {
+  workspace: string;
+  decrees: DecreeRow[];
+}
+/**
+ * DecreeList is GET /api/decrees: the workspaces of who asks.
+ */
+export interface DecreeList {
+  workspaces: DecreeWorkspace[];
+}
+/**
+ * DecreeInput is POST /api/decrees: the proposal of a permanent rule or of a
+ * one-time exception. Nothing is a decree before the confirmation.
+ */
+export interface DecreeInput {
+  workspace: string;
+  mesa?: string;
+  /**
+   * Kind is "rule" or "exception".
+   */
+  kind: string;
+  /**
+   * Effect is "permission" or "behavior" (a rule), "permission" (an exception).
+   */
+  effect: string;
+  /**
+   * Target is what the rule is about: class, character, table or workspace.
+   */
+  target_kind: string;
+  target_name?: string;
+  /**
+   * Field and Side say what a permission rule frees or forbids:
+   * files, commands, tools or domains; allow or deny.
+   */
+  field?: string;
+  side?: string;
+  value?: string;
+  /**
+   * Command is the exact command an exception frees.
+   */
+  command?: string;
+  /**
+   * Instruction is the short instruction of a behavior.
+   */
+  instruction?: string;
+  /**
+   * Until is the end of the validity of a rule (empty: permanent).
+   */
+  until?: string;
+  /**
+   * Text is the order as the person says it; it is kept as it is.
+   */
+  text: string;
+}
+/**
+ * DecreeProposal is what the engine understood, waiting for the click of the author.
+ */
+export interface DecreeProposal {
+  id: string;
+  /**
+   * Text is the confirmation: "Entendi: … Confirma?".
+   */
+  text: string;
+  order: string;
+  /**
+   * PIN says confirming asks the PIN of the author; Why says why.
+   */
+  pin: boolean;
+  why?: string;
+}
+/**
+ * ConfirmedDecree is the decree the confirmation made.
+ */
+export interface ConfirmedDecree {
+  number: number /* int64 */;
+  state: string;
+}
+/**
+ * SubRow is a subdelegation.
+ */
+export interface SubRow {
+  id: number /* int64 */;
+  workspace: string;
+  mesa: string;
+  type: string;
+  grantor: string;
+  grantee: string;
+  origin: number /* int64 */;
+  reason: string;
+  created_at: string;
+  until: string;
+  ended_at?: string;
+  active: boolean;
+  decisions: number /* int */;
+}
+/**
+ * RuleRow is a temporary table rule.
+ */
+export interface RuleRow {
+  id: number /* int64 */;
+  workspace: string;
+  table: string;
+  class: string;
+  state: string;
+  risk: string;
+  /**
+   * Level is the level of the author (agent, mesa, grand master or a person).
+   */
+  level: string;
+  author: string;
+  /**
+   * Covers is what the rule frees: a pattern or the exact action.
+   */
+  covers: string;
+  mission?: string;
+  created_at: string;
+  until?: string;
+  decisions: number /* int */;
+}
+/**
+ * DelegationRow is a delegation of decision: a decree of effect delegation.
+ */
+export interface DelegationRow extends DecreeRow {
+  /**
+   * Type is the type of request the Grand Master may decide.
+   */
+  type: string;
+  /**
+   * Decisions is how many were taken under it.
+   */
+  decisions: number /* int */;
+}
+/**
+ * DelegationWorkspace is the delegations, subdelegations and temporary rules of
+ * one workspace.
+ */
+export interface DelegationWorkspace {
+  workspace: string;
+  delegations: DelegationRow[];
+  subdelegations: SubRow[];
+  rules: RuleRow[];
+}
+/**
+ * DelegationList is GET /api/delegations.
+ */
+export interface DelegationList {
+  workspaces: DelegationWorkspace[];
+  /**
+   * CanRevokeAll and CanRenew are the Owner's buttons; the server decides again.
+   */
+  can_revoke_all: boolean;
+  can_revoke: boolean;
+}
+/**
+ * RevokeAllResult is what the emergency button took away.
+ */
+export interface RevokeAllResult {
+  delegations: number /* int */;
+  subdelegations: number /* int */;
+  rules: number /* int */;
+  rules_by_workspace: { [key: string]: number /* int */};
+}
+/**
+ * QueueRow is the queue of one level of approvers.
+ */
+export interface QueueRow {
+  /**
+   * Level is agent, mesa, grand_master or people, as the engine names it.
+   */
+  level: string;
+  table?: string;
+  open: number /* int */;
+  /**
+   * OldestSeconds is how long the oldest open request has waited.
+   */
+  oldest_seconds: number /* int64 */;
+  avg_wait_seconds: number /* int64 */;
+}
+/**
+ * PauseInfo is the pause of the autonomy of a table.
+ */
+export interface PauseInfo {
+  by: string;
+  /**
+   * ByName is the name of the person, when it was one.
+   */
+  by_name?: string;
+  /**
+   * Kind is character (the Grand Master) or person.
+   */
+  kind: string;
+  reason: string;
+  since: string;
+}
+/**
+ * ChainTable is a table in the supervision.
+ */
+export interface ChainTable {
+  table: string;
+  pause?: PauseInfo;
+  queues: QueueRow[];
+  /**
+   * CanResume says who asks may resume this pause now.
+   */
+  can_resume: boolean;
+}
+/**
+ * ChainWorkspace is the supervision of one workspace.
+ */
+export interface ChainWorkspace {
+  workspace: string;
+  /**
+   * Queues are the levels that are not of a table (Grand Master, people).
+   */
+  queues: QueueRow[];
+  tables: ChainTable[];
+}
+/**
+ * ChainStatus is GET /api/chain.
+ */
+export interface ChainStatus {
+  workspaces: ChainWorkspace[];
+  /**
+   * CanPause says the level of who asks may pause and resume.
+   */
+  can_pause: boolean;
+}
+/**
+ * PauseInput is the body of the pause and of the resume: the reason is required.
+ */
+export interface PauseInput {
+  reason: string;
+}
+/**
+ * CeilingView is the ceiling in force of a workspace.
+ */
+export interface CeilingView {
+  workspace: string;
+  /**
+   * Present says there is a file; Valid says it is read; Error says why not.
+   */
+  present: boolean;
+  valid: boolean;
+  error?: string;
+  /**
+   * Text is the file as it is (read only here).
+   */
+  text: string;
+  /**
+   * Widenings are the decrees of effect ceiling in force.
+   */
+  widenings: DecreeRow[];
+  /**
+   * CanWiden says who asks may open a request to widen it.
+   */
+  can_widen: boolean;
+}
+/**
+ * WidenInput is POST /api/workspaces/{workspace}/ceiling/widen: what the ceiling
+ * is asked to allow. It opens a proposal of decree; it changes nothing by itself.
+ */
+export interface WidenInput {
+  field: string; // files, commands, tools or domains
+  value: string;
+  text: string;
+}
+/**
+ * PolicyFile is the approval policy file of a workspace.
+ */
+export interface PolicyFile {
+  workspace: string;
+  text: string;
+  /**
+   * Version is the hash of Text, the base of the next save.
+   */
+  version: string;
+  /**
+   * Default says the workspace has no file and Text is the default content.
+   */
+  default: boolean;
+}
+/**
+ * PolicyInput is PUT /api/workspaces/{workspace}/policy.
+ */
+export interface PolicyInput {
+  text: string;
+  /**
+   * Version is the version the edit began from; a file changed since is refused.
+   */
+  version: string;
+}
+/**
+ * Instructions are the extra instructions of the users for a workspace.
+ */
+export interface Instructions {
+  workspace: string;
+  grand_master: string;
+  table_masters: string;
+  max_bytes: number /* int */;
+}
+/**
+ * InstructionsInput is PUT /api/workspaces/{workspace}/instructions: the text of
+ * one of the two files.
+ */
+export interface InstructionsInput {
+  /**
+   * Role is "grand_master" or "table_masters".
+   */
+  role: string;
+  text: string;
+}
+/**
+ * RuleWorkspaces is GET /api/rules/workspaces: the workspaces of who asks.
+ */
+export interface RuleWorkspaces {
+  workspaces: string[];
+}
+
+//////////
 // source: ws.go
 
 /**

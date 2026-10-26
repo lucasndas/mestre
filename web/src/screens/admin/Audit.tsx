@@ -17,6 +17,10 @@ const CATEGORIES: [key: string, prefix: string][] = [
   ["transfer", "panel.transfer."],
   ["login", "panel.login"],
   ["pin", "panel.pin."],
+  ["decrees", "panel.decree."],
+  ["delegations", "panel.subdelegation."],
+  ["chain", "panel.chain."],
+  ["workspaceRules", "panel.ceiling."],
 ];
 
 export function Audit() {

@@ -77,6 +77,8 @@ Tela só do **Dono** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capac
 
 - Bases e fichas: a tela exporta e importa; as regras de formato e de conflito de nomes são as de [exportar e importar](../orquestracao/bases-e-fichas.md#exportar-e-importar).
 
+As telas de decretos, delegações, supervisão da cadeia, teto, política e instruções extras estão em [regras e cadeia](administracao-regras.md).
+
 ### Implementação: usuários, segredos e auditoria
 
 Código: `internal/panel/routes_users.go`, `routes_secrets.go` e `routes_audit.go` (tipos em `types_admin.go`, gerados em `web/src/gen/panel.ts`) e `web/src/screens/admin/`. O nível vem da [tabela](../telegram/usuarios-e-niveis.md#níveis-e-capacidades) (`forbidden_level` com `need` e `have`; o painel diz "exige o nível Dono; o seu é Administrador"); toda ação que muda algo pede o PIN na própria requisição.

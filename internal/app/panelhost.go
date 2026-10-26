@@ -68,6 +68,9 @@ func (e *Engine) openPanel(ctx context.Context, db *store.DB, integ IntegrationR
 		e.log.Error("app: the panel could not be made; this period has none", "err", err)
 		return func() {}
 	}
+	if rs, ok := integ.(PanelRulesSource); ok {
+		p.SetRules(rs.PanelRules())
+	}
 	rel := newEngineRelay(e)
 	if e.deps.PanelTerminals != nil {
 		p.SetTerminals(e.deps.PanelTerminals)
