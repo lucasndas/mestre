@@ -1,7 +1,8 @@
 #!/bin/sh
-# Pre-push hook of the repository: the full suite, without -race, on the packages
-# the push changed, and the ones that import them (docs/qualidade/testes.md,
-# "Antes do push"). Like the pre-commit hook it tests what is being pushed,
+# Pre-push hook of the repository: the whole fast suite (the web side too when
+# web/ changed in the pushed range), then the full suite, without -race, on the
+# packages the push changed and the ones that import them
+# (docs/qualidade/testes.md, "Antes do push"). Like the pre-commit hook it tests what is being pushed,
 # not the working tree: the pushed commit is written to a folder inside the
 # git directory (the same path every time, to keep the Go build cache warm)
 # with a private index, so nothing in the working tree is touched.
@@ -14,6 +15,7 @@ set -eu
 cd "$(git rev-parse --show-toplevel)"
 . "$(dirname "$0")/suite.sh"
 zero=0000000000000000000000000000000000000000
+root="$(pwd)"
 gitdir="$(cd "$(git rev-parse --git-dir)" && pwd)"
 snap="$gitdir/prepush-snapshot"
 idx="$gitdir/prepush-index"
@@ -58,7 +60,13 @@ while read -r _ local_sha _ remote_sha; do
 	# The suite starts no git; the snapshot is not a repository.
 	if ! (
 		unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE GIT_PREFIX
-		cd "$snap" && printf '%s\n' "$files" | with_suite_lock go run ./tools/testrun prepush
+		cd "$snap"
+		web=0
+		printf '%s\n' "$files" | grep -q '^web/' && web=1
+		pushed() {
+			fast_suite "$root" "$web" && printf '%s\n' "$files" | go run ./tools/testrun prepush
+		}
+		with_suite_lock pushed
 	); then
 		status=1
 	else
