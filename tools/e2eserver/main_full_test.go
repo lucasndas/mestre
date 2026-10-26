@@ -57,7 +57,10 @@ func TestTheE2EServerServesTheEmbeddedPanelAndStops(t *testing.T) {
 	// The Go jobs do not build the front end (docs/decisoes/0027): without a
 	// bundle the panel answers its own "not built" page, which still proves the
 	// panel is mounted; with one (the e2e job), it is the real index.
-	if st, body := get("/"); !(st == 200 && strings.Contains(body, "<title>Mestre</title>")) && !(st == 503 && strings.Contains(body, "não foi construído")) {
+	st, body := get("/")
+	built := st == 200 && strings.Contains(body, "<title>Mestre</title>")
+	notBuilt := st == 503 && strings.Contains(body, "não foi construído")
+	if !built && !notBuilt {
 		t.Errorf("index = %d %s", st, body)
 	}
 	cancel()
