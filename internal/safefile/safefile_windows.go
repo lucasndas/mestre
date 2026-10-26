@@ -1,6 +1,7 @@
 package safefile
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -11,6 +12,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // heldDir is a folder path whose components are each held by a handle
@@ -291,6 +294,28 @@ func removeDir(dir, base string) error {
 	return nil
 }
 
+// renameRetries and renameWait bound how long a replacement waits for a reader
+// to let go of the target: Go opens files without FILE_SHARE_DELETE, so a
+// replacement over a file somebody has open for an instant (a character reading
+// a scroll) is refused until that handle closes.
+const (
+	renameRetries = 50
+	renameWait    = 20 * time.Millisecond
+)
+
+// renameOver moves tmp over target, waiting out a sharing violation.
+func renameOver(tmp, target string) error {
+	err := os.Rename(tmp, target)
+	for range renameRetries {
+		if !errors.Is(err, windows.ERROR_SHARING_VIOLATION) && !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+			break
+		}
+		_ = clock.Sleep(context.Background(), clock.Real{}, renameWait)
+		err = os.Rename(tmp, target)
+	}
+	return err
+}
+
 func write(dir, base string, data []byte, o Options) error {
 	d, err := openDir(dir, true)
 	if err != nil {
@@ -351,7 +376,7 @@ func write(dir, base string, data []byte, o Options) error {
 	// folders of the path are held, so the target is in the checked folder. A
 	// read-only target (the copy it replaces) is made writable to be replaced.
 	clearReadOnly(target)
-	if err := os.Rename(tmp, target); err != nil {
+	if err := renameOver(tmp, target); err != nil {
 		clearReadOnly(tmp)
 		_ = os.Remove(tmp)
 		return err

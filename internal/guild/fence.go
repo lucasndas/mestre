@@ -167,6 +167,10 @@ type Fence struct {
 	err    error // the last failure of a check
 	// stopReconcile cancels the reconciliation that runs (nil when none does).
 	stopReconcile context.CancelFunc
+	// wait is the timer of the wait of a promoted machine, armed when the fence
+	// is made (the moment its state becomes waiting), not when Run gets to
+	// start: a clock that moves in between does not shorten the wait.
+	wait clock.Timer
 }
 
 // NewFence returns the fence of a Citadel that is starting (or, with
@@ -194,7 +198,11 @@ func NewFence(cfg FenceConfig) *Fence {
 	case cfg.Promoted:
 		st = FenceWaiting
 	}
-	return &Fence{cfg: cfg, kick: make(chan struct{}, 1), flush: make(chan struct{}, 1), state: st}
+	f := &Fence{cfg: cfg, kick: make(chan struct{}, 1), flush: make(chan struct{}, 1), state: st}
+	if st == FenceWaiting {
+		f.wait = cfg.Clock.NewTimer(cfg.Wait)
+	}
+	return f
 }
 
 // State is the state of the fence now.
@@ -424,8 +432,11 @@ func (f *Fence) Run(ctx context.Context) error {
 		return ctx.Err()
 	}
 	if f.State() == FenceWaiting {
-		if err := clock.Sleep(ctx, f.cfg.Clock, f.cfg.Wait); err != nil {
-			return err
+		defer f.wait.Stop()
+		select {
+		case <-f.wait.C():
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 	t := f.cfg.Clock.NewTicker(f.cfg.Interval)

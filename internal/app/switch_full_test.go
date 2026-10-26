@@ -648,15 +648,13 @@ func TestACitadelRestartedDuringTheWaitOfItsPromotionStillWaits(t *testing.T) {
 	w.kill(b)
 	_ = w.clk.Advance(2 * time.Minute) // b is down: it cannot apply the time, and the error says so
 	w.start(b)
-	w.waitFor("b to come back as the Citadel of the epoch 2", 0, func() bool {
+	// The fence arms its timer of 60 s when it is made, and it says waiting from
+	// then on: the clock moves only after that, so the wait ends 60 s after it.
+	w.waitFor("b to come back as the Citadel of the epoch 2, waiting", 0, func() bool {
 		st, ok := w.status(b)
-		return ok && st.Role == app.RoleCitadel && st.Epoch == 2
+		return ok && st.Role == app.RoleCitadel && st.Epoch == 2 && st.Fence == "waiting"
 	})
-	// The role is told before the fence arms its timer of 60 s (Run starts
-	// after it), so one jump of 59 s could land before the timer exists and
-	// leave it 60 s ahead of the clock. The clock goes by steps of 1 s: the
-	// wait ends 60 s after the timer was armed, whenever that was, and never
-	// earlier.
+	// The clock goes by steps of 1 s: the wait never ends earlier than 60 s.
 	for range 59 {
 		if err := w.clk.Advance(time.Second); err != nil {
 			t.Fatal(err)
