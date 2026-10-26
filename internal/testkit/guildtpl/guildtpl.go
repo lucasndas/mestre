@@ -30,25 +30,26 @@ var (
 // migrated returns the Guild database file as the migrations leave it.
 func migrated() ([]byte, error) {
 	once.Do(func() {
-		dir, err := os.MkdirTemp("", "guildtpl")
-		if err != nil {
-			tplErr = err
-			return
-		}
-		defer os.RemoveAll(dir)
-		path := filepath.Join(dir, "mestre.db")
-		db, err := guilddb.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
-		if err != nil {
-			tplErr = err
-			return
-		}
-		if err := db.Close(); err != nil {
-			tplErr = err
-			return
-		}
-		template, tplErr = os.ReadFile(path)
+		template, tplErr = shared("guild", guilddb.Migrations, buildGuild)
 	})
 	return template, tplErr
+}
+
+func buildGuild() ([]byte, error) {
+	dir, err := os.MkdirTemp("", "guildtpl")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "mestre.db")
+	db, err := guilddb.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Close(); err != nil {
+		return nil, err
+	}
+	return os.ReadFile(path)
 }
 
 // Seed leaves the migrated database at path, creating its folder, unless a

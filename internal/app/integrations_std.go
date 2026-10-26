@@ -63,6 +63,11 @@ type StandardIntegration struct {
 	FFmpeg string
 	// AttachmentLimit is the biggest attachment (default 20 MB).
 	AttachmentLimit int64
+	// HashCost is the argon2id cost of the PINs and passwords of the users.
+	// Zero is the production cost and the wiring of `mestre run` never sets it:
+	// it exists so the tests, which hash a PIN in nearly every scenario, do not
+	// pay 64 MiB and two passes each time (docs/qualidade/testes.md).
+	HashCost users.PINCost
 }
 
 // Open implements Integration. It reads nothing from the vault and writes nothing
@@ -84,7 +89,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r := &stdRun{s: s, env: env, quota: &github.Quota{Clock: env.Clock}}
 	r.tokens = &github.Tokens{Apps: &github.Registry{DB: env.DB}, Keys: env.Vault, Clock: env.Clock, BaseURL: s.GitHubBase, HTTP: s.HTTP}
 	r.alert = &telegram.OwnerAlerts{Clock: env.Clock}
-	svc, err := users.New(users.Options{DB: env.DB, Clock: env.Clock, Alerts: r.alert, Approvals: lateApprovals{r}})
+	svc, err := users.New(users.Options{DB: env.DB, Clock: env.Clock, Alerts: r.alert, Approvals: lateApprovals{r}, PIN: s.HashCost, Password: s.HashCost})
 	if err != nil {
 		return nil, fmt.Errorf("app: the users: %w", err)
 	}

@@ -71,7 +71,7 @@ func newInteg(t *testing.T, withToken bool) *integ {
 		i.uses = nil
 		i.mu.Unlock()
 	}
-	i.std = StandardIntegration{TelegramBase: "https://api.telegram.org", HTTP: &http.Client{Transport: fakenet.HandlerTransport(i.tg)}}
+	i.std = StandardIntegration{HashCost: users.PINCost{MemoryKiB: 8, Time: 1, Threads: 1}, TelegramBase: "https://api.telegram.org", HTTP: &http.Client{Transport: fakenet.HandlerTransport(i.tg)}}
 	return i
 }
 

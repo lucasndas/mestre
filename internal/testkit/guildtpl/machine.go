@@ -20,25 +20,26 @@ var (
 // migratedMachine returns the machine database file as the migrations leave it.
 func migratedMachine() ([]byte, error) {
 	mOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "machinetpl")
-		if err != nil {
-			mTplErr = err
-			return
-		}
-		defer os.RemoveAll(dir)
-		path := filepath.Join(dir, "maquina.db")
-		db, err := machinedb.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
-		if err != nil {
-			mTplErr = err
-			return
-		}
-		if err := db.Close(); err != nil {
-			mTplErr = err
-			return
-		}
-		mTemplate, mTplErr = os.ReadFile(path)
+		mTemplate, mTplErr = shared("machine", machinedb.Migrations, buildMachine)
 	})
 	return mTemplate, mTplErr
+}
+
+func buildMachine() ([]byte, error) {
+	dir, err := os.MkdirTemp("", "machinetpl")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "maquina.db")
+	db, err := machinedb.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Close(); err != nil {
+		return nil, err
+	}
+	return os.ReadFile(path)
 }
 
 // OpenMachine is machinedb.Open for a test: when no database exists at path
