@@ -24,9 +24,9 @@ Reunir num só lugar as telas para configurar e acompanhar o Mestre. Cada tela �
 | Teto do workspace | o teto em vigor; "ampliar" abre a criação de um decreto, nunca edita direto | [teto do workspace](../classes/teto-do-workspace.md) |
 | Política de aprovação | editor do arquivo de política com validação antes de salvar | [arquivo de política](../aprovacoes/arquivo-de-politica.md) |
 | Instruções extras | texto do usuário para o Grão-Mestre e para os Mestres de mesa de cada workspace | [Grão-Mestre](../orquestracao/grao-mestre.md), [Mestre da mesa](../orquestracao/mestre-da-mesa.md) |
-| Workspaces | lista, criar (abre a sessão zero), acompanhar as etapas da sessão zero e tentar de novo a que falhou, pausar e retomar; os comandos de verificação (`verificacao.yaml`): ver a proposta do `analysis`, editar e confirmar (Administrador) | [workspaces](../orquestracao/workspaces.md), [sessão zero do workspace](../sessao-zero/workspace.md) |
+| Workspaces | lista, criar (abre a sessão zero), acompanhar as etapas da sessão zero e tentar de novo a que falhou, pausar e retomar; os comandos de verificação (`verificacao.yaml`): ver a proposta do `analysis`, editar e confirmar (Administrador) | [workspaces](../orquestracao/workspaces.md), [sessão zero do workspace](../sessao-zero/workspace.md); a tela em [workspaces no painel](workspaces.md) |
 | Consumo de uso | gráficos e tabelas por personagem, missão, mesa, workspace, conta e dia; limites configurados e quanto falta | [limites de uso](../plataforma/limites-de-uso.md) |
-| Guilda e saúde das máquinas | ver seção abaixo; as colunas Autocura, Checklist e Página reserva e a faixa de máquina única são do M7 | [camadas](../autocura/camadas.md), [checklist](../plataforma/checklist.md) |
+| Guilda e saúde das máquinas | ver seção abaixo; as colunas Autocura, Checklist e Página reserva, o Guardião e o botão da transcrição são do M7 | [camadas](../autocura/camadas.md), [checklist](../plataforma/checklist.md) |
 | Segredos | nomes dos segredos do cofre, tipo, impressão curta, datas e metadados; nenhum valor salvo é mostrado de novo, nem ao Dono: só substituir e apagar, com PIN; é o único lugar de cadastro de credenciais de site (página de login, usuário, segredo, dono, classes, domínios, tipo, com a sugestão de preferir senha de app, token ou chave de API, e validade opcional); avisos de validade das credenciais ([cofre](../plataforma/cofre.md#credenciais-de-site)); gerar nova chave de recuperação, com PIN, avisando que backups antigos exigem a anterior e que sem ela o backup do cofre é inútil | [credenciais de site](../plataforma/cofre.md#credenciais-de-site), [backup e chave de recuperação](../plataforma/cofre.md#backup-e-chave-de-recuperação) |
 | Diagnóstico com IA (desde o M7) | ficha de diagnóstico de cada máquina | [diagnóstico com IA](../autocura/diagnostico-com-ia.md#ficha-de-diagnóstico) |
 | Auditoria | trilha de auditoria com filtros (quem, o quê, quando, workspace) | [persistência](../arquitetura/persistencia.md) |
@@ -55,11 +55,23 @@ Uma linha por máquina da Guilda, atualizada em tempo real, com a época atual n
 
 Ações da tela: aceitar ou recusar uma máquina que pediu para entrar na Guilda, remover uma máquina, **excluir** uma máquina ou tirar a exclusão, **passar a Cidadela** a uma máquina online (troca planejada), tudo só o Dono, com PIN ([Guilda](../guilda/guilda.md), [Cidadela e Torres](../guilda/cidadela-e-torres.md)); mudar a prioridade (Dono); aplicar uma correção oferecida pelo checklist; ativar ou desativar a transcrição numa máquina ([Whisper](../plataforma/instalacao-e-atualizacao.md#whisper)); pedir ao Guardião as ações da [lista fechada](../autocura/guardiao.md#lista-fechada-de-ações) (status, logs, reiniciar, checklist).
 
+- **Do M6 ao M7:** a tela traz a faixa do modo máquina única, as colunas Papel, Estado, Motor, Ficha, Excluída, Carga, Agentes e Prioridade e o aviso de remoção; o Guardião, a autocura, o checklist, a página reserva e **ativar ou desativar a transcrição** (arquivos e benchmark do Whisper) chegam no M7, e a tela só diz se a máquina transcreve.
 - **Promoção recusada:** passar a Cidadela ou promover uma máquina excluída ou **fora da rede local** é recusado com o motivo, no painel e no Telegram: ninguém da Guilda alcança essa máquina pelo `mestre.local`.
 
 ### Fuso da Guilda
 
 O fuso da Guilda (padrão: o do sistema da máquina que criou a Guilda) fica no banco da Guilda e só o Dono o muda, nesta tela. Vale para o backup diário às 03:00 ([persistência](../arquitetura/persistencia.md#backup)), a virada do dia dos [limites de uso](../plataforma/limites-de-uso.md), as validades dos [decretos](../telegram/decretos.md) e, quando o workspace não tem um próprio, os [rituais](../orquestracao/rituais.md). Não muda numa troca de Cidadela.
+
+### Implementação: Guilda
+
+`internal/panel/routes_guild.go` (tipos em `types_guild.go`) e `internal/app/guildhost.go`, sobre o `guild.Citadel` que age; a tela é `web/src/screens/admin/Guild.tsx`. Tudo é do Dono (`manage_machines`, e `guild_settings` no fuso), com o PIN na própria requisição. O tópico `guild:main` do `/ws/ui` manda o snapshot e, a cada 3 s com alguém seguindo, a visão de novo se mudou. Máquina fora da rede local é a que não tem IP numa rede das interfaces da Cidadela (`guild.LocalNetworks`).
+
+| Rota | O que faz |
+|---|---|
+| `GET /api/guild`, `GET /api/guild/machines/{id}/removal` | a visão (época, fuso, `single`, máquinas, pedidos) e o aviso da remoção (quantos e quais agentes rodam lá) |
+| `POST /api/guild/joins/{id}/decide`, `…/machines/{id}/remove` (`confirm`), `…/exclusion`, `…/pass-citadel`, `PUT …/priority`, `PUT /api/guild/timezone` | aceitar ou recusar, remover, excluir, troca planejada (`Engine.Handover`, em segundo plano), prioridade, fuso; recusas são `refused` com `reason` (`excluded_machine`, `outside_local_network`, `citadel_protected`, `not_online`, `no_lock`, `not_revealed`, `handover_in_progress`…; uma troca planejada por vez) |
+
+Auditoria `panel.guild.*` (`entry_decided`, `machine_removed`, `exclusion`, `citadel_pass_started`, `citadel_pass_refused`, `priority`, `timezone`) com `user_id` e antes/depois, sem PIN. "GitHub fora" e "Telegram parado" vêm da cerca (`Fence`: `lock-down` e `TelegramStopped`).
 
 ### Operador do PC
 

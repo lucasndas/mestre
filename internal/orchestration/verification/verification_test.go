@@ -367,7 +367,7 @@ func TestASecretSplitByEscapesIsHiddenAndTheOutputHasNoEscapes(t *testing.T) {
 	}
 }
 
-// Part of CA-SZ-WS-08 (the notice of an outside edit and the confirmation are the panel, M6): the stage analysis leaves a proposal that does not hold before an
+// Part of CA-SZ-WS-08 (the proposal; the notice of an outside edit is below): the stage analysis leaves a proposal that does not hold before an
 // Administrator confirms it, and a file with content is never overwritten.
 func TestTheProposalIsWrittenOnceAndHoldsNothingUntilConfirmed(t *testing.T) {
 	t.Parallel()
@@ -393,5 +393,48 @@ func TestTheProposalIsWrittenOnceAndHoldsNothingUntilConfirmed(t *testing.T) {
 	}
 	if again, _ := os.ReadFile(path); string(again) != string(b) || len(told) != 1 {
 		t.Fatal("a second run rewrote or told again")
+	}
+}
+
+// CA-SZ-WS-08, the part of the edit made outside the panel: the confirmed version
+// stays in force whatever the file says, the edit is told once for each different
+// content, and the file that comes back to the confirmed content (or a new
+// confirmation) rearms the notice.
+func TestAnOutsideEditIsToldOnceAndTheConfirmedVersionStaysInForce(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	ctx := t.Context()
+	if told, err := s.OutsideEdit(ctx, "loja", []byte("qualquer coisa")); err != nil || told {
+		t.Fatalf("before a confirmation the file is a proposal: told %v, %v", told, err)
+	}
+	if _, err := s.Confirm(ctx, "loja", "u1", []byte(goodDoc)); err != nil {
+		t.Fatal(err)
+	}
+	if told, err := s.OutsideEdit(ctx, "loja", []byte(goodDoc)); err != nil || told {
+		t.Fatalf("the confirmed content is no edit: told %v, %v", told, err)
+	}
+	edited := []byte("version: 1\ncomandos: [\"rm -rf /\"]\n")
+	for i, want := range []bool{true, false} {
+		if told, err := s.OutsideEdit(ctx, "loja", edited); err != nil || told != want {
+			t.Fatalf("edit seen %d times: told %v, %v, want %v", i+1, told, err, want)
+		}
+	}
+	if doc, ok, err := s.Confirmed(ctx, "loja"); err != nil || !ok || doc.Commands[0] != "go build ./..." {
+		t.Fatalf("the version in force is %+v, %v, %v", doc, ok, err)
+	}
+	if _, err := s.OutsideEdit(ctx, "loja", []byte(goodDoc)); err != nil { // back to the confirmed content
+		t.Fatal(err)
+	}
+	if told, err := s.OutsideEdit(ctx, "loja", edited); err != nil || !told {
+		t.Fatalf("the same edit after the file went back: told %v, %v", told, err)
+	}
+	if _, err := s.Confirm(ctx, "loja", "u2", edited); err != nil {
+		t.Fatal(err)
+	}
+	if c, ok, err := s.Confirmation(ctx, "loja"); err != nil || !ok || c.By != "u2" || c.Doc != string(edited) {
+		t.Fatalf("confirmation %+v, %v, %v", c, ok, err)
+	}
+	if told, err := s.OutsideEdit(ctx, "loja", edited); err != nil || told {
+		t.Fatalf("the newly confirmed content is no edit: told %v, %v", told, err)
 	}
 }

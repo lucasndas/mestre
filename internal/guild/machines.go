@@ -388,7 +388,7 @@ func (c *Citadel) HandleCertRenew(ctx context.Context, m *protocol.Message) (*pr
 	}
 	cert, err := c.Renew(ctx, m.Peer.ID, kind, block.Bytes)
 	switch {
-	case errors.Is(err, ErrNotActive), errors.Is(err, ErrExpiredCredential), errors.Is(err, errNoMachine), errors.Is(err, ErrRenewRefused):
+	case errors.Is(err, ErrNotActive), errors.Is(err, ErrExpiredCredential), errors.Is(err, ErrNoMachine), errors.Is(err, ErrRenewRefused):
 		return nil, protocol.NewError(protocol.CodeForbidden, "%v", err)
 	case err != nil:
 		return nil, err
@@ -411,7 +411,7 @@ func (c *Citadel) HandleLeave(ctx context.Context, m *protocol.Message) (*protoc
 	switch {
 	case errors.Is(err, ErrNotActive):
 		return nil, nil // already gone: the ack tells the machine to go on
-	case errors.Is(err, ErrCitadelProtected), errors.Is(err, errNoMachine):
+	case errors.Is(err, ErrCitadelProtected), errors.Is(err, ErrNoMachine):
 		return nil, protocol.NewError(protocol.CodeForbidden, "%v", err)
 	case err != nil:
 		return nil, err

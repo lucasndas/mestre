@@ -58,7 +58,7 @@ func (e *Engine) openPanel(ctx context.Context, db *store.DB, integ IntegrationR
 		return func() {}
 	}
 	svc, alerts := src.PanelPieces()
-	opts := panel.Options{DB: db, Clock: e.clk, Users: svc, Alerts: alerts, Assets: assets, Machine: e.id.MachineID, Logger: e.log, VaultChanged: vaultChanged}
+	opts := panel.Options{DB: db, Clock: e.clk, Users: svc, Alerts: alerts, Assets: assets, Machine: e.id.MachineID, Logger: e.log, VaultChanged: vaultChanged, Mask: e.deps.Masker.Mask}
 	if adm, ok := integ.(PanelAdminSource); ok {
 		opts.GitHub, opts.Vault = adm.PanelAdmin()
 	}
@@ -94,6 +94,16 @@ func (e *Engine) openPanel(ctx context.Context, db *store.DB, integ IntegrationR
 		p.SetCanvas(canvasHost{get: e.orc.Load, clk: e.clk})
 	}
 	p.SetManage(func() panel.Manage { return e.panelManage(db) })
+	if e.deps.PanelWorkspaces != nil {
+		p.SetWorkspaces(e.deps.PanelWorkspaces)
+	} else if w, ok := integ.(WorkspacePanelSource); ok {
+		p.SetWorkspaces(w.PanelWorkspaces())
+	}
+	if e.deps.PanelGuild != nil {
+		p.SetGuild(e.deps.PanelGuild)
+	} else {
+		p.SetGuild(newGuildHost(e))
+	}
 	e.relay.Store(rel)
 	e.panel.Store(p)
 	run(func() { p.Run(ctx) })

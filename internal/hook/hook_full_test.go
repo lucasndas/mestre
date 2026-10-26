@@ -151,8 +151,8 @@ func TestAnApprovedActionPassesOnceAndTheNextAsksAgain(t *testing.T) {
 	term, out, _ := e.claude("t5", agent, quoteArg(builds.mestre)+" hook --provider claude-code --event PreToolUse", script)
 	action := classes.Action{Kind: providers.KindShell, Tool: "Bash", Command: "npm install x"}
 
-	say(t, e.ctx, term, "instale")
-	out.waitPrompt(t, "Tool Bash blocked by hook: "+classes.AskReason(1, action))
+	asked1 := "Tool Bash blocked by hook: " + classes.AskReason(1, action)
+	sayUntil(t, e.ctx, term, out, "instale", func(screen string) bool { return promptAfter(screen, asked1) })
 	st.mu.Lock()
 	waiting := st.waiting[agent]
 	st.mu.Unlock()
@@ -174,12 +174,11 @@ func TestAnApprovedActionPassesOnceAndTheNextAsksAgain(t *testing.T) {
 	if err := e.Rules.Save(e.ctx, &approved); err != nil {
 		t.Fatal(err)
 	}
-	say(t, e.ctx, term, "pedido #1 aprovado: repita")
-	out.waitFor(t, "pedido #1 aprovado: repita")
-	out.waitPrompt(t, "Tool Bash ran") // the turn ended: the agent takes the next message
+	// the turn ended: the agent takes the next message
+	sayUntil(t, e.ctx, term, out, "pedido #1 aprovado: repita", func(screen string) bool { return promptAfter(screen, "Tool Bash ran") })
 
-	say(t, e.ctx, term, "instale de novo")
-	out.waitFor(t, "Tool Bash blocked by hook: "+classes.AskReason(2, action))
+	asked2 := "Tool Bash blocked by hook: " + classes.AskReason(2, action)
+	sayUntil(t, e.ctx, term, out, "instale de novo", func(screen string) bool { return strings.Contains(screen, asked2) })
 	if ran := strings.Count(out.String(), "Tool Bash ran"); ran != 1 {
 		t.Fatalf("the approved action ran %d times:\n%s", ran, out.String())
 	}

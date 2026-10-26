@@ -484,6 +484,13 @@ func (s *Service) check(ctx context.Context, req CreateRequest) (placement, erro
 	if err := s.authorize(ctx, req); err != nil {
 		return p, err
 	}
+	// the sheet of the Grand Master holds whoever creates it: the engine at the
+	// stage files, a user, the restore of a grimoire
+	if req.Role == RoleGrandMaster {
+		if err := GrandMasterSheetProblem(ctx, s.o.Presets, req.Sheet); err != nil {
+			return p, err
+		}
+	}
 	if req.Table != "" {
 		t, err := s.o.Tables.Table(ctx, req.Workspace, req.Table)
 		if err != nil {

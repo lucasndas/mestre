@@ -13,12 +13,15 @@ export function SensitiveButton({
   onConfirm,
   variant = "primary",
   isDisabled = false,
+  describeError,
 }: {
   children: string;
   onConfirm: (pin: string) => Promise<unknown>;
   variant?: "primary" | "danger" | "secondary";
   /** The action is not ready (a form that is not filled): the button cannot be pressed. */
   isDisabled?: boolean;
+  /** Says why the server refused, when the screen has more to say than the generic text. */
+  describeError?: (err: unknown) => string;
 }) {
   const { t } = useTranslation("common");
   const { t: te } = useTranslation("errors");
@@ -62,7 +65,7 @@ export function SensitiveButton({
         value={pin}
         onChange={setPin}
       />
-      {error ? <Alert>{errorText(te, error)}</Alert> : null}
+      {error ? <Alert>{describeError ? describeError(error) : errorText(te, error)}</Alert> : null}
       <div className="flex gap-2">
         <Button type="submit" variant={variant} isDisabled={busy || pin.length === 0}>
           {children}

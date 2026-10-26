@@ -160,12 +160,12 @@ func (p Presets) Snapshot(_ context.Context, sheet string) (presets.Snapshot, er
 		s.Lifecycle = "persistent"
 	}
 	s.Restrictions = p.Restrictions[sheet]
-	return presets.Snapshot{Sheet: s, Base: presets.Base{Name: "claude-code", Command: "claude"}}, nil
+	return presets.Snapshot{Sheet: s, Base: presets.Base{Name: "claude-code", Command: "claude", Platforms: []presets.Platform{{OS: "linux"}, {OS: "windows"}}}}, nil
 }
 
 // Base implements characters.Presets.
 func (Presets) Base(context.Context, string) (presets.Base, bool, error) {
-	return presets.Base{Name: "claude-code", Command: "claude"}, true, nil
+	return presets.Base{Name: "claude-code", Command: "claude", Platforms: []presets.Platform{{OS: "linux"}, {OS: "windows"}}}, true, nil
 }
 
 // Choose implements characters.Presets: both machines fit.
@@ -178,7 +178,13 @@ func (Presets) Choose(context.Context, string, string) (machinesheet.Choice, err
 func (Presets) Machines(context.Context) ([]machinesheet.Sheet, error) { return nil, nil }
 
 // Sheets implements characters.Presets.
-func (Presets) Sheets(context.Context) ([]presets.Sheet, error) { return nil, nil }
+func (Presets) Sheets(context.Context) ([]presets.Sheet, error) {
+	out := make([]presets.Sheet, 0, len(Sheets))
+	for _, n := range Sheets {
+		out = append(out, presets.Sheet{Name: n, Base: "claude-code", Agent: presets.AgentClaudeCode, Class: "Dev"})
+	}
+	return out, nil
+}
 
 // Bases implements characters.Presets.
 func (Presets) Bases(context.Context) ([]presets.Base, error) { return nil, nil }

@@ -203,6 +203,11 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 			return rep.Loop(ctx, rulesRetryEvery)
 		})
 	}
+	if wl, ok := integ.(interface {
+		WorkspaceLoop(ctx context.Context) error
+	}); ok {
+		orc.Loops = append(orc.Loops, wl.WorkspaceLoop)
+	}
 	if sw, ok := integ.(interface {
 		PersonalSweepLoop(ctx context.Context) error
 	}); ok {

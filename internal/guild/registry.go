@@ -108,12 +108,13 @@ type querier interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
-var errNoMachine = errors.New("guild: no such machine")
+// ErrNoMachine: the registry has no machine with that id.
+var ErrNoMachine = errors.New("guild: no such machine")
 
 func loadMachine(ctx context.Context, q querier, id string) (Machine, error) {
 	m, err := scanMachine(q.QueryRowContext(ctx, `SELECT `+machineColumns+` FROM machines WHERE machine_id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return Machine{}, fmt.Errorf("%w: %s", errNoMachine, id)
+		return Machine{}, fmt.Errorf("%w: %s", ErrNoMachine, id)
 	}
 	return m, err
 }

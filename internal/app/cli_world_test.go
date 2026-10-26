@@ -53,7 +53,7 @@ var commSheets = map[string]presets.Sheet{
 }
 
 var commBases = map[string]presets.Base{
-	"claude-code":        {Name: "claude-code", Command: "claude", Env: map[string]string{"TOKEN": "s3cr3t-value"}},
+	"claude-code":        {Name: "claude-code", Command: "claude", Env: map[string]string{"TOKEN": "s3cr3t-value"}, Platforms: []presets.Platform{{OS: "linux"}, {OS: "windows"}}},
 	"codex":              {Name: "codex", Command: "codex"},
 	"bash":               {Name: "bash", Command: "bash", Platforms: []presets.Platform{{OS: "linux"}}, Ready: presets.Ready{Mode: presets.ReadyDelay, Delay: 1}},
 	presets.OperatorBase: {Name: presets.OperatorBase, Command: "operator"},

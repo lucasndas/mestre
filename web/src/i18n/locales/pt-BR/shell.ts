@@ -2,6 +2,7 @@ export default {
   nav: {
     approvals: "Aprovações",
     overview: "Visão geral",
+    workspaces: "Workspaces",
     sessions: "Minhas sessões",
     password: "Trocar a senha",
     users: "Usuários",
@@ -13,6 +14,7 @@ export default {
     ceiling: "Teto do workspace",
     policy: "Política de aprovação",
     instructions: "Instruções extras",
+    guild: "Guilda",
     github: "Conectar GitHub",
     classes: "Classes",
     apps: "Apps do GitHub",

@@ -5,6 +5,7 @@ const shell: Widen<typeof pt> = {
   nav: {
     approvals: "Approvals",
     overview: "Overview",
+    workspaces: "Workspaces",
     sessions: "My sessions",
     password: "Change password",
     users: "Users",
@@ -16,6 +17,7 @@ const shell: Widen<typeof pt> = {
     ceiling: "Workspace ceiling",
     policy: "Approval policy",
     instructions: "Extra instructions",
+    guild: "Guild",
     github: "Connect GitHub",
     classes: "Classes",
     apps: "GitHub Apps",

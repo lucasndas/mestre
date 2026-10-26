@@ -21,6 +21,8 @@ const CATEGORIES: [key: string, prefix: string][] = [
   ["delegations", "panel.subdelegation."],
   ["chain", "panel.chain."],
   ["workspaceRules", "panel.ceiling."],
+  ["workspaces", "panel.workspace."],
+  ["guild", "panel.guild."],
 ];
 
 export function Audit() {

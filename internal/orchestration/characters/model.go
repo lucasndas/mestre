@@ -164,6 +164,8 @@ var (
 	ErrTableClosed = errors.New("the table is closing or over")
 	// ErrBadSheet: the sheet or the base does not exist or does not fit.
 	ErrBadSheet = errors.New("no such sheet or base")
+	// ErrBadGrandMasterSheet: the sheet cannot be the Grand Master's (docs/orquestracao/grao-mestre.md#onde-roda).
+	ErrBadGrandMasterSheet = errors.New("this sheet cannot be the Grand Master's")
 	// ErrPinned: a pinned character is never ended by the engine or by dismiss.
 	ErrPinned = errors.New("the character is pinned")
 	// ErrNotVisible: the character is in another table.

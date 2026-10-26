@@ -10,6 +10,7 @@ import classes from "./classes";
 import common from "./common";
 import errors from "./errors";
 import github from "./github";
+import guild from "./guild";
 import presets from "./presets";
 import profiles from "./profiles";
 import rules from "./rules";
@@ -19,6 +20,7 @@ import shell from "./shell";
 import terminal from "./terminal";
 import usage from "./usage";
 import users from "./users";
+import workspaces from "./workspaces";
 
 export const en: Widen<typeof ptBR> = {
   common,
@@ -32,6 +34,7 @@ export const en: Widen<typeof ptBR> = {
   chat,
   github,
   rules,
+  guild,
   errors,
   terminal,
   canvas,
@@ -40,4 +43,5 @@ export const en: Widen<typeof ptBR> = {
   presets,
   profiles,
   usage,
+  workspaces,
 };

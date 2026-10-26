@@ -110,11 +110,61 @@ func (s Store) Confirm(ctx context.Context, workspace, by string, data []byte) (
 	hash = hex.EncodeToString(sum[:])
 	err = s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `INSERT INTO verification_commands (workspace, hash, doc, confirmed_by, confirmed_at) VALUES (?, ?, ?, ?, ?)
-			ON CONFLICT (workspace) DO UPDATE SET hash = excluded.hash, doc = excluded.doc, confirmed_by = excluded.confirmed_by, confirmed_at = excluded.confirmed_at`,
+			ON CONFLICT (workspace) DO UPDATE SET hash = excluded.hash, doc = excluded.doc, confirmed_by = excluded.confirmed_by, confirmed_at = excluded.confirmed_at, outside_hash = ''`,
 			workspace, hash, string(data), by, s.Clock.Now().UnixMilli())
 		return err
 	})
 	return hash, err
+}
+
+// Confirmation is the last confirmation of a workspace.
+type Confirmation struct {
+	Hash, By, Doc string
+	At            time.Time
+}
+
+// Confirmation reads who confirmed the document and when (false: none yet).
+func (s Store) Confirmation(ctx context.Context, workspace string) (Confirmation, bool, error) {
+	var c Confirmation
+	var at int64
+	err := s.DB.Reader().QueryRowContext(ctx, `SELECT hash, confirmed_by, doc, confirmed_at FROM verification_commands WHERE workspace = ?`, workspace).Scan(&c.Hash, &c.By, &c.Doc, &at)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Confirmation{}, false, nil
+	}
+	if err != nil {
+		return Confirmation{}, false, err
+	}
+	c.At = time.UnixMilli(at).UTC()
+	return c, true, nil
+}
+
+// OutsideEdit says whether the file on disk (data) differs from the confirmed
+// document of a workspace that has one: an edit made outside the panel, which
+// does not take effect (the confirmed version stays in force). It answers true
+// once for each different content, so the Administrators are told once; the file
+// that goes back to the confirmed content (or a new confirmation) rearms it.
+func (s Store) OutsideEdit(ctx context.Context, workspace string, data []byte) (bool, error) {
+	var hash, told string
+	err := s.DB.Reader().QueryRowContext(ctx, `SELECT hash, outside_hash FROM verification_commands WHERE workspace = ?`, workspace).Scan(&hash, &told)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil // nothing confirmed: the file is a proposal, not an edit
+	}
+	if err != nil {
+		return false, err
+	}
+	sum := sha256.Sum256(data)
+	now := hex.EncodeToString(sum[:])
+	if now == hash {
+		now = ""
+	}
+	if now == told {
+		return false, nil
+	}
+	err = s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `UPDATE verification_commands SET outside_hash = ? WHERE workspace = ?`, now, workspace)
+		return err
+	})
+	return now != "" && err == nil, err
 }
 
 // Confirmed is the confirmed document of the workspace, if there is one.

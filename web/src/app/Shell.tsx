@@ -79,7 +79,9 @@ function NavLink({
     | "/apps"
     | "/bases-e-fichas"
     | "/perfis"
-    | "/consumo";
+    | "/consumo"
+    | "/guilda"
+    | "/workspaces";
   children: string;
 }) {
   return (
@@ -105,17 +107,20 @@ function Nav() {
   const canInstructions = useCan("configure_workspace");
   const canClasses = useCan("approve_workspace_cls");
   const canProfiles = useCan("account_profiles");
+  const canGuild = useCan("manage_machines");
   return (
     <nav
       aria-label={t("nav.main")}
       className="flex gap-1 overflow-x-auto border-b border-line bg-surface p-2 md:flex-col md:border-r md:border-b-0 md:p-3"
     >
       <NavLink to="/">{t("nav.overview")}</NavLink>
+      <NavLink to="/workspaces">{t("nav.workspaces")}</NavLink>
       {canDecide ? <NavLink to="/aprovacoes">{t("nav.approvals")}</NavLink> : null}
       <NavLink to="/sessoes">{t("nav.sessions")}</NavLink>
       <NavLink to="/senha">{t("nav.password")}</NavLink>
       {canGitHub ? <NavLink to="/github">{t("nav.github")}</NavLink> : null}
       {canUsers ? <NavLink to="/usuarios">{t("nav.users")}</NavLink> : null}
+      {canGuild ? <NavLink to="/guilda">{t("nav.guild")}</NavLink> : null}
       {canSecrets ? <NavLink to="/segredos">{t("nav.secrets")}</NavLink> : null}
       {canClasses ? <NavLink to="/classes">{t("nav.classes")}</NavLink> : null}
       {canClasses ? <NavLink to="/apps">{t("nav.apps")}</NavLink> : null}

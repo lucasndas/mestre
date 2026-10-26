@@ -406,7 +406,7 @@ func (p *Panel) watchCanvas(ctx context.Context, next <-chan struct{}) {
 		case <-next:
 		}
 		next = p.db.LogWatch()
-		if len(p.hub.Topics("canvas")) == 0 {
+		if len(p.hub.Topics("canvas"))+len(p.hub.Topics(workspacesTopic)) == 0 {
 			continue
 		}
 		// wait for the commits to pause
@@ -424,6 +424,10 @@ func (p *Panel) watchCanvas(ctx context.Context, next <-chan struct{}) {
 			}
 		}
 		for _, topic := range p.hub.Topics("canvas") {
+			_ = p.hub.Publish(topic, EventChanged, struct{}{})
+		}
+		// the screens of the workspaces follow the same commits
+		for _, topic := range p.hub.Topics(workspacesTopic) {
 			_ = p.hub.Publish(topic, EventChanged, struct{}{})
 		}
 	}

@@ -232,6 +232,8 @@ type stdRun struct {
 	// zero is the session zero of the workspaces (sessionzerohost.go), made when
 	// the host has the orchestration.
 	zero atomic.Pointer[sessionzero.Service]
+	// retrying are the workspaces whose stage the panel is running now.
+	retrying sync.Map
 
 	fence atomic.Pointer[guild.Fence]
 	chain atomic.Pointer[chain.Service]

