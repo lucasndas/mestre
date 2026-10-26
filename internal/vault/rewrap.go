@@ -2,6 +2,7 @@ package vault
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -34,7 +35,19 @@ func (v *Vault) RewrapRecovery(ctx context.Context, public []byte) error {
 	if err := writeEnvelope(next, v.ring); err != nil {
 		return err
 	}
-	if _, err := v.cfg.DB.Writer().ExecContext(ctx, `UPDATE guild SET recovery_public_key = ? WHERE id = 1`, public); err != nil {
+	// the row is on disk when this returns: a power loss must not bring back the old
+	// public key, which settle would write the envelope for again
+	err = v.writeDurable(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `UPDATE guild SET recovery_public_key = ? WHERE id = 1`, public)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			return errors.New("the Guild row was not found")
+		}
+		return nil
+	})
+	if err != nil {
 		if rerr := writeFile(v.cfg.EnvelopePath, old, !v.cfg.fastEnvelope); rerr != nil {
 			err = errors.Join(err, rerr)
 		}

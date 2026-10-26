@@ -2,6 +2,8 @@ package vault
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"testing"
@@ -25,8 +27,16 @@ func TestRewrapRecoveryEnvelopesTheKeyToTheNewRecoveryKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	durable := 0
+	v.durableHook = func(ctx context.Context, fn func(*sql.Tx) error) error {
+		durable++
+		return f.db.WriteDurable(ctx, fn)
+	}
 	if err := v.RewrapRecovery(f.ctx, fresh.PublicKey()); err != nil {
 		t.Fatal(err)
+	}
+	if durable != 1 {
+		t.Fatalf("the public key of the Guild was written by %d durable transactions, want 1", durable)
 	}
 	env, err := os.ReadFile(f.cfg.EnvelopePath)
 	if err != nil {
@@ -60,5 +70,27 @@ func TestRewrapRecoveryEnvelopesTheKeyToTheNewRecoveryKey(t *testing.T) {
 	}
 	if err := v.RewrapRecovery(f.ctx, []byte("short")); err == nil {
 		t.Fatal("a public key that is not 32 bytes was accepted")
+	}
+}
+
+// With no Guild row to take the new public key, nothing changes: the old envelope is back.
+func TestRewrapRecoveryPutsTheOldEnvelopeBackWhenTheGuildDoesNotTakeTheKey(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, nil)
+	v := f.create(t)
+	defer v.Close()
+	before, err := os.ReadFile(f.cfg.EnvelopePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := NewRecoveryKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := v.RewrapRecovery(f.ctx, fresh.PublicKey()); err == nil {
+		t.Fatal("a Guild with no row took the new key")
+	}
+	if now, _ := os.ReadFile(f.cfg.EnvelopePath); !bytes.Equal(now, before) {
+		t.Fatal("the envelope is not the old one")
 	}
 }

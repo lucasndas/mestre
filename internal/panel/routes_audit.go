@@ -175,6 +175,26 @@ func (p *Panel) handleAudit(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, errInternal())
 		return
 	}
+	_ = rows.Close() // the reader is free for the next query
+	if me.Level != users.Owner {
+		// who is not the Owner knows only the people in the lines he sees and the ones
+		// he shares a workspace with, not every user of the Guild (removed ones included)
+		known := map[string]bool{me.ID: true}
+		for _, e := range out.Entries {
+			known[e.UserID] = true
+		}
+		all, err := p.users.List(ctx)
+		if err != nil {
+			WriteError(w, errInternal())
+			return
+		}
+		for _, u := range all {
+			if slices.ContainsFunc(u.Workspaces, func(w string) bool { return slices.Contains(me.Workspaces, w) }) {
+				known[u.ID] = true
+			}
+		}
+		out.People = slices.DeleteFunc(out.People, func(x AuditPerson) bool { return !known[x.ID] })
+	}
 	WriteJSON(w, http.StatusOK, out)
 }
 

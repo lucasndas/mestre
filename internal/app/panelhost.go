@@ -44,13 +44,13 @@ func (e *Engine) servePanel(w http.ResponseWriter, r *http.Request) {
 
 // openPanel makes the panel of the period over the main database and returns
 // what ends it. Nil source: no panel.
-func (e *Engine) openPanel(ctx context.Context, db *store.DB, integ IntegrationRun, assets fs.FS, run func(func())) func() {
+func (e *Engine) openPanel(ctx context.Context, db *store.DB, integ IntegrationRun, assets fs.FS, run func(func()), vaultChanged func(context.Context)) func() {
 	src, ok := integ.(PanelSource)
 	if !ok {
 		return func() {}
 	}
 	svc, alerts := src.PanelPieces()
-	opts := panel.Options{DB: db, Clock: e.clk, Users: svc, Alerts: alerts, Assets: assets, Machine: e.id.MachineID, Logger: e.log}
+	opts := panel.Options{DB: db, Clock: e.clk, Users: svc, Alerts: alerts, Assets: assets, Machine: e.id.MachineID, Logger: e.log, VaultChanged: vaultChanged}
 	if adm, ok := integ.(PanelAdminSource); ok {
 		opts.GitHub, opts.Vault = adm.PanelAdmin()
 	}

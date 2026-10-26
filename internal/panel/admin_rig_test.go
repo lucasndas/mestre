@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -91,6 +92,8 @@ type adminRig struct {
 	rk    *vault.RecoveryKey
 	env   string
 	gh    *fakeGitHub
+	// told counts the times the Towers were told the vault changed.
+	told atomic.Int32
 }
 
 func newAdmin(t *testing.T) *adminRig {
@@ -108,11 +111,15 @@ func newAdmin(t *testing.T) *adminRig {
 	}
 	t.Cleanup(v.Close)
 	a := &adminRig{rig: r, vault: v, rk: rk, env: env, gh: &fakeGitHub{status: map[string]github.Status{}}}
-	r.panel, err = panel.New(panel.Options{DB: r.db, Clock: r.clk, Users: r.users, Alerts: r.al, Assets: r.assets, Machine: "m1", Vault: v, GitHub: a.gh})
+	r.panel, err = panel.New(panel.Options{DB: r.db, Clock: r.clk, Users: r.users, Alerts: r.al, Assets: r.assets, Machine: "m1", Vault: v, GitHub: a.gh,
+		VaultChanged: func(context.Context) { a.told.Add(1) }})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(r.panel.Close)
+	if _, err := r.db.Writer().ExecContext(r.ctx, `INSERT INTO guild (id, guild_id, ca_cert, epoch, epoch_certificate, timezone, recovery_public_key, created_at) VALUES (1, 'g', x'00', 1, '', 'UTC', ?, 0)`, rk.PublicKey()); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := r.db.Writer().ExecContext(r.ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at) VALUES ('loja', 'o/loja', 'o/loja', 'u', 'main', 'active', 'done', 0, 0)`); err != nil {
 		t.Fatal(err)
 	}

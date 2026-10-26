@@ -107,3 +107,39 @@ func TestTheAuditTrailPagesAndOnlyShowsWhatTheLevelMaySee(t *testing.T) {
 	_, obsTok := a.member("Olga", "olga", users.Observer)
 	a.wantErr(a.call("GET", "/api/audit", nil, opts{cookie: obsTok}), 403, panel.CodeForbiddenLevel)
 }
+
+// Who is not the Owner learns the names of the people in the lines he sees and of those
+// who share a workspace with him, not every user of the Guild.
+func TestTheAuditFilterListsOnlyThePeopleTheCallerMayKnow(t *testing.T) {
+	t.Parallel()
+	a := newAdmin(t)
+	tok := a.ownerSession()
+	adm, admTok := a.member("Bruno", "bruno", users.Administrator) // acts in loja
+	other, err := a.users.Create(a.ctx, a.owner, users.NewUser{Name: "Estranha", Level: users.Approver, Workspaces: []string{"outra"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone, err := a.users.Create(a.ctx, a.owner, users.NewUser{Name: "Removido", Level: users.Observer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.users.Remove(a.ctx, a.owner, gone.ID); err != nil {
+		t.Fatal(err)
+	}
+	a.putAudit(time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC), "decree.created", `{"user_id":"`+a.owner.ID+`","workspace":"loja"}`)
+	names := func(p panel.AuditPage) map[string]bool {
+		m := map[string]bool{}
+		for _, x := range p.People {
+			m[x.Name] = true
+		}
+		return m
+	}
+	got := names(a.audit(admTok, url.Values{"action": {"decree."}}))
+	if !got["Lucas"] || !got["Bruno"] || got["Estranha"] || got["Removido"] {
+		t.Fatalf("an Administrator of loja is told %v", got)
+	}
+	if all := names(a.audit(tok, url.Values{})); !all["Estranha"] || !all["Removido"] || !all["Bruno"] {
+		t.Fatalf("the Owner is told %v", all)
+	}
+	_, _ = adm, other
+}

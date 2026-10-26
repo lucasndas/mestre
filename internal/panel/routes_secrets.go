@@ -332,6 +332,9 @@ func (p *Panel) handleRecoveryKey(w http.ResponseWriter, r *http.Request) {
 		p.vaultError(w, err)
 		return
 	}
+	if p.vaultChanged != nil {
+		p.vaultChanged(context.WithoutCancel(ctx)) // the Towers get the new envelope now, not at their next connection
+	}
 	p.audit(ctx, "panel.recovery_key.renewed", map[string]any{"user_id": me.ID, "ip": clientIP(r)})
 	WriteJSON(w, http.StatusOK, RecoveryKeyResponse{Key: rk.Reveal()})
 }

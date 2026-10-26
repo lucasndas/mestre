@@ -382,13 +382,14 @@ function RecoveryKey() {
         <ShownOnce
           title={t("recovery.shown")}
           secret={key}
-          note={t("recovery.once")}
+          note={`${t("recovery.once")} ${t("recovery.failsafe")}`}
           doneLabel={t("recovery.done")}
           onDone={() => setKey(null)}
         />
       ) : open ? (
         <div className="flex max-w-2xl flex-col gap-4">
           <Alert>{t("recovery.warning")}</Alert>
+          <p className="text-sm text-muted">{t("recovery.failsafe")}</p>
           <Checkbox
             isSelected={ack}
             onChange={setAck}

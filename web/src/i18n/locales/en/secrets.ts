@@ -85,6 +85,8 @@ const secrets: Widen<typeof pt> = {
     open: "Create new recovery key",
     warning:
       "Warning: the backups that already exist still need the old key. Keep the old key for as long as you need them. Without the right key, the vault backup is useless. Only a backup made after this change opens with the new key.",
+    failsafe:
+      "The new key takes effect as soon as you confirm and is shown only once. If the page fails before you save it, create another key, with the PIN.",
     ack: "I read the warning and want to create the new key",
     submit: "Create the new key",
     cancel: "Do not create",

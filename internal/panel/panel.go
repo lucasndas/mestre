@@ -53,24 +53,28 @@ type Options struct {
 	// Vault is the vault of the Citadel for the screen of the secrets (nil: the
 	// screen answers that it is not available).
 	Vault SecretVault
+	// VaultChanged tells the Towers the vault changed (a new recovery envelope);
+	// nil: nobody is told.
+	VaultChanged func(ctx context.Context)
 	// Rand is the source of the tokens (crypto/rand by default).
 	Rand io.Reader
 }
 
 // Panel is the panel of the acting Citadel.
 type Panel struct {
-	db       *store.DB
-	clk      clock.Clock
-	users    *users.Service
-	alerts   users.Alerts
-	machine  string
-	github   PersonalGitHub
-	vault    SecretVault
-	log      *slog.Logger
-	ids      *protocol.IDGen
-	sessions *Sessions
-	hub      *Hub
-	handler  http.Handler
+	db           *store.DB
+	clk          clock.Clock
+	users        *users.Service
+	alerts       users.Alerts
+	machine      string
+	github       PersonalGitHub
+	vault        SecretVault
+	vaultChanged func(ctx context.Context)
+	log          *slog.Logger
+	ids          *protocol.IDGen
+	sessions     *Sessions
+	hub          *Hub
+	handler      http.Handler
 	// slots bound the argon2 hashes at once: each takes 64 MiB, and the routes
 	// that hash are open to anybody
 	slots chan struct{}
@@ -90,7 +94,7 @@ func New(o Options) (*Panel, error) {
 	if o.Rand == nil {
 		o.Rand = newRand()
 	}
-	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, github: o.GitHub, vault: o.Vault, log: o.Logger, ids: protocol.NewIDGen(o.Clock)}
+	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, github: o.GitHub, vault: o.Vault, vaultChanged: o.VaultChanged, log: o.Logger, ids: protocol.NewIDGen(o.Clock)}
 	p.sessions = &Sessions{db: o.DB, clk: o.Clock, ids: p.ids, rnd: o.Rand}
 	p.hub = newHub(p)
 	p.slots = make(chan struct{}, hashSlots)

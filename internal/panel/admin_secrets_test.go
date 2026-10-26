@@ -251,6 +251,9 @@ func TestANewRecoveryKeyNeedsThePINAndTheWarningAndTheNextEnvelopeOpensOnlyWithI
 	}
 	a.wantErr(a.call("POST", "/api/recovery-key", panel.RecoveryKeyRequest{Acknowledged: true}, opts{cookie: tok}), 403, panel.CodePINRequired)
 	a.wantErr(a.call("POST", "/api/recovery-key", panel.RecoveryKeyRequest{}, opts{cookie: tok, pin: ownerPIN}), 422, panel.CodeAckRequired)
+	if a.told.Load() != 0 {
+		t.Fatal("the Towers were told before the key was made")
+	}
 	if now, _ := os.ReadFile(a.env); string(now) != string(before) {
 		t.Fatal("the envelope changed before the Owner confirmed")
 	}
@@ -271,6 +274,9 @@ func TestANewRecoveryKeyNeedsThePINAndTheWarningAndTheNextEnvelopeOpensOnlyWithI
 	}
 	if err := vault.RestoreKey(a.ctx, env, a.rk, &memKeys{}); err == nil {
 		t.Fatal("the old recovery key opens the envelope of the next backup")
+	}
+	if a.told.Load() != 1 {
+		t.Errorf("the Towers were told %d times that the vault changed, want 1", a.told.Load())
 	}
 	if err := vault.RestoreKey(a.ctx, env, fresh, &memKeys{}); err != nil {
 		t.Fatalf("the new recovery key does not open it: %v", err)

@@ -82,6 +82,8 @@ export default {
     open: "Gerar nova chave de recuperação",
     warning:
       "Atenção: os backups que já existem continuam exigindo a chave antiga. Guarde a chave antiga enquanto precisar deles. Sem a chave certa, o backup do cofre é inútil. Só o backup feito depois desta troca abre com a chave nova.",
+    failsafe:
+      "A chave nova vale assim que você confirma e só aparece uma vez. Se a página falhar antes de você guardá-la, gere outra chave, com o PIN.",
     ack: "Li o aviso e quero gerar a nova chave",
     submit: "Gerar a nova chave",
     cancel: "Não gerar",

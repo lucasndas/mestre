@@ -159,6 +159,36 @@ func TestTheVaultReachesTheCommonMachineAndNotTheExcludedOne(t *testing.T) {
 	})
 }
 
+// A new recovery key: the connected Tower gets the new envelope as soon as the panel
+// tells the Primary the vault changed, not at its next connection.
+func TestAConnectedTowerGetsTheEnvelopeOfANewRecoveryKey(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(t, rigOpts{vault: true, durable: true})
+		ctx := context.Background()
+		common := r.addTower("common", true)
+		holds := func() bool { return (&vault.Copier{Keys: common.keys, EnvelopePath: common.env}).Holds(ctx) }
+		eventually(t, "the copy", func() bool { return common.lsn() == r.lsn() && holds() })
+		before, _ := (&vault.Copier{Keys: common.keys, EnvelopePath: common.env}).Export(ctx)
+		fresh, err := vault.NewRecoveryKey()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := r.vault.RewrapRecovery(ctx, fresh.PublicKey()); err != nil {
+			t.Fatal(err)
+		}
+		r.primary.VaultChanged(ctx)
+		want, _ := (&vault.Copier{Keys: r.ckeys, EnvelopePath: r.envelope}).Export(ctx)
+		if bytes.Equal(before.Envelope, want.Envelope) {
+			t.Fatal("the envelope did not change")
+		}
+		eventually(t, "the new envelope", func() bool {
+			got, err := (&vault.Copier{Keys: common.keys, EnvelopePath: common.env}).Export(ctx)
+			return err == nil && bytes.Equal(got.Envelope, want.Envelope)
+		})
+	})
+}
+
 // The rule of the confirmations: at once when 256 records are waiting, otherwise every second.
 func TestARecordIsAckedAtOnceWhen256AreWaitingAndOtherwiseEverySecond(t *testing.T) {
 	t.Parallel()
