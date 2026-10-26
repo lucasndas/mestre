@@ -225,7 +225,7 @@ test("a refusal keeps what was typed and says why", async () => {
     ...base(),
     "POST /api/chat/loja/messages": () => ({
       status: 422,
-      body: { error: { code: "chat_secret", message: "x" } },
+      body: { error: { code: "chat_blocked", message: "x", params: { minutes: 10 } } },
     }),
   });
   const user = userEvent.setup();
@@ -236,7 +236,7 @@ test("a refusal keeps what was typed and says why", async () => {
   await fill(user, field, "meu token é segredo");
   await user.click(within(panel).getByRole("button", { name: "Enviar" }));
   expect((await within(panel).findByRole("alert")).textContent).toMatch(
-    /parece conter uma senha ou um token/,
+    /bloqueado por tentativas de mandar segredos\. Tente de novo em 10 min/,
   );
   expect((field as HTMLTextAreaElement).value).toBe("meu token é segredo");
 });
@@ -529,4 +529,27 @@ test("the panel speaks English with the same screens", async () => {
   expect(await within(panel).findByText("Grand Master is free")).toBeTruthy();
   expect(within(panel).getByRole("button", { name: "Send" })).toBeTruthy();
   expect(within(panel).getByText(/Each file up to 20 MB; at most 5 per message/)).toBeTruthy();
+});
+
+// The filter of secrets acted on the server: the message went (as a notice or without the piece) and
+// the user is told to change the secret.
+test("when the filter held the message the user is told to change the secret", async () => {
+  fakeServer({
+    ...base(),
+    "POST /api/chat/loja/messages": () => ({
+      status: 201,
+      body: { id: "in-5", held: false, secret: "held" },
+    }),
+  });
+  const user = userEvent.setup();
+  renderApp("/");
+  const panel = await openPanel(user);
+  online();
+  await fill(
+    user,
+    await within(panel).findByLabelText("Mensagem para o Grão-Mestre"),
+    "a senha é x",
+  );
+  await user.click(within(panel).getByRole("button", { name: "Enviar" }));
+  expect((await within(panel).findByRole("alert")).textContent).toMatch(/troque essa senha/);
 });

@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -501,3 +502,23 @@ func orAuto(l string) string {
 func oneLine(v string) string { return strings.Join(strings.Fields(v), " ") }
 
 var _ = io.EOF
+
+// Discard takes back a file that was kept for a message that was never delivered (the
+// message failed, or was already in the inbox): the file and its row go. Only a file this
+// service made, under the main clone of the workspace, is taken.
+func (s *Service) Discard(ctx context.Context, workspace string, st Stored) error {
+	root, err := s.o.Root(ctx, workspace)
+	if err != nil || root == "" {
+		return ErrWorkspace
+	}
+	if !strings.HasPrefix(st.Path, ".mestre/anexos/") || strings.Contains(st.Path, "..") {
+		return fmt.Errorf("attachments: %q is not a kept file", st.Path)
+	}
+	if err := os.Remove(filepath.Join(root, filepath.FromSlash(st.Path))); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `DELETE FROM attachments WHERE id = ? AND workspace = ?`, st.ID, workspace)
+		return err
+	})
+}

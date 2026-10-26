@@ -67,7 +67,8 @@ func newChatRig(t *testing.T) *chatRig {
 		Open: func(_ context.Context, _ string, o inbox.Outbound, i int) (panel.ChatDownload, error) {
 			return panel.ChatDownload{Name: path.Base(o.Attachments[i]) + `"; x="y`, Size: 3, Body: io.NopCloser(strings.NewReader("pdf"))}, nil
 		},
-		AuditSecret: func(_ context.Context, user string) {
+		Discard: files.Discard,
+		AuditSecret: func(_ context.Context, user, _ string) {
 			c.mu.Lock()
 			defer c.mu.Unlock()
 			c.sealed = append(c.sealed, user)
@@ -207,13 +208,16 @@ func TestAMessageSentThroughTheRouteIsTheUsersOwnAndPrivate(t *testing.T) {
 	// the field comes before the files: a file first, then a field, is refused
 	c.wantErr(c.post("/api/chat/loja/messages", c.biaTok, part{name: "text", value: "x"}, part{name: "client_id", value: "msg-route-012"},
 		part{name: "files", filename: "a.pdf", value: "%PDF-1.4"}, part{name: "quote", value: sent.ID}), 400, panel.CodeChatMalformed)
-	// a secret is refused and audited
-	c.wantErr(c.post("/api/chat/loja/messages", c.biaTok, msg("msg-route-013", "token ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD")...), 422, panel.CodeChatSecret)
+	// a token has the piece taken out, is audited, and the answer tells the user
+	w = c.post("/api/chat/loja/messages", c.biaTok, msg("msg-route-013", "token ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD")...)
+	if got := decodeInto[panel.ChatSent](t, w); w.Code != 201 || got.Secret != "removed" {
+		t.Fatalf("send with a token: %d %s", w.Code, w.Body)
+	}
 	if len(c.sealed) != 1 {
 		t.Fatalf("audited %v", c.sealed)
 	}
-	if its, _ := c.ib.All(c.ctx, "gm-loja"); len(its) != 1 {
-		t.Fatalf("%d messages in the inbox", len(its))
+	if its, _ := c.ib.All(c.ctx, "gm-loja"); len(its) != 2 || strings.Contains(its[1].Text, "ghp_") {
+		t.Fatalf("%d messages in the inbox: %+v", len(its), its)
 	}
 }
 

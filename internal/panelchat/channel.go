@@ -34,6 +34,14 @@ func (c Outgoing) Send(_ context.Context, o inbox.Outbound) error {
 	return nil
 }
 
+// Redacted is told a message of the panel was taken out of the inbox (`mestre reply --redact-source`):
+// the open tabs of its user read the conversation again and drop it.
+func (c Outgoing) Redacted(o inbox.Origin) {
+	if o.Channel == inbox.ChannelPanel {
+		c.s.emit(panel.ChatEvent{User: o.User, Kind: panel.EventChatChanged})
+	}
+}
+
 // File implements panel.ChatSource: a file the Grão-Mestre sent to this user, in this workspace.
 func (s *Service) File(ctx context.Context, u users.User, workspace string, answer int64, index int) (panel.ChatDownload, error) {
 	gone := panel.Err(panel.CodeChatFileGone, "o arquivo não está disponível", nil)

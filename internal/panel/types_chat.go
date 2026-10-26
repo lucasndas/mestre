@@ -142,6 +142,9 @@ type ChatSent struct {
 	ID string `json:"id"`
 	// Held says the message was kept because the Mestre is locked: it goes when it is unlocked.
 	Held bool `json:"held"`
+	// Secret says the filter of secrets acted: "held" (a password: the Grão-Mestre got only a notice) or
+	// "removed" (a token: he got the message without the piece). The user is told to change the secret.
+	Secret string `json:"secret,omitempty"`
 }
 
 // ChatChoice is the body of POST /api/chat/choices/{id}: the option, from 0.

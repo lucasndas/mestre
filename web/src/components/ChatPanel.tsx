@@ -295,7 +295,14 @@ function Composer({
     onSuccess: (sent) => {
       setText("");
       setFiles([]);
-      setProblem("");
+      // the filter of secrets acted: the user is told to change the secret
+      setProblem(
+        sent.secret === "held"
+          ? t("composer.secretHeld")
+          : sent.secret === "removed"
+            ? t("composer.secretRemoved")
+            : "",
+      );
       setNotice(sent.held ? t("composer.sentHeld") : t("composer.sent"));
       onClearQuote();
       id.current = newMessageId();

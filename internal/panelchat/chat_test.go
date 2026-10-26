@@ -3,6 +3,7 @@ package panelchat_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path"
@@ -19,6 +20,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/panelchat"
+	"github.com/mestre-ia/mestre/internal/secretscreen"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -45,6 +47,7 @@ type rig struct {
 	locked  bool
 	limit   int64
 	audited []string
+	alerts  []string
 	events  []panel.ChatEvent
 }
 
@@ -132,11 +135,17 @@ func newRig(t *testing.T, mod ...func(*panelchat.Options)) *rig {
 			return r.locked
 		},
 		Mask: logging.NewMasker().Mask,
-		AuditSecret: func(_ context.Context, user string) {
+		AuditSecret: func(_ context.Context, user, how string) {
 			r.mu.Lock()
 			defer r.mu.Unlock()
-			r.audited = append(r.audited, user)
+			r.audited = append(r.audited, user+":"+how)
 		},
+		AlertOwner: func(_ context.Context, text string) {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			r.alerts = append(r.alerts, text)
+		},
+		Discard: files.Discard,
 	}
 	for _, m := range mod {
 		m(&opts)
@@ -280,18 +289,6 @@ func TestOnlyWhoMayTalkAndActsInTheWorkspaceSends(t *testing.T) {
 	}
 	if _, err := r.svc.Conversation(r.ctx, r.rui, "loja"); err == nil {
 		t.Fatal("a user of another workspace reads the conversation")
-	}
-}
-
-// A secret never goes to the Grão-Mestre: the message is refused, the attempt is audited without
-// the text, and nothing is queued.
-func TestASecretInAMessageIsRefusedAndAudited(t *testing.T) {
-	t.Parallel()
-	r := newRig(t)
-	_, err := r.send(r.bia, in("loja", "use este token ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD", "msg-0000008"))
-	wantCode(t, err, panel.CodeChatSecret)
-	if len(r.items("loja", r.bia)) != 0 || len(r.audited) != 1 || r.audited[0] != r.bia.ID {
-		t.Fatalf("items %d audited %v", len(r.items("loja", r.bia)), r.audited)
 	}
 }
 
@@ -707,5 +704,244 @@ func TestTooManyMessagesInAMinuteAreRefused(t *testing.T) {
 	r.clk.Advance(61 * time.Second)
 	if _, err := r.send(r.bia, in("loja", "m", "msg-rate-final-3")); err != nil {
 		t.Fatalf("after the minute: %v", err)
+	}
+}
+
+const token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD"
+
+func (r *rig) auditedNow() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.audited...)
+}
+
+func (r *rig) attachmentRows() int {
+	var n int
+	if err := r.db.Reader().QueryRowContext(r.ctx, `SELECT COUNT(*) FROM attachments`).Scan(&n); err != nil {
+		r.t.Fatal(err)
+	}
+	return n
+}
+
+// A token of a known format has the piece taken out and the rest is delivered; the attempt is audited
+// without the text and the user is told (the same outcome as the Telegram's). A file of such a message is not kept.
+func TestATokenIsTakenOutAndTheRestIsDelivered(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	sent, err := r.send(r.bia, in("loja", "use este token "+token+" no deploy", "msg-sec-0001"), [2]string{"a.pdf", pdf})
+	if err != nil || sent.Secret != "removed" {
+		t.Fatalf("sent %+v, %v", sent, err)
+	}
+	it := r.items("loja", r.bia)[0]
+	if it.Text != "use este token "+secretscreen.Removed+" no deploy" || len(it.Attachments) != 0 || strings.Contains(it.Text, "ghp_") {
+		t.Fatalf("item %q %v", it.Text, it.Attachments)
+	}
+	if got := r.auditedNow(); len(got) != 1 || got[0] != r.bia.ID+":format" {
+		t.Fatalf("audited %v", got)
+	}
+	if r.attachmentRows() != 0 {
+		t.Fatal("a file of a message with a secret was kept")
+	}
+}
+
+// The filter reads the normalized text: a zero-width space inside the token, or the token written in full-width
+// letters, is the same token; a phrase that gives a password holds the message and the next one too.
+func TestTheFilterSeesThroughZeroWidthAndFullWidthText(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	zw := token[:5] + "\U0000200b" + token[5:]
+	full := strings.Map(func(c rune) rune {
+		if c >= '!' && c <= '~' {
+			return c + 0xFEE0
+		}
+		return c
+	}, token)
+	for i, text := range []string{"token " + zw, "token " + full} {
+		sent, err := r.send(r.bia, in("loja", text, "msg-sec-010"+strconv.Itoa(i)))
+		if err != nil || sent.Secret != "removed" {
+			t.Fatalf("%q: %+v, %v", text, sent, err)
+		}
+	}
+	for _, it := range r.items("loja", r.bia) {
+		if strings.Contains(it.Text, "ghp") || strings.Contains(it.Text, "\U0000ff47") {
+			t.Fatalf("a token went through: %q", it.Text)
+		}
+	}
+	// "s e n h a" with a zero-width space between the letters is still the phrase
+	sent, err := r.send(r.ana, in("loja", "a se\U0000200bnha é bananaAzul42", "msg-sec-0200"))
+	if err != nil || sent.Secret != "held" {
+		t.Fatalf("phrase: %+v, %v", sent, err)
+	}
+	if it := r.items("loja", r.ana)[0]; it.Text != panelchat.HeldNotice || strings.Contains(it.Text, "banana") {
+		t.Fatalf("what the Grand Master got: %q", it.Text)
+	}
+	// the message after the phrase is held too, once
+	if sent, _ := r.send(r.ana, in("loja", "bananaAzul42", "msg-sec-0201")); sent.Secret != "held" {
+		t.Fatalf("follow-up %+v", sent)
+	}
+	if sent, err := r.send(r.ana, in("loja", "oi de novo", "msg-sec-0202")); err != nil || sent.Secret != "" {
+		t.Fatalf("after the follow-up %+v, %v", sent, err)
+	}
+	for _, it := range r.items("loja", r.ana) {
+		if strings.Contains(it.Text, "banana") {
+			t.Fatalf("the password reached the inbox: %q", it.Text)
+		}
+	}
+}
+
+// The name of a file is looked at like the text: a name that gives a password holds the message and no file is kept.
+func TestTheNameOfAFileIsScreenedToo(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	sent, err := r.send(r.bia, in("loja", "segue", "msg-sec-0300"), [2]string{"a.pdf", pdf}, [2]string{"minha senha.txt", pdf})
+	if err != nil || sent.Secret != "held" {
+		t.Fatalf("sent %+v, %v", sent, err)
+	}
+	if it := r.items("loja", r.bia)[0]; it.Text != panelchat.HeldNotice || len(it.Attachments) != 0 {
+		t.Fatalf("item %q %v", it.Text, it.Attachments)
+	}
+	if r.attachmentRows() != 0 {
+		t.Fatal("a file of a held message stayed")
+	}
+	sent, err = r.send(r.bia, in("loja", "segue", "msg-sec-0301"), [2]string{token + ".pdf", pdf})
+	if err != nil || sent.Secret != "held" || r.attachmentRows() != 0 {
+		t.Fatalf("a token in the name: %+v, %v", sent, err)
+	}
+}
+
+// The filter is not an oracle without a limit: after 5 secrets caught in 10 minutes everything the user sends is refused
+// without being looked at, the audit has one row per attempt (at most 5), the Owner is told once, and the window ends.
+func TestTooManySecretsBlockTheUserAndTellTheOwner(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	for i := 0; i < 5; i++ {
+		if _, err := r.send(r.bia, in("loja", "x "+token, "msg-sec-040"+strconv.Itoa(i))); err != nil {
+			t.Fatal(err)
+		}
+		r.clk.Advance(time.Second)
+	}
+	if got := r.auditedNow(); len(got) != 5 {
+		t.Fatalf("audited %v", got)
+	}
+	r.mu.Lock()
+	alerts := append([]string(nil), r.alerts...)
+	r.mu.Unlock()
+	if len(alerts) != 1 || !strings.Contains(alerts[0], "Bia") || strings.Contains(alerts[0], "ghp_") {
+		t.Fatalf("alerts %q", alerts)
+	}
+	// the sixth, a harmless one or not, is refused the same way and writes nothing
+	for i, text := range []string{"oi", "x " + token} {
+		_, err := r.send(r.bia, in("loja", text, "msg-sec-050"+strconv.Itoa(i)))
+		wantCode(t, err, panel.CodeChatBlocked)
+	}
+	if len(r.auditedNow()) != 5 || len(r.items("loja", r.bia)) != 5 {
+		t.Fatalf("audited %d, items %d", len(r.auditedNow()), len(r.items("loja", r.bia)))
+	}
+	// another user is not blocked
+	if sent, err := r.send(r.ana, in("loja", "oi", "msg-sec-0600")); err != nil || sent.Secret != "" {
+		t.Fatalf("Ana: %+v, %v", sent, err)
+	}
+	r.clk.Advance(11 * time.Minute)
+	if sent, err := r.send(r.bia, in("loja", "oi", "msg-sec-0601")); err != nil || sent.Secret != "" {
+		t.Fatalf("after the window: %+v, %v", sent, err)
+	}
+}
+
+// Files kept for a message that is not queued are taken back: a failure of the inbox, an abort and the
+// repeat of a message that is already there. The key of the message has the workspace in it.
+func TestFilesOfAMessageThatWasNotQueuedAreTakenBack(t *testing.T) {
+	t.Parallel()
+	failing := false
+	r := newRig(t, func(o *panelchat.Options) {
+		enq := o.Enqueue
+		o.Enqueue = func(ctx context.Context, n inbox.NewItem) (inbox.Item, error) {
+			if failing {
+				return inbox.Item{}, errors.New("the inbox is down")
+			}
+			return enq(ctx, n)
+		}
+	})
+	files := func() int {
+		n := 0
+		_ = filepath.WalkDir(r.root, func(_ string, d os.DirEntry, _ error) error {
+			if d != nil && !d.IsDir() {
+				n++
+			}
+			return nil
+		})
+		return n
+	}
+	failing = true
+	if _, err := r.send(r.bia, in("loja", "oi", "msg-clean-001"), [2]string{"a.pdf", pdf}); err == nil {
+		t.Fatal("the send did not fail")
+	}
+	if r.attachmentRows() != 0 || files() != 0 {
+		t.Fatalf("after a failure: %d rows, %d files", r.attachmentRows(), files())
+	}
+	failing = false
+	d, err := r.svc.Begin(r.ctx, r.bia, in("loja", "oi", "msg-clean-002"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddFile(r.ctx, "a.pdf", "application/pdf", strings.NewReader(pdf)); err != nil {
+		t.Fatal(err)
+	}
+	d.Abort(r.ctx)
+	if r.attachmentRows() != 0 || files() != 0 {
+		t.Fatalf("after an abort: %d rows, %d files", r.attachmentRows(), files())
+	}
+	// the same id twice: the second try's file is not kept
+	for i := 0; i < 2; i++ {
+		if _, err := r.send(r.bia, in("loja", "oi", "msg-clean-003"), [2]string{"b.pdf", pdf}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if r.attachmentRows() != 1 || files() != 1 || len(r.items("loja", r.bia)) != 1 {
+		t.Fatalf("after a repeat: %d rows, %d files, %d items", r.attachmentRows(), files(), len(r.items("loja", r.bia)))
+	}
+	if key := r.items("loja", r.bia)[0].Refs.Key; key != "panel:"+r.bia.ID+":loja:msg-clean-003" {
+		t.Fatalf("key %q", key)
+	}
+}
+
+// A user has only a few messages being received at once; a place comes back when the message ends.
+func TestOnlyAFewUploadsAtOnceForEachUser(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	var open []panel.ChatDraft
+	for i := 0; i < 2; i++ {
+		d, err := r.svc.Begin(r.ctx, r.bia, in("loja", "x", "msg-up-000"+strconv.Itoa(i)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		open = append(open, d)
+	}
+	_, err := r.svc.Begin(r.ctx, r.bia, in("loja", "x", "msg-up-0009"))
+	wantCode(t, err, panel.CodeChatBusy)
+	if d, err := r.svc.Begin(r.ctx, r.ana, in("loja", "x", "msg-up-0010")); err != nil { // another user has his own
+		t.Fatal(err)
+	} else {
+		d.Abort(r.ctx)
+	}
+	open[0].Abort(r.ctx)
+	if _, err := open[1].Send(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	d, err := r.svc.Begin(r.ctx, r.bia, in("loja", "x", "msg-up-0011"))
+	if err != nil {
+		t.Fatalf("the places did not come back: %v", err)
+	}
+	d.Abort(r.ctx)
+}
+
+// A message of the panel taken out of the inbox because it carried a secret is dropped by the open tabs.
+func TestARedactedMessageIsDroppedByTheOpenTabs(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.svc.Channel().Redacted(inbox.Origin{Channel: inbox.ChannelPanel, User: r.bia.ID})
+	r.svc.Channel().Redacted(inbox.Origin{Channel: inbox.ChannelTelegram, User: r.ana.ID})
+	ev := r.heard()
+	if len(ev) != 1 || ev[0].User != r.bia.ID || ev[0].Kind != panel.EventChatChanged {
+		t.Fatalf("events %+v", ev)
 	}
 }

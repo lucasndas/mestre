@@ -1492,6 +1492,11 @@ export interface ChatSent {
    * Held says the message was kept because the Mestre is locked: it goes when it is unlocked.
    */
   held: boolean;
+  /**
+   * Secret says the filter of secrets acted: "held" (a password: the Grão-Mestre got only a notice) or
+   * "removed" (a token: he got the message without the piece). The user is told to change the secret.
+   */
+  secret?: string;
 }
 /**
  * ChatChoice is the body of POST /api/chat/choices/{id}: the option, from 0.

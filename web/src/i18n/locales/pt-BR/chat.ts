@@ -71,6 +71,10 @@ export default {
     noGrandMaster: "Este workspace não tem Grão-Mestre agora; não dá para enviar.",
     sent: "Mensagem enviada.",
     sentHeld: "Mensagem guardada até destravar.",
+    secretHeld:
+      "A sua mensagem parecia trazer uma senha e não foi entregue: o Grão-Mestre recebeu só um aviso. Cadastre credenciais na tela de Segredos e troque essa senha, que já passou por aqui.",
+    secretRemoved:
+      "A sua mensagem trazia um segredo (um token, uma chave). O Grão-Mestre recebeu a mensagem sem o trecho e sem anexos. Troque esse segredo: ele já passou por aqui.",
     files: "Arquivos anexados",
   },
 } as const;

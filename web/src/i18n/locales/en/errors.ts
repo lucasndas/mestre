@@ -39,8 +39,9 @@ const errors: Widen<typeof pt> = {
   chat_no_grand_master: "This workspace has no Grand Master right now. Nothing was sent.",
   chat_file_too_large: "A file is over the allowed limit. Nothing was sent.",
   chat_too_many_files: "There are too many files in the message (at most {{max}}).",
-  chat_secret:
-    "The message looks like it has a password or a token and was not sent. Secrets are registered on the Secrets screen, not in the chat.",
+  chat_blocked:
+    "Sending through the chat is blocked after attempts to send secrets. Try again in {{minutes}} min.",
+  chat_busy: "Messages of yours are still being sent. Wait for them to finish and try again.",
   chat_empty: "Write a message or attach a file.",
   chat_too_long: "The message is over {{max}} characters.",
   chat_quote_unknown: "The message you reply to does not exist anymore.",

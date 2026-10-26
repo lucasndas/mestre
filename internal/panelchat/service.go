@@ -72,11 +72,15 @@ type Options struct {
 	Limit   func() int64
 	// Locked says the Mestre is locked: what is sent is kept until it is not.
 	Locked func(ctx context.Context) bool
-	// Mask takes the secrets out of every text that leaves; a text of the user that the mask
-	// changes is a secret, and is refused. Nil: none.
+	// Mask takes the secrets out of every text that leaves, and is the masker of the filter of
+	// secrets of what the user writes (internal/secretscreen, the one of the Telegram). Nil: none.
 	Mask func(string) string
-	// AuditSecret writes the attempt to send a secret to the audit (never the text).
-	AuditSecret func(ctx context.Context, user string)
+	// AuditSecret writes the attempt to send a secret to the audit (never the text); how is the kind.
+	AuditSecret func(ctx context.Context, user, how string)
+	// AlertOwner tells the Owner a user is sending secrets again and again (nil: nobody).
+	AlertOwner func(ctx context.Context, text string)
+	// Discard takes back an attachment kept for a message that was not delivered (nil: it stays).
+	Discard func(ctx context.Context, workspace string, st attachments.Stored) error
 	// Open opens a file the Grão-Mestre sent (nil: the files are not there to download yet).
 	Open   func(ctx context.Context, workspace string, o inbox.Outbound, index int) (panel.ChatDownload, error)
 	Logger *slog.Logger
@@ -92,6 +96,12 @@ type Service struct {
 	next      int
 	listeners map[int]func(panel.ChatEvent)
 	sends     map[string][]time.Time
+	// hits are the moments secrets of each user were caught, followUp when the next message of a
+	// user is held too, alerted when the Owner was last told, and uploads the messages being received.
+	hits     map[string][]time.Time
+	followUp map[string]time.Time
+	alerted  map[string]time.Time
+	uploads  map[string]int
 }
 
 var _ panel.ChatSource = (*Service)(nil)
@@ -114,7 +124,8 @@ func New(o Options) (*Service, error) {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Service{o: o, clk: o.Clock, log: log, listeners: map[int]func(panel.ChatEvent){}, sends: map[string][]time.Time{}}, nil
+	return &Service{o: o, clk: o.Clock, log: log, listeners: map[int]func(panel.ChatEvent){}, sends: map[string][]time.Time{},
+		hits: map[string][]time.Time{}, followUp: map[string]time.Time{}, alerted: map[string]time.Time{}, uploads: map[string]int{}}, nil
 }
 
 // enqueue puts an item in the inbox of the Grão-Mestre of its workspace (the target when it
@@ -134,6 +145,13 @@ func (s *Service) enqueue(ctx context.Context, n inbox.NewItem) (inbox.Item, err
 }
 
 func (s *Service) mask(t string) string { return s.o.Mask(t) }
+
+func (s *Service) discard(ctx context.Context, workspace string, st attachments.Stored) error {
+	if s.o.Discard == nil {
+		return nil
+	}
+	return s.o.Discard(ctx, workspace, st)
+}
 
 // Limits implements panel.ChatSource.
 func (s *Service) Limits() (int64, int) { return s.o.Limit(), MaxFiles }

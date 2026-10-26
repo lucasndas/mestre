@@ -26,7 +26,8 @@ const (
 	CodeChatNoGrandMaster Code = "chat_no_grand_master"
 	CodeChatFileTooLarge  Code = "chat_file_too_large"
 	CodeChatTooManyFiles  Code = "chat_too_many_files"
-	CodeChatSecret        Code = "chat_secret"
+	CodeChatBlocked       Code = "chat_blocked"
+	CodeChatBusy          Code = "chat_busy"
 	CodeChatEmpty         Code = "chat_empty"
 	CodeChatTooLong       Code = "chat_too_long"
 	CodeChatQuoteUnknown  Code = "chat_quote_unknown"
@@ -42,7 +43,8 @@ func init() {
 		CodeChatNoGrandMaster: http.StatusConflict,
 		CodeChatFileTooLarge:  http.StatusRequestEntityTooLarge,
 		CodeChatTooManyFiles:  http.StatusUnprocessableEntity,
-		CodeChatSecret:        http.StatusUnprocessableEntity,
+		CodeChatBlocked:       http.StatusTooManyRequests,
+		CodeChatBusy:          http.StatusTooManyRequests,
 		CodeChatEmpty:         http.StatusUnprocessableEntity,
 		CodeChatTooLong:       http.StatusUnprocessableEntity,
 		CodeChatQuoteUnknown:  http.StatusNotFound,
@@ -85,6 +87,8 @@ type ChatDraft interface {
 	AddFile(ctx context.Context, name, mimeType string, r io.Reader) error
 	// Send puts the message in the inbox of the Grão-Mestre.
 	Send(ctx context.Context) (ChatSent, error)
+	// Abort gives up the message: what was kept for it is taken back. Every draft ends in Send or Abort.
+	Abort(ctx context.Context)
 }
 
 // ChatDownload is a file the Grão-Mestre sent.
@@ -261,6 +265,12 @@ func (p *Panel) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	u := UserOf(r)
 	in := ChatDraftInput{Workspace: ws, Session: SessionOf(r).ID}
 	var draft ChatDraft
+	sent := false
+	defer func() {
+		if draft != nil && !sent {
+			draft.Abort(r.Context())
+		}
+	}()
 	begin := func() bool {
 		if draft != nil {
 			return true
@@ -328,12 +338,13 @@ func (p *Panel) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	if !begin() {
 		return
 	}
-	sent, err := draft.Send(r.Context())
+	res, err := draft.Send(r.Context())
+	sent = true // Send gives the draft up itself, with or without an error
 	if err != nil {
 		p.writeChatError(w, "sending a message", err)
 		return
 	}
-	WriteJSON(w, http.StatusCreated, sent)
+	WriteJSON(w, http.StatusCreated, res)
 }
 
 // chatBodyError answers a body that could not be read: too big, or broken.

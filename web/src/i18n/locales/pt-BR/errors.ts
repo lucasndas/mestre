@@ -38,8 +38,9 @@ export default {
   chat_no_grand_master: "Este workspace não tem Grão-Mestre agora. Nada foi enviado.",
   chat_file_too_large: "Um arquivo passa do limite permitido. Nada foi enviado.",
   chat_too_many_files: "Há arquivos demais na mensagem (no máximo {{max}}).",
-  chat_secret:
-    "A mensagem parece conter uma senha ou um token e não foi enviada. Segredos se cadastram na tela de Segredos, não na conversa.",
+  chat_blocked:
+    "O envio pela conversa está bloqueado por tentativas de mandar segredos. Tente de novo em {{minutes}} min.",
+  chat_busy: "Há mensagens suas sendo enviadas. Espere terminar e tente de novo.",
   chat_empty: "Escreva uma mensagem ou anexe um arquivo.",
   chat_too_long: "A mensagem passa de {{max}} caracteres.",
   chat_quote_unknown: "A mensagem a que você responde não existe mais.",

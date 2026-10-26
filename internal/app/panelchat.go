@@ -74,11 +74,19 @@ func (r *stdRun) newChat() (*panelchat.Service, error) {
 			}
 			return attachments.DefaultLimit
 		},
-		Locked: func(ctx context.Context) bool { return r.lock != nil && r.lock.Locked(ctx) },
-		Mask:   r.env.Masker.Mask,
-		AuditSecret: func(ctx context.Context, user string) {
+		Locked:     func(ctx context.Context) bool { return r.lock != nil && r.lock.Locked(ctx) },
+		Mask:       r.env.Masker.Mask,
+		AlertOwner: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) },
+		Discard: func(ctx context.Context, workspace string, st attachments.Stored) error {
+			f := r.files.Load()
+			if f == nil {
+				return nil
+			}
+			return f.Discard(ctx, workspace, st)
+		},
+		AuditSecret: func(ctx context.Context, user, how string) {
 			id := fmt.Sprintf("secret-panel-%s-%d", user, r.env.Clock.Now().UnixNano())
-			if err := inbox.AuditSecretAttempt(ctx, r.env.DB, id, r.env.Clock.Now(), r.env.Machine, user, inbox.ChannelPanel, "painel"); err != nil {
+			if err := inbox.AuditSecretAttempt(ctx, r.env.DB, id, r.env.Clock.Now(), r.env.Machine, user, inbox.ChannelPanel, how); err != nil {
 				r.env.Log.Warn("app: a secret sent through the panel was not audited", "err", err)
 			}
 		},
@@ -110,6 +118,7 @@ func (m channelMux) Send(ctx context.Context, o inbox.Outbound) error {
 // conversation when it leaves the inbox: there is nothing else to delete.
 func (m channelMux) DeleteSource(ctx context.Context, o inbox.Origin) error {
 	if o.Channel == inbox.ChannelPanel {
+		m.panel.Redacted(o) // the open tabs of the user drop it
 		return nil
 	}
 	return m.telegram.DeleteSource(ctx, o)

@@ -74,6 +74,10 @@ const chat: Widen<typeof pt> = {
     noGrandMaster: "This workspace has no Grand Master right now; nothing can be sent.",
     sent: "Message sent.",
     sentHeld: "Message kept until the system is unlocked.",
+    secretHeld:
+      "Your message looked like it had a password and was not delivered: the Grand Master got only a notice. Register credentials on the Secrets screen and change that password, which has already passed through here.",
+    secretRemoved:
+      "Your message had a secret (a token, a key). The Grand Master got the message without that piece and without attachments. Change that secret: it has already passed through here.",
     files: "Attached files",
   },
 };
