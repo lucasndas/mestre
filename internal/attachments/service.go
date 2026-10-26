@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -184,13 +185,34 @@ func (s *Service) Receive(ctx context.Context, r Request) (Stored, error) {
 	if r.File.Size > s.o.Limit {
 		return Stored{}, &TooLargeError{Limit: s.o.Limit}
 	}
-	root, err := s.o.Root(ctx, r.Workspace)
-	if err != nil || root == "" {
+	if root, err := s.o.Root(ctx, r.Workspace); err != nil || root == "" {
 		return Stored{}, ErrWorkspace
 	}
 	data, err := s.fetch(ctx, r.File)
 	if err != nil {
 		return Stored{}, err
+	}
+	return s.keep(ctx, r, data)
+}
+
+// ReceiveData keeps a file whose bytes the channel already has: the upload of the
+// panel (docs/painel/conversa-e-aprovacoes.md#conversa-com-o-grão-mestre), which has no
+// download to make. The limit is the same as the one of Receive, and the bytes are
+// never trusted: the type is the one the content says, the name is made safe and the
+// file is kept without permission of execution.
+func (s *Service) ReceiveData(ctx context.Context, r Request, data []byte) (Stored, error) {
+	if int64(len(data)) > s.o.Limit || r.File.Size > s.o.Limit {
+		return Stored{}, &TooLargeError{Limit: s.o.Limit}
+	}
+	return s.keep(ctx, r, data)
+}
+
+// keep detects the type of the bytes, writes the file under the main clone of the
+// workspace and registers it.
+func (s *Service) keep(ctx context.Context, r Request, data []byte) (Stored, error) {
+	root, err := s.o.Root(ctx, r.Workspace)
+	if err != nil || root == "" {
+		return Stored{}, ErrWorkspace
 	}
 	now := s.clk.Now().UTC()
 	id := s.newID()
@@ -480,3 +502,23 @@ func orAuto(l string) string {
 func oneLine(v string) string { return strings.Join(strings.Fields(v), " ") }
 
 var _ = io.EOF
+
+// Discard takes back a file that was kept for a message that was never delivered (the
+// message failed, or was already in the inbox): the file and its row go. Only a file this
+// service made, under the main clone of the workspace, is taken.
+func (s *Service) Discard(ctx context.Context, workspace string, st Stored) error {
+	root, err := s.o.Root(ctx, workspace)
+	if err != nil || root == "" {
+		return ErrWorkspace
+	}
+	if !strings.HasPrefix(st.Path, ".mestre/anexos/") || strings.Contains(st.Path, "..") {
+		return fmt.Errorf("attachments: %q is not a kept file", st.Path)
+	}
+	if err := os.Remove(filepath.Join(root, filepath.FromSlash(st.Path))); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `DELETE FROM attachments WHERE id = ? AND workspace = ?`, st.ID, workspace)
+		return err
+	})
+}

@@ -177,7 +177,7 @@ test("an answer given elsewhere turns the item into 'Já respondido por …' wit
   const card = await screen.findByRole("article", { name: "Pedido #7" });
   expect(within(card).getByRole("button", { name: "Aprovar agora" })).toBeTruthy();
   const sock = openSocket();
-  expect(sock.subscribed()).toEqual(["notices:u1", "approvals:u1"]);
+  expect(sock.subscribed()).toEqual(["notices:u1", "chat:u1", "approvals:u1"]);
   act(() =>
     emit(sock, "approvals:u1", "changed", {
       request: 7,
@@ -365,7 +365,7 @@ test("an Observer has no counter, no link and no central", async () => {
   renderApp("/");
   await screen.findByRole("heading", { name: "Sua Guilda está pronta" });
   expect(screen.queryByRole("link", { name: /Aprovações/ })).toBeNull();
-  expect(openSocket().subscribed()).toEqual(["notices:u1"]);
+  expect(openSocket().subscribed()).toEqual(["notices:u1", "chat:u1"]);
 });
 
 const notice = (id: number, extra: Partial<NoticeView> = {}): NoticeView => ({

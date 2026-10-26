@@ -4,16 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
-	"golang.org/x/text/unicode/norm"
-
-	"github.com/mestre-ia/mestre/internal/logging"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/secretscreen"
 	"github.com/mestre-ia/mestre/internal/users"
 )
 
@@ -21,7 +17,7 @@ import (
 // (docs/plataforma/cofre.md#credenciais-de-site).
 const (
 	// RemovedSecret replaces a piece of a known format.
-	RemovedSecret = "[segredo removido]"
+	RemovedSecret = secretscreen.Removed
 	// HeldNotice is all the Grand Master receives of a message with a password
 	// phrase: the notice, never the content. It tells him what to do.
 	HeldNotice = "[mensagem retida: o usuário mandou uma senha pelo Telegram; o motor a apagou e não a entregou. " +
@@ -36,70 +32,24 @@ const (
 		"O Grão-Mestre recebeu a mensagem sem o trecho. Troque esse segredo: ele já passou por aqui."
 )
 
-// passphraseRes find the phrases that give a password in free text ("a senha é",
-// "minha senha", "a senha do Gmail é X", "senha=X", "password is X", "pwd X").
-// They run on the normalized text (normalize), where the spaces and the colon are
-// the plain ones; the classes below are for what the normalization leaves.
-var passphraseRes = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)\bminha[\s\p{Z}]+senha`),
-	regexp.MustCompile(`(?i)\b(?:senha|password|passwd|passphrase|pwd)[^\n]{0,40}?(?:[\s\p{Z}](?:é|eh|is|será|sera)(?:[\s\p{Z}]|$)|[\s\p{Z}]*[:=\x{FF1A}\x{FF1D}])`),
-	regexp.MustCompile(`(?i)\bpwd[\s\p{Z}]+\S`),
-}
+// secretKind says how the engine saw the secret (the filter is shared with the panel:
+// internal/secretscreen).
+type secretKind = secretscreen.Kind
+
+const (
+	secretNone       = secretscreen.None
+	secretPassphrase = secretscreen.Passphrase
+	secretFormat     = secretscreen.Format
+	secretFollowUp   = secretscreen.FollowUp
+)
 
 // followUpLife is how long after a held password phrase the next message of the
 // same author is held too: "minha senha:" and then the value, in two messages.
 const followUpLife = 5 * time.Minute
 
-// normalize is the text as the filter reads it: NFKC (full-width and lookalike
-// letters become the plain ones) without the invisible format characters (zero
-// width spaces and joiners, which split a word the eye still reads).
-func normalize(text string) string {
-	return stripFormat(norm.NFKC.String(stripFormat(text)))
-}
-
-func stripFormat(text string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.Is(unicode.Cf, r) {
-			return -1
-		}
-		return r
-	}, text)
-}
-
-// secretKind says how the engine saw the secret.
-type secretKind string
-
-const (
-	secretNone       secretKind = ""
-	secretPassphrase secretKind = "passphrase"
-	secretFormat     secretKind = "format"
-	// secretFollowUp is the message after a held phrase: held like it, but it
-	// does not start another wait.
-	secretFollowUp secretKind = "followup"
-)
-
-// held says the whole message is held (the text is not kept at all).
-func (k secretKind) held() bool { return k == secretPassphrase || k == secretFollowUp }
-
-// screen looks at the text a user sent. A passphrase holds the whole message (the
-// text comes back empty: nothing of it is kept); a known format is replaced in
-// place by RemovedSecret and the rest goes on. The masker is the one of the logs,
-// with every secret of the vault in it. Both look at the normalized text.
+// screen looks at the text a user sent (secretscreen.Screen over the masker of the bot).
 func (b *Bot) screen(text string) (secretKind, string) {
-	if text == "" {
-		return secretNone, text
-	}
-	text = normalize(text)
-	for _, re := range passphraseRes {
-		if re.MatchString(text) {
-			return secretPassphrase, ""
-		}
-	}
-	masked := b.o.Mask(text)
-	if masked == text {
-		return secretNone, text
-	}
-	return secretFormat, strings.ReplaceAll(masked, logging.Redacted, RemovedSecret)
+	return secretscreen.Screen(b.o.Mask, text)
 }
 
 // bodyOf is the text of a message: the text, or the caption of a file.
@@ -165,7 +115,7 @@ func (b *Bot) blocked(ctx context.Context, u users.User, m *Message, kind secret
 		b.log.Warn("telegram: the attempt to send a secret was not audited", "err", err)
 	}
 	advice := maskedAdvice
-	if kind.held() {
+	if kind.Held() {
 		advice = heldAdvice
 	}
 	b.say(ctx, m.Chat.ID, u.ID, advice)

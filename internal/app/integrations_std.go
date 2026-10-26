@@ -34,6 +34,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 	"github.com/mestre-ia/mestre/internal/panel"
+	"github.com/mestre-ia/mestre/internal/panelchat"
 	"github.com/mestre-ia/mestre/internal/sessionzero"
 	"github.com/mestre-ia/mestre/internal/telegram"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -111,6 +112,9 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r.lc = &telegram.LockChannel{Svc: r.lock, Users: svc, PINs: r.pins}
 	// what was kept while the Mestre was locked goes when it is not
 	r.lock.OnChange(func(locked bool) {
+		if r.chat != nil {
+			r.chat.LockChanged(context.Background())
+		}
 		if !locked {
 			if bot := r.currentBot(); bot != nil {
 				if err := bot.ReleaseHeld(context.Background()); err != nil {
@@ -130,6 +134,10 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r.replies = &telegram.Replies{Users: svc}
 	r.block = &telegram.BlockChannel{Users: svc, Panel: r.feed}
 	r.choose = &telegram.ChooseChannel{Users: svc}
+	r.chat, err = r.newChat()
+	if err != nil {
+		return nil, fmt.Errorf("app: the conversation of the panel: %w", err)
+	}
 	r.stall = &telegram.StallChannel{Users: svc}
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
 	r.gc = &telegram.GuildChannel{Users: svc, PINs: r.pins, Machines: env.Machines, SetExcluded: env.SetExcluded, Pending: env.Pending}
@@ -228,7 +236,10 @@ type stdRun struct {
 	orc   atomic.Pointer[Orchestration]
 	// progress is the message of progress of the workspaces, once the period has it.
 	progress atomic.Pointer[progress.Service]
-	closed   atomic.Bool
+	// chat is the conversation with the Grão-Mestre in the panel, and files the attachments it keeps.
+	chat   *panelchat.Service
+	files  atomic.Pointer[attachments.Service]
+	closed atomic.Bool
 
 	botMu sync.Mutex
 	bot   *telegram.Bot
@@ -494,7 +505,9 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 	}
 	o.ChainUsers = r.flow
 	if o.Channels == nil {
-		o.Channels = r.replies // the answer of `mestre reply` goes back to the chat of the user
+		// the answer of `mestre reply` goes back to the channel of the message: the chat of the user
+		// on the Telegram, the conversation of the panel
+		o.Channels = channelMux{telegram: r.replies, panel: r.chat.Channel()}
 	}
 	if o.ChainStallPeople == nil {
 		o.ChainStallPeople = r.stall
@@ -764,7 +777,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 		}
 	}
 	prog, err := progress.New(progress.Options{Clock: r.env.Clock, Tables: tables.Store{DB: r.env.DB}, Requests: &chain.Store{DB: r.env.DB},
-		Workspaces: activeWorkspaces{orc}, Recipients: progressPeople{digest.UsersDirectory{Users: r.users}}, Sender: progressSender{r.dg},
+		Workspaces: activeWorkspaces{orc}, Recipients: progressPeople{digest.UsersDirectory{Users: r.users}}, Sender: progressFanout{bot: progressSender{r.dg}, chat: r.chat, log: func(msg string, err error) { r.env.Log.Warn(msg, "err", err) }},
 		Mask: r.env.Masker.Mask, Logger: r.env.Log})
 	if err != nil {
 		r.env.Log.Warn("app: the message of progress is off", "err", err)
@@ -781,6 +794,9 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 		r.env.Log.Warn("app: the reading of the events of GitHub is off", "err", perr)
 	}
 	msgs := inboxMessages{&inbox.Store{DB: r.env.DB}}
+	if orc.Inbox != nil {
+		orc.Inbox.OnChange(r.chat.Changed) // the state of the Grão-Mestre and the queue ahead, in the conversation
+	}
 	r.choose.Answered = func(ctx context.Context, q telegram.ChoiceQuestion, by users.User, option string) error {
 		gm, ok, err := orc.Registry.GrandMaster(ctx, q.Workspace)
 		if err != nil || !ok {
@@ -791,7 +807,8 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 		_, err = orc.Inbox.Enqueue(ctx, it)
 		return err
 	}
-	(&blocking.ChooseHandler{Characters: orc.Registry, Chooser: chooser{r.choose}, User: msgs.User, Current: msgs.Current, Table: orc.Tables.Find}).Register(fwd)
+	(&blocking.ChooseHandler{Characters: orc.Registry, Chooser: chooserMux{telegram: chooser{r.choose}, chat: r.chat}, User: msgs.User, Current: msgs.Current,
+		ChannelOf: msgs.Channel, Table: orc.Tables.Find}).Register(fwd)
 	(&blocking.Handler{Characters: orc.Registry, Channel: r.block, Table: orc.Tables.Find, BlockedBy: orc.EpicDeps.Waiting, Owner: r.ownerName,
 		Evidence: func(_ context.Context, workspace, mesa string) string {
 			red, ok := orc.Quests.LastRed(workspace, mesa)
@@ -1029,6 +1046,7 @@ func (r *stdRun) attachments(orc *Orchestration) telegram.Files {
 		r.env.Log.Warn("app: the attachments are off", "err", err)
 		return nil
 	}
+	r.files.Store(svc) // the panel keeps the files of its messages the same way
 	return svc
 }
 

@@ -4,6 +4,7 @@ import approvals from "./approvals";
 import audit from "./audit";
 import auth from "./auth";
 import canvas from "./canvas";
+import chat from "./chat";
 import common from "./common";
 import errors from "./errors";
 import github from "./github";
@@ -22,6 +23,7 @@ export const en: Widen<typeof ptBR> = {
   secrets,
   audit,
   approvals,
+  chat,
   github,
   errors,
   terminal,

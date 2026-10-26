@@ -30,6 +30,18 @@ test("the Owner creates the Guild, signs out and signs in again", async ({ page 
   await expect(card.getByText(/Você respondeu: Aprovado/)).toBeVisible();
   await expect(page.getByRole("link", { name: "Aprovações, nenhuma pendente" })).toBeVisible();
 
+  // the conversation with the Grão-Mestre (a function in this Guild, tools/e2eserver/chat.go): the
+  // message goes to its inbox, it answers at once through the channel of the panel, and the answer
+  // shows in Markdown in the side panel
+  await page.getByRole("button", { name: "Abrir a conversa com o Grão-Mestre" }).click();
+  const chat = page.getByRole("complementary", { name: "Conversa com o Grão-Mestre" });
+  await expect(chat.getByText("Grão-Mestre livre")).toBeVisible();
+  await chat.getByLabel("Mensagem para o Grão-Mestre").fill("abra a mesa do login");
+  await chat.getByRole("button", { name: "Enviar" }).click();
+  await expect(chat.getByText("Mensagem enviada.")).toBeVisible();
+  await expect(chat.locator("strong", { hasText: "abra a mesa do login" })).toBeVisible();
+  await chat.getByRole("button", { name: "Fechar a conversa" }).click();
+
   // logout
   await page.getByRole("button", { name: "Menu da conta" }).click();
   await page.getByRole("menuitem", { name: "Sair" }).click();

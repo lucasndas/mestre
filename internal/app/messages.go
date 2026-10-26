@@ -54,19 +54,41 @@ func (m inboxMessages) User(ctx context.Context, workspace, id string) (string, 
 	return it.Origin.User, nil
 }
 
-// Current is the user of the last message of a user in the inbox of the Grão-Mestre:
-// the one it is handling.
-func (m inboxMessages) Current(ctx context.Context, workspace, grandMaster string) (string, error) {
+// current is the origin of the last message of a user in the inbox of the Grão-Mestre: the one
+// it is handling.
+func (m inboxMessages) current(ctx context.Context, workspace, grandMaster string) (inbox.Origin, error) {
 	all, err := m.store.All(ctx, grandMaster)
 	if err != nil {
-		return "", err
+		return inbox.Origin{}, err
 	}
 	for i := len(all) - 1; i >= 0; i-- {
 		if it := all[i]; it.Workspace == workspace && it.Kind == inbox.KindUser && it.Origin != nil && it.Origin.Choice == 0 && it.Origin.User != "" {
-			return it.Origin.User, nil
+			return *it.Origin, nil
 		}
 	}
-	return "", decrees.ErrNoMessage
+	return inbox.Origin{}, decrees.ErrNoMessage
+}
+
+// Current is the user of the last message of a user in the inbox of the Grão-Mestre:
+// the one it is handling.
+func (m inboxMessages) Current(ctx context.Context, workspace, grandMaster string) (string, error) {
+	o, err := m.current(ctx, workspace, grandMaster)
+	return o.User, err
+}
+
+// Channel is the channel of a message of a user ("" asks for the one in handling): the question of
+// `mestre choose` goes there and nowhere else. A message that cannot be read is the Telegram's.
+func (m inboxMessages) Channel(ctx context.Context, workspace, grandMaster, message string) string {
+	if message != "" {
+		if it, err := m.item(ctx, workspace, message); err == nil {
+			return it.Origin.Channel
+		}
+		return inbox.ChannelTelegram
+	}
+	if o, err := m.current(ctx, workspace, grandMaster); err == nil && o.Channel != "" {
+		return o.Channel
+	}
+	return inbox.ChannelTelegram
 }
 
 // chooser asks the questions of `mestre choose` through the bot.

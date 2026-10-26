@@ -128,7 +128,7 @@ func (c *ChooseChannel) click(ctx context.Context, k Click) (string, string, err
 	}
 	var q ChoiceQuestion
 	var options, state string
-	err := c.bot.o.DB.Reader().QueryRowContext(ctx, `SELECT workspace, mesa, asker, user_id, question, options, state FROM choose_questions WHERE id = ?`, id).
+	err := c.bot.o.DB.Reader().QueryRowContext(ctx, `SELECT workspace, mesa, asker, user_id, question, options, state FROM choose_questions WHERE id = ? AND channel = 'telegram'`, id).
 		Scan(&q.Workspace, &q.Mesa, &q.Asker, &q.UserID, &q.Question, &options, &state)
 	if err != nil {
 		return "", "", errors.New("essa pergunta não existe mais")

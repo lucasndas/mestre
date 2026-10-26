@@ -1,6 +1,6 @@
 # Anexos e transcrição
 
-> **Assunto:** imagens, documentos e áudios recebidos, arquivos enviados de volta e a transcrição local com whisper.cpp · **Componente:** Motor · **Atualizado:** 2026-10-20
+> **Assunto:** imagens, documentos e áudios recebidos, arquivos enviados de volta e a transcrição local com whisper.cpp · **Componente:** Motor · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
@@ -26,7 +26,7 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
   - legenda e caminho;
   - transcrição, se houver;
   - mesas para onde o anexo foi copiado.
-- **Painel:** anexos enviados pela [conversa do painel](../painel/conversa-e-aprovacoes.md) seguem as mesmas regras, sem a parte do Telegram.
+- **Painel:** anexos enviados pela [conversa do painel](../painel/conversa-e-aprovacoes.md) seguem as mesmas regras, sem a parte do Telegram: o navegador manda os bytes na própria mensagem (até 5 arquivos, cada um até o limite, que a tela mostra e confere antes de enviar), o servidor confere o tamanho de novo, guarda como anexo com origem "painel" e a sessão no registro, e a linha `[anexo]` vai ao Grão-Mestre.
 - **Entrega ao Grão-Mestre:** depois da linha de origem ([roteamento](roteamento.md#entrega-ao-grão-mestre)), vêm a legenda (como texto) e uma linha por arquivo:
   `[anexo] .mestre/anexos/2026/10/a1b2-relatorio.pdf · application/pdf · 1,2 MB`
 - **Repasse à mesa:** o Grão-Mestre repassa o pedido ao Mestre da mesa com o texto original e os caminhos dos anexos ([Grão-Mestre](../orquestracao/grao-mestre.md)).

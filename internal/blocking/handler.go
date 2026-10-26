@@ -331,6 +331,12 @@ type Chooser interface {
 	Ask(ctx context.Context, workspace, mesa, asker, userID, question string, options []string, recommend int) (int64, error)
 }
 
+// ChannelChooser is a Chooser that takes the question to a channel: the one of the message that
+// caused it ("telegram" or "panel").
+type ChannelChooser interface {
+	AskVia(ctx context.Context, channel, workspace, mesa, asker, userID, question string, options []string, recommend int) (int64, error)
+}
+
 // ChooseHandler is the command `mestre choose` (docs/cli/grao-mestre.md#mestre-choose).
 // It asks the user of the message in handling, or of --from-message, and passes on
 // nothing before the answer; the answer comes to the inbox of the Grand Master as a
@@ -344,6 +350,10 @@ type ChooseHandler struct {
 	Current func(ctx context.Context, workspace, grandMaster string) (string, error)
 	// Table finds a table of the workspace by its name or the number of its epic.
 	Table func(ctx context.Context, workspace, name string) (tables.Table, error)
+	// ChannelOf gives the channel of the message the question follows (message "" is the one in
+	// handling): the question goes only to that channel. Nil, or a Chooser that is no
+	// ChannelChooser: the Telegram.
+	ChannelOf func(ctx context.Context, workspace, grandMaster, message string) string
 }
 
 // Register registers the command.
@@ -404,7 +414,12 @@ func (h *ChooseHandler) handle(ctx context.Context, c *localchan.Call) localchan
 		}
 		mesa = t.ID
 	}
-	id, err := h.Chooser.Ask(ctx, who.Workspace, mesa, who.ID, user, args[0], options, recommend)
+	var id int64
+	if cc, ok := h.Chooser.(ChannelChooser); ok && h.ChannelOf != nil {
+		id, err = cc.AskVia(ctx, h.ChannelOf(ctx, who.Workspace, who.ID, flagText(c, "from-message")), who.Workspace, mesa, who.ID, user, args[0], options, recommend)
+	} else {
+		id, err = h.Chooser.Ask(ctx, who.Workspace, mesa, who.ID, user, args[0], options, recommend)
+	}
 	switch {
 	case errors.Is(err, ErrNoLevel):
 		return localchan.Fail("level_denied", "the user has no level to give orders to the Grand Master", "").WithExit(localchan.ExitDenied)

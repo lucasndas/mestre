@@ -540,7 +540,7 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 	// What the Grand Master gets of a secret: the notice, or the text without
 	// the piece (the message was already deleted above).
 	switch {
-	case kind.held():
+	case kind.Held():
 		in.Text, in.File, in.Kind = HeldNotice, nil, KindText
 	case kind == secretFormat:
 		in.Text, in.File = strings.TrimSpace(clean), nil
@@ -621,7 +621,7 @@ func (b *Bot) stranger(ctx context.Context, m *Message) {
 			}
 			// the Owner reads what a stranger wrote: never a secret in it
 			switch kind, clean := b.screen(text); {
-			case kind.held():
+			case kind.Held():
 				b.blockedStranger(ctx, m, kind)
 				text = "[mensagem com senha omitida pelo motor]"
 			case kind == secretFormat:

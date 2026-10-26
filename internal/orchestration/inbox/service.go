@@ -87,6 +87,27 @@ type Service struct {
 	unavail map[string]string
 	// progress hears how far the items that carry an ask went.
 	progress AskProgress
+	// changed are told when the inbox of a character changes (the panel shows the
+	// state of the Grand Master and the queue ahead).
+	changed []func(ctx context.Context, target string)
+}
+
+// OnChange registers what is told, with the id of the character, whenever its inbox or
+// its state changes: an item queued, delivered or closed, a change of state. The function
+// runs in the goroutine that made the change, so it must return soon.
+func (s *Service) OnChange(fn func(ctx context.Context, target string)) {
+	s.mu.Lock()
+	s.changed = append(s.changed, fn)
+	s.mu.Unlock()
+}
+
+func (s *Service) tellChanged(ctx context.Context, target string) {
+	s.mu.Lock()
+	fns := append([]func(context.Context, string){}, s.changed...)
+	s.mu.Unlock()
+	for _, fn := range fns {
+		fn(ctx, target)
+	}
 }
 
 // AskProgress is told how far an item that carries an ask went: `delivered`
@@ -198,6 +219,7 @@ func (s *Service) Enqueue(ctx context.Context, n NewItem) (Item, error) {
 	}
 	s.checkLong(ctx, c)
 	s.tellUnavailable(ctx, c, n)
+	s.tellChanged(ctx, n.Target)
 	return it, nil
 }
 
@@ -397,6 +419,7 @@ func (s *Service) Recover(ctx context.Context) error {
 // was interrupted gets the item back in the queue; one that ended loses what
 // was left.
 func (s *Service) StateChanged(ctx context.Context, c characters.Character, _ characters.State) error {
+	defer s.tellChanged(ctx, c.ID)
 	switch c.State {
 	case characters.Idle, characters.Waiting:
 		// A delivery that failed on the machine puts the character back to idle
@@ -429,8 +452,11 @@ func (s *Service) TurnEnded(context.Context, characters.Character, string) error
 func (s *Service) Confirmed(ctx context.Context, id string) error {
 	_, err := s.st.Deliver(ctx, id, s.clk.Now(), false)
 	if err == nil {
-		if it, gerr := s.st.Get(ctx, id); gerr == nil && it.Kind == KindAgent {
-			s.tellProgress(ctx, it.Refs.Ask, "answering")
+		if it, gerr := s.st.Get(ctx, id); gerr == nil {
+			if it.Kind == KindAgent {
+				s.tellProgress(ctx, it.Refs.Ask, "answering")
+			}
+			s.tellChanged(ctx, it.Target)
 		}
 	}
 	return err

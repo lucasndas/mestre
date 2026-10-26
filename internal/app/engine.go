@@ -203,6 +203,10 @@ type Deps struct {
 	// PanelCanvas is the engine of the tables the canvas shows (nil: the one of the
 	// orchestration of the period).
 	PanelCanvas panel.CanvasSource
+	// PanelChat is the conversation with the Grão-Mestre the panel shows (nil: the one
+	// of the standard integration). The browser smoke test gives it a Grão-Mestre that
+	// answers at once.
+	PanelChat panel.ChatSource
 	// Whisper is the whisper-server of this machine, which it uses to transcribe
 	// the audio another machine of the Guild sends it (nil: this machine does not
 	// transcribe for others; the installation sets it, milestone 7).
