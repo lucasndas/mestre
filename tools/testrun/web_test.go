@@ -85,7 +85,7 @@ func TestWebSideRunsVitestBiomeAndTscSideBySide(t *testing.T) {
 			t.Errorf("%q: calls %v", want, calls)
 		}
 	}
-	if !strings.Contains(out.String(), "PASS fast web: 1 tests in 3s (budget 15s)") || len(ex.callsMatching("go test")) != 1 {
+	if !strings.Contains(out.String(), "PASS fast web: 1 tests in 3s (budget 15s)") || len(ex.callsMatching("tool test2json")) != 1 {
 		t.Fatalf("output:\n%s", out)
 	}
 
@@ -97,7 +97,7 @@ func TestWebSideRunsVitestBiomeAndTscSideBySide(t *testing.T) {
 		if code := r.RunSuite(context.Background(), Suites["fast"]); code != 0 {
 			t.Fatalf("only %s: exit %d:\n%s", only, code, out)
 		}
-		if got := len(ex.callsMatching("go test")) == 1; got != (only == OnlyGo) {
+		if got := len(ex.callsMatching("tool test2json")) == 1; got != (only == OnlyGo) {
 			t.Errorf("only %s: go side ran = %v", only, got)
 		}
 		if got := len(ex.callsMatching("npx")) == 3; got != (only == OnlyWeb) {

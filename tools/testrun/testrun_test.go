@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -26,6 +27,9 @@ type fakeExec struct {
 	calls   []Cmd
 	handle  func(c Cmd, out io.Writer) int
 	missing string // a command name that is not installed
+	// build answers `go test -c` (the build of the test binaries); nil
+	// succeeds.
+	build func(c Cmd, out io.Writer) int
 }
 
 func (f *fakeExec) Run(ctx context.Context, c Cmd, out io.Writer) (int, error) {
@@ -35,7 +39,20 @@ func (f *fakeExec) Run(ctx context.Context, c Cmd, out io.Writer) (int, error) {
 	if c.Name == f.missing {
 		return -1, fmt.Errorf("run %s: exec: %q: executable file not found in $PATH", c, c.Name)
 	}
-	code := f.handle(c, out)
+	var code int
+	switch {
+	case c.Name == "go" && slices.Contains(c.Args, testListFormat):
+		// one package with tests, in the module of the repository
+		_, _ = io.WriteString(out, pkg+"|github.com/mestre-ia/mestre|1|0\n")
+	case c.Name == "go" && len(c.Args) > 1 && c.Args[0] == "test" && c.Args[1] == "-c":
+		if f.build != nil {
+			code = f.build(c, out)
+		}
+	case c.Name == "go" && len(c.Args) > 1 && c.Args[0] == "tool" && c.Args[1] == "-n":
+		// test2json is run with `go tool`
+	default:
+		code = f.handle(c, out)
+	}
 	if err := ctx.Err(); err != nil {
 		return -1, err // killed: the output is partial
 	}
@@ -70,10 +87,15 @@ func newRunner(fsys fstest.MapFS, clk clock.Clock, ex Exec) (*Runner, *bytes.Buf
 	if fsys == nil {
 		fsys = fstest.MapFS{}
 	}
-	return &Runner{Exec: ex, Clock: clk, FS: fsys, Out: &out}, &out
+	mkTemp := func() (string, func(), error) { return "/bins", func() {}, nil }
+	return &Runner{Exec: ex, Clock: clk, FS: fsys, Out: &out, MkTemp: mkTemp}, &out
 }
 
-func isMainRun(c Cmd) bool { return c.Name == "go" && strings.Contains(c.String(), "./...") }
+// isMainRun is the run of the test binary of the suite (not the solo re-run of
+// slow tests).
+func isMainRun(c Cmd) bool {
+	return c.Name == "go" && strings.Contains(c.String(), "tool test2json") && !strings.Contains(c.String(), "-test.run")
+}
 
 // CA-TESTES-01
 func TestOverBudgetFailsAndListsTenSlowest(t *testing.T) {
@@ -140,7 +162,7 @@ func TestSlowFastSuiteTestIsFlaggedOnly(t *testing.T) {
 	if !strings.Contains(text, "warning: 1 fast-suite test(s) above 100ms") || !strings.Contains(text, "TestSlow") || strings.Contains(text, "TestQuick") {
 		t.Fatalf("flags:\n%s", text)
 	}
-	if n := len(ex.callsMatching("-run ^TestSlow$")); n != 1 {
+	if n := len(ex.callsMatching("-test.run ^TestSlow$")); n != 1 {
 		t.Fatalf("TestSlow timed alone %d times, want 1", n)
 	}
 }
@@ -161,7 +183,7 @@ func TestATestUnder200msInTheSuiteIsNotRunAgainNorFlagged(t *testing.T) {
 	if code := r.RunSuite(context.Background(), Suites["fast"]); code != 0 || strings.Contains(out.String(), "warning") {
 		t.Fatalf("code %d:\n%s", code, out)
 	}
-	if c := ex.callsMatching("-run"); len(c) != 0 {
+	if c := ex.callsMatching("-test.run"); len(c) != 0 {
 		t.Fatalf("tests under 200 ms were run again: %v", c)
 	}
 }
@@ -180,7 +202,7 @@ func TestSlowOnlyUnderContentionIsNotFlagged(t *testing.T) {
 	if code := r.RunSuite(context.Background(), Suites["fast"]); code != 0 || strings.Contains(out.String(), "warning") {
 		t.Fatalf("code %d:\n%s", code, out)
 	}
-	if c := ex.callsMatching("-run"); len(c) != 1 || !strings.Contains(c[0].String(), "-run ^TestBusy$/^sub_case$") {
+	if c := ex.callsMatching("-test.run"); len(c) != 1 || !strings.Contains(c[0].String(), "-test.run ^TestBusy$/^sub_case$") {
 		t.Fatalf("calls = %v", c)
 	}
 }
@@ -206,9 +228,12 @@ func TestQuarantineSkipsAndExpiredFailsFull(t *testing.T) {
 
 	code := r.RunSuite(context.Background(), Suites["full"])
 
-	main := ex.callsMatching("go test")
-	if len(main) != 1 || !strings.Contains(main[0].String(), "-tags full -timeout 5m24s -skip ^(TestRecent|TestOld)$ ./...") {
-		t.Fatalf("go test call = %v", main)
+	main := ex.callsMatching("tool test2json")
+	if len(main) != 1 || !strings.Contains(main[0].String(), "-test.count=1 -test.timeout=5m24s -test.skip=^(TestRecent|TestOld)$") {
+		t.Fatalf("the quarantine is not passed to the test binary: %v", main)
+	}
+	if b := ex.callsMatching("test -c"); len(b) != 1 || !strings.Contains(b[0].String(), "-tags full") || strings.Contains(b[0].String(), "-skip") {
+		t.Fatalf("build call = %v", b)
 	}
 	text := out.String()
 	if !strings.Contains(text, "TestRecent (https://github.com/mestre-ia/mestre/issues/1") ||
@@ -237,7 +262,7 @@ func TestFailingTestRunsOnce(t *testing.T) {
 	if code == 0 {
 		t.Fatal("failing test passed the suite")
 	}
-	if n := len(ex.callsMatching("go test")); n != 1 {
+	if n := len(ex.callsMatching("tool test2json")); n != 1 {
 		t.Fatalf("go test called %d times, want once: %v", n, ex.calls)
 	}
 	if text := out.String(); !strings.Contains(text, "--- FAIL: "+pkg+" TestBroken") || !strings.Contains(text, "sample_test.go:9: boom") {
@@ -342,7 +367,7 @@ func TestHeavySuiteDoesNotLint(t *testing.T) {
 // heavy suite has none, so go test must not kill it at its default 10 min.
 func TestEverySuiteHasAHardTimeoutExceptHeavy(t *testing.T) {
 	t.Parallel()
-	want := map[string]string{"fast": " -timeout 54s ", "full": " -timeout 5m24s ", "heavy": " -timeout 0 "}
+	want := map[string]string{"fast": " -test.timeout=54s", "full": " -test.timeout=5m24s", "heavy": " -test.timeout=0"}
 	for suite, flag := range want {
 		t.Run(suite, func(t *testing.T) {
 			t.Parallel()
@@ -353,7 +378,7 @@ func TestEverySuiteHasAHardTimeoutExceptHeavy(t *testing.T) {
 			r.RunSuite(context.Background(), Suites[suite])
 
 			var main []Cmd
-			for _, c := range ex.callsMatching("./...") {
+			for _, c := range ex.callsMatching("tool test2json") {
 				if isMainRun(c) {
 					main = append(main, c)
 				}
@@ -411,16 +436,100 @@ func TestHeavyWithinMedianDoesNotWarn(t *testing.T) {
 	}
 }
 
+// A build failure fails the suite with the compiler output; nothing runs and
+// the linter is not started.
 func TestBuildFailureIsReported(t *testing.T) {
 	t.Parallel()
-	ex := &fakeExec{handle: func(c Cmd, out io.Writer) int {
-		line, _ := json.Marshal(event{Action: "build-output", ImportPath: pkg, Output: "x.go:3:1: syntax error\n"})
-		_, _ = fmt.Fprintf(out, "%s\n%s", line, ev("", "fail", 0))
+	ex := &fakeExec{handle: func(Cmd, io.Writer) int { return 0 }}
+	ex.build = func(c Cmd, out io.Writer) int {
+		if !c.MergeStderr {
+			t.Error("the compiler output (standard error) is not captured")
+		}
+		_, _ = io.WriteString(out, "# "+pkg+"\nx.go:3:1: syntax error\n")
 		return 1
-	}}
+	}
 	r, out := newRunner(nil, clock.NewFake(today), ex)
-	if code := r.RunSuite(context.Background(), Suites["fast"]); code == 0 || !strings.Contains(out.String(), "x.go:3:1: syntax error") {
+	code := r.RunSuite(context.Background(), Suites["fast"])
+	if code == 0 || !strings.Contains(out.String(), "x.go:3:1: syntax error") || !strings.Contains(out.String(), "FAIL fast: building the test binaries failed") {
 		t.Fatalf("code %d:\n%s", code, out)
+	}
+	if n := len(ex.callsMatching("tool test2json")) + len(ex.callsMatching("golangci-lint")); n != 0 {
+		t.Fatalf("ran tests or lint after the build failed (%d calls)", n)
+	}
+}
+
+// The build of the test binaries is outside the budget: a slow build does not
+// fail a suite whose run is inside it, its time is printed on its own line
+// and the run is what is timed.
+func TestTheBuildIsNotCountedInTheBudgetButTheRunIs(t *testing.T) {
+	t.Parallel()
+	cases := map[string]struct {
+		build, run time.Duration
+		wantFail   bool
+		wantLine   string
+	}{
+		"slow build, fast run": {5 * time.Minute, 20 * time.Second, false, "PASS fast: 1 tests in 20s (budget 36s)"},
+		"fast build, slow run": {2 * time.Second, 37 * time.Second, true, "FAIL fast suite took 37s, budget 36s"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			clk := clock.NewFake(today)
+			ex := &fakeExec{handle: func(cmd Cmd, out io.Writer) int {
+				if isMainRun(cmd) {
+					_, _ = io.WriteString(out, ev("TestOne", "pass", 0.01))
+					clk.Advance(c.run)
+				}
+				return 0
+			}}
+			ex.build = func(Cmd, io.Writer) int { clk.Advance(c.build); return 0 }
+			r, out := newRunner(nil, clk, ex)
+
+			code := r.RunSuite(context.Background(), Suites["fast"])
+
+			text := out.String()
+			if (code != 0) != c.wantFail || !strings.Contains(text, c.wantLine) {
+				t.Fatalf("exit %d, want line %q:\n%s", code, c.wantLine, text)
+			}
+			want := "build took " + c.build.String()
+			if name == "slow build, fast run" {
+				want = "build took 5m0s"
+			}
+			if !strings.Contains(text, want+" ") {
+				t.Fatalf("no %q line:\n%s", want, text)
+			}
+		})
+	}
+}
+
+// Every binary is built with the tags and flags of the suite and run from its
+// own package directory; the quarantine and -count go to the binary as -test.*.
+func TestBinariesAreBuiltWithTheSuiteFlagsAndRunInThePackageDirectory(t *testing.T) {
+	t.Parallel()
+	ex := &fakeExec{handle: func(c Cmd, out io.Writer) int {
+		_, _ = io.WriteString(out, ev("TestOne", "pass", 0.01))
+		return 0
+	}}
+	r, _ := newRunner(nil, clock.NewFake(today), ex)
+	r.Race, r.Shuffle = true, true
+
+	r.RunSuite(context.Background(), Suites["full"])
+
+	b := ex.callsMatching("test -c")
+	if len(b) != 1 {
+		t.Fatalf("build calls = %v", b)
+	}
+	for _, want := range []string{"-o /bins/", "-tags full", "-race " + RaceGcflags, pkg} {
+		if !strings.Contains(strings.ReplaceAll(b[0].String(), "\\", "/"), want) {
+			t.Fatalf("build lacks %q: %s", want, b[0])
+		}
+	}
+	if !slices.Contains(b[0].Env, "CGO_ENABLED=1") {
+		t.Fatalf("build env = %v", b[0].Env)
+	}
+	run := ex.callsMatching("tool test2json")
+	if len(run) != 1 || run[0].Dir != "internal/sample" || !strings.Contains(run[0].String(), "-test.shuffle=on") || !strings.Contains(run[0].String(), "-test.v=test2json") {
+		t.Fatalf("run calls = %v", run)
 	}
 }
 

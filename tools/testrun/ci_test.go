@@ -19,7 +19,7 @@ func TestSlowTestsAreTimedAloneInOneRunPerPackage(t *testing.T) {
 		switch {
 		case isMainRun(c):
 			_, _ = io.WriteString(out, ev("TestA", "pass", 0.25)+ev("TestB", "pass", 0.3)+ev("TestC", "pass", 0.4)+ev("TestQuick", "pass", 0.01))
-		case strings.Contains(c.String(), "-run"):
+		case strings.Contains(c.String(), "-test.run"):
 			_, _ = io.WriteString(out, ev("TestA", "pass", 0.15)+ev("TestB", "pass", 0.02)+ev("TestC", "pass", 0.3))
 		}
 		return 0
@@ -30,8 +30,8 @@ func TestSlowTestsAreTimedAloneInOneRunPerPackage(t *testing.T) {
 		t.Fatalf("code %d:\n%s", code, out)
 	}
 
-	calls := ex.callsMatching("-run")
-	if len(calls) != 1 || !strings.Contains(calls[0].String(), "-run ^(TestA|TestB|TestC)$ ") || !strings.HasSuffix(calls[0].String(), pkg) {
+	calls := ex.callsMatching("-test.run")
+	if len(calls) != 1 || !strings.Contains(calls[0].String(), "-test.run ^(TestA|TestB|TestC)$") {
 		t.Fatalf("solo runs = %v", calls)
 	}
 	text := out.String()
@@ -97,7 +97,7 @@ func TestSoloRerunsCountInTheWallTimeWithinTheBudgetLeft(t *testing.T) {
 				case isMainRun(cmd):
 					_, _ = io.WriteString(out, ev("TestSlow", "pass", 0.5))
 					clk.Advance(c.suite)
-				case strings.Contains(cmd.String(), "-run"):
+				case strings.Contains(cmd.String(), "-test.run"):
 					_, _ = io.WriteString(out, ev("TestSlow", "pass", 0.5))
 					clk.Advance(min(c.rerun, 8400*time.Millisecond)) // killed at the allowance, 36s - 24s - 3.6s
 				}
@@ -111,7 +111,7 @@ func TestSoloRerunsCountInTheWallTimeWithinTheBudgetLeft(t *testing.T) {
 			if (code != 0) != c.wantExit || !strings.Contains(text, c.wantLine) {
 				t.Fatalf("exit %d, want line %q:\n%s", code, c.wantLine, text)
 			}
-			if got := len(ex.callsMatching("-run")) > 0; got != c.wantRerun {
+			if got := len(ex.callsMatching("-test.run")) > 0; got != c.wantRerun {
 				t.Fatalf("re-run = %v, want %v", got, c.wantRerun)
 			}
 			if name == "fits" && !strings.Contains(text, "above 100ms when run alone") || name == "no time left" && !strings.Contains(text, "above 100ms in the suite (not re-run)") {
@@ -166,14 +166,14 @@ func TestMixedResultsAreNamedWithCount(t *testing.T) {
 	if strings.Contains(text, "mixed: "+pkg+" TestBroken") || strings.Contains(text, "mixed: "+pkg+" TestSteady") {
 		t.Fatalf("only TestFlaky is mixed:\n%s", text)
 	}
-	if strings.Contains(text, "took") {
+	if strings.Contains(text, "suite took") {
 		t.Fatalf("budget not scaled by -count:\n%s", text)
 	}
-	run := ex.callsMatching("-count=5")
-	if len(run) != 1 || !strings.Contains(run[0].String(), "-shuffle=on") || !strings.Contains(run[0].String(), "-timeout 4m30s") {
+	run := ex.callsMatching("-test.count=5")
+	if len(run) != 1 || !strings.Contains(run[0].String(), "-test.shuffle=on") || !strings.Contains(run[0].String(), "-test.timeout=4m30s") {
 		t.Fatalf("go test call = %v", run)
 	}
-	if n := len(ex.callsMatching("-run")); n != 0 {
+	if n := len(ex.callsMatching("-test.run")); n != 0 {
 		t.Fatalf("slow tests are not timed with -count > 1 (%d re-runs)", n)
 	}
 	if n := len(ex.callsMatching("golangci-lint")); n != 0 {

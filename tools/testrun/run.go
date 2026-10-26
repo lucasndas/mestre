@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +20,9 @@ type Cmd struct {
 	Args []string
 	Dir  string   // relative to the repository root; "" is the root
 	Env  []string // added to the runner environment
+	// MergeStderr sends the standard error to the same writer (the compiler
+	// output of the build step); otherwise it goes to the terminal.
+	MergeStderr bool
 }
 
 func (c Cmd) String() string { return strings.TrimSpace(c.Name + " " + strings.Join(c.Args, " ")) }
@@ -94,6 +98,10 @@ type Runner struct {
 	// Remove deletes a file relative to the root (the Vitest reports); nil keeps it.
 	Remove func(path string) error
 	Only   string // "go" or "web": run one side only ("" runs both)
+	// MkTemp makes the directory of the test binaries and returns its
+	// cleanup; nil uses a temporary directory.
+	MkTemp func() (string, func(), error)
+	built  *built // the test binaries of the suite being run
 
 	// Getenv reads the CI variables (GITHUB_STEP_SUMMARY); nil reads none.
 	Getenv func(string) string
@@ -173,27 +181,27 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	return code
 }
 
-// runGo is the Go side of a suite.
+// runGo is the Go side of a suite: the test binaries are built first, outside
+// the budget, and the budget times only their run (and the linter, in
+// parallel).
 func (r *Runner) runGo(ctx context.Context, s Suite, quarantine []QuarantineEntry) int {
 	count := r.count()
-	args := []string{"test", "-json", fmt.Sprintf("-count=%d", count)}
+	bt, bcode := r.build(ctx, s)
+	if bt == nil {
+		return bcode
+	}
+	defer bt.cleanup()
+	r.built = bt
+	flags := []string{"-test.count=" + strconv.Itoa(count)}
 	if r.Shuffle {
-		args = append(args, "-shuffle=on")
-	}
-	if s.Tags != "" {
-		args = append(args, "-tags", s.Tags)
-	}
-	if r.Race {
-		args = append(args, "-race", RaceGcflags)
+		flags = append(flags, "-test.shuffle=on")
 	}
 	if to := goTimeout(s, r.runs()); to != "" {
-		args = append(args, "-timeout", to)
+		flags = append(flags, "-test.timeout="+to)
 	}
 	if p := skipPattern(goQuarantine(quarantine)); p != "" {
-		args = append(args, "-skip", p)
+		flags = append(flags, "-test.skip="+p)
 	}
-	args = append(args, "./...")
-	goCmd := Cmd{Name: "go", Args: args, Env: r.goEnv(s.Name)}
 
 	start := r.Clock.Now()
 	lintSuite := s
@@ -201,13 +209,12 @@ func (r *Runner) runGo(ctx context.Context, s Suite, quarantine []QuarantineEntr
 		lintSuite.Lint = false // the linter result does not change from run to run, or with -race
 	}
 	lintDone := r.startLint(ctx, lintSuite)
-	var b bytes.Buffer
-	goCode, goErr := r.Exec.Run(ctx, goCmd, &b)
+	out, goCode, goErr := r.runBinaries(ctx, bt, r.goEnv(s.Name), flags)
 	goWall := clock.Since(r.Clock, start)
 	lint := <-lintDone
 	lintFailed := r.reportLint(lint)
 
-	rep := parseEvents(b.Bytes())
+	rep := parseEvents(out)
 	code := 0
 	if r.printFailures(rep, goCode, goErr) {
 		code = 1
@@ -255,7 +262,7 @@ func (r *Runner) runGo(ctx context.Context, s Suite, quarantine []QuarantineEntr
 	}
 	if lint.ran && lint.took > 0 {
 		// The two run side by side: whichever is longer is the floor of the wall time.
-		r.printf("info: go test took %v, golangci-lint %v (side by side)\n", goWall.Round(time.Millisecond), lint.took.Round(time.Millisecond))
+		r.printf("info: tests took %v, golangci-lint %v (side by side)\n", goWall.Round(time.Millisecond), lint.took.Round(time.Millisecond))
 	}
 	timing := ""
 	if slowWall.Round(time.Millisecond) > 0 {
