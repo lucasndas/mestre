@@ -58,6 +58,9 @@ type State struct {
 	ApprovalTest        string
 	ApprovalTestAt      time.Time
 	ApprovalTestSummary string
+	// GrandMasterSheet is the sheet the panel chose for the Grand Master when the
+	// workspace was created (empty: none chosen).
+	GrandMasterSheet string
 }
 
 // Store keeps State in the Guild database.
@@ -78,7 +81,7 @@ func fromMs(v int64) time.Time {
 }
 
 const stateColumns = `slug, versioning, versioning_asked_at, versioning_answered_at, apps_notified_at, agents_md_state,
-	agents_md_request, agents_md_text, claude_md_warned_at, pr_url, approval_test_result, approval_test_at, approval_test_summary`
+	agents_md_request, agents_md_text, claude_md_warned_at, pr_url, approval_test_result, approval_test_at, approval_test_summary, grand_master_sheet`
 
 // Get returns the state of the workspace; a workspace the session zero has
 // not touched yet has the zero State.
@@ -90,7 +93,7 @@ func (s Store) Get(ctx context.Context, slug string) (State, error) {
 	)
 	err := s.DB.Reader().QueryRowContext(ctx, `SELECT `+stateColumns+` FROM session_zero WHERE slug = ?`, slug).Scan(
 		&st.Slug, &versioning, &asked, &answered, &notified, &md, &st.AgentsMDRequest, &st.AgentsMDText, &warned,
-		&st.PRURL, &st.ApprovalTest, &testAt, &st.ApprovalTestSummary)
+		&st.PRURL, &st.ApprovalTest, &testAt, &st.ApprovalTestSummary, &st.GrandMasterSheet)
 	if errors.Is(err, sql.ErrNoRows) {
 		return State{Slug: slug}, nil
 	}
@@ -158,4 +161,9 @@ func (s Store) PROpened(ctx context.Context, slug string, now time.Time, url str
 // ApprovalTested records the result of the approval test.
 func (s Store) ApprovalTested(ctx context.Context, slug string, now time.Time, result, summary string) error {
 	return s.set(ctx, slug, now, `approval_test_result = ?, approval_test_at = ?, approval_test_summary = ?`, result, ms(now), summary)
+}
+
+// GrandMasterSheetChosen records the sheet of the Grand Master the panel chose.
+func (s Store) GrandMasterSheetChosen(ctx context.Context, slug string, now time.Time, sheet string) error {
+	return s.set(ctx, slug, now, `grand_master_sheet = ?`, sheet)
 }

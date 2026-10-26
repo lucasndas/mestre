@@ -1,0 +1,107 @@
+export default {
+  title: "Workspaces",
+  intro:
+    "The projects Mestre looks after. Creating a workspace starts the session zero: Mestre prepares the repository and the Grand Master analyses the project.",
+  empty: "None of your workspaces yet.",
+  state: { preparing: "preparing", active: "active", paused: "paused" },
+  grandMasterState: {
+    none: "no Grand Master yet",
+    idle: "idle",
+    waiting: "waiting",
+    busy: "working",
+    stopped: "stopped",
+  },
+  grandMaster: { sheet: "Grand Master sheet: {{sheet}}", state: "Grand Master {{state}}" },
+  fetchError: "The mirror cannot fetch the repository: {{error}}",
+  sessionZeroPR: "Session zero pull request:",
+  pause: "Pause workspace",
+  resume: "Resume workspace",
+  create: {
+    open: "Create workspace",
+    title: "New workspace",
+    intro:
+      "Give the repository and the sheet of the Grand Master. Mestre does the rest in the session zero.",
+    repo: "Repository",
+    repoHint: "As owner/name, like in github.com/owner/name.",
+    slug: "Nickname (optional)",
+    slugHint:
+      "A short name for the workspace. It does not change later; empty uses the name of the repository.",
+    sheet: "Grand Master sheet",
+    sheetHint: "The sheet is for this workspace and is only changed later in the sheets screen.",
+    noSheets: "There is no agent sheet yet. Create one in the sheets screen.",
+    submit: "Create workspace",
+    cancel: "Cancel",
+    done: "Workspace {{slug}} created. The session zero has started.",
+  },
+  stages: {
+    title: "Session zero",
+    names: {
+      apps: "Apps in the repository",
+      mirror: "Mirror and main clone",
+      files: "Mestre files and Grand Master",
+      analysis: "Project analysis",
+      approval_test: "Approval test",
+    },
+    states: {
+      done: "done",
+      current: "in progress",
+      waiting: "waiting",
+      failed: "failed",
+      pending: "pending",
+    },
+    waitingFor: "Waiting for: {{why}}",
+    failure_one: "Failed: {{reason}} (1 time; Mestre tries again by itself).",
+    failure_other: "Failed: {{reason}} ({{count}} times; Mestre tries again by itself).",
+    retry: "Try again",
+    retryNamed: "Try the {{stage}} stage of {{slug}} again",
+  },
+  versioning: {
+    title: "Pending question: version the .mestre/ folder?",
+    question:
+      "The .mestre/ folder can go into the repository, through a pull request, or stay only on this machine. Until you answer it stays local.",
+    label: "What to do with .mestre/",
+    local: "Stay local only",
+    localHint: "Nothing goes into the repository. You can change your mind later.",
+    versioned: "Version it in the project",
+    versionedHint: "Mestre opens the session zero pull request with the files.",
+    submit: "Answer",
+    waiting: "Pending question about .mestre/. An Administrator answers it.",
+    answered: {
+      local: ".mestre/ stays local only.",
+      versioned: ".mestre/ is versioned in the project.",
+    },
+  },
+  verification: {
+    toggle: "Verification commands",
+    title: "Verification commands",
+    inForce: "In force: confirmed by {{who}} on {{when}}",
+    none: "No confirmed version",
+    noneHint:
+      "With no confirmed command nothing is approved on its own: the approval request of the PR asks a person and a done with proof ends as not verified.",
+    outside:
+      "The file was changed outside the panel. The last confirmed version is in force; to apply the change, review and confirm it below.",
+    confirmedDoc: "See the version in force",
+    fileError: "The file does not hold as it is: {{error}}",
+    proposed: "Proposed commands, in order:",
+    editor: "verificacao.yaml",
+    editorHint:
+      "The commands run in order, in a worktree of the table; the first that exits with a code other than 0 fails. Only the confirmed version is in force.",
+    confirm: "Confirm these commands",
+    confirmedNow: "Version confirmed. It is in force now.",
+    readOnly: "An Administrator confirms the commands.",
+  },
+  refusals: {
+    unknown_sheet: "That sheet does not exist or does not run an agent. Nothing was created.",
+    repo_taken: "That repository is already the workspace {{slug}}.",
+    invalid_repo: "The repository must be as owner/name.",
+    invalid_slug: "The nickname does not hold. Suggestion: {{suggestion}}.",
+    creation_failed:
+      "The workspace could not be created: GitHub or Mestre refused. Nothing was created.",
+    not_preparing: "The workspace is past the session zero.",
+    preparing: "A workspace that is preparing cannot be paused.",
+    bad_state: "The state of the workspace does not allow that now.",
+    not_ready: "The main clone of the workspace does not exist yet. Wait for the mirror stage.",
+    invalid_document:
+      "The verification file does not hold: check the format, the commands and the time. Nothing was confirmed.",
+  },
+};

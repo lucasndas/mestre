@@ -89,6 +89,12 @@ func (s *Service) State(ctx context.Context, slug string) (State, error) {
 	return s.store.Get(ctx, slug)
 }
 
+// ChooseGrandMasterSheet records the sheet the panel chose for the Grand Master of
+// the workspace, which the stage files starts it with.
+func (s *Service) ChooseGrandMasterSheet(ctx context.Context, slug, sheet string) error {
+	return s.store.GrandMasterSheetChosen(ctx, slug, s.o.Clock.Now(), sheet)
+}
+
 // coded is an error with the code the panel shows for the stage.
 type coded struct {
 	code string

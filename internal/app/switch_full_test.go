@@ -517,9 +517,10 @@ func TestTheCitadelFallsATowerIsPromotedTheOtherFollowsAndTheOldOneReturnsAsATow
 	}
 }
 
-// Part of CA-CIDADELA-08 (fecha no M6; falta: o 307 da Torre para a Cidadela
-// no painel).
-// The planned handover (docs/guilda/cidadela-e-torres.md#troca-planejada):
+// CA-CIDADELA-08
+// The planned handover (docs/guilda/cidadela-e-torres.md#troca-planejada), started
+// by the same door as the "Passar a Cidadela" of the panel (the 307 of the Tower is
+// proved in internal/panel):
 // the Citadel stops acting outside, waits for the chosen machine to confirm
 // its last lsn and tells it to promote itself through the lock; the chosen
 // machine takes the command with everything, and the old one becomes a Tower.

@@ -178,7 +178,13 @@ func (Presets) Choose(context.Context, string, string) (machinesheet.Choice, err
 func (Presets) Machines(context.Context) ([]machinesheet.Sheet, error) { return nil, nil }
 
 // Sheets implements characters.Presets.
-func (Presets) Sheets(context.Context) ([]presets.Sheet, error) { return nil, nil }
+func (Presets) Sheets(context.Context) ([]presets.Sheet, error) {
+	out := make([]presets.Sheet, 0, len(Sheets))
+	for _, n := range Sheets {
+		out = append(out, presets.Sheet{Name: n, Base: "claude-code", Agent: presets.AgentClaudeCode, Class: "Dev"})
+	}
+	return out, nil
+}
 
 // Bases implements characters.Presets.
 func (Presets) Bases(context.Context) ([]presets.Base, error) { return nil, nil }

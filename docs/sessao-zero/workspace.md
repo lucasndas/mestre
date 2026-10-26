@@ -1,6 +1,6 @@
 # Sessão zero do workspace
 
-> **Assunto:** o que acontece, uma vez por repositório, quando um workspace é criado: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, comandos de verificação, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-20
+> **Assunto:** o que acontece, uma vez por repositório, quando um workspace é criado: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, comandos de verificação, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
@@ -28,7 +28,7 @@ flowchart TD
 1. **Apps fixos** (etapa `apps`)**:** o motor confere se "Grão-Mestre" e "Mestre" estão instalados no repositório. Se não estiverem, a etapa `apps` fica esperando: o motor acrescenta o repositório à instalação pela API, com a credencial pessoal do Dono, ou o Dono recebe o link para instalar (primeira instalação) ou marcar o repositório na instalação ([criacao-de-apps](../github/criacao-de-apps.md#repositórios-novos-e-permissões-novas), [identidades-e-apps](../github/identidades-e-apps.md)). A espera não é erro: o motor avisa o Dono uma única vez, olha de novo a cada 30 s e, enquanto faltar um App, não clona nada nem usa outra credencial.
 2. **Espelho** (etapa `mirror`)**:** o motor clona o repositório sem cópia de trabalho (`--bare`) na pasta de dados da Cidadela (padrão `workspaces/<slug>/espelho.git`; [persistencia](../arquitetura/persistencia.md)), com um token de instalação do App "Grão-Mestre". Daí sai o **clone principal** (padrão `workspaces/<slug>/principal/`), onde o Grão-Mestre trabalha. Como as mesas e as máquinas da Guilda usam o espelho: [mesas](../orquestracao/mesas.md).
 3. **`.mestre/` e arquivos gerados** (etapa `files`)**:** o motor cria a estrutura abaixo (sem apagar nada que já exista) e gera, no clone principal, os mesmos arquivos que gera em cada worktree de mesa ([mesa](mesa.md)). Até o usuário responder à pergunta de versionamento, `.mestre/` fica só local. O que o motor encontra de inválido (um `teto.yaml` que não lê, um JSON de hook quebrado, uma skill `mestre-*` sem o marcador) fica como está e os usuários são avisados.
-4. **Grão-Mestre:** ao fim da etapa `files`, o motor inicia o Grão-Mestre (fixo e protegido); ele já conversa com os usuários, mas mesas só se abrem com o workspace `active`. As etapas seguintes (`analysis` e `approval_test`) são conduzidas pelo Grão-Mestre e pelo motor, cada uma visível no painel como pendente, feita ou com erro; concluída a `approval_test`, o workspace vai para `active`.
+4. **Grão-Mestre:** ao fim da etapa `files`, o motor inicia o Grão-Mestre (fixo e protegido) com a ficha escolhida no painel ao criar o workspace ([workspaces no painel](../painel/workspaces.md)); ele já conversa com os usuários, mas mesas só se abrem com o workspace `active`. As etapas seguintes (`analysis` e `approval_test`) são conduzidas pelo Grão-Mestre e pelo motor, cada uma visível no painel como pendente, feita ou com erro; concluída a `approval_test`, o workspace vai para `active`.
 
 ### Análise do projeto e `AGENTS.md` (etapa `analysis`)
 - O Grão-Mestre analisa o projeto: linguagem, estrutura, como instalar, rodar, testar e fazer build.

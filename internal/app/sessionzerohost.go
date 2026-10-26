@@ -15,6 +15,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/github"
 	"github.com/mestre-ia/mestre/internal/gitx"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/sessionzero"
 	"github.com/mestre-ia/mestre/internal/telegram"
 )
@@ -22,8 +23,8 @@ import (
 // The session zero of the workspace (docs/sessao-zero/workspace.md) in the
 // Citadel: the stages apps, files, analysis and approval_test are registered on
 // the workspaces. What needs a real agent (the analysis of the Grand Master) or a
-// choice of the panel (the sheet of the Grand Master, the answer about versioning
-// .mestre/, milestone 6) is not faked: it stops with its reason.
+// choice of the panel (the answer about versioning .mestre/) is not faked: it stops
+// with its reason.
 
 // pullPushPermissions are the permissions of the token that sends the branch of
 // the session zero and opens its pull request.
@@ -37,7 +38,7 @@ var (
 	errAnalysisNeedsAgent = errors.New("the analysis of the project is made by the Grand Master as an agent, which this version does not run in the stage yet (docs/desenvolvimento/ligacao-de-producao.md)")
 	// errNoGrandMaster: the Grand Master is made with the workspace, with the sheet
 	// chosen in the panel (milestone 6); the stage files only starts one that exists.
-	errNoGrandMaster = errors.New("the workspace has no Grand Master: it is made with the workspace, with the sheet chosen in the panel (milestone 6)")
+	errNoGrandMaster = errors.New("the workspace has no sheet chosen for its Grand Master: the panel chooses it when the workspace is created")
 )
 
 // SessionZero composes the session zero of the workspaces over the orchestration:
@@ -53,7 +54,7 @@ func (r *stdRun) SessionZero(orc *Orchestration, worktree sessionzero.Worktree) 
 		Workspaces: orc.Workspaces, DB: r.env.DB, Clock: r.env.Clock,
 		Installations: r.Installations(), AppReview: r.AppReview(),
 		Users: szUsers{r}, Approvals: szApprovals{r: r, orc: orc}, Checklist: szChecklist{log: r.env.Log},
-		GrandMaster: szGrandMaster{orc}, Analyst: szAnalyst{}, PullRequests: szPullRequests{r: r, orc: orc},
+		GrandMaster: szGrandMaster{r: r, orc: orc}, Analyst: szAnalyst{}, PullRequests: szPullRequests{r: r, orc: orc},
 		Worktree: worktree, Masker: r.env.Masker, Log: r.env.Log,
 	})
 	if err != nil {
@@ -180,17 +181,33 @@ func (c szChecklist) Raise(_ context.Context, item sessionzero.ChecklistItem) er
 	return nil
 }
 
-// szGrandMaster is sessionzero.GrandMaster: the Grand Master is made with the
-// workspace, so the stage files only checks that there is one.
-type szGrandMaster struct{ orc *Orchestration }
+// szGrandMaster is sessionzero.GrandMaster: the stage files starts the Grand Master
+// of the workspace with the sheet the panel chose when the workspace was created
+// (docs/painel/administracao.md). One that is already alive is left alone.
+type szGrandMaster struct {
+	r   *stdRun
+	orc *Orchestration
+}
 
 func (g szGrandMaster) Start(ctx context.Context, workspace string) error {
-	_, ok, err := g.orc.Registry.GrandMaster(ctx, workspace)
+	if _, ok, err := g.orc.Registry.GrandMaster(ctx, workspace); err != nil || ok {
+		return err
+	}
+	zero := g.r.zero.Load()
+	if zero == nil {
+		return errNoGrandMaster
+	}
+	st, err := zero.State(ctx, workspace)
 	if err != nil {
 		return err
 	}
-	if !ok {
+	if st.GrandMasterSheet == "" {
 		return errNoGrandMaster
+	}
+	_, err = g.orc.Characters.Create(ctx, characters.CreateRequest{Sheet: st.GrandMasterSheet, Workspace: workspace, Role: characters.RoleGrandMaster,
+		Machine: g.r.env.Machine, Creator: characters.Creator{Kind: characters.CreatedByEngine}})
+	if err != nil {
+		return fmt.Errorf("the Grand Master with the sheet %s: %w", st.GrandMasterSheet, err)
 	}
 	return nil
 }

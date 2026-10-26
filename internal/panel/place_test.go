@@ -23,8 +23,8 @@ func gate(t *testing.T, p *place) (http.Handler, *int) {
 	return panel.Gate(p, next), &served
 }
 
-// CA-LOGIN-09, and the 307 of the redirected panel (the planned switch is for
-// another unit): a Tower answers 307 to the same path and query on the Citadel, and gives
+// CA-LOGIN-09, and the 307 of the redirected panel (the planned switch is proved in
+// internal/app, by the door of the panel): a Tower answers 307 to the same path and query on the Citadel, and gives
 // no data; a suspended Citadel does the same when it knows the Citadel of now,
 // and shows only the page "Cidadela suspensa" when it does not.
 //

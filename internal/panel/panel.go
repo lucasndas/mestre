@@ -104,6 +104,12 @@ type Panel struct {
 	manage atomic.Pointer[manageHolder]
 	// creation is the creation of the Apps by link (nil: no link, no Apps screen action).
 	creation *github.Creation
+	// workspaces is the engine of the workspaces for their screens (SetWorkspaces).
+	workspaces atomic.Pointer[workspaceHolder]
+	// guild is the engine of the Guild for its screen (SetGuild).
+	guild atomic.Pointer[guildHolder]
+	// guildFollow keeps the polling of the Guild while somebody follows it.
+	guildFollow guildFollow
 	// slots bound the argon2 hashes at once: each takes 64 MiB, and the routes
 	// that hash are open to anybody
 	slots chan struct{}

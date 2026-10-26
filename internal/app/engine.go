@@ -203,6 +203,14 @@ type Deps struct {
 	// PanelCanvas is the engine of the tables the canvas shows (nil: the one of the
 	// orchestration of the period).
 	PanelCanvas panel.CanvasSource
+	// PanelGuild is the engine of the Guild the panel shows (nil: the Citadel's own).
+	PanelGuild panel.GuildSource
+	// LocalNetworks are the networks that count as "the local network" of the Guild
+	// (nil: the ones of the interfaces of this machine).
+	LocalNetworks func() []*net.IPNet
+	// PanelWorkspaces is the engine of the workspaces the screens show (nil: the
+	// one of the integration).
+	PanelWorkspaces panel.WorkspaceSource
 	// PanelChat is the conversation with the Grão-Mestre the panel shows (nil: the one
 	// of the standard integration). The browser smoke test gives it a Grão-Mestre that
 	// answers at once.

@@ -1506,6 +1506,192 @@ export interface ChatChoice {
 }
 
 //////////
+// source: types_guild.go
+
+/**
+ * EventGuild is the event of the guild topic: the view changed.
+ */
+export const EventGuild = "view";
+/**
+ * GuildView is GET /api/guild.
+ */
+export interface GuildView {
+  /**
+   * Epoch is the epoch of the Guild, at the top of the screen.
+   */
+  epoch: number /* uint64 */;
+  timezone: string;
+  /**
+   * Single says only the Citadel is in the Guild: the screen shows the band of
+   * the single-machine mode.
+   */
+  single: boolean;
+  machines: GuildMachineRow[];
+  pending: GuildPendingJoin[];
+}
+/**
+ * GuildMachineRow is one machine. Every text in it is the machine's own word and
+ * the screen shows it as text, never as markup.
+ */
+export interface GuildMachineRow {
+  id: string;
+  name: string;
+  instance?: string;
+  /**
+   * Citadel is true for the machine that is the Citadel of the epoch; Self for
+   * the machine that answers.
+   */
+  citadel: boolean;
+  self: boolean;
+  /**
+   * Suspended: the Citadel does not act now (a fence or a handover under way).
+   */
+  suspended?: boolean;
+  /**
+   * GitHubDown and TelegramStopped are the signs of the lock at the GitHub and of
+   * the bot ("GitHub fora", "Telegram parado"), filled when the engine knows them.
+   */
+  github_down?: boolean;
+  telegram_stopped?: boolean;
+  /**
+   * Online: the machine is connected to the Citadel. LastSeen is when the engine
+   * last saw it online (nil: not since it started).
+   */
+  online: boolean;
+  last_seen?: string;
+  /**
+   * OutsideNetwork: no address of the machine is in the local network of the
+   * Citadel (it entered by an address); it is never promoted.
+   */
+  outside_network: boolean;
+  /**
+   * EngineVersion is known for this machine only; Protocol is the protocol
+   * negotiated on the connection (0: not connected).
+   */
+  engine_version?: string;
+  protocol?: number /* int */;
+  sheet: GuildSheet;
+  excluded: boolean;
+  /**
+   * Replica is the state of the replica of the machine (nil: not connected).
+   */
+  replica?: GuildReplica;
+  load: GuildLoad;
+  agents: GuildAgent[];
+  priority: number /* int */;
+}
+/**
+ * GuildSheet is the summary of the sheet of the machine.
+ */
+export interface GuildSheet {
+  os?: string;
+  gui: boolean;
+  providers: string[];
+  browser?: string;
+  /**
+   * Operator is "off", "ready" or "not_ready" (OperatorReason says why).
+   */
+  operator?: string;
+  operator_reason?: string;
+  cpu_cores: number /* int */;
+  mem_bytes: number /* uint64 */;
+  gpus: string[];
+  transcribes: boolean;
+}
+/**
+ * GuildReplica is the state of the copy of the database in a Tower: State is
+ * starting, snapshot or streaming; Behind the records it still lacks and LagMS
+ * how long the oldest has waited.
+ */
+export interface GuildReplica {
+  state: string;
+  behind: number /* uint64 */;
+  lag_ms: number /* int64 */;
+}
+/**
+ * GuildLoad is what the sheet says of the machine and how many agents run on it.
+ */
+export interface GuildLoad {
+  disk_free_bytes: number /* uint64 */;
+  running: number /* int */;
+}
+/**
+ * GuildAgent is a character that runs on the machine.
+ */
+export interface GuildAgent {
+  id: string;
+  name: string;
+  workspace: string;
+  table?: string;
+  state: string;
+}
+/**
+ * GuildPendingJoin is a machine that asks to enter the Guild: the code is the
+ * one the installer screen shows.
+ */
+export interface GuildPendingJoin {
+  id: string;
+  name: string;
+  code?: string;
+  created_at: string;
+}
+/**
+ * GuildRemoval is GET /api/guild/machines/{id}/removal: what a removal takes
+ * with it, to warn before the PIN.
+ */
+export interface GuildRemoval {
+  machine: string;
+  name: string;
+  /**
+   * Online: the machine is told to erase its share of the Guild; offline, it
+   * keeps the encrypted copy of the vault and the secrets should be replaced.
+   */
+  online: boolean;
+  agents: GuildAgent[];
+}
+/**
+ * GuildRemoved is the answer of the removal.
+ */
+export interface GuildRemoved {
+  notified: boolean;
+}
+/**
+ * GuildDecideRequest is POST /api/guild/joins/{id}/decide.
+ */
+export interface GuildDecideRequest {
+  accept: boolean;
+  /**
+   * Excluded takes the machine in already excluded.
+   */
+  excluded?: boolean;
+}
+/**
+ * GuildRemoveRequest is POST /api/guild/machines/{id}/remove: Confirm says the
+ * warning of the removal was read.
+ */
+export interface GuildRemoveRequest {
+  confirm: boolean;
+}
+/**
+ * GuildExcludeRequest is POST /api/guild/machines/{id}/exclusion.
+ */
+export interface GuildExcludeRequest {
+  excluded: boolean;
+}
+/**
+ * GuildPriorityRequest is PUT /api/guild/machines/{id}/priority.
+ */
+export interface GuildPriorityRequest {
+  priority: number /* int */;
+}
+/**
+ * GuildTimezoneRequest is PUT /api/guild/timezone.
+ */
+export interface GuildTimezoneRequest {
+  timezone: string;
+}
+
+//////////
 // source: types_manage.go
 
 /**
@@ -2265,6 +2451,178 @@ export interface InstructionsInput {
  */
 export interface RuleWorkspaces {
   workspaces: string[];
+}
+
+//////////
+// source: types_workspaces.go
+
+/**
+ * The stage states of the session zero a workspace shows.
+ */
+export const StageDone = "done";
+/**
+ * The stage states of the session zero a workspace shows.
+ */
+export const StageCurrent = "current";
+/**
+ * The stage states of the session zero a workspace shows.
+ */
+export const StageWaiting = "waiting";
+/**
+ * The stage states of the session zero a workspace shows.
+ */
+export const StageFailed = "failed";
+/**
+ * The stage states of the session zero a workspace shows.
+ */
+export const StagePending = "pending";
+/**
+ * StageFailureInfo is a stage that failed: the code and the reason the engine
+ * recorded, how many times and when it tries again.
+ */
+export interface StageFailureInfo {
+  code: string;
+  reason: string;
+  failures: number /* int */;
+  at: string;
+  retry_at: string;
+}
+/**
+ * WorkspaceStage is one step of the session zero, in the order they run.
+ */
+export interface WorkspaceStage {
+  /**
+   * Key is apps, mirror, files, analysis or approval_test.
+   */
+  key: string;
+  /**
+   * State is StageDone, StageCurrent, StageWaiting, StageFailed or StagePending.
+   */
+  state: string;
+  /**
+   * Waiting is what the current stage waits for, when it waits.
+   */
+  waiting?: string;
+  failure?: StageFailureInfo;
+}
+/**
+ * WorkspaceRow is a workspace in the list.
+ */
+export interface WorkspaceRow {
+  slug: string;
+  repo: string;
+  default_branch: string;
+  /**
+   * State is preparing, active or paused.
+   */
+  state: string;
+  stages: WorkspaceStage[];
+  /**
+   * Versioning is "" while the question is pending, then local or versioned;
+   * VersioningAsked says the question was already put to the people.
+   */
+  versioning: string;
+  versioning_asked: boolean;
+  session_zero_pr?: string;
+  grand_master_sheet?: string;
+  /**
+   * GrandMaster is the state of the Grand Master (none, idle, waiting, busy, stopped).
+   */
+  grand_master: string;
+  /**
+   * FetchError is why the mirror cannot be updated, while it cannot.
+   */
+  fetch_error?: string;
+  created_at: string;
+  /**
+   * CanAct says the user acts in this workspace; the buttons follow it and the
+   * level, and the server checks both again at every request.
+   */
+  can_act: boolean;
+}
+/**
+ * SheetOption is a sheet that may be the Grand Master of a workspace.
+ */
+export interface SheetOption {
+  name: string;
+  agent: string;
+}
+/**
+ * WorkspaceList is GET /api/workspaces.
+ */
+export interface WorkspaceList {
+  workspaces: WorkspaceRow[];
+  /**
+   * Sheets are the sheets the Grand Master may have; empty for who cannot create.
+   */
+  sheets: SheetOption[];
+  /**
+   * CanCreate says the user may create a workspace.
+   */
+  can_create: boolean;
+}
+/**
+ * CreateWorkspaceRequest is POST /api/workspaces.
+ */
+export interface CreateWorkspaceRequest {
+  /**
+   * Repo is "owner/name".
+   */
+  repo: string;
+  /**
+   * Slug is optional and immutable once the workspace exists.
+   */
+  slug?: string;
+  grand_master_sheet: string;
+}
+/**
+ * VersioningRequest is POST /api/workspaces/{slug}/versioning.
+ */
+export interface VersioningRequest {
+  /**
+   * Answer is local or versioned.
+   */
+  answer: string;
+}
+/**
+ * VerificationConfirmed is the version of verificacao.yaml that is in force.
+ */
+export interface VerificationConfirmed {
+  doc: string;
+  hash: string;
+  by: string;
+  at: string;
+}
+/**
+ * VerificationView is GET /api/workspaces/{slug}/verification: the file of the
+ * main clone (the proposal of the analysis, or what was written there), the
+ * version confirmed, and whether the file differs from it.
+ */
+export interface VerificationView {
+  /**
+   * File is the content of .mestre/regras/verificacao.yaml in the main clone
+   * ("" when it does not exist yet).
+   */
+  file: string;
+  confirmed?: VerificationConfirmed;
+  /**
+   * Commands are the commands the file proposes, in order (empty when it does
+   * not parse; FileError says why).
+   */
+  commands: string[];
+  file_error?: string;
+  /**
+   * Outside is true when a version is confirmed and the file differs from it:
+   * an edit made outside the panel, which is not in force.
+   */
+  outside: boolean;
+}
+/**
+ * ConfirmVerificationRequest is PUT /api/workspaces/{slug}/verification: the
+ * whole document, which becomes the confirmed version.
+ */
+export interface ConfirmVerificationRequest {
+  doc: string;
 }
 
 //////////

@@ -21,6 +21,7 @@ import { Decrees } from "../screens/admin/Decrees";
 import { Delegations } from "../screens/admin/Delegations";
 import { GitHubApps } from "../screens/admin/GitHubApps";
 import { GitHubConnect } from "../screens/admin/GitHubConnect";
+import { Guild } from "../screens/admin/Guild";
 import { Instructions } from "../screens/admin/Instructions";
 import { Policy } from "../screens/admin/Policy";
 import { Presets } from "../screens/admin/Presets";
@@ -36,6 +37,7 @@ import { Password } from "../screens/Password";
 import { Sessions } from "../screens/Sessions";
 import { Setup } from "../screens/Setup";
 import { TableScreen } from "../screens/TableScreen";
+import { Workspaces } from "../screens/workspaces/Workspaces";
 import { Shell } from "./Shell";
 
 export interface RouterContext {
@@ -104,6 +106,11 @@ const secretsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/segredos",
   component: Secrets,
+});
+const guildRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/guilda",
+  component: Guild,
 });
 const auditRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -175,6 +182,11 @@ const transferRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/transferencia",
   component: Transfer,
+});
+const workspacesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/workspaces",
+  component: Workspaces,
 });
 const approvalsRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -291,6 +303,8 @@ const routeTree = rootRoute.addChildren([
     presetsRoute,
     profilesRoute,
     usageRoute,
+    guildRoute,
+    workspacesRoute,
     githubRoute,
     transferRoute,
     terminalRoute,

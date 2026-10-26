@@ -130,7 +130,7 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 | M5 | 6 | [CLI do Grão-Mestre](../cli/grao-mestre.md) (2026-10-20: `gh epic`, `gh review`, `gh settings show`, `approval ask|decide|reply|list|delegate|autonomy`, `decree propose|list`, `app list|status|create`, `choose`, `table overlap` e `notify`; faltam `gh approve`, `gh merge` e `gh settings apply`, que dependem da composição da aprovação no GitHub) · [Mestre da mesa](../orquestracao/mestre-da-mesa.md) (o Mestre da mesa feito em 2026-10-20: instruções com os 9 itens, teto, níveis de decisão, aceite com `quests.Acceptance` e missão de correção, fixo e conectado; ver os critérios em marcos posteriores) |
 | M6 | 1 | [login](../painel/login.md) |
 | M6 | 2 | [administração](../painel/administracao.md) · [canvas](../painel/canvas.md) · [conversa e aprovações](../painel/conversa-e-aprovacoes.md) |
-| M6 | 3 | [visão do workspace](../painel/visao-do-workspace.md) · [`mestre attach`](../cli/attach.md) |
+| M6 | 3 | [visão do workspace](../painel/visao-do-workspace.md) · [workspaces no painel](../painel/workspaces.md) · [`mestre attach`](../cli/attach.md) |
 | M7 | 1 | [Guardião](../autocura/guardiao.md) · [instalação e atualização](../plataforma/instalacao-e-atualizacao.md) |
 | M7 | 2 | [camadas](../autocura/camadas.md) · [checklist](../plataforma/checklist.md) · [MCP por classe](../classes/mcp-por-classe.md) |
 | M7 | 3 | [página reserva](../autocura/pagina-reserva.md) · [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) · [autoatualização](../plataforma/autoatualizacao.md) · [teste de classe](../provedores/teste-de-classe.md) |

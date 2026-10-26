@@ -183,3 +183,42 @@ test("the Owner sees the classes and exports and imports a sheet", async ({ page
   await page.getByRole("button", { name: "Importar", exact: true }).click();
   await expect(page.getByText(/Importação concluída/)).toContainText("substituídas: 1");
 });
+
+// The Guild step of the smoke: the real Citadel is alone in its throwaway Guild, so the
+// screen shows the band of the single-machine mode, its own row and the epoch.
+test("the Guild screen shows the single-machine band and the Citadel", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Nome de login").fill("maria");
+  await page.getByLabel("Senha").fill("uma senha bem longa");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.getByRole("link", { name: "Guilda", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Guilda e máquinas", level: 1 })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Modo máquina única" })).toBeVisible();
+  await expect(page.getByText(/^Época \d+$/)).toBeVisible();
+  const rows = page.getByRole("list", { name: "Máquinas" }).getByRole("listitem");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first().getByText("Cidadela", { exact: true })).toBeVisible();
+  await expect(rows.first().getByText("esta máquina")).toBeVisible();
+});
+
+// The workspaces step of the smoke: the list shows the workspace of the double of the
+// engine, and an Administrator-level Owner confirms the proposal of the verification
+// commands (the confirmation is the version in force).
+test("the workspaces list shows a workspace and the Owner confirms its verification commands", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByLabel("Nome de login").fill("maria");
+  await page.getByLabel("Senha").fill("uma senha bem longa");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.getByRole("link", { name: "Workspaces", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Workspaces", level: 1 })).toBeVisible();
+  const card = page.getByRole("article", { name: "e2e" });
+  await expect(card.getByText("acme/e2e")).toBeVisible();
+  await expect(card.getByText("ativo", { exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "Comandos de verificação" }).click();
+  await expect(card.getByText("Nenhuma versão confirmada")).toBeVisible();
+  await card.getByRole("button", { name: "Confirmar estes comandos" }).click();
+  await expect(card.getByText("Versão confirmada. Ela já vale.")).toBeVisible();
+  await expect(card.getByText(/Em vigor: confirmada por Maria Souza/)).toBeVisible();
+});

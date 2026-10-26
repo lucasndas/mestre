@@ -16,5 +16,7 @@ packages:
       - terminals_types.go
       - types_approvals.go
       - types_canvas.go
+      - types_workspaces.go
+      - types_guild.go
       - types_chat.go
       - types_manage.go

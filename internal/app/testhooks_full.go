@@ -24,6 +24,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/providers"
 	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/users"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
@@ -304,11 +305,11 @@ func control(ctx context.Context, e *Engine, req controlRequest) controlAnswer {
 		}()
 		return controlAnswer{OK: true}
 	case "handover":
-		go func() {
-			if err := e.Handover(context.WithoutCancel(ctx), req.Target, "aprovacao-teste", "dono", 0); err != nil {
-				e.log.Error("test: handover", "err", err)
-			}
-		}()
+		// by the same door as the panel's "Passar a Cidadela": the target is checked
+		// (excluded, outside the local network) and the switch runs on
+		if err := newGuildHost(e).PassCitadel(ctx, users.User{ID: "dono"}, req.Target, "aprovacao-teste"); err != nil {
+			return fail(err)
+		}
 		return controlAnswer{OK: true}
 	case "exec":
 		var lsn uint64
