@@ -4,13 +4,16 @@
 # the release builds. A pull request that changes only documents runs the
 # document checks and the tests that read documents. The race detector
 # (budgets times 3) runs in its own job, in parallel with the tests and with a
-# cache of its own, on the pushes to main (and by hand), not on pull requests:
-# neither does the pre-push hook. Third-party actions are pinned by commit SHA;
-# golangci-lint is the pinned release binary, checked by its SHA-256.
+# cache of its own, on the batches of the merge queue, on the pushes to main
+# and by hand, not on pull requests: neither does the pre-push hook. The merge
+# queue (merge_group) runs everything on the batch before it reaches main.
+# Third-party actions are pinned by commit SHA; golangci-lint is the pinned
+# release binary, checked by its SHA-256.
 name: CI
 
 on:
   pull_request:
+  merge_group:
   push:
     branches: [main]
   workflow_dispatch:
@@ -206,8 +209,10 @@ jobs:
         if: env.CODE == 'true'
         run: go run ./tools/testrun full
 
+      # Only main's runs save: a cache saved on the temporary branch of a
+      # batch of the merge queue is seen by no other branch.
       - name: Save the caches
-        if: success() && github.event_name != 'pull_request'
+        if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -262,8 +267,9 @@ jobs:
           go test -race '-gcflags=modernc.org/...=-d=checkptr=0 -race=0' -tags full -run '^$' ./...
 
       # Right after the warm-up, so a race found by the suites below does not
-      # lose the cache.
+      # lose the cache; only main's runs save (see the job above).
       - name: Save the caches
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
