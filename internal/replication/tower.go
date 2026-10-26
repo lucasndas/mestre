@@ -786,12 +786,21 @@ func (r *Replica) retryErasing() {
 // whether there was anything to erase. The full copies still arriving are
 // removed by handleVaultDrop, not here, which runs later and in the background.
 func (r *Replica) dropVault(ctx context.Context) (bool, error) {
+	// vaultMu keeps vault.replica from reading or writing the key while it goes
+	// (on Windows a file open for reading cannot be removed). Same order as
+	// the wipe: applyMu, then vaultMu.
+	r.vaultMu.Lock()
 	held := r.cfg.Vault != nil && r.cfg.Vault.Holds(ctx)
+	var derr error
 	if r.cfg.Vault != nil {
-		if err := r.cfg.Vault.Drop(ctx); err != nil {
-			return false, err
+		if derr = r.cfg.Vault.Drop(ctx); derr != nil {
+			// The key may still be on disk: remembered, so the retry of the
+			// replica erases again and the receipt waits for it. The rest is
+			// erased all the same.
+			r.setPurgeOwed(true)
 		}
 	}
+	r.vaultMu.Unlock()
 	erased := held || r.purgeOwed()
 	if r.dropRestrictedFolders() {
 		erased = true
@@ -811,22 +820,22 @@ func (r *Replica) dropVault(ctx context.Context) (bool, error) {
 		for _, t := range VaultTables {
 			var n int
 			if err := r.cfg.DB.Reader().QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, t).Scan(&n); err != nil {
-				return false, errors.Join(lerr, err)
+				return false, errors.Join(derr, lerr, err)
 			}
 			if n == 0 {
 				continue
 			}
 			if err := r.cfg.DB.Reader().QueryRowContext(ctx, `SELECT count(*) FROM `+t).Scan(&n); err != nil {
-				return false, errors.Join(lerr, err)
+				return false, errors.Join(derr, lerr, err)
 			}
 			rows += n
 		}
 		if rows == 0 {
-			return false, lerr
+			return false, errors.Join(derr, lerr)
 		}
 	}
 	// The purge of the replica runs even when a leftover could not be erased.
-	return true, errors.Join(lerr, r.purgeVault(ctx))
+	return true, errors.Join(derr, lerr, r.purgeVault(ctx))
 }
 
 // dropPendingCopies removes the full copies still arriving: they hold the

@@ -153,13 +153,16 @@ func Restrict(path string, account *windows.SID) error {
 	return nil
 }
 
-// open opens path itself, never the target of a reparse point.
+// open opens path itself, never the target of a reparse point. It shares
+// read and delete: a reader (the status of the vault, a promotion check, an
+// antivirus) must not make the erasing of the key or its replacement fail with
+// a sharing violation while the file is open for a moment.
 func open(path string, access uint32) (*os.File, error) {
 	p, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return nil, err
 	}
-	h, err := windows.CreateFile(p, access|windows.READ_CONTROL, windows.FILE_SHARE_READ, nil,
+	h, err := windows.CreateFile(p, access|windows.READ_CONTROL, windows.FILE_SHARE_READ|windows.FILE_SHARE_DELETE, nil,
 		windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
 	if err != nil {
 		return nil, &os.PathError{Op: "open", Path: path, Err: err}

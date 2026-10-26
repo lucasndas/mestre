@@ -144,3 +144,41 @@ func TestTheVaultDoesNotOpenOnAReplicaOfTheDatabase(t *testing.T) {
 		t.Errorf("Open on a replica = %v, want ErrReplica", err)
 	}
 }
+
+// Readers of the key (a status check, a promotion check) run while the key is
+// erased: none may keep a handle that makes the erasing fail (on Windows a
+// file open for reading could not be removed), and none may survive it.
+func TestDropWorksWhileTheKeyIsBeingRead(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	keys := NewFileKeyStore(filepath.Join(t.TempDir(), "cofre.key"))
+	c := Copier{Keys: keys, EnvelopePath: filepath.Join(t.TempDir(), "cofre-envelope.bin")}
+	if err := keys.Save(ctx, []byte("ring")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(c.EnvelopePath, []byte("env"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				c.Holds(ctx)
+			}
+		}
+	}()
+	err := c.Drop(ctx)
+	close(stop)
+	<-done
+	if err != nil {
+		t.Fatalf("Drop while the key is read: %v", err)
+	}
+	if c.Holds(ctx) {
+		t.Error("the machine still holds the vault after Drop")
+	}
+}

@@ -99,3 +99,37 @@ func TestOnlyRegularFilesAreRead(t *testing.T) {
 		t.Error("ReadFile of a directory succeeded")
 	}
 }
+
+// A file open for reading (a status check, an antivirus) must not make the
+// erasing or the replacement of the key fail with a sharing violation.
+func TestAFileOpenForReadingCanBeRemovedAndReplaced(t *testing.T) {
+	t.Parallel()
+	me, err := CurrentAccount()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "k")
+	if err := WriteFile(path, []byte("one"), me); err != nil {
+		t.Fatal(err)
+	}
+	f, err := openChecked(path, me, windows.GENERIC_READ)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := os.Remove(path); err != nil {
+		t.Errorf("removing a file that is open for reading: %v", err)
+	}
+	path = filepath.Join(filepath.Dir(path), "k2")
+	if err := WriteFile(path, []byte("one"), me); err != nil {
+		t.Fatal(err)
+	}
+	g, err := openChecked(path, me, windows.GENERIC_READ)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+	if err := WriteFile(path, []byte("two"), me); err != nil {
+		t.Errorf("replacing a file that is open for reading: %v", err)
+	}
+}
