@@ -1,0 +1,27 @@
+export default {
+  nav: {
+    overview: "Visão geral",
+    sessions: "Minhas sessões",
+    password: "Trocar a senha",
+    groupAccount: "Conta",
+    groupGuild: "Guilda",
+    main: "Navegação principal",
+  },
+  top: {
+    workspace: "Workspace",
+    approvals: "Aprovações",
+    notices: "Avisos",
+    menu: "Menu da conta",
+    logout: "Sair",
+    skip: "Ir para o conteúdo",
+  },
+  reconnecting: "Reconectando à Cidadela…",
+  reconnected: "Conectado de novo.",
+  overview: {
+    title: "Sua Guilda está pronta",
+    welcome: "Olá, {{name}}. Seu nível é {{level}}.",
+    emptyTitle: "Ainda não há nenhum workspace",
+    emptyBody: "Quando você conectar um repositório do GitHub, ele aparece aqui.",
+    times: "Horários no fuso {{zone}}.",
+  },
+} as const;

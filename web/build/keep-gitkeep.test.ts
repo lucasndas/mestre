@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
-import { emptyExceptMarker, MARKER } from "./keep-gitkeep";
+import { emptyExceptMarker, KEPT, MARKER } from "./keep-gitkeep";
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -18,11 +18,12 @@ async function tmp(): Promise<string> {
 test("emptying the output folder keeps the embed marker", async () => {
   const d = await tmp();
   await writeFile(join(d, MARKER), "");
+  await writeFile(join(d, ".gitignore"), "*");
   await writeFile(join(d, "index.html"), "x");
   await mkdir(join(d, "assets"));
   await writeFile(join(d, "assets", "a.js"), "x");
   await emptyExceptMarker(d);
-  expect(await readdir(d)).toEqual([MARKER]);
+  expect((await readdir(d)).sort()).toEqual([...KEPT].sort());
 });
 
 test("a folder that does not exist yet is not an error", async () => {

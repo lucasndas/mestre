@@ -3,7 +3,8 @@
 # and docs/qualidade/testes.md). The `test` jobs run the Go side only and need
 # no Node; the `web` jobs run the web side (Vitest, Biome, tsc, the build) and
 # always run, because a required check that is skipped blocks the merge queue;
-# `e2e` smoke-tests the bundle `web` built, in a real browser. The `test` jobs
+# `e2e` smoke-tests the bundle `web` built, embedded in the real engine, in a
+# real browser. The `test` jobs
 # build and vet with cgo off, like the release builds. A pull request that changes only documents runs the
 # document checks and the tests that read documents. The race detector
 # (budgets times 3) runs in its own job, in parallel with the tests and with a
@@ -288,8 +289,10 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  # Smoke test of the panel in a real browser (headless Chromium), on the
-  # bundle of the `web` job. The time of the job is measured, not limited
+  # Smoke test of the panel in a real browser (headless Chromium): the bundle
+  # of the `web` job goes into internal/panel/webdist and tools/e2eserver runs
+  # the real engine with it embedded (go run, cgo off like the release builds).
+  # The time of the step is measured, not limited
   # (docs/qualidade/testes.md#smoke-do-painel).
   e2e:
     name: e2e (${{ matrix.os }})
@@ -310,6 +313,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # Uses the toolchain line of go.mod.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -338,6 +347,8 @@ jobs:
 
       - name: Smoke test
         working-directory: web
+        env:
+          CGO_ENABLED: "0"
         run: |
           start=$SECONDS
           npm run e2e

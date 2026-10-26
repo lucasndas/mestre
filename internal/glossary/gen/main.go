@@ -3,7 +3,7 @@
 // ./internal/glossary`; a fast test regenerates in memory and fails when the
 // committed file is stale (docs/desenvolvimento/convencoes.md#código-gerado).
 //
-//	gen <glossario.md> <output.go>
+//	gen <glossario.md> <glossario-en.md> <output.go> <output.ts>
 package main
 
 import (
@@ -14,32 +14,31 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: gen <glossario.md> <output.go>")
+	if len(os.Args) != 5 {
+		fmt.Fprintln(os.Stderr, "usage: gen <glossario.md> <glossario-en.md> <output.go> <output.ts>")
 		os.Exit(2)
 	}
-	if err := run(os.Args[1], os.Args[2]); err != nil {
+	if err := run(os.Args[1], os.Args[2], os.Args[3], os.Args[4]); err != nil {
 		fmt.Fprintln(os.Stderr, "glossary gen:", err)
 		os.Exit(1)
 	}
 }
 
-func run(in, out string) error {
-	f, err := os.Open(in)
+func run(in, inEN, out, outTS string) error {
+	terms, err := glossary.Load(in, inEN)
 	if err != nil {
 		return err
-	}
-	defer f.Close()
-	terms, problems := glossary.Parse(f)
-	if len(problems) > 0 {
-		for _, p := range problems {
-			fmt.Fprintf(os.Stderr, "%s:%d: %s\n", in, p.Line, p.Msg)
-		}
-		return fmt.Errorf("%d problem(s) in %s", len(problems), in)
 	}
 	src, err := glossary.Generate(terms)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(out, src, 0o644)
+	if err := os.WriteFile(out, src, 0o644); err != nil {
+		return err
+	}
+	ts, err := glossary.GenerateTS(terms)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(outTS, ts, 0o644)
 }

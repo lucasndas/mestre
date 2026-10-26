@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -437,4 +438,21 @@ func (s *Service) ChangePassword(ctx context.Context, id, current, next, keep st
 	}
 	s.sessionsEnded(ctx, id) // the panel closes the sockets of the sessions that no longer exist
 	return nil
+}
+
+// SetLanguage records the language of the panel a user chose.
+func (s *Service) SetLanguage(ctx context.Context, id, language string) error {
+	if !slices.Contains(Languages, language) {
+		return fmt.Errorf("%w: %q", ErrBadLanguage, language)
+	}
+	return s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `UPDATE users SET language = ?, updated_at = ? WHERE id = ? AND state = ?`, language, ms(s.clk.Now()), id, string(Active))
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return fmt.Errorf("%w: %s", ErrNoUser, id)
+		}
+		return nil
+	})
 }

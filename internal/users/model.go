@@ -19,7 +19,9 @@ const (
 type User struct {
 	ID, Name string
 	// Login is the login name of the panel (empty until the first access).
-	Login       string
+	Login string
+	// Language is the language of the panel the user chose ("" until chosen).
+	Language    string
 	Level       Level
 	State       State
 	TelegramID  int64
@@ -77,3 +79,9 @@ var (
 	ErrNoTransfer  = errors.New("users: no transfer waits")
 	ErrTransferBad = errors.New("users: the transfer is not possible")
 )
+
+// Languages are the languages of the panel.
+var Languages = []string{"pt-BR", "en"}
+
+// ErrBadLanguage is the refusal of a language the panel does not have.
+var ErrBadLanguage = errors.New("users: not a language of the panel")

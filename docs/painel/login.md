@@ -64,7 +64,7 @@ O painel esconde o que o nível não permite, mas quem decide é o servidor, em 
 
 ### Implementação
 
-- **Código:** `internal/panel` (HTTP, sessões, PIN, `/ws/ui`), `internal/users` (senha, códigos, fim das sessões) e a migração `0049_panel.sql` (`users.login` e `password_hash`, `panel_setup_codes`, `panel_access_codes`, `panel_sessions`, `panel_attempts`). Os tipos TypeScript são gerados por `tygo` (`go generate ./internal/panel`) em `web/src/gen/panel.ts`; um teste da suíte rápida falha se o arquivo estiver velho.
+- **Código:** `internal/panel` (HTTP, sessões, PIN, `/ws/ui`), `internal/users` (senha, códigos, fim das sessões) e as migrações `0049_panel.sql` (`users.login` e `password_hash`, `panel_setup_codes`, `panel_access_codes`, `panel_sessions`, `panel_attempts`) e `0050_user_language.sql` (`users.language`, o idioma do painel que o usuário escolheu; vazio até escolher). Os tipos TypeScript são gerados por `tygo` (`go generate ./internal/panel`) em `web/src/gen/panel.ts`; um teste da suíte rápida falha se o arquivo estiver velho.
 - **Montagem:** o painel responde em todo caminho que nenhuma outra rota da 7443 tem (`/`), atrás do `Gate`: a Cidadela que age serve; Torre e Cidadela suspensa fazem o `307`. Cada área registra as rotas em `routes_<area>.go` com `RegisterArea`. Os arquivos do front vêm de um `fs.FS` (`Deps.PanelAssets`; o padrão é o `webdist` embutido).
 - **Cookie** `__Host-mestre`. **PIN:** cabeçalho `X-Mestre-Pin` na própria requisição da ação (`Router.Sensitive`); o nível é conferido antes. **Origin:** `https://<Host>` em toda requisição que muda algo e na abertura do WebSocket.
 - **Erros:** `{"error": {"code", "params", "message"}}`, o `code` estável (a tradução é do front) e a mensagem em português só de reserva. Códigos: `invalid_credentials` 401, `unauthenticated` 401, `login_blocked` e `rate_limited` 429 (`retry_after_seconds`), `forbidden_level` 403 (`capability`, `need`, `have`), `bad_origin`, `pin_required`, `pin_invalid`, `pin_locked`, `no_pin` e `invalid_code` 403, `password_wrong` 403, `password_too_short` 422 (`min`), `invalid_login` e `invalid_pin` 422, `login_taken` 409, `bad_request` 400, `not_found` 404, `unavailable` 503, `internal` 500.
@@ -75,7 +75,8 @@ O painel esconde o que o nível não permite, mas quem decide é o servidor, em 
 | `POST /api/setup` | todos, enquanto não há usuário | `{code, name, login, password, pin}` cria o Dono e abre a sessão; depois, 404 |
 | `POST /api/login` | todos | `{login, password}` abre a sessão |
 | `POST /api/first-access` | todos | `{code, login, password, pin?}`: primeiro acesso, ou nova senha após redefinição (sem PIN) |
-| `POST /api/logout`, `GET /api/me`, `POST /api/password` | sessão | sair; `{user, session, capabilities}`; `{current, new}` |
+| `POST /api/logout`, `GET /api/me`, `POST /api/password` | sessão | sair; `{user, session, capabilities, timezone}` (`timezone` é o fuso da Guilda, em que o painel mostra todo horário); `{current, new}` |
+| `PUT /api/me/language` | sessão | `{language: "pt-BR"\|"en"}` guarda o idioma do usuário e devolve o `Me`; outro valor é `bad_request` |
 | `GET /api/sessions`, `DELETE /api/sessions/{id}` | sessão | as próprias; o Dono encerra qualquer uma |
 | `GET /api/admin/sessions` | Dono | as de todos |
 | `POST /api/users/{id}/access-code` | Dono, com PIN | `{kind: "first"\|"reset"}` devolve `{code, kind, expires_at}`; o código só aparece nessa resposta |

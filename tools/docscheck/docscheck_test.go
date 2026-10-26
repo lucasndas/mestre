@@ -441,10 +441,20 @@ func TestADRSectionsAndIndexBody(t *testing.T) {
 func TestGlossaryFormatIsChecked(t *testing.T) {
 	t.Parallel()
 	tr := newTree().area("produto").add("docs/produto/glossario.md", hdr("Glossário")+
-		"## Termos\n\n| Termo | Ajuda curta | Detalhes |\n|---|---|---|\n| mesa | ok. | [x](glossario.md) |\n")
+		"## Termos\n\n| Termo | Ajuda curta | No mundo real | Detalhes |\n|---|---|---|---|\n| mesa | ok. | um pedido | [x](glossario.md) |\n| Torre | ok. | uma máquina | [x](glossario.md) |\n")
 	got := only(run1(t, tr), ckGlossary)
-	if len(got) != 1 || !strings.Contains(got[0], "docs/produto/glossario.md:9: glossário: term \"mesa\" must start with a capital letter") {
+	joined := strings.Join(got, "\n")
+	if len(got) != 2 || !strings.Contains(joined, "docs/produto/glossario.md:9: glossário: term \"mesa\" must start with a capital letter") || !strings.Contains(joined, "falta docs/produto/glossario-en.md") {
 		t.Fatalf("errors = %q", got)
+	}
+	// the English table must pair with the terms
+	tr = newTree().area("produto").add("docs/produto/glossario.md", hdr("Glossário")+
+		"## Termos\n\n| Termo | Ajuda curta | No mundo real | Detalhes |\n|---|---|---|---|\n| Torre | ok. | uma máquina | [x](glossario.md) |\n").
+		add("docs/produto/glossario-en.md", hdr("Glossário em inglês")+
+			"## Terms\n\n| Termo | Term | Short help | In the real world |\n|---|---|---|---|\n| Mesa | Table | ok. | a request |\n")
+	all := strings.Join(only(run1(t, tr), ckGlossary), "\n")
+	if !strings.Contains(all, "\"Torre\" has no row in the English table") || !strings.Contains(all, "English row \"Mesa\" has no term") {
+		t.Fatalf("errors = %s", all)
 	}
 }
 

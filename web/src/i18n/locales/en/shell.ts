@@ -1,0 +1,31 @@
+import type { Widen } from "../../shape";
+import type pt from "../pt-BR/shell";
+
+const shell: Widen<typeof pt> = {
+  nav: {
+    overview: "Overview",
+    sessions: "My sessions",
+    password: "Change password",
+    groupAccount: "Account",
+    groupGuild: "Guild",
+    main: "Main navigation",
+  },
+  top: {
+    workspace: "Workspace",
+    approvals: "Approvals",
+    notices: "Notices",
+    menu: "Account menu",
+    logout: "Sign out",
+    skip: "Skip to content",
+  },
+  reconnecting: "Reconnecting to the Citadel…",
+  reconnected: "Connected again.",
+  overview: {
+    title: "Your Guild is ready",
+    welcome: "Hello, {{name}}. Your level is {{level}}.",
+    emptyTitle: "There is no workspace yet",
+    emptyBody: "When you connect a GitHub repository, it shows up here.",
+    times: "Times are in the {{zone}} time zone.",
+  },
+};
+export default shell;
