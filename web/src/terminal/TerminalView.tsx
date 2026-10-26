@@ -35,6 +35,8 @@ export interface TerminalViewProps {
   snapshotEvery?: number;
   /** Keeps the screen as text in the page as well (for screen readers); the standalone screen sets it. */
   readable?: boolean;
+  /** Inside a node of the canvas: the node shows the machine and the state, and the screen fills the room. */
+  compact?: boolean;
   className?: string;
 }
 
@@ -57,6 +59,7 @@ export function TerminalView({
   factory = xtermFactory,
   snapshotEvery = SNAPSHOT_EVERY,
   readable = false,
+  compact = false,
   className = "",
 }: TerminalViewProps) {
   const { t, i18n } = useTranslation("terminal");
@@ -192,9 +195,11 @@ export function TerminalView({
   return (
     <section aria-label={label} className={`flex min-w-0 flex-col gap-2 ${className}`}>
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <p className="text-sm text-muted">
-          {t("machine", { machine: info.machine })} · {t("state", { state: info.state })}
-        </p>
+        {compact ? null : (
+          <p className="text-sm text-muted">
+            {t("machine", { machine: info.machine })} · {t("state", { state: info.state })}
+          </p>
+        )}
         <div className="flex-1" />
         {canType ? (
           typing ? (
@@ -234,11 +239,11 @@ export function TerminalView({
       {/* nodrag, nowheel and nopan: inside the canvas the mouse and the wheel go to the terminal */}
       <div
         className={`nodrag nowheel nopan overflow-auto rounded-field border border-line bg-term-bg ${
-          noSignal ? "opacity-60 grayscale" : ""
-        }`}
+          compact ? "min-h-0 flex-1" : ""
+        } ${noSignal ? "opacity-60 grayscale" : ""}`}
         data-renderer={mode === "live" ? "webgl" : "snapshot"}
         data-signal={noSignal ? "lost" : "ok"}
-        style={{ maxHeight: "min(75dvh, 60rem)" }}
+        style={compact ? undefined : { maxHeight: "min(75dvh, 60rem)" }}
       >
         {mode === "live" ? (
           <div ref={hostRef} />
@@ -250,7 +255,9 @@ export function TerminalView({
           </section>
         )}
       </div>
-      {mode !== "live" ? <p className="text-sm text-muted">{t("snapshotHint")}</p> : null}
+      {mode !== "live" && !compact ? (
+        <p className="text-sm text-muted">{t("snapshotHint")}</p>
+      ) : null}
       <ModalOverlay
         isOpen={confirm}
         onOpenChange={setConfirm}

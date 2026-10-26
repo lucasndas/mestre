@@ -40,6 +40,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 | `/destravar` (com PIN) | sim | não | não | não |
 | Encerrar uma sessão do Operador do PC: `/operador encerrar` e botão **Encerrar agora** ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)) | sim | sim | não | não |
 | Digitar no terminal de um agente pelo canvas | sim | sim | não | não |
+| Editar o canvas: conexões, missões, fixar personagens, pergaminhos, grimórios e rituais ([canvas](../painel/canvas.md#ações-no-canvas)); ler e mover os elementos é de quem vê a mesa | sim | sim | não | não |
 | Criar workspace | sim | sim | não | não |
 | Alterar a configuração de um workspace pelo painel (fichas do Grão-Mestre e dos Mestres de mesa, instruções extras, limites, retenção, fuso), menos o que outra linha reserva | sim | sim | não | não |
 | Aprovar classe do workspace ([classes](../classes/classes.md)) | sim | sim | não | não |

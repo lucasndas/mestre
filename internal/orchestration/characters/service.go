@@ -57,6 +57,9 @@ type ServiceOptions struct {
 	Usage   UsageProbe
 	// Connections may be nil: no connection is made or removed.
 	Connections Connector
+	// Canvas may be nil: a replacement does not take the place of the old
+	// character on the canvas.
+	Canvas Placer
 	// Observer may be nil: nobody acts on the changes of state (the inbox
 	// and the waits, stage 7).
 	Observer Observer
@@ -327,6 +330,7 @@ func (s *Service) attempt(ctx context.Context, req CreateRequest, waitID string)
 		announce = !awaited
 	}
 	s.connect(ctx, ch, p.req.ReplaceOf)
+	s.takePlace(ctx, ch, p.req.ReplaceOf)
 	if s.o.ScrollCopies != nil && ch.Table != "" {
 		// the copies are a convenience of reading: a failure is logged, never a
 		// reason for the character not to start
@@ -380,6 +384,22 @@ func (s *Service) connect(ctx context.Context, c Character, replaces string) {
 	}
 	if err := s.o.Connections.Born(ctx, c); err != nil {
 		s.log.Warn("characters: the connections were not made", "id", c.ID, "err", err)
+	}
+}
+
+// takePlace gives a character that replaces another the place of the old one on
+// the canvas of the table. A failure is only logged: the canvas places it by
+// itself.
+func (s *Service) takePlace(ctx context.Context, c Character, replaces string) {
+	if s.o.Canvas == nil || replaces == "" {
+		return
+	}
+	old, err := s.o.Registry.Get(ctx, replaces)
+	if err != nil {
+		return
+	}
+	if err := s.o.Canvas.Replaced(ctx, old, c); err != nil {
+		s.log.Warn("characters: the place of the replaced character was not inherited", "id", c.ID, "err", err)
 	}
 }
 

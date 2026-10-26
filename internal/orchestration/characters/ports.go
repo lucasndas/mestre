@@ -364,6 +364,13 @@ type Connector interface {
 	Inherit(ctx context.Context, from, to Character) error
 }
 
+// Placer keeps the place of the characters on the canvas.
+type Placer interface {
+	// Replaced gives the character that replaces another its position, size
+	// and group on the canvas (docs/cli/coordenacao.md, CA-CLI-COORD-04).
+	Replaced(ctx context.Context, from, to Character) error
+}
+
 // Observer is told by the Service what the Citadel learns of a character, for
 // the parts that act on it: the inbox delivers when the character is free, the
 // waits are satisfied by a done (docs/orquestracao/esperas-e-caixa-de-entrada.md).

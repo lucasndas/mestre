@@ -15,6 +15,11 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-markdown": "6.5.2",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
     "@fontsource-variable/fraunces": "5.3.0",
     "@fontsource-variable/newsreader": "5.3.0",
     "@tailwindcss/vite": "4.3.3",
@@ -23,6 +28,7 @@
     "@xterm/addon-webgl": "0.19.0",
     "@xterm/headless": "6.0.0",
     "@xterm/xterm": "6.0.0",
+    "@xyflow/react": "12.12.0",
     "i18next": "26.5.11",
     "react": "19.3.1",
     "react-aria-components": "1.22.1",

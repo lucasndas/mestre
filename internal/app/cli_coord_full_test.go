@@ -5,18 +5,25 @@ package app_test
 import (
 	"testing"
 
+	"github.com/mestre-ia/mestre/internal/app"
+	"github.com/mestre-ia/mestre/internal/orchestration/canvas"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/panel"
 )
 
-// Part of CA-CLI-COORD-04 (the position on the canvas is milestone 6): the new
-// terminal uses the new sheet and keeps the name and the two connections of
-// the one it replaces.
+// CA-CLI-COORD-04: the new terminal uses the new sheet and keeps the name, the
+// two connections and the place on the canvas of the one it replaces.
 func TestRecruitReplaceKeepsTheNameAndTheConnections(t *testing.T) {
 	t.Parallel()
 	w := newCommWorld(t)
 	dev1, rev := w.recruit("Dev-1", "Dev Claude"), w.recruit("Revisor", "Revisor Codex")
 	if r := w.run(w.master, "connect", "Dev-1", "Revisor"); r.code != 0 {
 		t.Fatalf("connect: %+v", r)
+	}
+	host := app.NewCanvasHostForTest(w.orc, w.clk)
+	place := panel.CanvasItem{Key: canvas.Key(canvas.KindCharacter, dev1.ID), X: 840, Y: -120, W: 720, H: 480, Parent: "group:time"}
+	if err := host.SaveLayout(w.ctx, w.slug, w.table.ID, panel.LayoutRequest{Items: []panel.CanvasItem{place, {Key: "group:time", Label: "Time", W: 2000, H: 1000}}}); err != nil {
+		t.Fatal(err)
 	}
 	before := connectedNames(t, w, dev1)
 	if len(before) != 2 {
@@ -42,6 +49,21 @@ func TestRecruitReplaceKeepsTheNameAndTheConnections(t *testing.T) {
 		t.Errorf("Dev-1 is connected to %v, was %v", got, before)
 	}
 	_ = rev
+	st, err := host.State(w.ctx, w.slug, w.table.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := place
+	want.Key = canvas.Key(canvas.KindCharacter, now.ID)
+	var at []panel.CanvasItem
+	for _, it := range st.Layout {
+		if it.Key == want.Key || it.Key == place.Key {
+			at = append(at, it)
+		}
+	}
+	if len(at) != 1 || at[0] != want {
+		t.Errorf("the places of the old and the new Dev-1 are %+v; want only %+v", at, want)
+	}
 	// A busy character is replaced at its safe point.
 	busy := w.recruit("Dev-2", "Dev Claude")
 	w.mach.Report(w.ctx, busy.ID, characters.Busy)

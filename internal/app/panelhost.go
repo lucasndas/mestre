@@ -68,6 +68,11 @@ func (e *Engine) openPanel(ctx context.Context, db *store.DB, integ IntegrationR
 	} else {
 		p.SetTerminals(rel)
 	}
+	if e.deps.PanelCanvas != nil {
+		p.SetCanvas(e.deps.PanelCanvas)
+	} else {
+		p.SetCanvas(canvasHost{get: e.orc.Load, clk: e.clk})
+	}
 	e.relay.Store(rel)
 	e.panel.Store(p)
 	run(func() { p.Run(ctx) })

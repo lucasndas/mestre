@@ -63,4 +63,6 @@ export default {
   github_not_ready: "O App Grão-Mestre ainda não está pronto para conectar o GitHub.",
   github_flow_off: "O App Grão-Mestre está com o device flow desligado no GitHub.",
   github_no_right: "O seu nível ou os seus workspaces não permitem a credencial pessoal.",
+  refused: "A Cidadela recusou a ação.",
+  conflict: "Isto mudou desde que você abriu. Veja a versão atual e tente de novo.",
 } as const;

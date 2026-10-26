@@ -18,7 +18,7 @@ Mostrar, em tempo real, tudo o que acontece numa mesa: o Mestre da mesa, a party
 
 | Elemento | Tipo no React Flow | O que mostra | Dono do comportamento |
 |---|---|---|---|
-| Personagem | nó personalizado com xterm.js | nome, classe, **selo da máquina** onde roda, estado e motivo (ocioso, ocupado, aguardando, aguardando permissão, cota ou entrada, travado, interrompido…), ícone de fixado, aviso de monitoramento reduzido | [personagens](../orquestracao/personagens.md) |
+| Personagem | nó personalizado com xterm.js | nome, classe, **selo da máquina** onde roda, estado e motivo (ocioso, ocupado, aguardando, aguardando permissão, cota ou entrada, travado, interrompido…), ícone de fixado, aviso de monitoramento reduzido. O Grão-Mestre do workspace aparece em toda mesa, para a conexão automática com o Mestre da mesa ter as duas pontas | [personagens](../orquestracao/personagens.md) |
 | Terminal simples (`spawn`) | igual ao personagem, sem classe | base usada e máquina | [personagens](../orquestracao/personagens.md) |
 | Pergaminho | nó com editor Markdown | conteúdo ao vivo, editável por pessoas e agentes | [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md) |
 | Tomo | nó-grupo de pergaminhos empilhados | título e quantidade; abre ao clicar | [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md) |
@@ -30,8 +30,14 @@ Mostrar, em tempo real, tudo o que acontece numa mesa: o Mestre da mesa, a party
 ### Canvas infinito
 
 - Zoom, arrastar o fundo, selecionar vários, arrastar elementos e agrupar.
-- Posição, tamanho e grupos de cada elemento ficam salvos no banco da Cidadela por mesa. Reabrir o navegador mostra tudo como estava.
-- Elementos criados pelo motor (recrutamento, missão) aparecem perto de quem os criou, sem sobrepor (posicionamento automático simples).
+- Posição, tamanho e grupos de cada elemento ficam salvos no banco da Cidadela por mesa (tabela `canvas_items`, chave `<tipo>:<id>`; um grupo é um elemento com rótulo; `internal/orchestration/canvas`). Reabrir o navegador mostra tudo como estava. Quem vê a mesa move e redimensiona; **agrupar** é de quem edita o canvas.
+- Elementos criados pelo motor (recrutamento, missão) aparecem perto de quem os criou, sem sobrepor: ao ler o estado, o que ainda não tem lugar ganha o primeiro espaço livre, em anéis a partir do criador (à direita dele), com uma folga entre os elementos para a linha e o rótulo caberem. Quem some da mesa some do layout; um grupo fica até o usuário o apagar.
+- Um personagem que substitui outro (`mestre recruit --replace`) herda a posição, o tamanho e o grupo do antigo, na hora em que nasce (`characters.Placer`).
+
+### API e atualização ao vivo
+
+- `GET /api/workspaces/{ws}/tables/{mesa}/canvas` devolve o estado inteiro da mesa (personagens, pergaminhos, tomos, conexões, missões, esperas, impasses, layout); `PUT …/canvas/layout` guarda o que o usuário moveu. Cada ação tem a sua rota (conexão, fixar, pergaminho, missão, grimório, ritual) e o painel só repassa ao serviço do motor que a CLI também usa; o nível é conferido de novo no servidor (capacidade `edit_canvas`: Administrador ou acima; ler e mover é de quem vê a mesa).
+- O tópico `canvas:<workspace>/<mesa>` entrega o estado ao assinar e o evento `changed` a cada mudança do banco da Cidadela (agrupadas em 150 ms); o navegador lê o estado de novo, e é assim que o que um agente escreve num pergaminho aparece sem recarregar. Com o socket caído, a faixa "reconectando" aparece e, ao voltar, tudo é lido de novo.
 
 ### Terminais no canvas
 
@@ -54,13 +60,13 @@ Toda ação usa a mesma API do motor que a CLI usa; as regras são as do documen
 
 | Ação | Como | Regras |
 |---|---|---|
-| Criar conexão | arrastar de um elemento para outro | [conexões](../orquestracao/conexoes.md) |
+| Criar conexão | arrastar de um elemento para outro (`ConnectByUser`: motivo `manual`, só Dono e Administrador) | [conexões](../orquestracao/conexoes.md) |
 | Remover conexão | selecionar a aresta e apagar; a automática Mestre da mesa ↔ Grão-Mestre é recusada | [conexões](../orquestracao/conexoes.md) |
-| Montar ou ajustar missão | arrastar setas de etapa entre personagens e numerar | [missões](../orquestracao/missoes.md) |
+| Montar ou ajustar missão | no painel lateral, "Montar missão": arrastar de um personagem ao próximo cria uma etapa que vem depois (arrastar para uma etapa anterior é a devolução) e a ordem da lista é o número. Nasce como **rascunho**, que pode ser ajustado (`quests.Service.Redraw`) até rodar; uma missão que já roda não se desenha de novo por aqui. Uma etapa por personagem | [missões](../orquestracao/missoes.md) |
 | Fixar personagem | ícone de alfinete | [personagens](../orquestracao/personagens.md) |
 | Editar pergaminho | editor no próprio nó | [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md) |
 | Salvar seleção como grimório e restaurar em outra mesa | botão na barra da seleção | [grimórios](../orquestracao/grimorios.md) |
-| Ver e editar rituais da mesa | painel lateral | [rituais](../orquestracao/rituais.md) |
+| Ver e editar rituais da mesa | painel lateral: ativar, desativar e mudar o que o ritual faz | [rituais](../orquestracao/rituais.md) |
 
 Depois de `mestre recruit --replace`, o nó do personagem novo fica na posição do antigo, com as mesmas conexões ([coordenação](../cli/coordenacao.md); a parte do canvas de CA-CLI-COORD-04 é do M6).
 
@@ -77,7 +83,7 @@ Depois de `mestre recruit --replace`, o nó do personagem novo fica na posição
 
 ## Regras e erros
 
-- Ação recusada pelo motor (nível, regra do documento dono) → o canvas desfaz o gesto e mostra o motivo devolvido.
+- Ação recusada pelo motor (nível, regra do documento dono) → o canvas desfaz o gesto e mostra o motivo devolvido: a resposta é `refused` com `params.reason` (chave estável, traduzida pelo painel; sem tradução vale o texto do motor) e, na conexão automática, `params.reasons`. Nada é desenhado antes de o motor responder: a linha arrastada fica pontilhada até lá. Pergaminho editado por outra pessoa no meio é `conflict` (a revisão base não bate).
 - WebSocket caiu → faixa "reconectando", com backoff; ao voltar, o estado é recarregado da Cidadela.
 - Máquina do personagem fora do ar → terminal em cinza com "máquina sem sinal desde HH:MM" (no fuso da Guilda); o retrato fica visível e, ao voltar o sinal, a Cidadela pede o fluxo de novo de onde parou. A digitação nessa máquina é recusada (`unavailable`).
 
@@ -103,6 +109,8 @@ Depois de `mestre recruit --replace`, o nó do personagem novo fica na posição
 - [Personagens](../orquestracao/personagens.md)
 - [Conexões](../orquestracao/conexoes.md)
 - [Missões](../orquestracao/missoes.md)
+- [Rituais](../orquestracao/rituais.md)
+- [Grimórios](../orquestracao/grimorios.md)
 - [Esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)
 - [Pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md)
 - [Glossário](../produto/glossario.md)

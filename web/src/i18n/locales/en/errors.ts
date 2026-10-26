@@ -65,5 +65,7 @@ const errors: Widen<typeof pt> = {
   github_not_ready: "The Grand Master App is not ready to connect GitHub yet.",
   github_flow_off: "The Grand Master App has the device flow turned off on GitHub.",
   github_no_right: "Your level or your workspaces do not allow the personal credential.",
+  refused: "The Citadel refused the action.",
+  conflict: "This changed since you opened it. Look at the current version and try again.",
 };
 export default errors;

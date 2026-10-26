@@ -200,6 +200,9 @@ type Deps struct {
 	// characters of the Guild, through their machines). The browser smoke test
 	// gives it the terminal of a fake agent.
 	PanelTerminals panel.TerminalSource
+	// PanelCanvas is the engine of the tables the canvas shows (nil: the one of the
+	// orchestration of the period).
+	PanelCanvas panel.CanvasSource
 	// Whisper is the whisper-server of this machine, which it uses to transcribe
 	// the audio another machine of the Guild sends it (nil: this machine does not
 	// transcribe for others; the installation sets it, milestone 7).

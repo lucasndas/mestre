@@ -34,6 +34,10 @@ const (
 	CodePermissionPrompt   Code = "permission_prompt"
 	CodeTooManyStreams     Code = "too_many_streams"
 	CodeInternal           Code = "internal"
+	// CodeRefused: the engine refused an action of the canvas; params.reason says why.
+	CodeRefused Code = "refused"
+	// CodeConflict: the thing changed under the request (a scroll edited by somebody else).
+	CodeConflict Code = "conflict"
 )
 
 // APIError is the body of every error of the API: {"error": {...}}.
@@ -75,6 +79,8 @@ var status = map[Code]int{
 	CodePermissionPrompt:   http.StatusConflict,
 	CodeTooManyStreams:     http.StatusTooManyRequests,
 	CodeInternal:           http.StatusInternalServerError,
+	CodeRefused:            http.StatusConflict,
+	CodeConflict:           http.StatusConflict,
 }
 
 // Err makes an error of the API.
