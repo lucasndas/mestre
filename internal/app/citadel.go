@@ -111,9 +111,11 @@ type takeover struct {
 
 // citadelRun is one period of this machine as the Citadel.
 type citadelRun struct {
-	db    *store.DB
-	epoch uint64
-	fence *guild.Fence
+	// handing says a planned handover asked in the panel is under way: a second one is refused.
+	handing atomic.Bool
+	db      *store.DB
+	epoch   uint64
+	fence   *guild.Fence
 	// reconcileFail is why the fence waits for the reconciliation with GitHub (nil: it does not).
 	reconcileFail atomic.Pointer[reconcileFailure]
 	srv           *protocol.Server

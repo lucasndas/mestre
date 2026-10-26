@@ -182,14 +182,18 @@ function Workspace({ w }: { w: WorkspaceRow }) {
       {w.session_zero_pr ? (
         <p className="mt-3 text-sm">
           {t("sessionZeroPR")}{" "}
-          <a
-            className="text-accent underline"
-            href={w.session_zero_pr}
-            rel="noreferrer noopener"
-            target="_blank"
-          >
-            {w.session_zero_pr}
-          </a>
+          {w.session_zero_pr.startsWith("https://github.com/") ? (
+            <a
+              className="text-accent underline"
+              href={w.session_zero_pr}
+              rel="noreferrer noopener"
+              target="_blank"
+            >
+              {w.session_zero_pr}
+            </a>
+          ) : (
+            <span>{w.session_zero_pr}</span>
+          )}
         </p>
       ) : null}
       {question && canConfigure ? <Versioning slug={w.slug} /> : null}

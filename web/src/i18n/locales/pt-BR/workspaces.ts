@@ -91,6 +91,8 @@ export default {
   },
   refusals: {
     unknown_sheet: "Essa ficha não existe ou não roda um agente. Nada foi criado.",
+    bad_grand_master_sheet:
+      "Essa ficha não serve para o Grão-Mestre: use um agente, que não seja o Operador do PC e que rode em toda máquina não excluída.",
     repo_taken: "Esse repositório já é o workspace {{slug}}.",
     invalid_repo: "O repositório precisa estar no formato dono/nome.",
     invalid_slug: "O apelido não vale. Sugestão: {{suggestion}}.",

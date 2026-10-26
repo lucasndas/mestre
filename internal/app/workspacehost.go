@@ -5,12 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io/fs"
 	"path/filepath"
 	"time"
 
-	"github.com/mestre-ia/mestre/internal/orchestration/presets"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/verification"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 	"github.com/mestre-ia/mestre/internal/panel"
@@ -116,7 +115,9 @@ func (h workspaceHost) stages(orc *Orchestration, w workspaces.Workspace) []pane
 	return out
 }
 
-// Sheets are the sheets that run an agent: the Grand Master is one, so a plain shell is not.
+// Sheets are the sheets that may be the Grand Master's: the ones that run an agent
+// on a base that is not the Operator's and runs on every machine not excluded
+// (characters.GrandMasterSheetProblem).
 func (h workspaceHost) Sheets(ctx context.Context) ([]panel.SheetOption, error) {
 	orc, _, err := h.parts()
 	if err != nil {
@@ -128,7 +129,7 @@ func (h workspaceHost) Sheets(ctx context.Context) ([]panel.SheetOption, error) 
 	}
 	out := []panel.SheetOption{}
 	for _, s := range all {
-		if s.Agent != presets.AgentShell {
+		if characters.GrandMasterSheetProblem(ctx, orc.Presets, s.Name) == nil {
 			out = append(out, panel.SheetOption{Name: s.Name, Agent: s.Agent})
 		}
 	}
@@ -140,16 +141,11 @@ func (h workspaceHost) Create(ctx context.Context, by users.User, req panel.Crea
 	if err != nil {
 		return panel.WorkspaceRow{}, err
 	}
-	sheets, err := h.Sheets(ctx)
-	if err != nil {
-		return panel.WorkspaceRow{}, err
-	}
-	known := false
-	for _, s := range sheets {
-		known = known || s.Name == req.GrandMasterSheet
-	}
-	if !known {
-		return panel.WorkspaceRow{}, &panel.Refusal{Reason: "unknown_sheet", Message: "a ficha " + req.GrandMasterSheet + " não existe ou não roda um agente"}
+	if err := characters.GrandMasterSheetProblem(ctx, orc.Presets, req.GrandMasterSheet); err != nil {
+		if errors.Is(err, characters.ErrBadGrandMasterSheet) {
+			return panel.WorkspaceRow{}, &panel.Refusal{Reason: "bad_grand_master_sheet", Message: err.Error()}
+		}
+		return panel.WorkspaceRow{}, &panel.Refusal{Reason: "unknown_sheet", Message: "a ficha " + req.GrandMasterSheet + " não existe"}
 	}
 	w, err := orc.Workspaces.Create(ctx, workspaces.CreateRequest{Repo: req.Repo, Slug: req.Slug})
 	if err != nil {
@@ -201,7 +197,13 @@ func (h workspaceHost) Retry(ctx context.Context, slug string) error {
 	}
 	// the stage can take minutes (a clone): it runs on, and the screen follows the
 	// workspace as it changes; a failure is recorded in the stage
-	go func() { _ = orc.Workspaces.Prepare(context.WithoutCancel(ctx), slug) }()
+	if _, running := h.r.retrying.LoadOrStore(slug, struct{}{}); running {
+		return nil // one run of the stage at a time: another click waits for this one
+	}
+	go func() {
+		defer h.r.retrying.Delete(slug)
+		_ = orc.Workspaces.Prepare(context.WithoutCancel(ctx), slug)
+	}()
 	return nil
 }
 
@@ -270,11 +272,14 @@ func (h workspaceHost) Verification(ctx context.Context, slug string) (panel.Ver
 		return panel.VerificationView{}, notFound(err)
 	}
 	var v panel.VerificationView
+	unreadable := false
 	data, _, err := safefile.Read(h.file(orc, slug), maxVerificationFile)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
-		return v, fmt.Errorf("read %s: %w", verification.File, err)
+		// a link, a folder, a pipe or a file too big is not read and does not block
+		// the screen: it is said, and a confirmation still makes the file right
+		v.FileError, unreadable = fileProblem(err), true
 	default:
 		v.File = string(data)
 		if doc, perr := verification.Parse(data); perr != nil {
@@ -289,9 +294,22 @@ func (h workspaceHost) Verification(ctx context.Context, slug string) (panel.Ver
 	}
 	if ok {
 		v.Confirmed = &panel.VerificationConfirmed{Doc: c.Doc, Hash: c.Hash, By: h.userName(ctx, c.By), At: c.At}
-		v.Outside = v.File != "" && hashOf([]byte(v.File)) != c.Hash
+		v.Outside = (v.File != "" && hashOf([]byte(v.File)) != c.Hash) || unreadable
 	}
 	return v, nil
+}
+
+// fileProblem says in a few words why the file could not be read.
+func fileProblem(err error) string {
+	switch {
+	case errors.Is(err, safefile.ErrLink):
+		return "o arquivo é um link simbólico"
+	case errors.Is(err, safefile.ErrTooLarge):
+		return "o arquivo passa do limite de tamanho"
+	case safefile.Refused(err):
+		return "o arquivo não é um arquivo comum"
+	}
+	return "o arquivo não pôde ser lido"
 }
 
 // userName is the name of a user for the screen (the id when the user is gone).
@@ -322,9 +340,11 @@ func (h workspaceHost) ConfirmVerification(ctx context.Context, by users.User, s
 		return "", err
 	}
 	// the file of the main clone follows what was confirmed, so that a later
-	// difference is an edit made outside the panel
+	// difference is an edit made outside the panel. The confirmation is already in
+	// force: a file that cannot be written (a link, a folder) does not undo it, and
+	// the screen shows it as an edit outside the panel until it is put right.
 	if err := safefile.Write(h.file(orc, slug), doc, safefile.Options{}); err != nil {
-		return "", fmt.Errorf("write %s: %w", verification.File, err)
+		h.r.env.Log.Warn("app: the confirmed verification commands were not written to the main clone", "workspace", slug, "err", err)
 	}
 	return hash, nil
 }
@@ -360,8 +380,13 @@ func (r *stdRun) checkOutsideEdits(ctx context.Context) {
 			continue
 		}
 		data, _, err := safefile.Read(h.file(orc, w.Slug), maxVerificationFile)
-		if err != nil {
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
 			continue // no file is no edit: the confirmed version holds
+		case err != nil:
+			// a link, a folder, a pipe or a file too big is an edit outside the panel
+			// too: told once for each reason
+			data = []byte("unreadable: " + fileProblem(err))
 		}
 		changed, err := h.verifications().OutsideEdit(ctx, w.Slug, data)
 		if err != nil {

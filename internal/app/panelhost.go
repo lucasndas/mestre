@@ -58,7 +58,7 @@ func (e *Engine) openPanel(ctx context.Context, db *store.DB, integ IntegrationR
 		return func() {}
 	}
 	svc, alerts := src.PanelPieces()
-	opts := panel.Options{DB: db, Clock: e.clk, Users: svc, Alerts: alerts, Assets: assets, Machine: e.id.MachineID, Logger: e.log, VaultChanged: vaultChanged}
+	opts := panel.Options{DB: db, Clock: e.clk, Users: svc, Alerts: alerts, Assets: assets, Machine: e.id.MachineID, Logger: e.log, VaultChanged: vaultChanged, Mask: e.deps.Masker.Mask}
 	if adm, ok := integ.(PanelAdminSource); ok {
 		opts.GitHub, opts.Vault = adm.PanelAdmin()
 	}

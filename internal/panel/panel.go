@@ -70,6 +70,9 @@ type Options struct {
 	// Creation is the creation of the GitHub Apps by link: the page of the link is
 	// served at /github/apps/novo/<token> (nil: the Owner cannot make a link now).
 	Creation *github.Creation
+	// Mask hides the secrets in the text the audit keeps of what a person wrote
+	// (nil: the text goes as it is).
+	Mask func(string) string
 }
 
 // Panel is the panel of the acting Citadel.
@@ -89,6 +92,7 @@ type Panel struct {
 	appr         *ApprovalSource
 	notes        *NoticeSource
 	chat         ChatSource
+	mask         func(string) string
 	// stop ends what the areas registered with the engine (the listeners of the
 	// flow and of the feed), when the panel closes.
 	stop    []func()
@@ -129,7 +133,10 @@ func New(o Options) (*Panel, error) {
 	if o.Rand == nil {
 		o.Rand = newRand()
 	}
-	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, github: o.GitHub, vault: o.Vault, vaultChanged: o.VaultChanged, log: o.Logger, ids: protocol.NewIDGen(o.Clock), appr: o.Approvals, notes: o.Notices, chat: o.Chat, creation: o.Creation}
+	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, github: o.GitHub, vault: o.Vault, vaultChanged: o.VaultChanged, log: o.Logger, ids: protocol.NewIDGen(o.Clock), appr: o.Approvals, notes: o.Notices, chat: o.Chat, creation: o.Creation, mask: o.Mask}
+	if p.mask == nil {
+		p.mask = func(s string) string { return s }
+	}
 	p.sessions = &Sessions{db: o.DB, clk: o.Clock, ids: p.ids, rnd: o.Rand}
 	p.hub = newHub(p)
 	p.slots = make(chan struct{}, hashSlots)

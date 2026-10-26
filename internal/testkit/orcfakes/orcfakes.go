@@ -160,12 +160,12 @@ func (p Presets) Snapshot(_ context.Context, sheet string) (presets.Snapshot, er
 		s.Lifecycle = "persistent"
 	}
 	s.Restrictions = p.Restrictions[sheet]
-	return presets.Snapshot{Sheet: s, Base: presets.Base{Name: "claude-code", Command: "claude"}}, nil
+	return presets.Snapshot{Sheet: s, Base: presets.Base{Name: "claude-code", Command: "claude", Platforms: []presets.Platform{{OS: "linux"}, {OS: "windows"}}}}, nil
 }
 
 // Base implements characters.Presets.
 func (Presets) Base(context.Context, string) (presets.Base, bool, error) {
-	return presets.Base{Name: "claude-code", Command: "claude"}, true, nil
+	return presets.Base{Name: "claude-code", Command: "claude", Platforms: []presets.Platform{{OS: "linux"}, {OS: "windows"}}}, true, nil
 }
 
 // Choose implements characters.Presets: both machines fit.

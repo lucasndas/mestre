@@ -92,6 +92,8 @@ export default {
   },
   refusals: {
     unknown_sheet: "That sheet does not exist or does not run an agent. Nothing was created.",
+    bad_grand_master_sheet:
+      "That sheet cannot be the Grand Master: use an agent that is not the PC Operator and runs on every machine that is not excluded.",
     repo_taken: "That repository is already the workspace {{slug}}.",
     invalid_repo: "The repository must be as owner/name.",
     invalid_slug: "The nickname does not hold. Suggestion: {{suggestion}}.",

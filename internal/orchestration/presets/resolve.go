@@ -144,13 +144,32 @@ func chooseOne(b Base, req machinesheet.Requirements, m machinesheet.Sheet) mach
 	if v.Name == "" {
 		v.Name = m.MachineID
 	}
-	switch {
-	case !slices.ContainsFunc(b.Platforms, func(p Platform) bool { return p.OS == m.OS }):
-		v.Unmet, v.Reason = machinesheet.ReqOS, fmt.Sprintf("a base `%s` não roda em %s", b.Name, m.OS)
-		return v
-	case len(b.Machines) > 0 && !slices.Contains(b.Machines, m.MachineID):
-		v.Unmet, v.Reason = "machines", fmt.Sprintf("a base `%s` não vale nesta máquina", b.Name)
+	if ok, why := RunsOn(b, m); !ok {
+		switch {
+		case !slices.ContainsFunc(b.Platforms, func(p Platform) bool { return p.OS == m.OS }):
+			v.Unmet, v.Reason = machinesheet.ReqOS, fmt.Sprintf("a base `%s` não roda em %s", b.Name, m.OS)
+		default:
+			v.Unmet, v.Reason = "machines", fmt.Sprintf("a base `%s` não vale nesta máquina", b.Name)
+		}
+		_ = why
 		return v
 	}
 	return machinesheet.Match(m, req)
+}
+
+// RunsOn says whether the base runs on the machine (its system is one of the
+// platforms of the base and the base is not restricted to other machines),
+// whether or not the machine is online now; the reason is for the Owner.
+func RunsOn(b Base, m machinesheet.Sheet) (ok bool, reason string) {
+	name := m.Name
+	if name == "" {
+		name = m.MachineID
+	}
+	switch {
+	case !slices.ContainsFunc(b.Platforms, func(p Platform) bool { return p.OS == m.OS }):
+		return false, fmt.Sprintf("a base `%s` não roda em %s (%s)", b.Name, m.OS, name)
+	case len(b.Machines) > 0 && !slices.Contains(b.Machines, m.MachineID):
+		return false, fmt.Sprintf("a base `%s` não vale na máquina %s", b.Name, name)
+	}
+	return true, ""
 }

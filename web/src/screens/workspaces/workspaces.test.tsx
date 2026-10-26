@@ -303,3 +303,26 @@ test("an Approver reads the verification commands but cannot confirm them", asyn
   expect(await screen.findByText("Um Administrador confirma os comandos.")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Confirmar estes comandos" })).toBeNull();
 });
+
+test("the link of the session zero pull request is a link only for github.com", async () => {
+  fakeServer({
+    ...base,
+    ...as(["status"]),
+    "GET /api/workspaces": () => ({
+      body: list(
+        [
+          row({ slug: "a", repo: "acme/a", session_zero_pr: "https://github.com/acme/a/pull/1" }),
+          row({ slug: "b", repo: "acme/b", session_zero_pr: "javascript:alert(1)" }),
+        ],
+        { can_create: false, sheets: [] },
+      ),
+    }),
+  });
+  renderApp("/workspaces");
+  expect(
+    (await screen.findByRole("link", { name: "https://github.com/acme/a/pull/1" })).getAttribute(
+      "href",
+    ),
+  ).toBe("https://github.com/acme/a/pull/1");
+  expect(screen.queryByRole("link", { name: "javascript:alert(1)" })).toBeNull();
+});

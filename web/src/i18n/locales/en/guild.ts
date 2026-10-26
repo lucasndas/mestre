@@ -139,6 +139,8 @@ export default {
     no_lock: "The Guild has no lock at GitHub configured: the switch is not possible yet.",
     suspended: "The Citadel is suspended and takes no changes now.",
     not_pending: "This request was already decided or expired.",
+    not_revealed: "The machine has not shown its code yet: wait for the installer to display it.",
+    handover_in_progress: "A Citadel switch is already under way: wait for it to end.",
     bad_priority: "The priority goes from 0 to 1000.",
     bad_timezone: "That time zone is not in the IANA database.",
     confirm_required: "Read the warning of the removal and confirm.",

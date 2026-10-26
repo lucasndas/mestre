@@ -78,6 +78,8 @@ func refusalOf(err error) error {
 		return r("suspended")
 	case errors.Is(err, guild.ErrNotPending), errors.Is(err, guild.ErrExpired):
 		return r("not_pending")
+	case errors.Is(err, guild.ErrNotRevealed):
+		return r("not_revealed")
 	case errors.Is(err, guild.ErrBadPriority):
 		return r("bad_priority")
 	case errors.Is(err, guild.ErrBadTimezone):
@@ -277,7 +279,11 @@ func (g *guildHost) PassCitadel(ctx context.Context, by users.User, machineID, a
 	case g.e.lockOf(run) == nil:
 		return refusalOf(guild.ErrNoLock)
 	}
+	if err := run.claimHandover(run.fence != nil && run.fence.Acting()); err != nil {
+		return err
+	}
 	go func() {
+		defer run.handing.Store(false)
 		if err := g.e.Handover(context.WithoutCancel(ctx), machineID, approvalID, by.ID, 0); err != nil {
 			g.e.log.Warn("app: the planned switch asked in the panel did not end", "target", machineID, "approval", approvalID, "err", err)
 		}
@@ -306,5 +312,19 @@ func (g *guildHost) SetTimezone(ctx context.Context, zone string) error {
 		return refusalOf(err)
 	}
 	g.e.sendConfig(context.WithoutCancel(ctx), run)
+	return nil
+}
+
+// claimHandover takes the only place of a planned handover asked in the panel: a
+// second one while the first is under way, and one on a Citadel that drains or does
+// not act, are refused with their reason. The caller frees it when the handover ends.
+func (r *citadelRun) claimHandover(acting bool) error {
+	if !r.handing.CompareAndSwap(false, true) {
+		return &panel.Refusal{Reason: "handover_in_progress", Message: "a troca da Cidadela já está em andamento"}
+	}
+	if r.gate.isDraining() || !acting {
+		r.handing.Store(false)
+		return refusalOf(guild.ErrSuspended)
+	}
 	return nil
 }

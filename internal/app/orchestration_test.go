@@ -91,10 +91,10 @@ type orcPresets struct{}
 
 func (orcPresets) Snapshot(_ context.Context, sheet string) (presets.Snapshot, error) {
 	return presets.Snapshot{Sheet: presets.Sheet{Name: sheet, Base: "claude-code", Agent: presets.AgentClaudeCode, Class: "Dev"},
-		Base: presets.Base{Name: "claude-code", Command: "claude"}}, nil
+		Base: presets.Base{Name: "claude-code", Command: "claude", Platforms: []presets.Platform{{OS: "linux"}, {OS: "windows"}}}}, nil
 }
 func (orcPresets) Base(context.Context, string) (presets.Base, bool, error) {
-	return presets.Base{Name: "claude-code", Command: "claude"}, true, nil
+	return presets.Base{Name: "claude-code", Command: "claude", Platforms: []presets.Platform{{OS: "linux"}, {OS: "windows"}}}, true, nil
 }
 func (orcPresets) Choose(context.Context, string, string) (machinesheet.Choice, error) {
 	return machinesheet.Choice{Verdicts: []machinesheet.Verdict{{MachineID: "cidadela", Name: "Cidadela", OK: true}}}, nil

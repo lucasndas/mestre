@@ -2,6 +2,7 @@ package panel_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
@@ -201,5 +202,29 @@ func TestAnAdministratorConfirmsTheVerificationCommands(t *testing.T) {
 	}
 	if r.audited("panel.workspace.verification_confirmed") != 1 || !contains(r.auditText(), "go test") {
 		t.Error("the edit is not in the audit with the document")
+	}
+}
+
+// What a person wrote in the verification commands is masked before the audit keeps
+// it, and the confirmation is audited once the engine accepted it.
+func TestTheAuditOfAConfirmationKeepsTheMaskedDocument(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	_, adm := r.member("Ana", "ana", users.Administrator)
+	p, err := panel.New(panel.Options{DB: r.db, Clock: r.clk, Users: r.users, Alerts: r.al, Assets: r.assets, Machine: "m1",
+		Mask: func(s string) string { return strings.ReplaceAll(s, "segredo-123", "***") }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(p.Close)
+	r.panel = p
+	f := &fakeWorkspaces{}
+	p.SetWorkspaces(f)
+	doc := "version: 1\ncomandos: [\"curl -H 'token: segredo-123' x\"]\n"
+	if w := r.call("PUT", "/api/workspaces/loja/verification", panel.ConfirmVerificationRequest{Doc: doc}, opts{cookie: adm}); w.Code != 200 {
+		t.Fatalf("confirm: %d %s", w.Code, w.Body)
+	}
+	if got := r.auditText(); strings.Contains(got, "segredo-123") || !strings.Contains(got, "***") {
+		t.Errorf("the audit keeps %q", got)
 	}
 }

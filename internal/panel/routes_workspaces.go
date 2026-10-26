@@ -270,9 +270,9 @@ func (a *workspaceArea) handleConfirm(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, err)
 		return
 	}
-	detail := map[string]any{"workspace": slug, "after": map[string]any{"hash": hash, "doc": in.Doc}}
+	detail := map[string]any{"workspace": slug, "after": map[string]any{"hash": hash, "doc": a.p.mask(in.Doc)}}
 	if before.Confirmed != nil {
-		detail["before"] = map[string]any{"hash": before.Confirmed.Hash, "doc": before.Confirmed.Doc}
+		detail["before"] = map[string]any{"hash": before.Confirmed.Hash, "doc": a.p.mask(before.Confirmed.Doc)}
 	}
 	a.audit(r, "verification_confirmed", detail)
 	v, err := src.Verification(r.Context(), slug)

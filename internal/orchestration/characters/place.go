@@ -348,3 +348,40 @@ func (s *Service) grandMasterNotStarted(ctx context.Context, c Character, cause 
 		Character: c.ID, Name: c.Name, Creator: c.CreatedBy, Text: fmt.Sprintf("%s não iniciou: %v", c.Name, cause)})
 	return fmt.Errorf("character %s did not start: %w", c.Name, cause)
 }
+
+// GrandMasterSheetProblem says why a sheet cannot be the one of a Grand Master
+// (nil: it can). The Grand Master runs an agent, never on the base of the
+// Operator of the PC (which only the Owner's approval activates), and its base
+// must run on every machine the Owner did not exclude, because any of them may
+// become the Citadel (docs/orquestracao/grao-mestre.md#onde-roda).
+func GrandMasterSheetProblem(ctx context.Context, p Presets, sheet string) error {
+	bad := func(format string, a ...any) error {
+		return fmt.Errorf("%w: %s", ErrBadGrandMasterSheet, fmt.Sprintf(format, a...))
+	}
+	if sheet == "" {
+		return bad("o Grão-Mestre nasce de uma ficha")
+	}
+	snap, err := p.Snapshot(ctx, sheet)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrBadSheet, err)
+	}
+	switch {
+	case snap.Sheet.Agent == presets.AgentShell:
+		return bad("a ficha %s é um terminal simples, não um agente", sheet)
+	case snap.Base.Name == presets.OperatorBase:
+		return bad("a base %s é a do Operador do PC e só o Dono a ativa", presets.OperatorBase)
+	}
+	machines, err := p.Machines(ctx)
+	if err != nil {
+		return err
+	}
+	for _, m := range machines {
+		if m.Excluded {
+			continue
+		}
+		if ok, why := presets.RunsOn(snap.Base, m); !ok {
+			return bad("%s", why)
+		}
+	}
+	return nil
+}
