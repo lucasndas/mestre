@@ -8,4 +8,8 @@
 #     issue: https://github.com/mestre-ia/mestre/issues/123
 #     added: 2026-10-12
 #     reason: what makes it unstable
-tests: []
+tests:
+  - test: TestTheConnectionFallingAndComingBackDuringAStepLeavesNoHoleInTheOutputAndRepeatsNoCommand
+    issue: https://github.com/mestre-ia/mestre/issues/329
+    added: 2026-10-26
+    reason: on Linux CI the mirror push of meu-app hit context deadline exceeded (28 s) in a PR that touched no engine code
