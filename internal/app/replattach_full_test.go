@@ -225,8 +225,16 @@ func TestAnAttachmentForACharacterOfTheTowerIsCopiedIntoItsTableBeforeTheRowsTha
 	if early.Load() {
 		t.Error("the Tower had the row of the attachment before the file")
 	}
-	if b, _ := os.ReadFile(filepath.Join(w.towerDir, filepath.FromSlash(second))); string(b) != "PDF" {
-		t.Errorf("the copy = %q", b)
+	// the file shows up in the folder before its bytes are all there (or while the
+	// copy holds it, on Windows): the content is waited for, not the name
+	var copied []byte
+	w.r.waitFor("the copy of the second attachment to be complete", func() bool {
+		b, err := os.ReadFile(filepath.Join(w.towerDir, filepath.FromSlash(second)))
+		copied = b
+		return err == nil && string(b) == "PDF"
+	})
+	if string(copied) != "PDF" {
+		t.Errorf("the copy = %q", copied)
 	}
 }
 

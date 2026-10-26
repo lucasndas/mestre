@@ -266,7 +266,9 @@ func (e *Engine) towerWorktree(dir string) error {
 	if err != nil {
 		return err
 	}
-	if r, err := filepath.EvalSymlinks(root); err == nil {
+	// the root gets the same resolution as the worktree: when it does not exist
+	// yet, only its existing prefix is resolved (short names of Windows included)
+	if r, err := resolveExisting(root); err == nil {
 		root = r
 	}
 	rel, err := filepath.Rel(root, real)
