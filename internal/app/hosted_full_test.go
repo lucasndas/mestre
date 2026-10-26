@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/app"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/app"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // CA-CIDADELA-15: `mestre run` hosts the orchestration. The process of the

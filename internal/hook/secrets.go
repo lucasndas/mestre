@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // A key written into a file (docs/classes/permissoes.md#regras-e-erros, "Chave

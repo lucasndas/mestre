@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The numbers of the periodic reading (docs/github/eventos.md#intervalo-adaptativo-padrão-configurável-por-workspace).

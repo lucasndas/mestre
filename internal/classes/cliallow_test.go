@@ -3,7 +3,7 @@ package classes_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // cli.allow lists commands as typed; * matches any text, and "issue *" also

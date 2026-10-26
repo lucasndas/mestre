@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/testkit/localrig"
+	"github.com/mestre-ia/mestre/internal/testkit/localrig"
 )
 
 // `--from` takes a folder of $MESTRE_TMP: the CLI reads it, as the character,

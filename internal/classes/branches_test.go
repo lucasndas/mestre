@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // An absent git.branches is the table's branch: a class that commits (or

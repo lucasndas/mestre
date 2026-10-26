@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // Replies is the inbox.Channels of the Telegram: the answer of the Grand Master

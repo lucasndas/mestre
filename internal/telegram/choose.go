@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/blocking"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/blocking"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // ChooseAction is the button of an option of a question of the Grão-Mestre; its

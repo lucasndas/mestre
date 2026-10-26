@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // State is the state of a dependency.

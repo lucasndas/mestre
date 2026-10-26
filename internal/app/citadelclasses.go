@@ -7,10 +7,10 @@ import (
 	"runtime"
 	"sync/atomic"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
-	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/tablerules"
+	"github.com/mestre-ia/mestre/internal/protocol"
 )
 
 // CharacterDecrees gives the decrees and exceptions that apply to a character

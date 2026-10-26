@@ -3,7 +3,7 @@ package grimoires_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/grimoires"
+	"github.com/mestre-ia/mestre/internal/orchestration/grimoires"
 )
 
 // The ceiling of the workspace holds for every character that is made, also the

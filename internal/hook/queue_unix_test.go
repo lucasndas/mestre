@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/hook"
 )
 
 func mkfifo(path string) error { return syscall.Mkfifo(path, 0o600) }

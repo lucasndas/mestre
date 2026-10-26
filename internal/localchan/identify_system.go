@@ -1,7 +1,7 @@
 package localchan
 
 import (
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // SystemConfig configures NewSystemIdentifier, the identifier of the

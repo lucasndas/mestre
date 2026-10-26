@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Fake secrets are assembled at run time so the source never holds a

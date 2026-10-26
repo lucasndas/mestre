@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/decrees"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 func (w *world) setZone(zone string) {

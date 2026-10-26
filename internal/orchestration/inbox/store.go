@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // Store is the inbox_messages and outbound_messages tables of the Guild

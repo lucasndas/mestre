@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // CA-CLAUDE-04

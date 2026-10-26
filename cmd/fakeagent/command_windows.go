@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/lucasndas/mestre/internal/testkit/fakeagent"
+	"github.com/mestre-ia/mestre/internal/testkit/fakeagent"
 )
 
 // command runs line with cmd /s /c "<line>", the form that keeps quoted

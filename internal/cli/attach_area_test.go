@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/testkit/localrig"
+	"github.com/mestre-ia/mestre/internal/testkit/localrig"
 )
 
 // CA-ANEXO-06: `mestre reply --attach /etc/passwd` is refused by the CLI with

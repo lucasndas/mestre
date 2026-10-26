@@ -3,7 +3,7 @@ package cli_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/cli"
+	"github.com/mestre-ia/mestre/internal/cli"
 )
 
 // CA-CLI-GM-12 (the level of the commands of approval): a common character is

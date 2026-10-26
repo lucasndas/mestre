@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/github"
 )
 
 // epicClosers is what the epic sink tells: *epicdeps.Service.

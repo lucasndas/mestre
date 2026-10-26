@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/transport"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/transport"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 func mustKey(t *testing.T) *ecdsa.PrivateKey {

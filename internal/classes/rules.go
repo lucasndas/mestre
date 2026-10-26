@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // RulesVersion is the version of the effective-rules document. It changes

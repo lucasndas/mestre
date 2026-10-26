@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/testkit"
 )
 
 // The API of the approval on GitHub (docs/github/aprovacao-no-github.md): the

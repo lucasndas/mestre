@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // Reminder tells the author of a delegation that it is about to end and offers

@@ -18,9 +18,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Type is the kind of secret (table in docs/plataforma/cofre.md#o-que-fica-no-cofre).

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
 // State is the state of a table (docs/orquestracao/mesas.md#estados). It is

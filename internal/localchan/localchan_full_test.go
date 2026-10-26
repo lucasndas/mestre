@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/testkit"
 )
 
 // CA-LOCAL-07, on Linux and on Windows: the engine and the CLI are real, the

@@ -9,9 +9,9 @@ package fakepty
 import (
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/testkit/memio"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/testkit/memio"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Pair is one fake PTY.

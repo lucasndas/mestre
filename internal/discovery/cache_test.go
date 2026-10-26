@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/discovery"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
+	"github.com/mestre-ia/mestre/internal/discovery"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
 )
 
 var day = 24 * time.Hour

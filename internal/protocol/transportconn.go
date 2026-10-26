@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lucasndas/mestre/internal/transport"
+	"github.com/mestre-ia/mestre/internal/transport"
 )
 
 // The adapter between internal/transport (WSS with mTLS) and the Conn,

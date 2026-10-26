@@ -7,7 +7,7 @@ import (
 	"context"
 	"embed"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 //go:embed migrations/*.sql

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
 func TestSlugify(t *testing.T) {

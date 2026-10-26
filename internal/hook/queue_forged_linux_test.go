@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/hook"
 )
 
 // nextTick returns once the change time the system gives new files has moved

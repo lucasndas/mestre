@@ -1,8 +1,8 @@
 package localchan
 
 import (
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/winsvc"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/winsvc"
 )
 
 // DefaultTerminalAccess is what the engine does on the socket for each

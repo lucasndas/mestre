@@ -3,7 +3,7 @@ package classes
 import (
 	"context"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // MaxAnalysisWork is the bound of the units one decision may spend.

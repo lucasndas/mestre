@@ -12,8 +12,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Roots are the folders the classes of a workspace live in

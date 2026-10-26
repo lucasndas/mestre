@@ -3,7 +3,7 @@ package localchan_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/localchan"
 )
 
 // CA-CODEX-WIN-04

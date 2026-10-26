@@ -3,9 +3,9 @@ package basesync_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/orchestration/basesync"
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/orchestration/basesync"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
 // quiet moves the base in the mirror without telling the services: nothing

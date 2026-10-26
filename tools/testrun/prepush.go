@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // listFormat prints, for each package: its import path, its module and the

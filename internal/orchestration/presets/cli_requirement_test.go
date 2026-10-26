@@ -3,7 +3,7 @@ package presets_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/presets"
+	"github.com/mestre-ia/mestre/internal/orchestration/presets"
 )
 
 // CA-CONF-07 (the sheet half): a character with the skills of the Mestre

@@ -15,17 +15,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/hook"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/orchestration/presets"
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/sessionzero"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/presets"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/sessionzero"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 const runtimePTYVersion = "1.0.0"
@@ -58,9 +58,9 @@ func buildRuntimeBinaries(t *testing.T) {
 		b.pty = filepath.Join(b.ptyFolde, runtimePTYVersion, "mestre-pty"+exe)
 		b.mestre, b.fakeagent = filepath.Join(dir, "mestre"+exe), filepath.Join(dir, "claude"+exe)
 		for _, a := range [][]string{
-			{"-o", b.pty, "-ldflags", "-X main.version=" + runtimePTYVersion, "github.com/lucasndas/mestre/cmd/mestre-pty"},
-			{"-o", b.mestre, "github.com/lucasndas/mestre/cmd/mestre"},
-			{"-o", b.fakeagent, "github.com/lucasndas/mestre/cmd/fakeagent"},
+			{"-o", b.pty, "-ldflags", "-X main.version=" + runtimePTYVersion, "github.com/mestre-ia/mestre/cmd/mestre-pty"},
+			{"-o", b.mestre, "github.com/mestre-ia/mestre/cmd/mestre"},
+			{"-o", b.fakeagent, "github.com/mestre-ia/mestre/cmd/fakeagent"},
 		} {
 			if out, err := exec.Command("go", append([]string{"build"}, a...)...).CombinedOutput(); err != nil {
 				b.err = fmt.Errorf("go build %v: %v\n%s", a, err, out)

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/machinesheet"
-	"github.com/lucasndas/mestre/internal/orchestration/presets"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/machinesheet"
+	"github.com/mestre-ia/mestre/internal/orchestration/presets"
 )
 
 // ErrCeiling: the sheet, with its class, is above the ceiling of the workspace

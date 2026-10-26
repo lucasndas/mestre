@@ -9,11 +9,11 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/store/guild"
-	"github.com/lucasndas/mestre/internal/store/machine"
-	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store/guild"
+	"github.com/mestre-ia/mestre/internal/store/machine"
+	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
 )
 
 type opener func(ctx context.Context, path string) (*store.DB, error)

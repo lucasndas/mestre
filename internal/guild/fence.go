@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The lease of the lock (docs/guilda/trava-no-github.md#aluguel).

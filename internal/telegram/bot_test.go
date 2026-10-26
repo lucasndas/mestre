@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/telegram"
-	"github.com/lucasndas/mestre/internal/testkit/faketelegram"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/telegram"
+	"github.com/mestre-ia/mestre/internal/testkit/faketelegram"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // CA-BOT-01

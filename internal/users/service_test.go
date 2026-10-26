@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 func TestThereIsOnlyOneOwnerAndTheOwnerCannotSuspendOrRemoveSelf(t *testing.T) {

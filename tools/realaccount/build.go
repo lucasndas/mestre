@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/lucasndas/mestre/internal/realaccount"
+	"github.com/mestre-ia/mestre/internal/realaccount"
 )
 
 // built is what the tool builds for the tests.

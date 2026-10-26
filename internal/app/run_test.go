@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/app"
-	"github.com/lucasndas/mestre/internal/testkit/fakenet"
-	"github.com/lucasndas/mestre/internal/testkit/sheetfake"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/app"
+	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
+	"github.com/mestre-ia/mestre/internal/testkit/sheetfake"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // An engine whose period fails returns the error: the goroutines it started

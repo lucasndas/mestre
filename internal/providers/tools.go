@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // ToolKind is the provider-independent type of a tool (tool.kind).

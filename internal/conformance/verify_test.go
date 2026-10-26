@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/conformance"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/conformance"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // transcript is a recorded answer of testdata/transcripts: the answers of

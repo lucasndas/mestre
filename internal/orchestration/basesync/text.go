@@ -3,7 +3,7 @@ package basesync
 import (
 	"fmt"
 
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 )
 
 // instructions is what the engine tells the Dev of the step sync

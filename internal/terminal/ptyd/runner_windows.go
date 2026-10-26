@@ -12,7 +12,7 @@ import (
 	"github.com/aymanbagabas/go-pty"
 	"golang.org/x/sys/windows"
 
-	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
+	"github.com/mestre-ia/mestre/internal/winsvc/logonsweep"
 )
 
 // sysAgent is the Windows part of an agent: the Job Object of the terminal.

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/rituals"
+	"github.com/mestre-ia/mestre/internal/orchestration/rituals"
 )
 
 // CA-RIT-07: the name of a ritual is one line of printable characters, 1 to 64,

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lucasndas/mestre/internal/lockdown"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/lockdown"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // LockAction is the button that confirms /travar.

@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/attachments"
-	"github.com/lucasndas/mestre/internal/machinesheet"
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/attachments"
+	"github.com/mestre-ia/mestre/internal/machinesheet"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The transcription on another machine of the Guild

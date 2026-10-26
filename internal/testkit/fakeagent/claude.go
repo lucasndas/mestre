@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // What the fake agent does only as Claude Code

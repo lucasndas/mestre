@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
-	"github.com/lucasndas/mestre/internal/sessionzero"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/sessionzero"
 )
 
 const projectAgents = "# Meu App\n\nConvenções do projeto, escritas à mão.\r\n\tcom bytes estranhos \xc3\xa9\n"

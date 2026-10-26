@@ -5,7 +5,7 @@ package classes_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // With the real git state, a repository that tracks a file named "-" does

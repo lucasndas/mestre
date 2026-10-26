@@ -16,8 +16,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/vault"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/vault"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Default validity of the Guild certificates (docs/arquitetura/seguranca.md#tls-e-ca-interna).

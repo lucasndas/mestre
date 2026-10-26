@@ -31,7 +31,7 @@ $GitFile    = 'Git-2.56.0.2-64-bit.exe'
 $GitSha256  = '52188f917b378f00c70ec136bcf090005f30d44fbc4eba0bce759cc6592d60f6'
 $GoFile     = 'go1.27.2.windows-amd64.msi'
 $GoSha256   = 'dc673c9207a83f95031549fafe72cc0b4c4554a1c16b373d875e90cf8d995ed9'
-$Repo       = 'https://github.com/lucasndas/mestre.git'
+$Repo       = 'https://github.com/mestre-ia/mestre.git'
 # Each spike round gets its own branch, created from main (-Branch, -Prompt).
 
 function Get-Checked([string]$Url, [string]$Path, [string]$Sha256) {

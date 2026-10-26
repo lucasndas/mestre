@@ -7,7 +7,7 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/lucasndas/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/logging"
 )
 
 // Main is `mestre run [--instance <inst>] [--dir <pasta>]`: the engine of the

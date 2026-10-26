@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/testkit/memio"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/testkit/memio"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 func TestReadDeadlineFollowsFakeClock(t *testing.T) {

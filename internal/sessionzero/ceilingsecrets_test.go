@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/sessionzero"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/sessionzero"
 )
 
 // Part of CA-TETO-07: the files.deny of the default ceiling are the globs of

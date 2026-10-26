@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
 // mestreDir is the folder of the Mestre in the project. When the users

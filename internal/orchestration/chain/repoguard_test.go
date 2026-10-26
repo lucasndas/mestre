@@ -3,8 +3,8 @@ package chain_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 )
 
 func TestARepositoryIsTheSameOnlyByItsAsciiNameInAnyCase(t *testing.T) {

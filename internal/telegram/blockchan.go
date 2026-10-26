@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/blocking"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/blocking"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // BlockDetailsAction is the button "Ver detalhes" of a message that blocks; its

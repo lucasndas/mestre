@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Timing of the search (docs/conectividade/descoberta.md#ordem-de-tentativa).

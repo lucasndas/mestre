@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/sessionzero"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/sessionzero"
 )
 
 // Stop ends a character: the normal exit of the provider, and after 30 s the

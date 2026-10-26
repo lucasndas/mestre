@@ -17,14 +17,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/store/machine"
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
-	"github.com/lucasndas/mestre/internal/testkit"
-	"github.com/lucasndas/mestre/internal/testkit/leakcheck"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store/machine"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/testkit/leakcheck"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The full suite of the local channel starts real processes: the mestre-pty,
@@ -84,9 +84,9 @@ func TestMain(m *testing.M) {
 	}
 	useBuilds(dir)
 	for _, b := range [][]string{
-		{"-o", builds.pty, "-ldflags", "-X main.version=" + ptyVersion, "github.com/lucasndas/mestre/cmd/mestre-pty"},
-		{"-o", builds.mestre, "github.com/lucasndas/mestre/cmd/mestre"},
-		{"-o", builds.fakeagent, "github.com/lucasndas/mestre/cmd/fakeagent"},
+		{"-o", builds.pty, "-ldflags", "-X main.version=" + ptyVersion, "github.com/mestre-ia/mestre/cmd/mestre-pty"},
+		{"-o", builds.mestre, "github.com/mestre-ia/mestre/cmd/mestre"},
+		{"-o", builds.fakeagent, "github.com/mestre-ia/mestre/cmd/fakeagent"},
 	} {
 		if out, err := exec.Command("go", append([]string{"build"}, b...)...).CombinedOutput(); err != nil {
 			fmt.Fprintf(os.Stderr, "go build %v: %v\n%s", b, err, out)

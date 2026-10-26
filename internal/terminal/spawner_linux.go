@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/lucasndas/mestre/internal/privdir"
+	"github.com/mestre-ia/mestre/internal/privdir"
 )
 
 // Spawn creates the socket (mode 0600, folder 0700), writes the secret to a

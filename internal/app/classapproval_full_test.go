@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/app"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/app"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // CA-CLASSES-06: `mestre run` with the chain of approval. The Grand Master

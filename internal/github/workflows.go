@@ -5,7 +5,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // The errors of the push of the CI.

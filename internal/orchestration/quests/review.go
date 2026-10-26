@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/orchestration/scrolls"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/scrolls"
 )
 
 // ReviewScrollName is the fixed name of the review scroll of a quest.

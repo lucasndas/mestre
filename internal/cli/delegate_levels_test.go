@@ -3,7 +3,7 @@ package cli_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/cli"
+	"github.com/mestre-ia/mestre/internal/cli"
 )
 
 // CA-CLI-GM-12 (`approval delegate`): a common character and the Mestre da mesa

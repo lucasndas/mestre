@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Defaults of the refresh (docs/guilda/ficha-da-maquina.md#atualização-sozinha).

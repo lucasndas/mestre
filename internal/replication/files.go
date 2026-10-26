@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // The files of the Citadel (docs/guilda/replicacao.md#arquivos-e-espelhos):

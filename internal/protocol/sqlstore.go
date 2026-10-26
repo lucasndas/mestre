@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // SQLStore keeps the outbox and the processed commands in the tables of the

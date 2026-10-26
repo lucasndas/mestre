@@ -17,7 +17,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
 )
 
 // EnvTestSuite names the suite being run; set by tools/testrun.

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/discovery"
+	"github.com/mestre-ia/mestre/internal/discovery"
 )
 
 func TestTheBroadcastAddressOfEachInterfaceComesFromItsMask(t *testing.T) {

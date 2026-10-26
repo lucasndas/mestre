@@ -11,7 +11,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // decodeNumbers decodes a JSON object keeping the text of the numbers.

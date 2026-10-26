@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // ButtonTTL is how long a button the bot gave out stays valid.

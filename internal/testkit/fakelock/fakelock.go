@@ -10,7 +10,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/guild"
 )
 
 // ErrDown is the error of a lock that cannot be reached.

@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
-	"github.com/lucasndas/mestre/internal/testkit/delegated"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/internal/testkit/delegated"
 )
 
 // readPIDs reads the PIDs the tree helper wrote, one per line.

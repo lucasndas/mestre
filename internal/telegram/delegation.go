@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/decrees"
-	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/orchestration/tablerules"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // The buttons of the delegation (docs/aprovacoes/delegacao.md).

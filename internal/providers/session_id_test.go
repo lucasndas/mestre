@@ -3,7 +3,7 @@ package providers_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // A session id that comes from a hook payload travels as an argument of the

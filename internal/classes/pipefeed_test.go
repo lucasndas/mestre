@@ -3,7 +3,7 @@ package classes_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // Fixed rules hidden in text the analysis did not read

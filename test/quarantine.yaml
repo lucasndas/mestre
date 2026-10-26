@@ -5,7 +5,7 @@
 #
 # tests:
 #   - test: TestExample
-#     issue: https://github.com/lucasndas/mestre/issues/123
+#     issue: https://github.com/mestre-ia/mestre/issues/123
 #     added: 2026-10-12
 #     reason: what makes it unstable
 tests: []

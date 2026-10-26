@@ -3,8 +3,8 @@ package chain
 import (
 	"context"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
 // AskRequest is `mestre approval ask`: the Grão-Mestre takes a request that waits

@@ -8,8 +8,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/launcher"
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/launcher"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // A kill that names the mestre-pty by PID and start identity, and the sessions

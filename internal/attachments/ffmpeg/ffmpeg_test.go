@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/attachments/ffmpeg"
+	"github.com/mestre-ia/mestre/internal/attachments/ffmpeg"
 )
 
 // The fast suite never starts a process.

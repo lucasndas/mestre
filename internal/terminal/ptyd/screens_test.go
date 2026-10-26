@@ -7,12 +7,12 @@ import (
 	"testing"
 	"testing/synctest"
 
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/terminal/ptyd"
-	"github.com/lucasndas/mestre/internal/testkit"
-	"github.com/lucasndas/mestre/internal/testkit/fakeagent"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal/ptyd"
+	"github.com/mestre-ia/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/testkit/fakeagent"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // startScreen runs the fake agent of a provider until it stops printing

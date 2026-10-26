@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/privdir"
+	"github.com/mestre-ia/mestre/internal/privdir"
 )
 
 // The window of the transfer in parts

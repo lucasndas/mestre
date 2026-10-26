@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // ClassName is the temporary class of the run, invisible to the users.

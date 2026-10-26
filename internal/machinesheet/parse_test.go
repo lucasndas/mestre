@@ -6,8 +6,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/machinesheet"
-	"github.com/lucasndas/mestre/internal/testkit/sheetfake"
+	"github.com/mestre-ia/mestre/internal/machinesheet"
+	"github.com/mestre-ia/mestre/internal/testkit/sheetfake"
 )
 
 func TestTheVersionOfTheSystemIsReadFromTheTextTheSystemGives(t *testing.T) {

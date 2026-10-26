@@ -3,9 +3,9 @@ package approvals
 import (
 	"fmt"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 )
 
 // MergeOrder is a merge the Grão-Mestre wants to make (`mestre gh merge`): the PR,

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // nopEpoch, nopCerts and nopStore are the least a Config needs for a test of

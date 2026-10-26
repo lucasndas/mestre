@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // Env is what the decision knows about the character besides its effective

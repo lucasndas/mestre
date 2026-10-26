@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 )
 
 // CA-CLI-GM-13: with two open tables, `table status --json` has for each the title

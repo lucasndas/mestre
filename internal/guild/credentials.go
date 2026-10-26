@@ -6,8 +6,8 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/transport"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/transport"
 )
 
 // Credentials is the transport.CredentialChecker of the Guild, consulted on

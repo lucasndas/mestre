@@ -53,7 +53,7 @@ Aceita, 2026-10-12.
 - **Como chamar:** o projeto se descreve como **"código disponível"**, nunca como "open source".
 - **Uso comercial:** só com autorização do autor.
 - **Contribuições externas:** o projeto **não aceita contribuições externas de código**; pull requests de terceiros são fechados com um agradecimento e a indicação de abrir uma issue. Issues (erros, ideias, dúvidas) são bem-vindas. Não há acordo de contribuição (CLA).
-- **Repositório:** https://github.com/lucasndas/mestre (público).
+- **Repositório:** https://github.com/mestre-ia/mestre (público).
 
 ## Consequências
 

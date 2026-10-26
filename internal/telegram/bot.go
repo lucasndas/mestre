@@ -13,11 +13,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/attachments"
-	"github.com/lucasndas/mestre/internal/glossary"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/users"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/attachments"
+	"github.com/mestre-ia/mestre/internal/glossary"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/users"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Gate says whether this Citadel may call the Telegram: only the Citadel of the

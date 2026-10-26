@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // Changes is what the branch of a table did since a commit

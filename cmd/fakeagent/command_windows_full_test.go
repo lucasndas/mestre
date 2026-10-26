@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/testkit/fakeagent"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/testkit/fakeagent"
 )
 
 // CA-DUBLES-13: the double runs an Antigravity hook as the real agy does,

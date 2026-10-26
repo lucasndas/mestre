@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/launcher"
+	"github.com/mestre-ia/mestre/internal/launcher"
 )
 
 func TestValidateVersion(t *testing.T) {

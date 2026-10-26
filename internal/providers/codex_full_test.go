@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/store"
-	machinedb "github.com/lucasndas/mestre/internal/store/machine"
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/testkit"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/store"
+	machinedb "github.com/mestre-ia/mestre/internal/store/machine"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // recorder is the character state, the Mestre da mesa and the checklist of
@@ -85,8 +85,8 @@ func buildCodexBinaries(t *testing.T) (pty, fake string) {
 	pty = filepath.Join(dir, "pty", "1.0.0", "mestre-pty"+exe)
 	fake = filepath.Join(dir, "codex"+exe) // the fake agent called codex is the fake Codex
 	for _, b := range [][]string{
-		{"-o", pty, "-ldflags", "-X main.version=1.0.0", "github.com/lucasndas/mestre/cmd/mestre-pty"},
-		{"-o", fake, "github.com/lucasndas/mestre/cmd/fakeagent"},
+		{"-o", pty, "-ldflags", "-X main.version=1.0.0", "github.com/mestre-ia/mestre/cmd/mestre-pty"},
+		{"-o", fake, "github.com/mestre-ia/mestre/cmd/fakeagent"},
 	} {
 		if out, err := exec.Command("go", append([]string{"build"}, b...)...).CombinedOutput(); err != nil {
 			t.Fatalf("go build %v: %v\n%s", b, err, out)

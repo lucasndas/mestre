@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 )
 
 // Part of CA-APROV-FLUXO-01: the impression of a target does not depend on how

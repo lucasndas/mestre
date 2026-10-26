@@ -21,8 +21,8 @@ import (
 	"net"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/testkit/fakenet"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
 )
 
 // Wire kinds of the framing over the fake byte stream.

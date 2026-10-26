@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // CA-LOCAL-17: the signs of life of a long command (`ask`: queued, delivered,

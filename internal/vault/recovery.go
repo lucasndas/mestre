@@ -17,7 +17,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/logging"
 )
 
 // RecoveryKey is the seed of the X25519 key pair that opens the recovery

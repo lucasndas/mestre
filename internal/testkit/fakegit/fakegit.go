@@ -16,7 +16,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // Errors returned by the fake: the sentinels of gitx, so errors.Is works the

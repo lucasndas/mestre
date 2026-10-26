@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/lucasndas/mestre/internal/glossary"
+	"github.com/mestre-ia/mestre/internal/glossary"
 )
 
 func main() {

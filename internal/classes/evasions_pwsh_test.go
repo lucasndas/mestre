@@ -3,7 +3,7 @@ package classes_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // The PowerShell and Windows forms that hid a command or a move of the home of

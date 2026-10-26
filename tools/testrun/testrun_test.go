@@ -13,10 +13,10 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
-const pkg = "github.com/lucasndas/mestre/internal/sample"
+const pkg = "github.com/mestre-ia/mestre/internal/sample"
 
 var today = time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
 
@@ -190,11 +190,11 @@ func TestQuarantineSkipsAndExpiredFailsFull(t *testing.T) {
 	t.Parallel()
 	fsys := fstest.MapFS{QuarantinePath: {Data: []byte(`tests:
   - test: TestRecent
-    issue: https://github.com/lucasndas/mestre/issues/1
+    issue: https://github.com/mestre-ia/mestre/issues/1
     added: 2026-10-01
     reason: races on slow disks
   - test: TestOld
-    issue: https://github.com/lucasndas/mestre/issues/2
+    issue: https://github.com/mestre-ia/mestre/issues/2
     added: 2026-09-20
     reason: flaky pairing
 `)}}
@@ -211,11 +211,11 @@ func TestQuarantineSkipsAndExpiredFailsFull(t *testing.T) {
 		t.Fatalf("go test call = %v", main)
 	}
 	text := out.String()
-	if !strings.Contains(text, "TestRecent (https://github.com/lucasndas/mestre/issues/1") ||
-		!strings.Contains(text, "TestOld (https://github.com/lucasndas/mestre/issues/2, since 2026-09-20: flaky pairing) EXPIRED") {
+	if !strings.Contains(text, "TestRecent (https://github.com/mestre-ia/mestre/issues/1") ||
+		!strings.Contains(text, "TestOld (https://github.com/mestre-ia/mestre/issues/2, since 2026-09-20: flaky pairing) EXPIRED") {
 		t.Fatalf("skipped list:\n%s", text)
 	}
-	if strings.Contains(text, "TestRecent (https://github.com/lucasndas/mestre/issues/1, since 2026-10-01: races on slow disks) EXPIRED") {
+	if strings.Contains(text, "TestRecent (https://github.com/mestre-ia/mestre/issues/1, since 2026-10-01: races on slow disks) EXPIRED") {
 		t.Fatalf("recent entry marked expired:\n%s", text)
 	}
 	if code == 0 || !strings.Contains(text, "FAIL quarantine has expired entries") {

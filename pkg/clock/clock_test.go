@@ -8,7 +8,7 @@ import (
 	"time"
 	_ "time/tzdata" // America/Sao_Paulo without depending on the host
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 var epoch = time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)

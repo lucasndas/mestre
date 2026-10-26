@@ -59,7 +59,7 @@ linters:
             - "!**/cmd/fakeagent/**"
             - "!**/tools/**"
           deny:
-            - pkg: github.com/lucasndas/mestre/internal/testkit
+            - pkg: github.com/mestre-ia/mestre/internal/testkit
               desc: test doubles are for tests only (docs/qualidade/dubles.md)
         guardian-isolated:
           files:
@@ -68,8 +68,8 @@ linters:
           list-mode: strict
           allow:
             - $gostd
-            - github.com/lucasndas/mestre/pkg/clock
-            - github.com/lucasndas/mestre/guardian
+            - github.com/mestre-ia/mestre/pkg/clock
+            - github.com/mestre-ia/mestre/guardian
             - golang.org/x/sys
             - golang.org/x/crypto
             - github.com/kardianos/service

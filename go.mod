@@ -1,4 +1,4 @@
-module github.com/lucasndas/mestre
+module github.com/mestre-ia/mestre
 
 go 1.25.0
 

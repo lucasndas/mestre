@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // GuildExcludeAction is the Excluir and the Desfazer exclusão of /guilda; its

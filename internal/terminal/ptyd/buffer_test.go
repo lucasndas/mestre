@@ -7,7 +7,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/terminal/ptyd"
+	"github.com/mestre-ia/mestre/internal/terminal/ptyd"
 )
 
 // pattern returns n bytes whose value depends on their offset, so a replay

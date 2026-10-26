@@ -3,7 +3,7 @@ package providers_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // The probes of the verification rounds of the M3 audit against the start

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // The line of the Codex hooks, run by the shell Codex runs it with ($SHELL

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/quests"
+	"github.com/mestre-ia/mestre/internal/orchestration/quests"
 )
 
 // badNames are names that somebody chose to break a line, forge the header of

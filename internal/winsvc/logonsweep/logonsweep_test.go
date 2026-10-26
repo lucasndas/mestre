@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
+	"github.com/mestre-ia/mestre/internal/winsvc/logonsweep"
 )
 
 // Part of CA-TERM-05 (what the sweep takes: the matching logic; the real sweep of a

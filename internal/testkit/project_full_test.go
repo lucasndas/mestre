@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/testkit"
 )
 
 // CA-TREINO-05

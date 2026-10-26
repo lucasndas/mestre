@@ -3,7 +3,7 @@ package workspaces_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
 // Part of CA-REPL-17: only the .mestre/ of the main clone of each workspace

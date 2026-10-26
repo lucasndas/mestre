@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
 // The fixed Apps of every repository (docs/github/identidades-e-apps.md).

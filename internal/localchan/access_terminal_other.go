@@ -2,7 +2,7 @@
 
 package localchan
 
-import "github.com/lucasndas/mestre/internal/terminal"
+import "github.com/mestre-ia/mestre/internal/terminal"
 
 // DefaultTerminalAccess is nil outside Windows: the group and the mode of
 // the socket already cover every terminal (DefaultAccess).

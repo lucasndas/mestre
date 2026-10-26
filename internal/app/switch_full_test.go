@@ -18,12 +18,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/app"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/testkit/clocksock"
-	"github.com/lucasndas/mestre/internal/testkit/leakcheck"
-	"github.com/lucasndas/mestre/internal/transport"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/app"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/testkit/clocksock"
+	"github.com/mestre-ia/mestre/internal/testkit/leakcheck"
+	"github.com/mestre-ia/mestre/internal/transport"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The change of Citadel in the full suite (docs/qualidade/testes.md#troca-de-cidadela-e-replicação-na-completa):

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/testkit/localrig"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/testkit/localrig"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // lateReader is a PeerSource that takes time to read the peer, as the real

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 type recordingAccess struct {

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/testkit"
-	"github.com/lucasndas/mestre/internal/testkit/fakepty"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/testkit/fakepty"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // MemLauncher is the in-memory launcher of the fast suite: "start a

@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/localchan"
 )
 
 // bindStale binds a stream socket to path and leaves it unlistening: the file

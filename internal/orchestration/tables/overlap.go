@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/localchan"
 )
 
 // The reach of the reading of `table overlap`: how many commits of the base it looks

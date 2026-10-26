@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // The groups of medio (docs/orquestracao/cadeia-de-aprovacao.md#condições-da-mesa):

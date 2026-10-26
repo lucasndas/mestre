@@ -15,7 +15,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/lucasndas/mestre/internal/testkit/fakegit"
+	"github.com/mestre-ia/mestre/internal/testkit/fakegit"
 )
 
 // Training projects (docs/qualidade/projetos-de-treino.md). The models live

@@ -6,9 +6,9 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/cli"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/cli"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/protocol"
 )
 
 // forwarder is the Forwarder of the local channel: on the Citadel the call is

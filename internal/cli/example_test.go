@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/cli"
+	"github.com/mestre-ia/mestre/internal/cli"
 )
 
 // The example of `ask` in the help must not suggest a time limit above the

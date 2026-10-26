@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/testkit/localrig"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/testkit/localrig"
 )
 
 // idRig is a ProcIdentifier over a fake /proc, as the engine builds one.

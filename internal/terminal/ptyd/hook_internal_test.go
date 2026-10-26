@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
 )
 
 // Part of CA-TERM-18: the output of a hook comes back cut at 64 KiB, and a hook

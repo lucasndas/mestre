@@ -7,8 +7,8 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/testkit/countfs"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/testkit/countfs"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // run checks a tree of Go files and returns the issues as text.

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 )
 
 func TestParseCriteriaReadsOnlyTheItemsOfTheSectionInOrder(t *testing.T) {

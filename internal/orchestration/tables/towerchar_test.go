@@ -1,8 +1,8 @@
 package tables_test
 
 import (
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 )
 
 // character puts a character of the table, alive, on the Tower: the one that

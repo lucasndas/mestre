@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // DownNotice warns the Owner once when the GitHub goes out and once when it is

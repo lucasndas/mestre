@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/protocol"
 )
 
 // The routes of the entry, on the engine's port, outside mTLS

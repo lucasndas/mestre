@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/terminal/ptyd"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/terminal/ptyd"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Runner is the ptyd.Runner of the fast suite: "start the agent" creates a

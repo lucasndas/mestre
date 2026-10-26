@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/ghcli"
-	"github.com/lucasndas/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/ghcli"
+	"github.com/mestre-ia/mestre/internal/github"
 )
 
 type creatorLog struct {

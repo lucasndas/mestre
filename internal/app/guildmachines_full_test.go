@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Part of the /guilda listing: GuildMachines says which machines are online. The

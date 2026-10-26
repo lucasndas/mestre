@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Git is the in-memory gitx.Git: a registry of repositories by directory.

@@ -5,7 +5,7 @@ package app
 import (
 	"errors"
 
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // launcherSpawner: the client of the launcher service of Windows arrives with

@@ -19,8 +19,8 @@ import (
 
 	"modernc.org/sqlite" // registers the "sqlite" database/sql driver
 
-	"github.com/lucasndas/mestre/internal/privdir"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/privdir"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Defaults from docs/arquitetura/persistencia.md#banco-configuração.

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/machinesheet"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/machinesheet"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // CA-CONF-06
