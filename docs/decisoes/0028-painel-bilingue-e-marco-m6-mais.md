@@ -20,7 +20,7 @@ O painel é a primeira interface que o usuário vê em um navegador, e os textos
 
 Opção 2.
 
-1. **No M6** o painel é bilíngue (pt-BR e en) com `react-i18next`. Há um catálogo por idioma e uma verificação **da suíte rápida** de que os dois têm as mesmas chaves. O [glossário](../produto/glossario.md) ganha as colunas "No mundo real" e inglês (feito na unidade do design e das telas).
+1. **No M6** o painel é bilíngue (pt-BR e en) com `react-i18next`. Há um catálogo por idioma e uma verificação **da suíte rápida** de que os dois têm as mesmas chaves. Querem-se também explicações "no mundo real" para os termos de RPG ([glossário](../produto/glossario.md)); a forma e o modelo de dados delas (e qualquer mudança no formato do glossário) ficam para o trabalho de design da unidade 1C, ainda não decidido.
 2. **Novo marco M6+**, como o M4+ e o M5+: sem documentos de funcionalidade, auditado antes do M7 ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#marcos)). Ele:
    - converte os motivos de recusa do motor em **código e parâmetros** (o texto sai do cliente);
    - traduz as mensagens humanas do Telegram e da CLI;
