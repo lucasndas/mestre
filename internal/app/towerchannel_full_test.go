@@ -242,7 +242,13 @@ func TestACharacterTheTowerDoesNotHaveIsInterruptedWhenItConnects(t *testing.T) 
 	x.r.waitFor("the real character idle", func() bool { return x.state(t, real.ID) == characters.Idle })
 
 	x.a.e.srvp.Load().CloseAll(protocol.CloseShuttingDown, "the test cuts the connection")
-	x.r.waitFor("the ghost to be interrupted by the resync", func() bool { return x.state(t, ghost.ID) == characters.Interrupted })
+	// The resync interrupts the ghost, and the resumption that follows it ends an
+	// ephemeral character with no task under way (Service.ResumeMachine): the
+	// interrupted state is a moment a poll may miss, so both are the resync's.
+	x.r.waitFor("the ghost to be interrupted by the resync", func() bool {
+		st := x.state(t, ghost.ID)
+		return st == characters.Interrupted || st == characters.Stopped
+	})
 	if got := x.state(t, real.ID); got != characters.Idle {
 		t.Errorf("the character the Tower has is %s after the resync; want idle", got)
 	}
