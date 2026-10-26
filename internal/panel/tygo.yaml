@@ -11,3 +11,4 @@ packages:
       - types.go
       - errors.go
       - ws.go
+      - types_admin.go

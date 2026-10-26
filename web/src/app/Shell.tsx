@@ -5,9 +5,10 @@ import { Button as AriaButton, Menu, MenuItem, MenuTrigger, Popover } from "reac
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import { type SocketState, UiSocket } from "../lib/ws";
+import { TransferBanner } from "../screens/admin/Transfer";
 import { Brand } from "./AuthLayout";
 import { LanguageSwitcher } from "./LanguageSwitcher";
-import { useMe } from "./session";
+import { useCan, useMe } from "./session";
 
 /** The band that tells the Citadel is out of reach; the state is reloaded when it is back. */
 function useConnection(): SocketState {
@@ -44,7 +45,13 @@ export function ReconnectingBand({ state }: { state: SocketState }) {
   );
 }
 
-function NavLink({ to, children }: { to: "/" | "/sessoes" | "/senha"; children: string }) {
+function NavLink({
+  to,
+  children,
+}: {
+  to: "/" | "/sessoes" | "/senha" | "/usuarios" | "/segredos" | "/auditoria" | "/github";
+  children: string;
+}) {
   return (
     <Link
       to={to}
@@ -59,6 +66,10 @@ function NavLink({ to, children }: { to: "/" | "/sessoes" | "/senha"; children: 
 
 function Nav() {
   const { t } = useTranslation("shell");
+  const canGitHub = useCan("connect_own_github");
+  const canUsers = useCan("manage_users");
+  const canSecrets = useCan("bases_vault_policy");
+  const canAudit = useCan("activate_classes");
   return (
     <nav
       aria-label={t("nav.main")}
@@ -67,6 +78,10 @@ function Nav() {
       <NavLink to="/">{t("nav.overview")}</NavLink>
       <NavLink to="/sessoes">{t("nav.sessions")}</NavLink>
       <NavLink to="/senha">{t("nav.password")}</NavLink>
+      {canGitHub ? <NavLink to="/github">{t("nav.github")}</NavLink> : null}
+      {canUsers ? <NavLink to="/usuarios">{t("nav.users")}</NavLink> : null}
+      {canSecrets ? <NavLink to="/segredos">{t("nav.secrets")}</NavLink> : null}
+      {canAudit ? <NavLink to="/auditoria">{t("nav.audit")}</NavLink> : null}
     </nav>
   );
 }
@@ -140,6 +155,7 @@ export function Shell() {
       <div className="md:col-span-2">
         <TopBar />
         <ReconnectingBand state={state} />
+        <TransferBanner />
       </div>
       <Nav />
       <main id="content" className="min-w-0 px-5 py-8 md:px-10">

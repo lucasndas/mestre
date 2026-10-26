@@ -32,3 +32,27 @@ test("the Owner creates the Guild, signs out and signs in again", async ({ page 
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByRole("heading", { name: "Sua Guilda está pronta" })).toBeVisible();
 });
+
+// The administration step of the smoke: the Owner registers a user (with the PIN, as
+// the server demands) and sees the code of first access, which shows up once.
+test("the Owner registers a user and sees the code of first access", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Nome de login").fill("maria");
+  await page.getByLabel("Senha").fill("uma senha bem longa");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.getByRole("link", { name: "Usuários" }).click();
+  await expect(page.getByRole("heading", { name: "Usuários", level: 1 })).toBeVisible();
+  await page.getByRole("button", { name: "Cadastrar usuário" }).click();
+  await page.getByLabel("Nome", { exact: true }).fill("Ana Lima");
+  await page.getByRole("button", { name: "Cadastrar usuário" }).click();
+  await page.getByLabel("PIN").fill("123456");
+  await page.getByRole("button", { name: "Cadastrar usuário" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Código de primeiro acesso de Ana Lima" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("shown-once")).toHaveText(/^[A-Z0-9]{8,}$/);
+  await expect(page.getByText("Ana Lima").first()).toBeVisible();
+  // the code is shown once: after it is written down, it is gone
+  await page.getByRole("button", { name: "Já anotei" }).click();
+  await expect(page.getByTestId("shown-once")).toHaveCount(0);
+});

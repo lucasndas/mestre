@@ -35,6 +35,7 @@ Escolhida pelo Dono em 2026-10-26, entre três propostas vistas em telas reais (
 - Quando o servidor recusa (nível, PIN, limite), a tela diz **quem recusou e por quê**, no idioma do usuário, e nada muda por baixo: a interface só reflete o estado depois da resposta, nunca antes.
 - Ações que se desfazem oferecem "Desfazer" no lugar do aviso de sucesso; as que não se desfazem (encerrar sessão de outro aparelho, apagar) dizem isso antes de executar.
 - **PIN:** o campo aparece **depois** do botão da ação sensível e vai na própria requisição; não há "lembrar PIN" ([PIN em ações sensíveis](login.md#pin-em-ações-sensíveis)). O componente é `SensitiveButton`.
+- **Mostrado uma vez** (código de acesso, chave de recuperação): o componente `ShownOnce` mostra o valor grande, com "Copiar" e o aviso de que não volta; some quando a pessoa diz que anotou, e nada o guarda (nem o cache de consultas). Valores de segredos não têm tela: a lista mostra só nome, tipo, impressão, datas e metadados.
 
 ## Reconexão
 
@@ -54,7 +55,7 @@ Quando o canal `/ws/ui` cai, uma faixa âmbar "Reconectando à Cidadela…" fica
 
 ## Acessibilidade e movimento
 
-- Tudo se usa só com o teclado, com foco visível; componentes interativos vêm de `react-aria-components`.
+- Tudo se usa só com o teclado, com foco visível; componentes interativos vêm de `react-aria-components`; uma escolha simples numa lista (filtro de quem, de workspace) usa o `select` do navegador, que o teclado e o leitor de tela já tratam bem. Códigos e chaves usam a fonte monoespaçada do sistema.
 - Contraste de texto de pelo menos 4,5:1 (3:1 para texto grande); a cor nunca é a única informação.
 - Alvos de toque de pelo menos 44 px. Movimento curto e só para dar retorno; `prefers-reduced-motion` o desliga.
 - Faixas e erros usam `role="alert"` ou `role="status"` para o leitor de tela.

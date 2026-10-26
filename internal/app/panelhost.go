@@ -18,6 +18,14 @@ type PanelSource interface {
 	PanelPieces() (*users.Service, users.Alerts)
 }
 
+// PanelAdminSource is what an IntegrationRun may also be, for the screens of the
+// administration: the device flow of the personal GitHub credentials ("Conectar
+// GitHub") and the vault of the period (the screen of the secrets). Either may be
+// nil: its routes then answer that they are not available.
+type PanelAdminSource interface {
+	PanelAdmin() (panel.PersonalGitHub, panel.SecretVault)
+}
+
 // mountPanel puts the panel on the engine port, on every path no other route
 // has: the machine always answers there, and enginePlacement decides what
 // (docs/painel/login.md#acesso-por-https).
@@ -42,7 +50,11 @@ func (e *Engine) openPanel(ctx context.Context, db *store.DB, integ IntegrationR
 		return func() {}
 	}
 	svc, alerts := src.PanelPieces()
-	p, err := panel.New(panel.Options{DB: db, Clock: e.clk, Users: svc, Alerts: alerts, Assets: assets, Machine: e.id.MachineID, Logger: e.log})
+	opts := panel.Options{DB: db, Clock: e.clk, Users: svc, Alerts: alerts, Assets: assets, Machine: e.id.MachineID, Logger: e.log}
+	if adm, ok := integ.(PanelAdminSource); ok {
+		opts.GitHub, opts.Vault = adm.PanelAdmin()
+	}
+	p, err := panel.New(opts)
 	if err != nil {
 		e.log.Error("app: the panel could not be made; this period has none", "err", err)
 		return func() {}

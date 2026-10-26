@@ -32,6 +32,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/orchestration/tablerules"
 	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/sessionzero"
 	"github.com/mestre-ia/mestre/internal/telegram"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -155,6 +156,20 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 
 // PanelPieces implements PanelSource.
 func (r *stdRun) PanelPieces() (*users.Service, users.Alerts) { return r.users, r.alert }
+
+// PanelAdmin implements PanelAdminSource. A piece that is not built stays a nil
+// interface (not a nil pointer in one), so the panel knows it is missing.
+func (r *stdRun) PanelAdmin() (panel.PersonalGitHub, panel.SecretVault) {
+	var gh panel.PersonalGitHub
+	if r.personal != nil {
+		gh = r.personal
+	}
+	var v panel.SecretVault
+	if r.env.Vault != nil {
+		v = r.env.Vault
+	}
+	return gh, v
+}
 
 type stdRun struct {
 	s   StandardIntegration

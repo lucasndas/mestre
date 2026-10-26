@@ -226,6 +226,333 @@ export interface SessionList {
 }
 
 //////////
+// source: types_admin.go
+
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeOwnerExists: Code = "owner_exists";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeSelfAction: Code = "self_action";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeBadLevel: Code = "bad_level";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeInvalidWorkspace: Code = "invalid_workspace";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeTransferBad: Code = "transfer_bad";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeNoTransfer: Code = "no_transfer";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeSecretManaged: Code = "secret_managed";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeSecretExists: Code = "secret_exists";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeInvalidSecret: Code = "invalid_secret";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeVaultClosed: Code = "vault_closed";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeAckRequired: Code = "ack_required";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeGitHubMismatch: Code = "github_login_mismatch";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeGitHubDenied: Code = "github_denied";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeGitHubExpired: Code = "github_expired";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeGitHubNoLogin: Code = "github_no_login";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeGitHubNoFlow: Code = "github_no_flow";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeGitHubNotReady: Code = "github_not_ready";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeGitHubFlowOff: Code = "github_flow_off";
+/**
+ * The codes of the errors of the administration screens.
+ */
+export const CodeGitHubNoRight: Code = "github_no_right";
+/**
+ * GitHubState is the personal GitHub credential of a user, never a token.
+ */
+export interface GitHubState {
+  /**
+   * State is "" (none), "connected" or "expired".
+   */
+  state: string;
+  /**
+   * Login is the GitHub account that authorized.
+   */
+  login: string;
+  expires_at?: string;
+}
+/**
+ * UserRow is a user in the screen of the users.
+ */
+export interface UserRow {
+  id: string;
+  name: string;
+  login: string;
+  level: string;
+  level_name: string;
+  state: string;
+  workspaces: string[];
+  has_pin: boolean;
+  telegram: boolean;
+  github_login: string;
+  github: GitHubState;
+  created_at: string;
+}
+/**
+ * TransferInfo is the transfer of the post of Owner that waits for the answer of
+ * the chosen user.
+ */
+export interface TransferInfo {
+  from_id: string;
+  from_name: string;
+  to_id: string;
+  to_name: string;
+  expires_at: string;
+  /**
+   * ToMe is true for the user who is asked to accept it.
+   */
+  to_me: boolean;
+}
+/**
+ * UserList is GET /api/users.
+ */
+export interface UserList {
+  users: UserRow[];
+  /**
+   * Workspaces are the slugs of every workspace, for the lists of workspaces.
+   */
+  workspaces: string[];
+  transfer?: TransferInfo;
+}
+/**
+ * TransferState is GET /api/transfer: the transfer, for the user asked to accept
+ * it or the Owner who asked (nil: none).
+ */
+export interface TransferState {
+  transfer?: TransferInfo;
+}
+/**
+ * CreateUserRequest is POST /api/users (the PIN of the Owner in the header).
+ */
+export interface CreateUserRequest {
+  name: string;
+  level: string;
+  workspaces: string[];
+  github_login: string;
+}
+/**
+ * CreateUserResponse carries the user and the code of first access, which is
+ * shown once.
+ */
+export interface CreateUserResponse {
+  user: UserRow;
+  code: AccessCodeResponse;
+}
+/**
+ * EditUserRequest is PATCH /api/users/{id}; a field that is not sent stays.
+ */
+export interface EditUserRequest {
+  name?: string;
+  level?: string;
+  workspaces?: string[];
+  github_login?: string;
+}
+/**
+ * PairingCodeResponse is the code of pairing of the Telegram, shown once.
+ */
+export interface PairingCodeResponse {
+  code: string;
+  expires_at: string;
+}
+/**
+ * TransferRequest is POST /api/transfer: the user who is to receive the post.
+ */
+export interface TransferRequest {
+  to: string;
+}
+/**
+ * GitHubChallenge is POST /api/me/github/begin: what the user types in GitHub.
+ */
+export interface GitHubChallenge {
+  user_code: string;
+  verification_uri: string;
+  expires_at: string;
+  interval_seconds: number /* int */;
+}
+/**
+ * GitHubPoll is POST /api/me/github/poll: "pending" or "connected".
+ */
+export interface GitHubPoll {
+  state: string;
+}
+/**
+ * GitHubMe is GET /api/me/github: the credential of the user and whether his
+ * level and workspaces let him have one.
+ */
+export interface GitHubMe {
+  github: GitHubState;
+  /**
+   * Login is the account registered for him (the one that must authorize).
+   */
+  login: string;
+  /**
+   * May is false for a level or a list of workspaces that do not connect.
+   */
+  may: boolean;
+}
+/**
+ * SiteMetaInfo is the metadata of a site credential, which is clear in the vault.
+ */
+export interface SiteMetaInfo {
+  owner_user: string;
+  classes: string[];
+  domains: string[];
+  kind: string;
+  expires_at?: string;
+}
+/**
+ * SecretNotice is a validity notice of a credential: "expiring", "expired" or
+ * "stale" (no validity and not replaced for a long time), with the days.
+ */
+export interface SecretNotice {
+  kind: string;
+  days: number /* int */;
+}
+/**
+ * SecretRow is a secret in the screen: never the value, not even masked.
+ */
+export interface SecretRow {
+  name: string;
+  type: string;
+  fingerprint: string;
+  created_at: string;
+  updated_at: string;
+  last_used_at?: string;
+  site?: SiteMetaInfo;
+  /**
+   * Managed is true for a secret the Mestre keeps itself (the keys of the
+   * Apps, the tokens of the users, the CA): it is listed, not changed here.
+   */
+  managed: boolean;
+  notice?: SecretNotice;
+}
+/**
+ * SecretList is GET /api/secrets.
+ */
+export interface SecretList {
+  secrets: SecretRow[];
+}
+/**
+ * SiteCredentialInput is the credential of a site: the fields the vault keeps
+ * (docs/plataforma/cofre.md#credenciais-de-site).
+ */
+export interface SiteCredentialInput {
+  name: string;
+  url: string;
+  user: string;
+  password: string;
+  selectors?: { [key: string]: string};
+  success?: string;
+  owner_user: string;
+  classes: string[];
+  domains: string[];
+  kind: string;
+  expires_at?: string;
+}
+/**
+ * ReplaceSecretRequest is PUT /api/secrets/{name}: the new value of a secret
+ * that is not a site credential, or the whole credential of a site (Site).
+ */
+export interface ReplaceSecretRequest {
+  value?: string;
+  site?: SiteCredentialInput;
+}
+/**
+ * RecoveryKeyRequest is POST /api/recovery-key: Acknowledged says the Owner read
+ * the warning about the old backups.
+ */
+export interface RecoveryKeyRequest {
+  acknowledged: boolean;
+}
+/**
+ * RecoveryKeyResponse carries the new recovery key, which is shown once and kept
+ * nowhere.
+ */
+export interface RecoveryKeyResponse {
+  key: string;
+}
+/**
+ * AuditEntry is a line of the audit trail.
+ */
+export interface AuditEntry {
+  id: string;
+  at: string;
+  action: string;
+  user_id: string;
+  user_name: string;
+  workspace: string;
+  detail: { [key: string]: any};
+}
+/**
+ * AuditPage is GET /api/audit: the newest first; Next is the cursor of the next page
+ * ("" at the end).
+ */
+export interface AuditPage {
+  entries: AuditEntry[];
+  next: string;
+  /**
+   * People and Workspaces fill the filters of the screen: the users (their names
+   * are in the lines anyway) and the workspaces the user may look at.
+   */
+  people: AuditPerson[];
+  workspaces: string[];
+}
+/**
+ * AuditPerson is a user in the filter "who" of the audit.
+ */
+export interface AuditPerson {
+  id: string;
+  name: string;
+}
+
+//////////
 // source: ws.go
 
 /**

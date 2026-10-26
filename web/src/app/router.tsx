@@ -9,6 +9,11 @@ import {
 } from "@tanstack/react-router";
 import { ApiError } from "../lib/api";
 import { meQuery, statusQuery } from "../lib/queries";
+import { Audit } from "../screens/admin/Audit";
+import { GitHubConnect } from "../screens/admin/GitHubConnect";
+import { Secrets } from "../screens/admin/Secrets";
+import { Transfer } from "../screens/admin/Transfer";
+import { Users } from "../screens/admin/Users";
 import { FirstAccess } from "../screens/FirstAccess";
 import { Login } from "../screens/Login";
 import { Overview } from "../screens/Overview";
@@ -72,6 +77,34 @@ const sessionsRoute = createRoute({
   },
 });
 
+// Administration (docs/painel/administracao.md): the server decides the level of
+// each request; the nav only hides what the level cannot do.
+const usersRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/usuarios",
+  component: Users,
+});
+const secretsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/segredos",
+  component: Secrets,
+});
+const auditRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/auditoria",
+  component: Audit,
+});
+const githubRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/github",
+  component: GitHubConnect,
+});
+const transferRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/transferencia",
+  component: Transfer,
+});
+
 // The screens before the login go to the panel when there is a session already.
 async function leaveIfSignedIn(qc: QueryClient) {
   if (await sessionOrNull(qc)) throw redirect({ to: "/" });
@@ -114,7 +147,16 @@ const setupRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  appRoute.addChildren([overviewRoute, sessionsRoute, passwordRoute]),
+  appRoute.addChildren([
+    overviewRoute,
+    sessionsRoute,
+    passwordRoute,
+    usersRoute,
+    secretsRoute,
+    auditRoute,
+    githubRoute,
+    transferRoute,
+  ]),
   loginRoute,
   firstAccessRoute,
   setupRoute,
