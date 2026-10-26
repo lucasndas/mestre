@@ -61,7 +61,7 @@ Na raiz do repositório (o que cada suíte contém e quando roda está em [teste
 | `go run ./tools/testrun affected` | durante o trabalho |
 | `go run ./tools/testrun fast` | antes de cada commit (inclui o golangci-lint e a verificação de docs) |
 | `go run ./tools/testrun full` | antes do merge |
-| `go run ./tools/testrun fast -race` (ou `full -race`) | o que o CI Linux roda a mais fora do PR (no push para a `main` e sob demanda): o detector de corridas, com orçamento 3 vezes maior (precisa de cgo e de `gcc`) |
+| `go run ./tools/testrun fast -race` (ou `full -race`) | o que o CI Linux roda a mais fora do PR (no push para a `main` e sob demanda): o detector de corridas, com orçamento 3 vezes maior (precisa de cgo e de `gcc`); o job `race` do CI passa `-only go`, porque não instala o Node |
 | `go run ./tools/docscheck` | só a [verificação de docs](../qualidade/verificacao-de-docs.md) |
 | `go run ./tools/codecheck` | só as regras de código fora do linter ([estilo](convencoes.md#estilo)) |
 | `golangci-lint run ./...` | só o linter |
