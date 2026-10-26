@@ -308,6 +308,37 @@ func TestADeliveryThatFailsKeepsTheItemQueuedAndTheNextChangeOfStateTriesAgain(t
 	}
 }
 
+// A delivery that the cut of the connection it came in ends (the context of the report that made
+// it is canceled) gives the item back to the queue: the report that would have done it later is
+// seen already, and its resend is dropped, so an item left in flight would stay there for good.
+func TestADeliveryEndedByTheCutOfTheConnectionGivesTheItemBackToTheQueue(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.dev("42-login", "Dev")
+	w.deliv.err = errors.New("the machine is out")
+	it, err := w.svc.Enqueue(w.ctx, inbox.NewItem{Workspace: workspace, Target: dev.ID, Kind: inbox.KindAgent, Sender: "Mestre", Text: "faça"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.deliv.err = nil
+	cctx, cancel := context.WithCancel(w.ctx)
+	defer cancel()
+	w.deliv.cut = cancel
+	if err := w.svc.Pump(cctx, dev.ID); !errors.Is(err, context.Canceled) {
+		t.Fatalf("the delivery cut = %v; want the cancellation", err)
+	}
+	if got, _ := w.svc.Store().Get(w.ctx, it.ID); got.State != inbox.Queued {
+		t.Fatalf("the item is %s after the cut; want it queued again", got.State)
+	}
+	w.deliv.cut = nil
+	if err := w.svc.Pump(w.ctx, dev.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.deliv.ids(); !slices.Equal(got, []string{it.ID}) {
+		t.Fatalf("delivered %v after the connection is back", got)
+	}
+}
+
 func TestAConfirmedItemIsDeliveredAnUnconfirmedOneIsToo(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
