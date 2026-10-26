@@ -77,10 +77,31 @@ func (b *bufferSource) print(p []byte) {
 type towerLink struct {
 	relay *terminalRelay
 	peer  protocol.Peer
-	sess  *protocol.Session
+
+	mu   sync.Mutex
+	sess *protocol.Session
 }
 
-func (l *towerLink) Session() *protocol.Session { return l.sess }
+func (l *towerLink) Session() *protocol.Session {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.sess
+}
+
+// drop ends the connection: the streams that began on it end the next time they
+// try to send, as in the Tower, where a stream never outlives its connection.
+func (l *towerLink) drop() {
+	l.mu.Lock()
+	l.sess = nil
+	l.mu.Unlock()
+}
+
+// reconnect is a new connection, which no old stream belongs to.
+func (l *towerLink) reconnect() {
+	l.mu.Lock()
+	l.sess = &protocol.Session{}
+	l.mu.Unlock()
+}
 
 func (l *towerLink) SendData(_ context.Context, f protocol.DataFrame) error {
 	f.Data = bytes.Clone(f.Data)
@@ -367,6 +388,7 @@ func TestAMachineThatDropsGreysTheTerminalAndResumesWhereItWas(t *testing.T) {
 	w.mu.Lock()
 	w.connected = false
 	w.mu.Unlock()
+	w.link.drop() // the stream of the old connection ends; without this it could also deliver "durante" and the new one would repeat it
 	r.MachineDown("t1")
 	info, _ := r.Info(t.Context(), w.char.TerminalID)
 	if info.Signal || info.NoSignalSince == nil || !info.NoSignalSince.Equal(w.clk.Now()) {
@@ -378,6 +400,7 @@ func TestAMachineThatDropsGreysTheTerminalAndResumesWhereItWas(t *testing.T) {
 	w.mu.Lock()
 	w.connected = true
 	w.mu.Unlock()
+	w.link.reconnect()
 	r.MachineUp(t.Context(), "t1")
 	b.until(t, func() bool { return string(b.data) == "antesdurante" && len(b.signals) == 2 })
 	if !b.signals[1] || b.jumps != 0 {
