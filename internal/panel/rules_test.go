@@ -173,7 +173,7 @@ func TestDelegationsShowToAnAdministratorWhoRevokesARuleButNotAll(t *testing.T) 
 		t.Fatalf("%d rules after the revocation, want 1", n)
 	}
 	// the delegation is the Owner's: an Administrator does not revoke it
-	r.wantErr(r.call("POST", "/api/decrees/"+itoa(dec)+"/revoke", nil, opts{cookie: adm}), 403, panel.CodeForbiddenLevel)
+	r.wantErr(r.call("POST", "/api/decrees/"+num(dec)+"/revoke", nil, opts{cookie: adm}), 403, panel.CodeForbiddenLevel)
 
 	// the Owner's button takes the delegation, the subdelegation and the rule that is left
 	w = r.call("POST", "/api/delegations/revoke-all", nil, opts{cookie: owner})
@@ -192,7 +192,7 @@ func TestDelegationsShowToAnAdministratorWhoRevokesARuleButNotAll(t *testing.T) 
 	}
 }
 
-func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+func num(n int64) string { return strconv.FormatInt(n, 10) }
 
 // CA-ADM-13: an Approver pauses a table whose queue is 3 open requests, the oldest 40
 // minutes old; the screen shows the pause with who and when and the metrics. An Observer
@@ -346,7 +346,7 @@ func TestTheDecreesScreenCreatesARuleAndAnExceptionAndRevokesThem(t *testing.T) 
 			t.Errorf("decree %d (%s): can_revoke = %v for the Approver", d.Number, d.Kind, d.CanRevoke)
 		}
 		if d.Kind == "rule" {
-			r.wantErr(r.call("POST", "/api/decrees/"+itoa(d.Number)+"/revoke", nil, opts{cookie: apv}), 403, panel.CodeForbiddenLevel)
+			r.wantErr(r.call("POST", "/api/decrees/"+num(d.Number)+"/revoke", nil, opts{cookie: apv}), 403, panel.CodeForbiddenLevel)
 		}
 	}
 	// the Owner revokes the rule; the audit keeps the before and the after
@@ -354,7 +354,7 @@ func TestTheDecreesScreenCreatesARuleAndAnExceptionAndRevokesThem(t *testing.T) 
 		if d.Kind != "rule" {
 			continue
 		}
-		if w := r.call("POST", "/api/decrees/"+itoa(d.Number)+"/revoke", nil, opts{cookie: owner, pin: ownerPIN}); w.Code != 204 {
+		if w := r.call("POST", "/api/decrees/"+num(d.Number)+"/revoke", nil, opts{cookie: owner, pin: ownerPIN}); w.Code != 204 {
 			t.Fatalf("revoke = %d %s", w.Code, w.Body)
 		}
 	}
