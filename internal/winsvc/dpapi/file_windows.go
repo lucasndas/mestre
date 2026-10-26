@@ -155,8 +155,9 @@ func Restrict(path string, account *windows.SID) error {
 
 // open opens path itself, never the target of a reparse point. It shares
 // read and delete: a reader (the status of the vault, a promotion check, an
-// antivirus) must not make the erasing of the key or its replacement fail with
-// a sharing violation while the file is open for a moment.
+// antivirus) must not make the erasing of the key fail with a sharing
+// violation while the file is open for a moment. Replacing an open file is
+// still denied by MoveFileEx.
 func open(path string, access uint32) (*os.File, error) {
 	p, err := windows.UTF16PtrFromString(path)
 	if err != nil {
