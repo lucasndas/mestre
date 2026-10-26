@@ -63,6 +63,9 @@ type Options struct {
 	// central answers "unavailable") and Notices the feed of the bell (nil: no bell).
 	Approvals *ApprovalSource
 	Notices   *NoticeSource
+	// Chat is the conversation with the Grão-Mestre (nil: the panel answers that it is
+	// not available).
+	Chat ChatSource
 }
 
 // Panel is the panel of the acting Citadel.
@@ -81,6 +84,7 @@ type Panel struct {
 	hub          *Hub
 	appr         *ApprovalSource
 	notes        *NoticeSource
+	chat         ChatSource
 	// stop ends what the areas registered with the engine (the listeners of the
 	// flow and of the feed), when the panel closes.
 	stop    []func()
@@ -109,13 +113,14 @@ func New(o Options) (*Panel, error) {
 	if o.Rand == nil {
 		o.Rand = newRand()
 	}
-	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, github: o.GitHub, vault: o.Vault, vaultChanged: o.VaultChanged, log: o.Logger, ids: protocol.NewIDGen(o.Clock), appr: o.Approvals, notes: o.Notices}
+	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, github: o.GitHub, vault: o.Vault, vaultChanged: o.VaultChanged, log: o.Logger, ids: protocol.NewIDGen(o.Clock), appr: o.Approvals, notes: o.Notices, chat: o.Chat}
 	p.sessions = &Sessions{db: o.DB, clk: o.Clock, ids: p.ids, rnd: o.Rand}
 	p.hub = newHub(p)
 	p.slots = make(chan struct{}, hashSlots)
 	p.sessions.ended = p.hub.closeSession
 	p.listenApprovals()
 	p.listenNotices()
+	p.listenChat()
 	// the sessions the users service ended in the database: close their sockets
 	o.Users.OnSessionsEnded(func(ctx context.Context, userID string) { p.hub.closeUserGone(ctx, userID) })
 
@@ -247,8 +252,13 @@ func (p *Panel) authenticate(r *http.Request) (context.Context, *APIError) {
 // (401 without one), then, when cap is not "", the level of the user in the table
 // of levels, read from the database at each request.
 func (p *Panel) require(h http.HandlerFunc, public bool, caps ...users.Capability) http.Handler {
+	return p.requireLimit(maxBody, h, public, caps...)
+}
+
+// requireLimit is require with its own limit for the body: the routes that take a file.
+func (p *Panel) requireLimit(limit int64, h http.HandlerFunc, public bool, caps ...users.Capability) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, maxBody)
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		if mutating(r.Method) && !originOK(r) {
 			if _, err := r.Cookie(CookieName); err == nil { // a request with no session writes nothing
 				p.audit(r.Context(), "panel.origin_refused", map[string]any{"ip": clientIP(r), "path": clip(r.URL.Path, 200)})
@@ -306,6 +316,12 @@ func (r *Router) Auth(pattern string, h http.HandlerFunc) {
 // capabilities of the table of levels.
 func (r *Router) Require(pattern string, h http.HandlerFunc, caps ...users.Capability) {
 	r.mux.Handle(pattern, r.p.require(h, false, caps...))
+}
+
+// RequireLimit is Require for a route whose body may be as large as limit bytes (the
+// others take 1 MiB): the one that takes the files of a message.
+func (r *Router) RequireLimit(pattern string, limit int64, h http.HandlerFunc, caps ...users.Capability) {
+	r.mux.Handle(pattern, r.p.requireLimit(limit, h, false, caps...))
 }
 
 // Sensitive registers a route of an action that asks for the PIN, in the same

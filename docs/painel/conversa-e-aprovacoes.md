@@ -22,6 +22,7 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - **Pergunta de escolha** (`mestre choose`, [CLI](../cli/grao-mestre.md#mestre-choose)): um botão por opção, no canal de origem da mensagem que a causou; a escolha volta ao Grão-Mestre como resposta e vale uma vez.
 - Estado do Grão-Mestre no topo (ocioso, ocupado, itens na fila à frente), para o usuário saber quando esperar resposta.
 - Com o sistema travado, o envio mostra "guardado até destravar" ([segurança do canal](../telegram/seguranca-do-canal.md)).
+- **Segredo:** a mensagem que o mascarador reconhece como senha ou token não é enviada ao Grão-Mestre: o painel recusa, diz que segredos se cadastram na tela de Segredos e o motor audita a tentativa (usuário e canal, nunca o texto).
 
 ### Central de aprovações
 
@@ -48,13 +49,22 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - **Avisos de bloqueio:** `blocking.Store` guarda as partes mascaradas do aviso (evidência inteira, passos, dono, bloco do agente) em `blocking_notices`; a central mostra os dos últimos 7 dias para o Dono e os Administradores do workspace, sem estado próprio, e o botão do passo do cofre sai com `can_do` só para o Dono (o PIN é pedido na tela de Segredos).
 - **Sino:** `internal/notices` (`panel_notices`, `panel_notice_reads`) guarda o que o bot também diz (`OwnerAlerts`, `BlockChannel`): o público de cada aviso (workspace, Dono e Administradores, Dono, um usuário) é decidido na leitura, o lido é por usuário e a lista olha os últimos 30 dias. O texto passa pelo mascarador antes de ser guardado. O link de um aviso leva ao pedido (`/aprovacoes?pedido=`), ao aviso de bloqueio (`?aviso=`), à mesa ou à Guilda; as rotas de mesa e de Guilda são das telas dessas áreas.
 - **Máscara e nível:** todo texto de pedido que o painel devolve (pergunta, bloco do agente, `About`, alvo exato, diff, histórico) passa pelo mascarador do motor (`ApprovalSource.Mask`) logo antes de sair. O servidor confere de novo as respostas do tipo (regra permanente só em permissão de classe com ação; **Delegar** só em risco `alto` ou `medio`, e em `medio` um Administrador basta, porque vira decreto de política) e a visibilidade (pedido sem workspace é de quem atua em "", o Dono).
+- **Conversa (M6, unidade 2E):** `internal/panelchat` é o canal do painel da caixa de entrada; `internal/panel/routes_chat.go` são as rotas, e o servidor confere o nível (`talk_to_grand_master`) e o workspace em cada envio, leitura, escolha e download.
+  - **Histórico:** não é copiado. Vem da caixa de entrada (`inbox_messages`, as mensagens do próprio usuário, em qualquer canal) e das respostas guardadas (`outbound_messages`), sempre filtradas pelo usuário da sessão, nunca por um que o navegador diga; o painel mostra as últimas 200 de cada. O lido é o `panel_chat_reads` (até que resposta o usuário leu) e o contador de não lidas conta só as respostas do painel. Tudo que sai passa pelo mascarador.
+  - **Envio:** `POST /api/chat/{workspace}/messages` é multipart, com `text`, `client_id` e `quote` antes dos arquivos (o servidor confere tudo antes de guardar qualquer arquivo). O `client_id` torna o reenvio idempotente (`Refs.Key`); a origem leva o usuário, a sessão (`Conversation`) e o id (`Message`); até 20.000 caracteres, até 5 arquivos de até o limite dos [anexos](../telegram/anexos-e-transcricao.md) (20 MB) e 30 mensagens por minuto por usuário. O arquivo vira anexo do workspace com origem "painel" (`attachments.Service.ReceiveData`) e a mensagem leva a linha `[anexo]` com o caminho.
+  - **Citar:** o `quote` é o id de uma entrada da conversa do próprio usuário (`in-`, `out-` ou `ask-`); o servidor o resolve, recusa o de outro usuário ou workspace e põe no cabeçalho a mesa que ele conhece (a da pergunta, ou a da mensagem que a resposta respondeu).
+  - **Resposta:** `channelMux` entrega o `mestre reply` ao canal da origem; o do painel só avisa as telas do usuário (a resposta já está guardada e é lida de lá), e uma mensagem do painel nunca vai ao Telegram. O assunto `chat:<usuário>` de `/ws/ui` leva `changed` (a tela lê de novo) e `status` (estado do Grão-Mestre, que a caixa de entrada anuncia por `Service.OnChange`).
+  - **Escolha:** `mestre choose` vai ao canal da mensagem que o causou (`ChooseHandler.ChannelOf`); a pergunta do painel é uma linha de `choose_questions` com `channel = 'panel'`, só o painel responde a ela e só o Telegram responde à do Telegram; o clique vale uma vez e o segundo é recusado.
+  - **Andamento:** cada envio da mensagem de progresso também grava o cartão do workspace (`panel_chat_progress`, uma linha por workspace, reescrita no lugar), que só o Dono e os Administradores do workspace veem, como o Telegram.
+  - **Arquivos do Grão-Mestre:** a tela e a rota de download existem (anexo, nunca exibido na página, só para o usuário da resposta); os bytes de `mestre reply --attach` ainda não chegam ao motor ([ligação de produção](../desenvolvimento/ligacao-de-producao.md)), então o arquivo aparece pelo nome, sem download, até lá.
+  - **Seletor:** enquanto a barra de cima não tem o seletor de workspace, o painel lateral tem o próprio, com o último escolhido neste navegador.
 - **Motor:** `mestre notify` e `mestre approval ask` dizem em `delivered.panel` quantos usuários o painel guardou o aviso para (uma gravação que falhou não conta) (`not_delivered` só quando nem o Telegram nem o painel alcançam ninguém).
 
 ## Regras e erros
 
 - O servidor confere nível e workspace em cada envio e cada resposta; o navegador só esconde o que não é permitido.
 - Pedido que expirou ou foi invalidado enquanto a tela estava aberta → o botão devolve o motivo e o item se atualiza.
-- WebSocket fora → mensagens digitadas ficam no campo, não são enviadas "às cegas"; ao reconectar, o usuário reenvia.
+- WebSocket fora → mensagens digitadas ficam no campo, não são enviadas "às cegas" (o botão Enviar fica desligado, com o motivo); ao reconectar, o usuário reenvia. Uma recusa do servidor também deixa o texto no campo.
 - Arquivo acima do limite → recusado antes do envio, com o limite exibido.
 
 ## Critérios de aceite

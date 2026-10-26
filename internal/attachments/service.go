@@ -184,13 +184,34 @@ func (s *Service) Receive(ctx context.Context, r Request) (Stored, error) {
 	if r.File.Size > s.o.Limit {
 		return Stored{}, &TooLargeError{Limit: s.o.Limit}
 	}
-	root, err := s.o.Root(ctx, r.Workspace)
-	if err != nil || root == "" {
+	if root, err := s.o.Root(ctx, r.Workspace); err != nil || root == "" {
 		return Stored{}, ErrWorkspace
 	}
 	data, err := s.fetch(ctx, r.File)
 	if err != nil {
 		return Stored{}, err
+	}
+	return s.keep(ctx, r, data)
+}
+
+// ReceiveData keeps a file whose bytes the channel already has: the upload of the
+// panel (docs/painel/conversa-e-aprovacoes.md#conversa-com-o-grão-mestre), which has no
+// download to make. The limit is the same as the one of Receive, and the bytes are
+// never trusted: the type is the one the content says, the name is made safe and the
+// file is kept without permission of execution.
+func (s *Service) ReceiveData(ctx context.Context, r Request, data []byte) (Stored, error) {
+	if int64(len(data)) > s.o.Limit || r.File.Size > s.o.Limit {
+		return Stored{}, &TooLargeError{Limit: s.o.Limit}
+	}
+	return s.keep(ctx, r, data)
+}
+
+// keep detects the type of the bytes, writes the file under the main clone of the
+// workspace and registers it.
+func (s *Service) keep(ctx context.Context, r Request, data []byte) (Stored, error) {
+	root, err := s.o.Root(ctx, r.Workspace)
+	if err != nil || root == "" {
+		return Stored{}, ErrWorkspace
 	}
 	now := s.clk.Now().UTC()
 	id := s.newID()

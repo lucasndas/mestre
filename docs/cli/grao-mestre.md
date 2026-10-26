@@ -1,6 +1,6 @@
 # CLI: comandos do Grão-Mestre
 
-> **Assunto:** sintaxe de `table` (com o status e a sobreposição entre mesas), `choose`, `gh`, `app`, `approval` (com a pausa de autonomia de uma mesa), `decree` e `notify`, do Grão-Mestre (`approval decide|list` também do Mestre da mesa; `approval reply`, de quem pediu) · **Componente:** CLI · **Atualizado:** 2026-10-20
+> **Assunto:** sintaxe de `table` (com o status e a sobreposição entre mesas), `choose`, `gh`, `app`, `approval` (com a pausa de autonomia de uma mesa), `decree` e `notify`, do Grão-Mestre (`approval decide|list` também do Mestre da mesa; `approval reply`, de quem pediu) · **Componente:** CLI · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
@@ -38,7 +38,7 @@ mestre choose "<pergunta>" --option "<rótulo>" --option "<rótulo>"… [--recom
 ```
 - Pergunta ao usuário da mensagem em tratamento (ou da indicada por `--from-message`) com um botão por opção, pelo canal de origem; a recomendada (`--recommend`, a partir de 1; padrão a primeira) vem primeiro. `--table` põe a mesa no cabeçalho. Volta com 9 e o id da pergunta; **nada é repassado antes da resposta**.
 - A escolha chega à caixa de entrada como mensagem do usuário que clicou, com o rótulo e o id da pergunta; só vale o clique do destinatário, conferido como os demais botões ([bot](../telegram/bot.md#mensagens-de-saída)). Uma resposta em texto livre também vale.
-- Menos de 2 ou mais de 6 opções → 2 `bad_options`; texto com cara de segredo → 3 `secret_detected`; usuário sem nível para dar ordens → 3 `level_denied`; usuário sem Telegram, suspenso ou de outro workspace → 7 `not_delivered`; mensagem que não é de um usuário do workspace → 4 `not_found`. A pergunta fica guardada (`choose_questions`) e o clique do destinatário vale uma vez. O canal de origem de hoje é o Telegram; a resposta pelo painel chega no M6. Sem `--from-message`, vale o usuário da última mensagem de usuário da caixa de entrada do Grão-Mestre.
+- Menos de 2 ou mais de 6 opções → 2 `bad_options`; texto com cara de segredo → 3 `secret_detected`; usuário sem nível para dar ordens → 3 `level_denied`; usuário sem Telegram, suspenso ou de outro workspace → 7 `not_delivered`; mensagem que não é de um usuário do workspace → 4 `not_found`. A pergunta fica guardada (`choose_questions`) e o clique do destinatário vale uma vez. A pergunta vai só ao canal da mensagem que a causou: os botões do Telegram, ou os botões da conversa do [painel](../painel/conversa-e-aprovacoes.md#conversa-com-o-grão-mestre) (a escolha chega como mensagem do usuário, com a origem "painel"). Sem `--from-message`, vale o usuário da última mensagem de usuário da caixa de entrada do Grão-Mestre.
 
 ### `mestre gh`
 ```

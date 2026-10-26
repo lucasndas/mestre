@@ -128,12 +128,17 @@ func runWith(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, o r
 		return fmt.Errorf("starting the fake agent: %w", err)
 	}
 	masker := logging.NewMasker()
+	chat, closeChat, err := startFakeChat(ctx, guildDB, filepath.Join(dir, "anexos"), masker.Mask)
+	if err != nil {
+		return fmt.Errorf("starting the fake Grand Master: %w", err)
+	}
+	defer closeChat()
 	deps := app.Deps{
 		Version: "e2e", Masker: masker, Logger: logging.New(stderr, masker, logging.Options{Clock: clock.Real{}}),
 		// the real integration, with no bot (no token in the vault) and GitHub
 		// pointed at a closed port: no network is ever used
 		HostOrchestration: true, Integration: app.StandardIntegration{GitHubBase: "http://127.0.0.1:1", GitHubWeb: "http://127.0.0.1:1", TelegramBase: "http://127.0.0.1:1"},
-		PanelAssets: panel.Assets(), PanelTerminals: terms, PanelCanvas: newFakeCanvas(),
+		PanelAssets: panel.Assets(), PanelTerminals: terms, PanelCanvas: newFakeCanvas(), PanelChat: chat,
 	}
 	e, err := app.New(cfg, paths, deps)
 	if err != nil {

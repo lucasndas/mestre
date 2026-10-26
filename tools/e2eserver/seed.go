@@ -25,6 +25,11 @@ func seedRequest(ctx context.Context, guildDB string) error {
 	}
 	defer db.Close()
 	now := clk.Now()
+	// the workspace of the request, where the conversation of the smoke test happens
+	if _, err := db.Writer().ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+		VALUES ('loja', 'lucas/loja', 'lucas/loja', 'https://example.test/loja.git', 'main', 'active', '', ?, ?)`, now.UnixMilli(), now.UnixMilli()); err != nil {
+		return fmt.Errorf("the workspace: %w", err)
+	}
 	r := chain.Request{
 		Workspace: "loja", Type: classes.RequestExtraCost, State: chain.Open, Level: chain.Level{Kind: chain.LevelPeople},
 		About: "mais US$ 20 de uso este mês", Risk: classes.RiskResult{Risk: classes.RiskMedium, Rule: "custo extra", TableVersion: 1},

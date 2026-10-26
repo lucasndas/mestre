@@ -40,7 +40,9 @@ export async function api<T>(
   opts: CallOptions = {},
 ): Promise<T> {
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  // a form (the files of a message) goes as it is: the browser writes the content type, with the boundary
+  const isForm = typeof FormData !== "undefined" && body instanceof FormData;
+  if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
   if (opts.pin) headers["X-Mestre-Pin"] = opts.pin;
   let res: Response;
   try {
@@ -48,7 +50,7 @@ export async function api<T>(
       method,
       headers,
       credentials: "same-origin",
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
     });
   } catch {
     throw new ApiError(0, NETWORK, "network");

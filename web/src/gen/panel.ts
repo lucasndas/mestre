@@ -1301,6 +1301,206 @@ export interface RitualEditRequest {
 }
 
 //////////
+// source: types_chat.go
+
+/**
+ * ChatTopic is the topic of /ws/ui a user follows to hear about his conversations: the
+ * id is his own, and the events carry the workspace.
+ */
+export const ChatTopic = "chat";
+/**
+ * EventChatChanged says the conversation of a workspace has something new (an
+ * answer, a question, the card of progress): the screen reads it again.
+ */
+export const EventChatChanged = "changed";
+/**
+ * EventChatStatus carries the new state of the Grão-Mestre of a workspace.
+ */
+export const EventChatStatus = "status";
+/**
+ * ChatWorkspace is a workspace the user may talk in.
+ */
+export interface ChatWorkspace {
+  slug: string;
+  /**
+   * CanTalk is false for the level that may not write to the Grão-Mestre (the input is
+   * shown off, with the reason).
+   */
+  can_talk: boolean;
+  unread: number /* int */;
+}
+/**
+ * ChatOverview is GET /api/chat.
+ */
+export interface ChatOverview {
+  workspaces: ChatWorkspace[];
+  /**
+   * Unread is the sum of the unread answers of every workspace.
+   */
+  unread: number /* int */;
+  /**
+   * Limit is the biggest attachment, in bytes; MaxFiles how many go in one message.
+   */
+  limit: number /* int64 */;
+  max_files: number /* int */;
+}
+/**
+ * ChatSnapshot is the first event of the topic "chat".
+ */
+export interface ChatSnapshot {
+  unread: number /* int */;
+}
+/**
+ * ChatStatus is the state of the Grão-Mestre of a workspace.
+ */
+export interface ChatStatus {
+  /**
+   * State is "idle", "busy", "unavailable" (interrupted, with Reason) or "none" (the
+   * workspace has no Grão-Mestre now).
+   */
+  state: string;
+  reason?: string;
+  /**
+   * Ahead is how many items wait in his inbox.
+   */
+  ahead: number /* int */;
+  /**
+   * Locked says the Mestre is locked: what is sent is kept until it is unlocked.
+   */
+  locked: boolean;
+}
+/**
+ * ChatStatusEvent is the payload of the event "status".
+ */
+export interface ChatStatusEvent {
+  workspace: string;
+  status: ChatStatus;
+}
+/**
+ * ChatChangedEvent is the payload of the event "changed".
+ */
+export interface ChatChangedEvent {
+  workspace: string;
+}
+/**
+ * ChatProgress is the message of progress of the workspace: the card at the top.
+ */
+export interface ChatProgress {
+  /**
+   * Lines are the lines of the message: the count of the tables first, then one line
+   * for each thing that waits for somebody.
+   */
+  lines: string[];
+  updated_at: string;
+}
+/**
+ * ChatAttachment is a file of a message.
+ */
+export interface ChatAttachment {
+  name: string;
+  /**
+   * Download is the path of the file when the user may download it (a file the Grão-Mestre
+   * sent); empty for what the user sent himself or a file that is not there to download.
+   */
+  download?: string;
+}
+/**
+ * ChatQuote is the message a message answers (the quote), with the start of its text.
+ */
+export interface ChatQuote {
+  id: string;
+  excerpt: string;
+  /**
+   * Mine says the quoted message is the user's own.
+   */
+  mine: boolean;
+}
+/**
+ * ChatQuestion is a question of `mestre choose`: one button per option.
+ */
+export interface ChatQuestion {
+  id: number /* int64 */;
+  options: string[];
+  /**
+   * State is "open" or "answered"; Answer the option chosen.
+   */
+  state: string;
+  answer?: string;
+}
+/**
+ * ChatEntry is a message of the conversation.
+ */
+export interface ChatEntry {
+  /**
+   * ID names the entry: "in-<n>" (a message of the user), "out-<n>" (an answer) or
+   * "ask-<n>" (a question). It is what a quote carries.
+   */
+  id: string;
+  /**
+   * From is "user", "grand_master" or "question".
+   */
+  from: string;
+  /**
+   * Channel is "panel" or "telegram", for the icon.
+   */
+  channel: string;
+  text: string;
+  at: string;
+  table?: string;
+  quote?: ChatQuote;
+  /**
+   * Attachments are the files of the message.
+   */
+  attachments?: ChatAttachment[];
+  question?: ChatQuestion;
+  /**
+   * Waiting is true for a message of the user that the Grão-Mestre did not take yet
+   * (in the queue, or kept because the Mestre is locked).
+   */
+  waiting?: boolean;
+  /**
+   * Unread is true for an answer that came after the user last opened the conversation.
+   */
+  unread?: boolean;
+}
+/**
+ * ChatConversation is GET /api/chat/{workspace}: the conversation of the user with the
+ * Grão-Mestre of the workspace, oldest first.
+ */
+export interface ChatConversation {
+  workspace: string;
+  can_talk: boolean;
+  /**
+   * Status is the state of the Grão-Mestre.
+   */
+  status: ChatStatus;
+  progress?: ChatProgress;
+  entries: ChatEntry[];
+  unread: number /* int */;
+  /**
+   * Limit is the biggest attachment, in bytes; MaxFiles how many go in one message.
+   */
+  limit: number /* int64 */;
+  max_files: number /* int */;
+}
+/**
+ * ChatSent is the answer of POST /api/chat/{workspace}/messages.
+ */
+export interface ChatSent {
+  id: string;
+  /**
+   * Held says the message was kept because the Mestre is locked: it goes when it is unlocked.
+   */
+  held: boolean;
+}
+/**
+ * ChatChoice is the body of POST /api/chat/choices/{id}: the option, from 0.
+ */
+export interface ChatChoice {
+  option: number /* int */;
+}
+
+//////////
 // source: ws.go
 
 /**

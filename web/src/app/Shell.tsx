@@ -1,17 +1,20 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Button as AriaButton, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { useTranslation } from "react-i18next";
+import { ChatPanel } from "../components/ChatPanel";
 import { ApprovalsCounter, NoticesBell } from "../components/TopBarSlots";
+import type { ChatConversation, ChatStatusEvent } from "../gen/panel";
 import { api } from "../lib/api";
-import { type Live, LiveContext } from "../lib/live";
+import { chatOverviewQuery, chatQuery } from "../lib/chatQueries";
+import { type Live, LiveContext, useLiveEvents } from "../lib/live";
 import { type SocketState, UiSocket } from "../lib/ws";
 import { TransferBanner } from "../screens/admin/Transfer";
 import { Brand } from "./AuthLayout";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { useCan, useMe } from "./session";
-import { SocketContext } from "./socket";
+import { ConnectionContext, SocketContext } from "./socket";
 
 /** The band that tells the Citadel is out of reach; the state is reloaded when it is back. */
 function useConnection(): { state: SocketState; socket: UiSocket | null } {
@@ -104,7 +107,48 @@ function Nav() {
   );
 }
 
-function TopBar() {
+/** What the conversation tells the screens: a change reads it again, the state of the Grão-Mestre is put in place. */
+function ChatLive() {
+  const qc = useQueryClient();
+  useLiveEvents("chat:", (_topic, event, data) => {
+    if (event === "status") {
+      const s = data as ChatStatusEvent;
+      qc.setQueryData<ChatConversation>(chatQuery(s.workspace).queryKey, (old) =>
+        old ? { ...old, status: s.status } : old,
+      );
+      return;
+    }
+    void qc.invalidateQueries({ queryKey: ["chat"] });
+  });
+  return null;
+}
+
+/** The button of the side panel, with the answers that wait for the user. */
+function ChatToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const { t } = useTranslation("chat");
+  const { data } = useQuery(chatOverviewQuery);
+  const n = data?.unread ?? 0;
+  return (
+    <AriaButton
+      aria-label={n > 0 ? t("toggleUnread", { count: n }) : t("toggleOpen")}
+      aria-expanded={open}
+      onPress={onToggle}
+      className="relative grid min-h-11 min-w-11 place-items-center rounded-full px-3 text-sm font-semibold hover:bg-accent-wash"
+    >
+      <span aria-hidden="true">{t("toggle")}</span>
+      {n > 0 ? (
+        <span
+          aria-hidden="true"
+          className="absolute -top-1 -right-1 grid min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-semibold text-accent-ink"
+        >
+          {n > 99 ? "99+" : n}
+        </span>
+      ) : null}
+    </AriaButton>
+  );
+}
+
+function TopBar({ chatOpen, onChat }: { chatOpen: boolean; onChat: () => void }) {
   const { t } = useTranslation("shell");
   const me = useMe();
   const qc = useQueryClient();
@@ -130,6 +174,7 @@ function TopBar() {
       <div data-slot="notices-bell" className="flex items-center">
         <NoticesBell />
       </div>
+      <ChatToggle open={chatOpen} onToggle={onChat} />
       <LanguageSwitcher />
       <MenuTrigger>
         <AriaButton
@@ -158,6 +203,7 @@ export function Shell() {
   const { i18n } = useTranslation();
   const me = useMe();
   const { state, socket } = useConnection();
+  const [chatOpen, setChatOpen] = useState(false);
   // the events of the channel for the screens (the counter, the bell, the central), and the
   // topics of this user: his approvals and his notices
   const userId = me.user.id;
@@ -170,7 +216,11 @@ export function Shell() {
     [socket],
   );
   useEffect(() => {
-    socket?.subscribe([`notices:${userId}`, ...(canDecide ? [`approvals:${userId}`] : [])]);
+    socket?.subscribe([
+      `notices:${userId}`,
+      `chat:${userId}`,
+      ...(canDecide ? [`approvals:${userId}`] : []),
+    ]);
   }, [socket, userId, canDecide]);
   // the language the user chose follows him to any browser
   useEffect(() => {
@@ -182,25 +232,35 @@ export function Shell() {
   }, [i18n.language]);
   return (
     <LiveContext.Provider value={live}>
-      <div className="grid min-h-dvh grid-rows-[auto_auto_1fr] md:grid-cols-[14rem_1fr] md:grid-rows-[auto_1fr]">
-        <a
-          href="#content"
-          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-surface focus:p-2"
+      <ConnectionContext.Provider value={state}>
+        <ChatLive />
+        <div
+          className={`grid min-h-dvh grid-rows-[auto_auto_1fr] md:grid-rows-[auto_1fr] ${chatOpen ? "md:grid-cols-[14rem_1fr_26rem]" : "md:grid-cols-[14rem_1fr]"}`}
         >
-          {t("top.skip")}
-        </a>
-        <div className="md:col-span-2">
-          <TopBar />
-          <ReconnectingBand state={state} />
-          <TransferBanner />
+          <a
+            href="#content"
+            className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-surface focus:p-2"
+          >
+            {t("top.skip")}
+          </a>
+          <div className="md:col-span-full">
+            <TopBar chatOpen={chatOpen} onChat={() => setChatOpen((o) => !o)} />
+            <ReconnectingBand state={state} />
+            <TransferBanner />
+          </div>
+          <Nav />
+          <main id="content" className="min-w-0 px-5 py-8 md:px-10">
+            <SocketContext.Provider value={socket}>
+              <Outlet />
+            </SocketContext.Provider>
+          </main>
+          {chatOpen ? (
+            <div className="fixed inset-0 z-40 md:sticky md:inset-auto md:top-0 md:z-auto md:col-start-3 md:row-span-2 md:row-start-1 md:h-dvh md:border-l md:border-line">
+              <ChatPanel onClose={() => setChatOpen(false)} />
+            </div>
+          ) : null}
         </div>
-        <Nav />
-        <main id="content" className="min-w-0 px-5 py-8 md:px-10">
-          <SocketContext.Provider value={socket}>
-            <Outlet />
-          </SocketContext.Provider>
-        </main>
-      </div>
+      </ConnectionContext.Provider>
     </LiveContext.Provider>
   );
 }

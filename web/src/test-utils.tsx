@@ -32,6 +32,20 @@ export interface Call {
 
 type Handler = (call: Call) => { status?: number; body?: unknown } | undefined;
 
+/** A JSON body as an object; a form (the files of a message) as its fields, the files by name. */
+function bodyOf(body: BodyInit | null | undefined): unknown {
+  if (!body) return undefined;
+  if (body instanceof FormData) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of body.entries()) {
+      const val = typeof v === "string" ? v : v.name;
+      out[k] = k === "files" ? [...((out[k] as string[]) ?? []), val] : val;
+    }
+    return out;
+  }
+  return JSON.parse(String(body));
+}
+
 /** A fake server: handlers by "METHOD /path"; calls are recorded; an unknown route is a 404. */
 export function fakeServer(handlers: Record<string, Handler>) {
   const calls: Call[] = [];
@@ -41,7 +55,7 @@ export function fakeServer(handlers: Record<string, Handler>) {
     const call: Call = {
       method,
       path,
-      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      body: bodyOf(init?.body),
       headers: (init?.headers ?? {}) as Record<string, string>,
     };
     calls.push(call);

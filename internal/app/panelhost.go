@@ -57,6 +57,12 @@ func (e *Engine) openPanel(ctx context.Context, db *store.DB, integ IntegrationR
 	if a, ok := integ.(ApprovalPanelSource); ok {
 		opts.Approvals, opts.Notices = a.PanelApprovals()
 	}
+	if c, ok := integ.(ChatPanelSource); ok {
+		opts.Chat = c.PanelChat()
+	}
+	if e.deps.PanelChat != nil {
+		opts.Chat = e.deps.PanelChat
+	}
 	p, err := panel.New(opts)
 	if err != nil {
 		e.log.Error("app: the panel could not be made; this period has none", "err", err)

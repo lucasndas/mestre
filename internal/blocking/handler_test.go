@@ -407,3 +407,42 @@ func TestNotifyCountsWhoTheBellOfThePanelWasStoredFor(t *testing.T) {
 		}
 	}
 }
+
+type viaChooser struct {
+	fakeChooser
+	via []string
+}
+
+func (f *viaChooser) AskVia(ctx context.Context, channel, workspace, mesa, asker, userID, question string, options []string, recommend int) (int64, error) {
+	f.via = append(f.via, channel+"|"+userID)
+	return f.Ask(ctx, workspace, mesa, asker, userID, question, options, recommend)
+}
+
+// The question of `mestre choose` goes to the channel of the message that caused it: the one in
+// handling, or the one named by --from-message; without a way to tell the channel, the Telegram's
+// path (Ask) is the one that runs.
+func TestChooseAsksInTheChannelOfTheMessageThatCausedIt(t *testing.T) {
+	t.Parallel()
+	h, _ := chooseRig()
+	via := &viaChooser{}
+	h.Chooser = via
+	h.ChannelOf = func(_ context.Context, workspace, gm, message string) string {
+		if workspace != "loja" || gm != "gm" {
+			t.Errorf("channel asked for %q of %q", workspace, gm)
+		}
+		if message == "m81" {
+			return "telegram"
+		}
+		return "panel"
+	}
+	choose(h, "gm", map[string]any{"option": []any{"a", "b"}}, "x?")
+	choose(h, "gm", map[string]any{"option": []any{"a", "b"}, "from-message": "m81"}, "y?")
+	if strings.Join(via.via, ",") != "panel|u-bia,telegram|u-ana" {
+		t.Fatalf("channels = %q", via.via)
+	}
+	h.ChannelOf = nil
+	choose(h, "gm", map[string]any{"option": []any{"a", "b"}}, "z?")
+	if len(via.via) != 2 || len(via.asked) != 3 {
+		t.Fatalf("without ChannelOf: %q, %d asked", via.via, len(via.asked))
+	}
+}
