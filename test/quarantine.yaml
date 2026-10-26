@@ -13,7 +13,3 @@ tests:
     issue: https://github.com/mestre-ia/mestre/issues/329
     added: 2026-10-26
     reason: on Linux CI the mirror push of meu-app hit context deadline exceeded (28 s) in a PR that touched no engine code
-  - test: TestExcludingATowerErasesItsVaultAndUndoingItBringsTheVaultBack
-    issue: https://github.com/mestre-ia/mestre/issues/333
-    added: 2026-10-26
-    reason: on Windows CI the excluded Tower failed to delete cofre.key, held open by another handle (sharing violation)
