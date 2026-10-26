@@ -1,0 +1,18 @@
+export default {
+  title: "Minhas sessões",
+  titleAll: "Sessões de todos",
+  intro: "Cada navegador em que você entrou é uma sessão. Encerre as que não reconhece.",
+  introAll: "Como Dono, você vê e encerra as sessões de todos os usuários.",
+  current: "Esta sessão",
+  device: "Aparelho",
+  user: "Usuário",
+  ip: "Endereço",
+  created: "Entrou em",
+  lastUsed: "Último uso",
+  end: "Encerrar",
+  endNamed: "Encerrar a sessão de {{device}}",
+  ended: "Sessão encerrada.",
+  empty: "Nenhuma sessão.",
+  mine: "Minhas",
+  everyone: "De todos",
+} as const;

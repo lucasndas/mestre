@@ -1,0 +1,78 @@
+@import "tailwindcss";
+@import "@fontsource-variable/fraunces";
+@import "@fontsource-variable/newsreader";
+
+/* The visual tokens of the panel (docs/painel/design.md). Every color, font,
+   radius and shadow of a screen comes from here, never from a literal. */
+@theme {
+  --color-paper: #f4ecdc;
+  --color-surface: #fbf6ea;
+  --color-ink: #2a2118;
+  --color-muted: #6a5b4b;
+  --color-line: #d9ccb2;
+  --color-accent: #8a3b1e;
+  --color-accent-strong: #6e2d15;
+  --color-accent-ink: #fff7ea;
+  --color-accent-wash: #ecdcc4;
+  --color-signal: #2f6b4f;
+  --color-danger: #a3281c;
+  --color-danger-wash: #f6ddd6;
+  --color-warn: #f1b04c;
+  --color-warn-ink: #2a1c00;
+  --font-display: "Fraunces Variable", Georgia, serif;
+  --font-body: "Newsreader Variable", Georgia, serif;
+  --radius-field: 3px;
+  --shadow-card: 0 1px 0 var(--color-line), 0 12px 30px -18px rgb(90 61 26 / 0.35);
+  --shadow-pop: 0 10px 28px -10px rgb(42 33 24 / 0.45);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+  ::selection {
+    background: var(--color-accent-wash);
+    color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  input {
+    caret-color: var(--color-accent);
+  }
+  button {
+    cursor: pointer;
+  }
+  * {
+    scrollbar-color: var(--color-line) transparent;
+  }
+  /* biome-ignore-all lint/complexity/noImportantStyles: reduced motion has to win over every utility */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

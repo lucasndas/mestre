@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 import { keepGitkeep } from "./build/keep-gitkeep.ts";
@@ -7,10 +8,12 @@ import { keepGitkeep } from "./build/keep-gitkeep.ts";
 const outDir = fileURLToPath(new URL("../internal/panel/webdist", import.meta.url));
 
 export default defineConfig({
-  plugins: [react(), keepGitkeep(outDir)],
+  plugins: [tailwindcss(), react(), keepGitkeep(outDir)],
   build: { outDir, emptyOutDir: false },
   test: {
     environment: "jsdom",
+    setupFiles: ["src/test-setup.ts"],
+    css: false,
     include: ["src/**/*.test.{ts,tsx}", "build/**/*.test.ts"],
     // A failed test is never run again (docs/qualidade/testes.md#regras-e-erros).
     retry: 0,
