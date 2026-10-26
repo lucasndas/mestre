@@ -147,15 +147,6 @@ func (o *outbuf) waitFor(t *testing.T, sub string) {
 	o.wait(t, fmt.Sprintf("%q", sub), func(raw, _ string) bool { return strings.Contains(raw, sub) })
 }
 
-// waitPrompt waits until the screen shows the prompt, a line of just ">",
-// below the first line that holds after: the prompt after a line ("Tool Bash
-// ran") is the agent free for the next message, which a message typed during
-// the turn would not find.
-func (o *outbuf) waitPrompt(t *testing.T, after string) {
-	t.Helper()
-	o.wait(t, fmt.Sprintf("the prompt after %q", after), func(_, screen string) bool { return promptAfter(screen, after) })
-}
-
 // promptAfter is whether the screen holds a line of just ">" below the first
 // line that holds after.
 func promptAfter(screen, after string) bool {
@@ -166,6 +157,40 @@ func promptAfter(screen, after string) bool {
 		}
 	}
 	return false
+}
+
+// screenNow is the screen as it is now (the scrollback and the visible rows).
+func (o *outbuf) screenNow() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.em.History(-1)
+}
+
+// sayUntil types text and waits for done to hold of the screen. A call to the engine that
+// passes the 800 ms the dispatcher waits (classes.DegradedReason: a loaded machine, the
+// Windows runner) is decided alone, opens no request and keeps no waiting state (the
+// engine drops what comes after the deadline), so the message is typed again once the
+// agent is free; a step that is not about that deadline does not fail on it.
+func sayUntil(t *testing.T, ctx context.Context, term *terminal.Terminal, o *outbuf, text string, done func(screen string) bool) {
+	t.Helper()
+	for try := 1; ; try++ {
+		seen := strings.Count(o.screenNow(), classes.DegradedReason)
+		say(t, ctx, term, text)
+		o.wait(t, fmt.Sprintf("the answer to %q", text), func(_, screen string) bool {
+			return done(screen) || strings.Count(screen, classes.DegradedReason) > seen
+		})
+		if done(o.screenNow()) {
+			return
+		}
+		if try == 5 {
+			t.Fatalf("the engine did not answer %q in time in %d tries:\n%s", text, try, o.screenNow())
+		}
+		// the turn is over when the last line of the screen is the prompt: only then the agent takes the message again
+		o.wait(t, "the agent free again", func(_, screen string) bool {
+			lines := strings.Split(strings.TrimRight(screen, " \n"), "\n")
+			return len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == ">"
+		})
+	}
 }
 
 // wait waits until holds says so of the raw output and of the screen (the
