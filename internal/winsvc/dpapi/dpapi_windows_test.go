@@ -99,3 +99,28 @@ func TestOnlyRegularFilesAreRead(t *testing.T) {
 		t.Error("ReadFile of a directory succeeded")
 	}
 }
+
+// A file open for reading (a status check, an antivirus) must not make the
+// erasing of the key fail with a sharing violation. Replacing it is another
+// matter: MoveFileEx onto a file that is open is denied even with
+// FILE_SHARE_DELETE, and the key is only rewritten by the Citadel and by the
+// import of a copy, which do not run while it is erased.
+func TestAFileOpenForReadingCanBeRemoved(t *testing.T) {
+	t.Parallel()
+	me, err := CurrentAccount()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "k")
+	if err := WriteFile(path, []byte("one"), me); err != nil {
+		t.Fatal(err)
+	}
+	f, err := openChecked(path, me, windows.GENERIC_READ)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := os.Remove(path); err != nil {
+		t.Errorf("removing a file that is open for reading: %v", err)
+	}
+}
