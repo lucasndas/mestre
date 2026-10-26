@@ -212,25 +212,21 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $pkgs = go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... | Where-Object { $_ -and $_ -notlike '*realaccount*' }
+          $pkgs = go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}|{{.Dir}}{{end}}' ./... | Where-Object { $_ -and $_ -notlike '*realaccount*' }
           "packages with tests: $($pkgs.Count)"
           $bins = Join-Path $env:RUNNER_TEMP 'bins'
           New-Item -ItemType Directory -Force $bins | Out-Null
-          $t = Measure-Command { go test -c -o "$bins\" $pkgs | Out-Null }
-          "E1 test -c first: $($t.TotalSeconds)"
+          $items = $pkgs | ForEach-Object { $x = $_ -split '\|'; [pscustomobject]@{ Pkg = $x[0]; Dir = $x[1]; Exe = (Join-Path $bins (($x[0] -replace '[/\\]', '_') + '.exe')) } }
+          $build = { param($it) go test -c -o $it.Exe $it.Pkg 2>&1 | Out-Null }
+          $t = Measure-Command { $items | ForEach-Object -ThrottleLimit 4 -Parallel { go test -c -o $_.Exe $_.Pkg 2>&1 | Out-Null } }
+          "E1 test -c first x4: $($t.TotalSeconds)"
           Remove-Item "$bins\*" -Force
-          $t = Measure-Command { go test -c -o "$bins\" $pkgs | Out-Null }
-          "E2 test -c cached: $($t.TotalSeconds)"
-          (Get-ChildItem $bins | Measure-Object -Property Length -Sum).Sum
-          $t = Measure-Command { go test -count=1 -run '^$' ./... | Out-Null }
-          "A norun all: $($t.TotalSeconds)"
-          $dirs = @{}
-          go list -f '{{.ImportPath}} {{.Dir}}' $pkgs | ForEach-Object { $x = $_ -split ' ', 2; $dirs[$x[0]] = $x[1] }
-          $items = $pkgs | ForEach-Object { [pscustomobject]@{ Name = ($_ -split '/')[-1]; Dir = $dirs[$_]; Pkg = $_ } }
+          $t = Measure-Command { $items | ForEach-Object -ThrottleLimit 4 -Parallel { go test -c -o $_.Exe $_.Pkg 2>&1 | Out-Null } }
+          "E2 test -c cached x4: $($t.TotalSeconds)"
+          "bins: " + (Get-ChildItem $bins | Measure-Object).Count + " size " + (Get-ChildItem $bins | Measure-Object -Property Length -Sum).Sum
           $t = Measure-Command {
             $items | ForEach-Object -ThrottleLimit 4 -Parallel {
-              $exe = Join-Path $using:bins ($_.Name + '.test.exe')
-              if (Test-Path $exe) { Push-Location $_.Dir; & $exe '-test.count=1' | Out-Null; Pop-Location }
+              if (Test-Path $_.Exe) { Push-Location $_.Dir; & $_.Exe '-test.count=1' 2>&1 | Out-Null; Pop-Location }
             }
           }
           "F run binaries x4: $($t.TotalSeconds)"
