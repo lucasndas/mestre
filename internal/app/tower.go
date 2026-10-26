@@ -217,6 +217,14 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 		Hooks: protocol.Hooks{
 			OnConnect: func(*protocol.Session) {
 				locator.Connected(pctx)
+				e.setConnected(true)
+				e.down.Back()
+				kickRenew()
+			},
+			// From OnReady the connection is the current one of the link: at
+			// OnConnect a send still finds the link without it (or on the one
+			// that just ended), and the resync, which is transient, would be lost.
+			OnReady: func(*protocol.Session) {
 				go func() {
 					if link := e.towerLink(); link != nil {
 						e.resyncCharacters(pctx, link)
@@ -228,9 +236,6 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 						e.log.Warn("app: the commits of the tables were not sent again", "err", err)
 					}
 				}()
-				e.setConnected(true)
-				e.down.Back()
-				kickRenew()
 			},
 			OnDisconnect: func(*protocol.Session, error) {
 				e.setConnected(false)

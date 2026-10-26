@@ -68,6 +68,13 @@ func (s *Service) Withdraw(ctx context.Context, id int64, why string) error {
 	if r.State != Open {
 		return nil
 	}
+	// The hour of the entry ends the request in two places at once: its own
+	// deadline here and the expiry of the entry in the Citadel. Whichever runs
+	// first, the request ends expired, not cancelled.
+	if r.Type == classes.RequestGuildEntry && !s.clk.Now().Before(r.CreatedAt.Add(GuildEntryValidity)) {
+		s.expire(ctx, r.ID)
+		return nil
+	}
 	s.cancel(ctx, r, why)
 	return nil
 }

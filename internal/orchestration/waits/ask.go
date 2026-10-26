@@ -261,8 +261,10 @@ func (s *Service) TurnEnded(ctx context.Context, c characters.Character, lastMes
 		return err
 	}
 	for _, a := range asks {
-		it, err := s.o.Inbox.Store().Get(ctx, a.Item)
-		if err != nil || (it.State != inbox.Delivering && it.State != inbox.Delivered) {
+		// by the ref of the item, not by a.Item: the ask records its item after
+		// the enqueue, which delivers at once, and a fast turn can end before that
+		it, found, err := s.o.Inbox.Store().ByAsk(ctx, a.ID)
+		if err != nil || !found || (it.State != inbox.Delivering && it.State != inbox.Delivered) {
 			continue // this turn was not the one of the ask
 		}
 		answer := lastMessage

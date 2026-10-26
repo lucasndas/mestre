@@ -69,6 +69,11 @@ func (rt *Runtime) DeliverInbox(ctx context.Context, d protocol.InboxDeliver) (p
 	if !s.status().State.Receives() || s.holdsFirst() {
 		return busy, nil
 	}
+	// Typing is an act on this machine: the connection of the command falling
+	// halfway must not cancel it. Cancelled after the keys went into the
+	// terminal, it would fail without marking the item typed, and the Citadel
+	// would send it again and type it twice.
+	ctx = context.WithoutCancel(ctx)
 	long := rt.o.LongText
 	if long <= 0 {
 		long = DefaultLongText
