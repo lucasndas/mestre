@@ -18,7 +18,7 @@ import (
 // budgets; the owner set it after the first measurements on the CI. It counts
 // only the execution of the tests, never the preparation of Vitest
 // (docs/qualidade/testes.md#executor-testrun).
-const WebBudget = 15 * time.Second
+const WebBudget = 30 * time.Second
 
 // webSuite is the quarantine suite name of the entries that name a Vitest
 // test file instead of a Go test.

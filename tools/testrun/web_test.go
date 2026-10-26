@@ -97,7 +97,7 @@ func TestWebSideRunsVitestBiomeAndTscSideBySide(t *testing.T) {
 			t.Errorf("%q: calls %v", want, calls)
 		}
 	}
-	if !strings.Contains(out.String(), "PASS fast web: 1 tests in 5ms (budget 15s)") || len(ex.callsMatching("tool test2json")) != 1 {
+	if !strings.Contains(out.String(), "PASS fast web: 1 tests in 5ms (budget 30s)") || len(ex.callsMatching("tool test2json")) != 1 {
 		t.Fatalf("output:\n%s", out)
 	}
 
@@ -197,7 +197,7 @@ func (c *checkGateClock) Now() time.Time {
 // CA-TESTES-15
 func TestWebSideHasItsOwnBudgetAndTheGoOnesStay(t *testing.T) {
 	t.Parallel()
-	if WebBudget != 15*time.Second || Suites["fast"].Budget != 36*time.Second || Suites["full"].Budget != 216*time.Second {
+	if WebBudget != 30*time.Second || Suites["fast"].Budget != 36*time.Second || Suites["full"].Budget != 216*time.Second {
 		t.Fatalf("budgets: web %v, fast %v, full %v", WebBudget, Suites["fast"].Budget, Suites["full"].Budget)
 	}
 	run := func(wall time.Duration, execMs int) (int, string) {
@@ -216,18 +216,18 @@ func TestWebSideHasItsOwnBudgetAndTheGoOnesStay(t *testing.T) {
 		r, out := newRunner(webFS(nil), clk, ex)
 		return r.RunSuite(context.Background(), Suites["fast"]), out.String()
 	}
-	// Go takes 20 s (under its 36 s) and the tests 14 s (under 15 s).
-	if code, text := run(15*time.Second, 14000); code != 0 || !strings.Contains(text, "PASS fast web") || !strings.Contains(text, "slow: 1 web test(s)") {
+	// Go takes 20 s (under its 36 s) and the tests 29 s (under 30 s).
+	if code, text := run(30*time.Second, 29000); code != 0 || !strings.Contains(text, "PASS fast web") || !strings.Contains(text, "slow: 1 web test(s)") {
 		t.Fatalf("exit %d:\n%s", code, text)
 	}
-	// The preparation does not count: 40 s in all, 14 s of them in the tests.
-	code, text := run(40*time.Second, 14000)
-	if code != 0 || !strings.Contains(text, "vitest prepare took 26s, not counted in the budget") || !strings.Contains(text, "PASS fast web: 2 tests in 14s (budget 15s)") {
+	// The preparation does not count: 55 s in all, 29 s of them in the tests.
+	code, text := run(55*time.Second, 29000)
+	if code != 0 || !strings.Contains(text, "vitest prepare took 26s, not counted in the budget") || !strings.Contains(text, "PASS fast web: 2 tests in 29s (budget 30s)") {
 		t.Fatalf("exit %d:\n%s", code, text)
 	}
-	// The execution does: 16 s in the tests fail even with a short preparation.
-	code, text = run(17*time.Second, 16000)
-	if code != 1 || !strings.Contains(text, "FAIL web side of fast took 16s, budget 15s. The 10 slowest tests:") || !strings.Contains(text, "a") {
+	// The execution does: 31 s in the tests fail even with a short preparation.
+	code, text = run(32*time.Second, 31000)
+	if code != 1 || !strings.Contains(text, "FAIL web side of fast took 31s, budget 30s. The 10 slowest tests:") || !strings.Contains(text, "a") {
 		t.Fatalf("exit %d:\n%s", code, text)
 	}
 	if strings.Contains(text, "FAIL fast suite took") {
@@ -266,7 +266,7 @@ func TestWebQuarantineShuffleCountAndAffected(t *testing.T) {
 	if !strings.Contains(vs[0].String(), "--sequence.shuffle") || !strings.Contains(vs[0].String(), "--exclude src/flaky.test.ts") {
 		t.Errorf("args: %v", vs[0])
 	}
-	if !strings.Contains(text, "mixed: /w/src/a.test.ts a_b passed 3 failed 2") || !strings.Contains(text, "budget 1m15s") {
+	if !strings.Contains(text, "mixed: /w/src/a.test.ts a_b passed 3 failed 2") || !strings.Contains(text, "budget 2m30s") {
 		t.Fatalf("output:\n%s", text)
 	}
 	if len(ex.callsMatching("biome")) != 0 {
