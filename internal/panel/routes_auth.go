@@ -21,6 +21,7 @@ func mountAuth(r *Router) {
 	r.Public("POST /api/login", p.handleLogin)
 	r.Public("POST /api/first-access", p.handleFirstAccess)
 	r.Auth("POST /api/logout", p.handleLogout)
+	r.Auth("PUT /api/me/language", p.handleLanguage)
 	r.Auth("GET /api/me", p.handleMe)
 	r.Auth("POST /api/password", p.handlePassword)
 	r.Sensitive("POST /api/users/{id}/access-code", "users.access_code", users.ManageUsers, p.handleAccessCode)
@@ -63,7 +64,7 @@ func (p *Panel) clearCookie(w http.ResponseWriter) {
 }
 
 // me is the answer that opens a session.
-func (p *Panel) me(u users.User, ss Session) Me {
+func (p *Panel) me(ctx context.Context, u users.User, ss Session) Me {
 	var caps []string
 	for _, c := range users.Capabilities() {
 		if users.Can(u.Level, c) {
@@ -76,10 +77,23 @@ func (p *Panel) me(u users.User, ss Session) Me {
 		ws = []string{}
 	}
 	return Me{
-		User:         UserInfo{ID: u.ID, Name: u.Name, Login: u.Login, Level: string(u.Level), LevelName: u.Level.Name(), Workspaces: ws, HasPIN: u.HasPIN},
+		User:         UserInfo{ID: u.ID, Name: u.Name, Login: u.Login, Level: string(u.Level), LevelName: u.Level.Name(), Workspaces: ws, HasPIN: u.HasPIN, Language: u.Language},
 		Session:      SessionInfo{ID: ss.ID, UserID: ss.UserID, Device: ss.Device, IP: ss.IP, CreatedAt: ss.CreatedAt, LastUsedAt: ss.LastUsedAt, Current: true},
 		Capabilities: caps,
+		Timezone:     p.timezone(ctx),
 	}
+}
+
+// timezone is the IANA name of the Guild time zone (UTC when it has none).
+func (p *Panel) timezone(ctx context.Context) string {
+	var name string
+	if err := p.db.Reader().QueryRowContext(ctx, `SELECT timezone FROM guild WHERE id = 1`).Scan(&name); err != nil || name == "" || name == "Local" {
+		return "UTC"
+	}
+	if _, err := time.LoadLocation(name); err != nil {
+		return "UTC"
+	}
+	return name
 }
 
 // open starts the session of a user and answers with who he is.
@@ -92,7 +106,7 @@ func (p *Panel) open(w http.ResponseWriter, r *http.Request, u users.User, actio
 	}
 	p.audit(r.Context(), action, map[string]any{"user_id": u.ID, "session": ss.ID, "ip": ss.IP, "device": ss.Device})
 	p.setCookie(w, token, ss)
-	WriteJSON(w, http.StatusOK, p.me(u, ss))
+	WriteJSON(w, http.StatusOK, p.me(r.Context(), u, ss))
 }
 
 func (p *Panel) handleSetup(w http.ResponseWriter, r *http.Request) {
@@ -317,7 +331,7 @@ func (p *Panel) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Panel) handleMe(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, p.me(UserOf(r), SessionOf(r)))
+	WriteJSON(w, http.StatusOK, p.me(r.Context(), UserOf(r), SessionOf(r)))
 }
 
 func (p *Panel) handlePassword(w http.ResponseWriter, r *http.Request) {
@@ -384,4 +398,22 @@ func (p *Panel) handleAccessCode(w http.ResponseWriter, r *http.Request) {
 		p.audit(ctx, "panel.access_code.created", map[string]any{"user_id": UserOf(r).ID, "target": target, "kind": c.Kind, "expires_at": c.ExpiresAt, "ip": clientIP(r)})
 		WriteJSON(w, http.StatusOK, AccessCodeResponse{Code: c.Code, Kind: c.Kind, ExpiresAt: c.ExpiresAt})
 	}
+}
+
+func (p *Panel) handleLanguage(w http.ResponseWriter, r *http.Request) {
+	u := UserOf(r)
+	var in LanguageRequest
+	if !decode(w, r, &in) {
+		return
+	}
+	switch err := p.users.SetLanguage(r.Context(), u.ID, in.Language); {
+	case errors.Is(err, users.ErrBadLanguage):
+		WriteError(w, Err(CodeBadRequest, "idioma inválido", nil))
+		return
+	case err != nil:
+		WriteError(w, errInternal())
+		return
+	}
+	u.Language = in.Language
+	WriteJSON(w, http.StatusOK, p.me(r.Context(), u, SessionOf(r)))
 }

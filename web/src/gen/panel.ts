@@ -177,6 +177,17 @@ export interface Me {
   user: UserInfo;
   session: SessionInfo;
   capabilities: string[];
+  /**
+   * Timezone is the IANA name of the Guild time zone: every time the panel
+   * shows is in it.
+   */
+  timezone: string;
+}
+/**
+ * LanguageRequest is PUT /api/me/language: "pt-BR" or "en".
+ */
+export interface LanguageRequest {
+  language: string;
 }
 /**
  * UserInfo is the user as the panel shows him.
@@ -189,6 +200,10 @@ export interface UserInfo {
   level_name: string;
   workspaces: string[];
   has_pin: boolean;
+  /**
+   * Language is the language the user chose ("" until chosen: the browser decides).
+   */
+  language: string;
 }
 /**
  * SessionInfo is a session of the panel.

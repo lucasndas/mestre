@@ -61,6 +61,14 @@ type Me struct {
 	User         UserInfo    `json:"user"`
 	Session      SessionInfo `json:"session"`
 	Capabilities []string    `json:"capabilities"`
+	// Timezone is the IANA name of the Guild time zone: every time the panel
+	// shows is in it.
+	Timezone string `json:"timezone"`
+}
+
+// LanguageRequest is PUT /api/me/language: "pt-BR" or "en".
+type LanguageRequest struct {
+	Language string `json:"language"`
 }
 
 // UserInfo is the user as the panel shows him.
@@ -72,6 +80,8 @@ type UserInfo struct {
 	LevelName  string   `json:"level_name"`
 	Workspaces []string `json:"workspaces"`
 	HasPIN     bool     `json:"has_pin"`
+	// Language is the language the user chose ("" until chosen: the browser decides).
+	Language string `json:"language"`
 }
 
 // SessionInfo is a session of the panel.
