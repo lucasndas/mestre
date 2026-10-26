@@ -1,6 +1,6 @@
 # Login do painel
 
-> **Assunto:** login, assistente de criação do Dono, primeiro acesso de cada usuário, sessões com expiração e PIN em ações sensíveis · **Componente:** Painel · **Atualizado:** 2026-10-19
+> **Assunto:** login, assistente de criação do Dono, primeiro acesso de cada usuário, sessões com expiração e PIN em ações sensíveis · **Componente:** Painel · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
@@ -61,6 +61,29 @@ Garantir que só usuários autorizados usem o painel, cada um com o seu nível e
 ### Nível em cada tela
 
 O painel esconde o que o nível não permite, mas quem decide é o servidor, em toda requisição, pela [tabela de níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades).
+
+### Implementação
+
+- **Código:** `internal/panel` (HTTP, sessões, PIN, `/ws/ui`), `internal/users` (senha, códigos, fim das sessões) e a migração `0049_panel.sql` (`users.login` e `password_hash`, `panel_setup_codes`, `panel_access_codes`, `panel_sessions`, `panel_attempts`). Os tipos TypeScript são gerados por `tygo` (`go generate ./internal/panel`) em `web/src/gen/panel.ts`; um teste da suíte rápida falha se o arquivo estiver velho.
+- **Montagem:** o painel responde em todo caminho que nenhuma outra rota da 7443 tem (`/`), atrás do `Gate`: a Cidadela que age serve; Torre e Cidadela suspensa fazem o `307`. Cada área registra as rotas em `routes_<area>.go` com `RegisterArea`. Os arquivos do front vêm de um `fs.FS` (`Deps.PanelAssets`; o padrão é o `webdist` embutido).
+- **Cookie** `__Host-mestre`. **PIN:** cabeçalho `X-Mestre-Pin` na própria requisição da ação (`Router.Sensitive`); o nível é conferido antes. **Origin:** `https://<Host>` em toda requisição que muda algo e na abertura do WebSocket.
+- **Erros:** `{"error": {"code", "params", "message"}}`, o `code` estável (a tradução é do front) e a mensagem em português só de reserva. Códigos: `invalid_credentials` 401, `unauthenticated` 401, `login_blocked` e `rate_limited` 429 (`retry_after_seconds`), `forbidden_level` 403 (`capability`, `need`, `have`), `bad_origin`, `pin_required`, `pin_invalid`, `pin_locked`, `no_pin` e `invalid_code` 403, `password_wrong` 403, `password_too_short` 422 (`min`), `invalid_login` e `invalid_pin` 422, `login_taken` 409, `bad_request` 400, `not_found` 404, `unavailable` 503, `internal` 500.
+
+| Rota | Quem | O que faz |
+|---|---|---|
+| `GET /api/status` | todos | `{setup_open}`: o front abre o assistente ou o login |
+| `POST /api/setup` | todos, enquanto não há usuário | `{code, name, login, password, pin}` cria o Dono e abre a sessão; depois, 404 |
+| `POST /api/login` | todos | `{login, password}` abre a sessão |
+| `POST /api/first-access` | todos | `{code, login, password, pin?}`: primeiro acesso, ou nova senha após redefinição (sem PIN) |
+| `POST /api/logout`, `GET /api/me`, `POST /api/password` | sessão | sair; `{user, session, capabilities}`; `{current, new}` |
+| `GET /api/sessions`, `DELETE /api/sessions/{id}` | sessão | as próprias; o Dono encerra qualquer uma |
+| `GET /api/admin/sessions` | Dono | as de todos |
+| `POST /api/users/{id}/access-code` | Dono, com PIN | `{kind: "first"\|"reset"}` devolve `{code, kind, expires_at}`; o código só aparece nessa resposta |
+
+- **`GET /ws/ui`:** envelope do protocolo sem `machine_id` e `epoch`. O navegador manda `ui.subscribe` e `ui.unsubscribe` com `{topics}`; a Cidadela responde `ui.subscribed {topics, rejected: [{topic, code}]}` (com `reply_to`), manda o retrato como `ui.event {topic, event: "snapshot", data}` e depois cada `ui.event`; um pedido recusado volta como `error` com o corpo de erro acima. As áreas registram o tipo de tópico com `Hub.Provide` (quem pode seguir e o retrato) e publicam com `Hub.Publish` e `Hub.PublishFrame` (frame binário `0x01`). Fila cheia de eventos fecha o socket; a de frames binários perde frames. O fim da sessão fecha com o código `4001`.
+- **Auditoria** (`audit_log`, sem senha, PIN, código nem token): `panel.setup`, `panel.login`, `panel.login.failed`, `panel.login.suspended`, `panel.login.blocked`, `panel.logout`, `panel.first_access`, `panel.password.changed`, `panel.session.ended`, `panel.access_code.created`, `panel.origin_refused`, `panel.pin.ok`, `panel.pin.failed`, `panel.pin.required`, `panel.pin.locked`. O nome de login só entra se for de um usuário.
+- **Código de configuração:** `users.Service.NewSetupCode` o gera (só guarda o hash); `mestre setup-code` abre o banco da Cidadela e o chama, enquanto a instalação (M7) o mostrará no terminal. O comando recusa agente, quem não é root nem administrador, máquina que não é a Cidadela e Guilda que já tem usuário.
+- **Escolhas:** a tentativa de senha é reservada antes de a senha ser conferida (requisições ao mesmo tempo não passam do limite), e uma senha atual errada em `/api/password` conta no mesmo limite; no máximo 3 hashes argon2 ao mesmo tempo, e o excedente recebe `rate_limited`; a troca do posto de Dono encerra as sessões dos dois; o bloqueio do login conta por nome de login, e os erros de código de configuração e de primeiro acesso por IP; o `307` usa `mestre.local` na porta do motor da própria máquina (a Guilda usa uma porta só); a atividade do usuário grava `last_used_at` no máximo uma vez por minuto, porque cada escrita é replicada.
 
 ## Regras e erros
 

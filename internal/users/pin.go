@@ -54,13 +54,16 @@ const (
 	maxThreads   = 16
 )
 
-func (s *Service) hashPIN(pin string) (string, error) {
+func (s *Service) hashPIN(pin string) (string, error) { return hashSecret(s.o.Rand, s.o.PIN, pin) }
+
+// hashSecret is the argon2id hash, in the PHC format, of a PIN or a password,
+// with a salt of its own.
+func hashSecret(rnd io.Reader, c PINCost, secret string) (string, error) {
 	salt := make([]byte, 16)
-	if _, err := io.ReadFull(s.o.Rand, salt); err != nil {
+	if _, err := io.ReadFull(rnd, salt); err != nil {
 		return "", err
 	}
-	c := s.o.PIN
-	key := argon2.IDKey([]byte(pin), salt, c.Time, c.MemoryKiB, c.Threads, pinKeyLen)
+	key := argon2.IDKey([]byte(secret), salt, c.Time, c.MemoryKiB, c.Threads, pinKeyLen)
 	enc := base64.RawStdEncoding
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version, c.MemoryKiB, c.Time, c.Threads, enc.EncodeToString(salt), enc.EncodeToString(key)), nil
 }

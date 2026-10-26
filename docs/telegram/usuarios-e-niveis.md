@@ -1,6 +1,6 @@
 # Usuários e níveis
 
-> **Assunto:** usuários autorizados, níveis e o que cada um pode, cadastro, pareamento, PIN, suspensão e transferência de Dono · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** usuários autorizados, níveis e o que cada um pode, cadastro, pareamento, PIN, suspensão e transferência de Dono · **Componente:** Motor · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
@@ -126,7 +126,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 - Ação negada por nível: o bot ou o painel diz qual nível é exigido. Nada é executado.
 - Mudança de nível ou de workspaces vale na próxima mensagem. Aprovações pendentes que o novo nível não permite são invalidadas, como na suspensão.
 - O Dono não pode suspender nem remover a si mesmo. Antes, precisa transferir o posto.
-- **Implementação:** `internal/users` guarda os usuários (tabelas `users`, `user_workspaces`, `telegram_pairing_codes`, `telegram_pairing_failures`, `pin_requests`, `pin_failures` e `owner_transfers`, no banco da Guilda): a tabela de níveis é `Can`/`Require` (um nível ou capacidade desconhecido é recusado), o pareamento é `NewCode`/`Pair`, o PIN (argon2id) é `StartPIN`/`CheckPIN`/`Consume` e a transferência é `StartTransfer`/`AcceptTransfer`. Quem pede o PIN no Telegram e quem recebe o texto livre do Observador é o [bot](bot.md) (`internal/telegram`, etapa 2): o texto livre de quem não fala com o Grão-Mestre recebe só os comandos do nível (CA-USR-01) e o PIN é uma resposta capturada pelo motor (`PINCapture`, CA-USR-06).
+- **Implementação:** `internal/users` guarda os usuários, o login e a senha do painel (`login.go`; [login](../painel/login.md#implementação)) (tabelas `users`, `user_workspaces`, `telegram_pairing_codes`, `telegram_pairing_failures`, `pin_requests`, `pin_failures` e `owner_transfers`, no banco da Guilda): a tabela de níveis é `Can`/`Require` (um nível ou capacidade desconhecido é recusado), o pareamento é `NewCode`/`Pair`, o PIN (argon2id) é `StartPIN`/`CheckPIN`/`Consume` e a transferência é `StartTransfer`/`AcceptTransfer`. Quem pede o PIN no Telegram e quem recebe o texto livre do Observador é o [bot](bot.md) (`internal/telegram`, etapa 2): o texto livre de quem não fala com o Grão-Mestre recebe só os comandos do nível (CA-USR-01) e o PIN é uma resposta capturada pelo motor (`PINCapture`, CA-USR-06).
 
 ## Critérios de aceite
 

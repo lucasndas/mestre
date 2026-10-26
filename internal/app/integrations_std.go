@@ -148,6 +148,9 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	return r, nil
 }
 
+// PanelPieces implements PanelSource.
+func (r *stdRun) PanelPieces() (*users.Service, users.Alerts) { return r.users, r.alert }
+
 type stdRun struct {
 	s   StandardIntegration
 	env IntegrationEnv

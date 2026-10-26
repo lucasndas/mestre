@@ -130,11 +130,18 @@ func (s *Service) AcceptTransfer(ctx context.Context, by User, pinRequest string
 		if err := one(tx.ExecContext(ctx, `UPDATE users SET level = 'owner', updated_at = ? WHERE id = ? AND state = 'active'`, ms(now), by.ID)); err != nil {
 			return err
 		}
+		for _, u := range []string{from, by.ID} { // a change of level ends the sessions
+			if err := endSessions(ctx, tx, u, ""); err != nil {
+				return err
+			}
+		}
 		return tx.QueryRowContext(ctx, `SELECT name FROM users WHERE id = ?`, by.ID).Scan(&newName)
 	})
 	if err != nil {
 		return err
 	}
+	s.sessionsEnded(ctx, from)
+	s.sessionsEnded(ctx, by.ID)
 	s.levelsChanged(ctx) // the Owner of the decrees is another now
 	if s.o.Alerts != nil {
 		s.o.Alerts.Tell(ctx, from, fmt.Sprintf("%s aceitou o posto de Dono. Você agora é Administrador.", newName))
