@@ -12,14 +12,4 @@ tests:
   - test: TestTheConnectionFallingAndComingBackDuringAStepLeavesNoHoleInTheOutputAndRepeatsNoCommand
     issue: https://github.com/mestre-ia/mestre/issues/329
     added: 2026-10-26
-    reason: on Linux CI the mirror push of meu-app hit context deadline exceeded (28 s) in a PR that touched no engine code
-  - test: TestTwoHundredPreToolCallsAreUnderASecondAtP95
-    issue: https://github.com/mestre-ia/mestre/issues/350
-    added: 2026-10-26
-    reason: absolute p95 timing bound failed on the Windows full suite under runner load (87.7 s)
-  - test: TestAnEntryThatNobodyAnswersIsTakenDownAfterTheHour
-    issue: https://github.com/mestre-ia/mestre/issues/342
-    added: 2026-10-26
-    reason: failed in the fast suite of the main push of #341 (30 ms run); flagged flaky by the nightly hunt
-    suite: fast
-
+    reason: a Tower cut mid-step leaves the item stuck for 20-30 s (a report handler of the Citadel waits on inbox.deliver while the resend of the same report waits for it across connections); the double typing is fixed, this deadlock is not (see the issue)
