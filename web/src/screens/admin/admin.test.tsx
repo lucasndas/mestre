@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
-import { fakeServer, ME, renderApp } from "../../test-utils";
+import { fakeServer, fill, ME, renderApp } from "../../test-utils";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -87,17 +87,17 @@ test("the Owner registers a user with the PIN and sees the code of first access 
       },
     }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/usuarios");
   await user.click(await screen.findByRole("button", { name: "Cadastrar usuário" }));
   const submit = screen.getByRole("button", { name: "Cadastrar usuário" });
   expect((submit as HTMLButtonElement).disabled).toBe(true); // no name yet
-  await user.type(screen.getByLabelText("Nome"), "Ana Lima");
+  await fill(user, screen.getByLabelText("Nome"), "Ana Lima");
   await user.click(screen.getByRole("radio", { name: /Observador/ }));
   await user.click(screen.getByRole("checkbox", { name: "loja" }));
   await user.click(screen.getByRole("button", { name: "Cadastrar usuário" }));
   // the PIN is asked after the button and goes in the very request
-  await user.type(screen.getByLabelText("PIN"), "123456");
+  await fill(user, screen.getByLabelText("PIN"), "123456");
   await user.click(screen.getByRole("button", { name: "Cadastrar usuário" }));
   expect(
     await screen.findByRole("heading", { name: "Código de primeiro acesso de Ana Lima" }),
@@ -124,11 +124,11 @@ test("a refusal of the server shows its text and changes nothing on the screen",
       body: { error: { code: "pin_invalid", message: "x" } },
     }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/usuarios");
   await user.click(await screen.findByRole("button", { name: "Gerenciar Bruno Dias" }));
   await user.click(screen.getByRole("button", { name: "Suspender" }));
-  await user.type(screen.getByLabelText("PIN"), "000000");
+  await fill(user, screen.getByLabelText("PIN"), "000000");
   await user.click(screen.getByRole("button", { name: "Suspender" }));
   expect((await screen.findByRole("alert")).textContent).toBe("PIN incorreto.");
   expect(screen.queryByText("Suspenso")).toBeNull();
@@ -153,14 +153,14 @@ test("the user list shows the state of the GitHub credential and the codes need 
       body: { code: "RESET234", kind: "reset", expires_at: "2026-10-26T12:30:00Z" },
     }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/usuarios");
   expect(
     await screen.findByText(/GitHub conectado como bruno-gh, renovado até 26\/10\/2026, 17:00/),
   ).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Gerenciar Bruno Dias" }));
   await user.click(screen.getByRole("button", { name: "Redefinir a senha" }));
-  await user.type(screen.getByLabelText("PIN"), "123456");
+  await fill(user, screen.getByLabelText("PIN"), "123456");
   await user.click(screen.getByRole("button", { name: "Redefinir a senha" }));
   expect(
     await screen.findByRole("heading", { name: "Código para a nova senha de Bruno Dias" }),
@@ -222,14 +222,14 @@ test("replacing a site credential asks for the PIN and writes the whole credenti
     "GET /api/secrets": () => ({ body: { secrets: [secret({})] } }),
     "PUT /api/secrets/gmail": () => ({ body: secret({}) }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/segredos");
   await user.click(await screen.findByRole("button", { name: "Substituir gmail" }));
-  await user.type(screen.getByLabelText("Página de login"), "https://mail.exemplo.com/entrar");
-  await user.type(screen.getByLabelText("Usuário"), "maria@exemplo.com");
-  await user.type(screen.getByLabelText("Senha, token ou chave"), "senha-nova-longa");
+  await fill(user, screen.getByLabelText("Página de login"), "https://mail.exemplo.com/entrar");
+  await fill(user, screen.getByLabelText("Usuário"), "maria@exemplo.com");
+  await fill(user, screen.getByLabelText("Senha, token ou chave"), "senha-nova-longa");
   await user.click(screen.getByRole("button", { name: "Substituir" }));
-  await user.type(screen.getByLabelText("PIN"), "123456");
+  await fill(user, screen.getByLabelText("PIN"), "123456");
   await user.click(screen.getByRole("button", { name: "Substituir" }));
   expect(await screen.findByText("Segredo substituído.")).toBeTruthy();
   const put = calls.find((c) => c.method === "PUT");
@@ -256,20 +256,20 @@ test("a site credential is registered with every field and the suggestion of an 
     "GET /api/secrets": () => ({ body: { secrets: [] } }),
     "POST /api/secrets/site": () => ({ status: 201, body: secret({ name: "Banco" }) }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/segredos");
   await user.click(await screen.findByRole("button", { name: "Cadastrar credencial de site" }));
   expect(screen.getByText(/Prefira senha de app, token ou chave de API/)).toBeTruthy();
-  await user.type(screen.getByLabelText("Nome da credencial"), "Banco");
-  await user.type(screen.getByLabelText("Página de login"), "https://banco.exemplo.com");
-  await user.type(screen.getByLabelText("Usuário"), "maria");
-  await user.type(screen.getByLabelText("Senha, token ou chave"), "s3gredo-longo");
+  await fill(user, screen.getByLabelText("Nome da credencial"), "Banco");
+  await fill(user, screen.getByLabelText("Página de login"), "https://banco.exemplo.com");
+  await fill(user, screen.getByLabelText("Usuário"), "maria");
+  await fill(user, screen.getByLabelText("Senha, token ou chave"), "s3gredo-longo");
   await user.click(screen.getByRole("radio", { name: "Token" }));
-  await user.type(screen.getByLabelText(/Classes que podem usar/), "pesquisador, contador");
-  await user.type(screen.getByLabelText(/Domínios permitidos/), "banco.exemplo.com");
-  await user.type(screen.getByLabelText(/Validade/), "2027-01-15");
+  await fill(user, screen.getByLabelText(/Classes que podem usar/), "pesquisador, contador");
+  await fill(user, screen.getByLabelText(/Domínios permitidos/), "banco.exemplo.com");
+  await fill(user, screen.getByLabelText(/Validade/), "2027-01-15");
   await user.click(screen.getByRole("button", { name: "Cadastrar credencial" }));
-  await user.type(screen.getByLabelText("PIN"), "123456");
+  await fill(user, screen.getByLabelText("PIN"), "123456");
   await user.click(screen.getByRole("button", { name: "Cadastrar credencial" }));
   expect(await screen.findByText("Credencial cadastrada.")).toBeTruthy();
   expect(
@@ -293,7 +293,7 @@ test("a new recovery key shows the warning first, asks for the PIN and shows the
     "GET /api/secrets": () => ({ body: { secrets: [] } }),
     "POST /api/recovery-key": () => ({ body: { key: "ABCD-EFGH-IJKL-MNOP" } }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/segredos");
   await user.click(await screen.findByRole("button", { name: "Gerar nova chave de recuperação" }));
   // the warning about the old backups is before the PIN, and the button waits for the reading
@@ -305,7 +305,7 @@ test("a new recovery key shows the warning first, asks for the PIN and shows the
   expect(calls.some((c) => c.path === "/api/recovery-key")).toBe(false);
   await user.click(screen.getByRole("checkbox", { name: /Li o aviso/ }));
   await user.click(screen.getByRole("button", { name: "Gerar a nova chave" }));
-  await user.type(screen.getByLabelText("PIN"), "123456");
+  await fill(user, screen.getByLabelText("PIN"), "123456");
   await user.click(screen.getByRole("button", { name: "Gerar a nova chave" }));
   expect(await screen.findByTestId("shown-once")).toBeTruthy();
   expect(screen.getByTestId("shown-once").textContent).toBe("ABCD-EFGH-IJKL-MNOP");
@@ -357,7 +357,7 @@ test("the audit shows who did what and when, in the Guild time zone, and filters
       body: { entries: [], next: "", people, workspaces: ["loja"] },
     }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/auditoria");
   expect(await screen.findByText("Usuário cadastrado")).toBeTruthy();
   expect(screen.getByText("citadel.promoted")).toBeTruthy(); // an action the panel has no text for shows its code
@@ -476,14 +476,14 @@ test("the user asked to take the post of Owner sees the banner and accepts with 
       return { status: 204 };
     },
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   const { router } = renderApp("/");
   expect(await screen.findByText(/Maria Souza quer passar o posto de Dono a você/)).toBeTruthy();
   await user.click(screen.getByRole("link", { name: "Ver o pedido" }));
   const page = await screen.findByRole("heading", { name: "Posto de Dono" });
   expect(page).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Aceitar o posto de Dono" }));
-  await user.type(screen.getByLabelText("PIN"), "654321");
+  await fill(user, screen.getByLabelText("PIN"), "654321");
   await user.click(screen.getByRole("button", { name: "Aceitar o posto de Dono" }));
   await waitFor(() => expect(calls.some((c) => c.path === "/api/transfer/accept")).toBe(true));
   expect(calls.find((c) => c.path === "/api/transfer/accept")?.headers["X-Mestre-Pin"]).toBe(

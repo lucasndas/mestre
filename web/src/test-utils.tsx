@@ -1,11 +1,23 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
+import type userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { I18nextProvider } from "react-i18next";
 import { vi } from "vitest";
 import { makeRouter } from "./app/router";
 import { type Language, setupI18n } from "./i18n";
+
+// fill puts text in a field the way a paste does: one input event, not one per
+// key. Only the tests that prove the typing itself type key by key.
+export async function fill(
+  user: ReturnType<typeof userEvent.setup>,
+  el: HTMLElement,
+  text: string,
+) {
+  await user.click(el);
+  await user.paste(text);
+}
 
 export function renderWithI18n(ui: ReactElement, language: Language = "pt-BR") {
   return render(<I18nextProvider i18n={setupI18n(language)}>{ui}</I18nextProvider>);

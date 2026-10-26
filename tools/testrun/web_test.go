@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -159,6 +161,39 @@ func TestWebFailuresFailTheSuite(t *testing.T) {
 	}
 }
 
+// checkGateClock is a fake clock that tells when the Biome and tsc goroutines
+// of RunWeb have read their end time (the Since in their closure), so a test
+// can move the shared clock only after that and keep their duration at zero.
+type checkGateClock struct {
+	*clock.Fake
+	checksDone sync.WaitGroup
+}
+
+func newCheckGateClock(f *clock.Fake) *checkGateClock {
+	c := &checkGateClock{Fake: f}
+	c.checksDone.Add(2)
+	return c
+}
+
+func (c *checkGateClock) Now() time.Time {
+	now := c.Fake.Now()
+	pcs := make([]uintptr, 16)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+	var since, check bool
+	for {
+		f, more := frames.Next()
+		since = since || strings.HasSuffix(f.Function, "clock.Since")
+		check = check || strings.Contains(f.Function, "RunWeb.func")
+		if !more {
+			break
+		}
+	}
+	if since && check {
+		c.checksDone.Done()
+	}
+	return now
+}
+
 // CA-TESTES-15
 func TestWebSideHasItsOwnBudgetAndTheGoOnesStay(t *testing.T) {
 	t.Parallel()
@@ -166,8 +201,18 @@ func TestWebSideHasItsOwnBudgetAndTheGoOnesStay(t *testing.T) {
 		t.Fatalf("budgets: web %v, fast %v, full %v", WebBudget, Suites["fast"].Budget, Suites["full"].Budget)
 	}
 	run := func(wall time.Duration, execMs int) (int, string) {
-		clk := clock.NewFake(today)
-		ex := webExec(clk, wall, func() string { return vitestReportSpan(execMs, "a:passed:300", "b:passed:20") })
+		fake := clock.NewFake(today)
+		clk := newCheckGateClock(fake)
+		ex := webExec(fake, wall, func() string { return vitestReportSpan(execMs, "a:passed:300", "b:passed:20") })
+		// Vitest moves the clock only after Biome and tsc have read their end
+		// time; the checks would count that time.
+		inner := ex.handle
+		ex.handle = func(c Cmd, out io.Writer) int {
+			if isNpx(c, "vitest") {
+				clk.checksDone.Wait()
+			}
+			return inner(c, out)
+		}
 		r, out := newRunner(webFS(nil), clk, ex)
 		return r.RunSuite(context.Background(), Suites["fast"]), out.String()
 	}

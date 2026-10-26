@@ -9,15 +9,10 @@ import type {
   NoticeView,
 } from "../gen/panel";
 import { emit, installFakeSocket, openSocket } from "../test-socket";
-import { fakeServer, ME, renderApp } from "../test-utils";
+import { fakeServer, fill, ME, renderApp } from "../test-utils";
 
 beforeEach(() => installFakeSocket());
 
-// paste is much cheaper than typing key by key, and a field takes it the same way
-async function fill(user: ReturnType<typeof userEvent.setup>, el: HTMLElement, text: string) {
-  await user.click(el);
-  await user.paste(text);
-}
 afterEach(() => vi.unstubAllGlobals());
 
 const ANA = { ...ME, capabilities: ["decide_approvals", "status"] };
@@ -82,7 +77,7 @@ test("the central shows the question, the block of the agent and the answers; th
     ...base([item()]),
     "POST /api/approvals/7/answer": () => ({ body: { state: "approved" } }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/aprovacoes");
   const card = await screen.findByRole("article", { name: "Pedido #7" });
   expect(within(card).getByText(/Comando exato: npm install lodash/)).toBeTruthy();
@@ -123,7 +118,7 @@ test("an answer that needs data shows the field first and does not send it empty
     ...base([item()]),
     "POST /api/approvals/7/answer": () => ({ body: { state: "denied" } }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/aprovacoes");
   const card = await screen.findByRole("article", { name: "Pedido #7" });
   await user.click(within(card).getByRole("button", { name: "Aprovar por um tempo" }));
@@ -163,7 +158,7 @@ test("the delegation shows what it covers before the PIN is asked", async () => 
       }),
     ]),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/aprovacoes");
   const card = await screen.findByRole("article", { name: "Pedido #7" });
   await user.click(within(card).getByRole("button", { name: "Delegar" }));
@@ -220,7 +215,7 @@ test("a request that ended while the user was answering says why, in his languag
       }),
     }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/aprovacoes", "en");
   const card = await screen.findByRole("article", { name: "Request #7" });
   await user.click(within(card).getByRole("button", { name: "Approve now" }));
@@ -236,7 +231,7 @@ test("the filters go to the server and the empty state says what to do", async (
       "GET /api/approvals?type=aviso": () => list([], []),
     }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/aprovacoes");
   await screen.findByRole("article", { name: "Pedido #7" });
   await user.selectOptions(screen.getByLabelText("Workspace"), "loja");
@@ -297,7 +292,7 @@ test("Ver detalhes shows the whole question with the target and the diff of the 
       },
     }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/aprovacoes");
   const card = await screen.findByRole("article", { name: "Pedido #7" });
   await user.click(within(card).getByRole("button", { name: "Ver detalhes" }));
@@ -330,7 +325,7 @@ test("a blocking notice shows the whole evidence and the text of the agent apart
   const owner = fakeServer({
     ...base([], { "GET /api/approvals": () => list([], [blocking(true)]) }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   const view = renderApp("/aprovacoes");
   const card = await screen.findByRole("article", { name: "Aviso de bloqueio" });
   expect(card.textContent).toContain("checkout_test.go:10 → falhou");
@@ -406,7 +401,7 @@ test("the bell shows the unread count, the notices with their place and hour, an
       return { status: 204 };
     },
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/");
   const bell = await screen.findByRole("button", { name: "Avisos, 2 não lidos" });
   await user.click(bell);
@@ -433,7 +428,7 @@ test("a notice of the bell leads to its place and is marked as read; a new one r
     }),
     "POST /api/notices/read": () => ({ status: 204 }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   const view = renderApp("/");
   await user.click(await screen.findByRole("button", { name: "Avisos, 1 não lidos" }));
   const dialog = await screen.findByRole("dialog", { name: "Avisos" });
@@ -486,7 +481,7 @@ test("the history lists what ended with the filters and loads more", async () =>
     "GET /api/approvals/history?before=2": () => ({ body: { items: [row(1)], next: 0 } }),
     "GET /api/approvals/history?state=denied": () => ({ body: { items: [], next: 0 } }),
   });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/aprovacoes/historico");
   expect(await screen.findByText("Pedido #3 · Merge")).toBeTruthy();
   expect(screen.getByText(/Aprovado por Bia \(das pessoas\)/)).toBeTruthy();

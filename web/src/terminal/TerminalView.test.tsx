@@ -204,7 +204,7 @@ test("a terminal is read-only for a level that cannot type: no control, nothing 
 
 test("typing: the busy agent asks for a confirmation first, the keys go to the server, and releasing the keyboard ends the session", async () => {
   vi.useRealTimers();
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   const { feed, typed, ended } = fakeFeed();
   const { factory, lives } = fakeFactory();
   const refresh = vi.fn(async () => info({ busy: true, state: "busy" }));
@@ -243,7 +243,7 @@ test("typing: the busy agent asks for a confirmation first, the keys go to the s
 
 test("leaving the page while typing ends the typing session", async () => {
   vi.useRealTimers();
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   const { feed, ended } = fakeFeed();
   const { factory } = fakeFactory();
   const { unmount } = renderWithI18n(
@@ -265,7 +265,7 @@ test("leaving the page while typing ends the typing session", async () => {
 
 test("a refusal of the server is shown translated and a refused level releases the keyboard", async () => {
   vi.useRealTimers();
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   const { feed, followers } = fakeFeed();
   const { factory, lives } = fakeFactory();
   renderWithI18n(

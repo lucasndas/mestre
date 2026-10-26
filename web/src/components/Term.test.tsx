@@ -13,7 +13,7 @@ import { Term } from "./Term";
 test("the help of Party is exactly the short help of the glossary", async () => {
   const party = glossary.Party["pt-BR"];
   expect(party.help).toBe("O time de personagens conectados desta mesa.");
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderWithI18n(<Term name="Party" />, "pt-BR");
   await user.click(screen.getByRole("button", { name: /Party/ }));
   const dialog = await screen.findByRole("dialog");
@@ -36,7 +36,7 @@ test("every <Term name> of the panel is a row of the glossary", () => {
 });
 
 test("the help is in English when the panel is in English", async () => {
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderWithI18n(<Term name="Cidadela" />, "en");
   await user.click(screen.getByRole("button", { name: /Citadel/ }));
   const dialog = await screen.findByRole("dialog");
