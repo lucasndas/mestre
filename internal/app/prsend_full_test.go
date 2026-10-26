@@ -27,6 +27,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/testkit/fakegithub"
+	"github.com/mestre-ia/mestre/internal/users"
 	"github.com/mestre-ia/mestre/internal/vault"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
@@ -217,7 +218,7 @@ func (w *prWorld) githubReady(orc *Orchestration, db *store.DB) {
 // period of the orchestration and has the commands of GitHub act under the fence.
 func (w *prWorld) attach(orc *Orchestration, db *store.DB, v *vault.Vault, fence *guild.Fence) {
 	t := w.t
-	std := StandardIntegration{GitHubBase: w.url, GitHubWeb: w.url, HTTP: &http.Client{Timeout: 10 * time.Second}}
+	std := StandardIntegration{HashCost: users.PINCost{MemoryKiB: 8, Time: 1, Threads: 1}, GitHubBase: w.url, GitHubWeb: w.url, HTTP: &http.Client{Timeout: 10 * time.Second}}
 	run, err := std.Open(t.Context(), IntegrationEnv{DB: db, Vault: v, Clock: clock.Real{}, Machine: w.a.id, Masker: logging.NewMasker()})
 	if err != nil {
 		t.Fatal(err)

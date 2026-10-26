@@ -76,7 +76,7 @@ func newWorld(t *testing.T) *world {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	w := &world{t: t, ctx: ctx, clk: clk, db: db, al: &alerts{}, appr: &approvals{}}
-	w.svc, err = users.New(users.Options{DB: db, Clock: clk, Alerts: w.al, Approvals: w.appr, PIN: users.PINCost{MemoryKiB: 8, Time: 1, Threads: 1}})
+	w.svc, err = users.New(users.Options{DB: db, Clock: clk, Alerts: w.al, Approvals: w.appr, PIN: users.PINCost{MemoryKiB: 8, Time: 1, Threads: 1}, Password: users.PINCost{MemoryKiB: 8, Time: 1, Threads: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}
