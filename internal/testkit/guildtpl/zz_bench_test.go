@@ -1,3 +1,5 @@
+//go:build zz
+
 package guildtpl
 
 import (

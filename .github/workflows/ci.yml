@@ -212,8 +212,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          go test -count=1 -v -run TestZZ ./internal/testkit/guildtpl | Select-String 'ZZ'
-          go test -count=1 -v -run TestZZ ./internal/testkit/guildtpl | Select-String 'ZZ'
+          go test -tags zz -count=1 -v -run TestZZ ./internal/testkit/guildtpl | Select-String 'ZZ'
+          go test -tags zz -count=1 -v -run TestZZ ./internal/testkit/guildtpl | Select-String 'ZZ'
 
       - name: Full suite
         if: env.CODE == 'true' && false
