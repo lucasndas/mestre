@@ -208,6 +208,19 @@ func TestServerFieldsAndOrderAreNotDrift(t *testing.T) {
 			t.Fatalf("differences = %q", got)
 		}
 	})
+	t.Run("a new setting that is an object switched off", func(t *testing.T) {
+		t.Parallel()
+		live := serverView(t)
+		p := rule(live, "pull_request")["parameters"].(map[string]any)
+		p["dismissal_restriction"] = map[string]any{"enabled": false, "allowed_actors": []any{}}
+		if got := compare(t, doc(block), live); len(got) != 0 {
+			t.Fatalf("differences = %q", got)
+		}
+		p["dismissal_restriction"] = map[string]any{"enabled": true, "allowed_actors": []any{}}
+		if got := compare(t, doc(block), live); len(got) != 1 {
+			t.Fatalf("an object switched on is drift; differences = %q", got)
+		}
+	})
 	t.Run("the repository's document and CI", func(t *testing.T) {
 		t.Parallel()
 		md, err := os.ReadFile("../../docs/desenvolvimento/ambiente.md")
