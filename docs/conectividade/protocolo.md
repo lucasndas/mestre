@@ -1,6 +1,6 @@
 # Protocolo entre as máquinas da Guilda e o navegador
 
-> **Assunto:** conexão WSS iniciada pela Torre até a Cidadela atual: endpoints, envelope com época, versão, ack e idempotência, multiplexação, tipos de mensagem, transferência em partes, Guardião e navegador · **Componente:** Todos · **Atualizado:** 2026-10-19
+> **Assunto:** conexão WSS iniciada pela Torre até a Cidadela atual: endpoints, envelope com época, versão, ack e idempotência, multiplexação, tipos de mensagem, transferência em partes, Guardião e navegador · **Componente:** Todos · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
@@ -110,7 +110,7 @@ O catálogo de tipos, com os campos principais e as respostas, e a tabela de có
 ### Canal do navegador
 
 - **Conexão:** `/ws/ui`, autenticado pelo cookie de sessão (`HttpOnly`, `Secure`, `SameSite=Strict`), com o `Origin` conferido. O envelope é o mesmo, sem `machine_id` nem `epoch`.
-- **Assinaturas:** o navegador assina tópicos com `ui.subscribe` (`workspace:<id>`, `table:<id>`, `terminal:<id>`). Recebe um retrato inicial e depois os eventos (`ui.event`).
+- **Assinaturas:** o navegador assina tópicos com `ui.subscribe` (`workspace:<id>`, `table:<id>`, `terminal:<id>`). Recebe um retrato inicial e depois os eventos (`ui.event`); `ui.unsubscribe` sai de tópicos e o fim da sessão fecha o socket com `4001` (formatos em [login](../painel/login.md#implementação)).
 - **Terminais:**
   - A saída chega em frames `0x01`, repassados pela Cidadela sem guardar buffer. Ao abrir um terminal, a Cidadela pede à máquina dele o `terminal.replay` do buffer e repassa ao navegador; o tamanho do terminal é fixo e o navegador nunca o muda ([terminal](../arquitetura/terminal.md)).
   - Para cada navegador, a fila tem limite. Cliente lento perde o fluxo e recebe de novo o replay do buffer.

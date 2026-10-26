@@ -533,6 +533,8 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 				e.setLocked(nil) // the lock of a period is not the next one's
 				integ.Close()    // before the database is closed (the deferred function above)
 			}()
+			// the panel is served by the Citadel that acts; it ends before the integration
+			defer e.openPanel(pctx, db, integ, e.deps.PanelAssets, func(f func()) { wg.Go(f) })()
 		}
 		orc, err := e.hostOrchestration(db, integ)
 		if err != nil {

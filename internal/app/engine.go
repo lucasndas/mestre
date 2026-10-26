@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -28,6 +29,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/machinesheet"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/protocol"
 	"github.com/mestre-ia/mestre/internal/providers"
 	"github.com/mestre-ia/mestre/internal/store"
@@ -190,6 +192,10 @@ type Deps struct {
 	// orchestration, the bot of the Telegram, the users, the flow of approval and
 	// the commands of GitHub (StandardIntegration); nil: none.
 	Integration Integration
+	// PanelAssets are the files of the front end of the panel (nil: the build
+	// embedded in the binary, internal/panel/webdist). The tests of the engine
+	// give a fstest.MapFS: none depends on the build.
+	PanelAssets fs.FS
 	// Whisper is the whisper-server of this machine, which it uses to transcribe
 	// the audio another machine of the Guild sends it (nil: this machine does not
 	// transcribe for others; the installation sets it, milestone 7).
@@ -244,6 +250,7 @@ type Engine struct {
 	hk       atomic.Pointer[hook.Engine]     // the hook engine of this machine, which also decides the pre-runs
 	mach     atomic.Pointer[machineRouter]   // the machines of the orchestration of the period
 	srvp     atomic.Pointer[protocol.Server] // the protocol server of the period of the Citadel
+	panel    atomic.Pointer[panel.Panel]     // the panel of the period of the Citadel that acts
 	sent     replies                         // the ends of the table.done the Citadel waits for
 	tabs     atomic.Pointer[tables.Service]  // the tables of the period of the Citadel, for the bundles of the Towers
 	member   *guild.Member
@@ -437,6 +444,7 @@ func (e *Engine) Run(ctx context.Context) error {
 		return err
 	}
 	e.towers = keepOpen{protocol.FromTransportListener(e.tls.Route(transport.RouteTower, transport.KindMachine))}
+	e.mountPanel()
 	e.joins = &joinMux{m: e.tls, h: map[string]http.Handler{}}
 	// The routes of the entry exist from the start and answer 503 until a
 	// Citadel that acts mounts its own: a Tower, or a Citadel that has not

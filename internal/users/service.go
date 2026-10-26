@@ -9,6 +9,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/protocol"
@@ -46,6 +47,9 @@ type Options struct {
 	// PIN are the cost of the hash of the PIN; zero is the default
 	// (argon2id, 64 MiB, 2 passes).
 	PIN PINCost
+	// Password is the cost of the hash of the passwords of the panel; zero is
+	// the default, as for the PIN.
+	Password PINCost
 	// Rand is the source of the codes and the salts (crypto/rand by default).
 	Rand io.Reader
 }
@@ -55,6 +59,12 @@ type Service struct {
 	o   Options
 	clk clock.Clock
 	ids *protocol.IDGen
+
+	dummyOnce sync.Once
+	dummyHash string
+
+	endedMu sync.Mutex
+	ended   func(ctx context.Context, userID string)
 }
 
 // New returns the Service.
@@ -66,6 +76,7 @@ func New(o Options) (*Service, error) {
 		o.Rand = rand.Reader
 	}
 	o.PIN = o.PIN.withDefaults()
+	o.Password = o.Password.withDefaults()
 	return &Service{o: o, clk: o.Clock, ids: protocol.NewIDGen(o.Clock)}, nil
 }
 
@@ -78,7 +89,7 @@ func fromMs(v int64) time.Time {
 	return time.UnixMilli(v).UTC()
 }
 
-const userColumns = `id, name, level, state, telegram_id, github_login, pin_hash <> '', pin_locked_until, created_at`
+const userColumns = `id, name, level, state, telegram_id, github_login, pin_hash <> '', pin_locked_until, created_at, login`
 
 func scanUser(sc interface{ Scan(...any) error }) (User, error) {
 	var (
@@ -87,7 +98,7 @@ func scanUser(sc interface{ Scan(...any) error }) (User, error) {
 		hasPIN         bool
 		locked, create int64
 	)
-	if err := sc.Scan(&u.ID, &u.Name, &level, &state, &u.TelegramID, &u.GitHubLogin, &hasPIN, &locked, &create); err != nil {
+	if err := sc.Scan(&u.ID, &u.Name, &level, &state, &u.TelegramID, &u.GitHubLogin, &hasPIN, &locked, &create, &u.Login); err != nil {
 		return User{}, err
 	}
 	u.Level, u.State, u.HasPIN, u.PINLockedUntil, u.CreatedAt = Level(level), State(state), hasPIN, fromMs(locked), fromMs(create)
@@ -318,6 +329,9 @@ func (s *Service) Edit(ctx context.Context, by User, id string, e Edit) (User, e
 			if _, err := tx.ExecContext(ctx, `UPDATE users SET level = ?, updated_at = ? WHERE id = ? AND level <> 'owner' AND ? <> 'owner'`, string(*e.Level), now, id, string(*e.Level)); err != nil {
 				return err
 			}
+			if err := endSessions(ctx, tx, id, ""); err != nil { // a change of level ends the sessions
+				return err
+			}
 		}
 		if e.Workspaces != nil {
 			ws := slices.Clone(*e.Workspaces)
@@ -341,6 +355,9 @@ func (s *Service) Edit(ctx context.Context, by User, id string, e Edit) (User, e
 	})
 	if err != nil {
 		return User{}, err
+	}
+	if relevel {
+		s.sessionsEnded(ctx, id)
 	}
 	if narrowed {
 		if err := s.invalidate(ctx, id); err != nil {
@@ -399,6 +416,9 @@ func (s *Service) setState(ctx context.Context, by User, id string, to State) er
 		if _, err := tx.ExecContext(ctx, `UPDATE pin_requests SET state = 'cancelled' WHERE user_id = ? AND state IN ('open', 'done')`, id); err != nil {
 			return err
 		}
+		if err := endSessions(ctx, tx, id, ""); err != nil {
+			return err
+		}
 		_, err = tx.ExecContext(ctx, `UPDATE owner_transfers SET state = 'cancelled', ended_at = ? WHERE state = 'pending' AND (from_user = ? OR to_user = ?)`, ms(s.clk.Now()), id, id)
 		return err
 	})
@@ -406,6 +426,7 @@ func (s *Service) setState(ctx context.Context, by User, id string, to State) er
 		return err
 	}
 	if to != Active {
+		s.sessionsEnded(ctx, id)
 		return s.invalidate(ctx, id)
 	}
 	return nil

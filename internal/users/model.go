@@ -17,7 +17,9 @@ const (
 
 // User is a user of the Mestre.
 type User struct {
-	ID, Name    string
+	ID, Name string
+	// Login is the login name of the panel (empty until the first access).
+	Login       string
 	Level       Level
 	State       State
 	TelegramID  int64

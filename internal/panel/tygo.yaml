@@ -1,0 +1,13 @@
+# tygo generates the TypeScript types of the API from the Go types
+# (go generate in this package). The output is committed; a test of the fast
+# suite fails when it is stale.
+packages:
+  - path: "github.com/mestre-ia/mestre/internal/panel"
+    output_path: "../../web/src/gen/panel.ts"
+    type_mappings:
+      time.Time: "string"
+      json.RawMessage: "any"
+    include_files:
+      - types.go
+      - errors.go
+      - ws.go
