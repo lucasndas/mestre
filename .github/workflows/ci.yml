@@ -212,38 +212,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $pkgs = go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}|{{.Dir}}{{end}}' ./... | Where-Object { $_ -and $_ -notlike '*realaccount*' }
-          "packages with tests: $($pkgs.Count)"
-          $bins = Join-Path $env:RUNNER_TEMP 'bins'
-          $groups = @()
-          foreach ($line in $pkgs) {
-            $x = $line -split '\|'
-            $name = ($x[0] -split '/')[-1]
-            $placed = $false
-            foreach ($g in $groups) { if (-not $g.Names.Contains($name)) { $g.Names.Add($name) | Out-Null; $g.Items += [pscustomobject]@{ Pkg = $x[0]; Dir = $x[1]; Name = $name }; $placed = $true; break } }
-            if (-not $placed) { $g = [pscustomobject]@{ Names = [System.Collections.Generic.HashSet[string]]::new(); Items = @() }; $g.Names.Add($name) | Out-Null; $g.Items += [pscustomobject]@{ Pkg = $x[0]; Dir = $x[1]; Name = $name }; $groups += $g }
-          }
-          "groups: $($groups.Count)"
-          $build = {
-            $i = 0
-            foreach ($g in $groups) { $i++; $d = "$bins\g$i"; New-Item -ItemType Directory -Force $d | Out-Null; go test -c -o "$d\" ($g.Items | ForEach-Object { $_.Pkg }) 2>&1 | Select-Object -Last 3 }
-          }
-          $t = Measure-Command { & $build }
-          "E1 test -c first: $($t.TotalSeconds)"
-          Remove-Item $bins -Recurse -Force
-          $t = Measure-Command { & $build }
-          "E2 test -c cached: $($t.TotalSeconds)"
-          "bins: " + (Get-ChildItem $bins -Recurse -File | Measure-Object).Count + " size " + (Get-ChildItem $bins -Recurse -File | Measure-Object -Property Length -Sum).Sum
-          $runs = @(); $i = 0
-          foreach ($g in $groups) { $i++; foreach ($it in $g.Items) { $runs += [pscustomobject]@{ Exe = "$bins\g$i\$($it.Name).test.exe"; Dir = $it.Dir } } }
-          $t = Measure-Command {
-            $runs | ForEach-Object -ThrottleLimit 4 -Parallel {
-              if (Test-Path $_.Exe) { Push-Location $_.Dir; & $_.Exe '-test.count=1' 2>&1 | Out-Null; Pop-Location }
-            }
-          }
-          "F run binaries x4: $($t.TotalSeconds)"
-          $t = Measure-Command { go test -count=1 ./... | Out-Null }
-          "G plain go test: $($t.TotalSeconds)"
+          go test -count=1 -v -run TestZZ ./internal/testkit/guildtpl | Select-String 'ZZ'
+          go test -count=1 -v -run TestZZ ./internal/testkit/guildtpl | Select-String 'ZZ'
 
       - name: Full suite
         if: env.CODE == 'true' && false
