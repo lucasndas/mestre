@@ -1,6 +1,7 @@
 #!/bin/sh
-# Pre-commit hook of the repository: runs the fast suite on what is about to
-# be committed, the index, not the working tree (docs/qualidade/testes.md).
+# Pre-commit hook of the repository: runs the affected tests and the linter on
+# what is about to be committed, the index, not the working tree
+# (docs/qualidade/testes.md).
 # The index is written to a folder inside the git directory with
 # `git checkout-index`, so unstaged edits and untracked files never reach the
 # test and nothing in the working tree is touched, stashed or restored.
@@ -18,7 +19,7 @@ snap="$gitdir/precommit-snapshot"
 # The tree of this commit (the index): the same tree passed today, say on an
 # amend, is not tested again.
 tree="$(git write-tree)"
-key="$gitdir/suite-passed/fast-$tree"
+key="$gitdir/suite-passed/affected-$tree"
 if passed "$key" || passed "$gitdir/suite-passed/docs-$tree"; then
 	echo "pre-commit: this tree already passed today, skipped"
 	exit 0
@@ -36,7 +37,7 @@ cd "$snap"
 # A commit of documents only (the same rule as the CI: docs/, the Markdown
 # files of the root and LICENSE) cannot break a Go test, except the ones that
 # read a document: run the document check, the code rules and those tests,
-# found by the path they open, as the CI does, not the whole fast suite.
+# found by the path they open, as the CI does.
 if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qvE '^docs/|^[^/]+\.md$|^LICENSE$'; then
 	echo "pre-commit: only documents changed, running the document checks"
 	docs_checks() {
@@ -48,26 +49,39 @@ if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qvE '^docs/|^[^/]+\.md$|^
 	mark "$gitdir/suite-passed/docs-$tree"
 	exit 0
 fi
-# The web side (Vitest, Biome and tsc, with a budget of its own) runs only
-# when the commit touches web/; the Go side runs always. Vitest does not work
-# in a path with a ".git" folder in it, where the snapshot lives, so the web
-# side runs from a copy of web/ in the temporary folder, borrowing the
-# node_modules of the working tree, with the testrun built from the snapshot.
-web_suite() {
-	exe="$(go env GOEXE)"
-	wsnap="${TMPDIR:-/tmp}/mestre-web-snapshot-$(printf '%s' "$root" | cksum | cut -d' ' -f1)"
-	rm -rf "$wsnap"
-	mkdir -p "$wsnap/test"
-	cp -R web "$wsnap/web"
-	[ ! -f test/quarantine.yaml ] || cp test/quarantine.yaml "$wsnap/test/"
-	[ ! -d "$root/web/node_modules" ] || ln -s "$root/web/node_modules" "$wsnap/web/node_modules"
-	go build -o "$wsnap/testrun$exe" ./tools/testrun
-	go run ./tools/testrun fast -only go
-	(cd "$wsnap" && "./testrun$exe" fast -only web)
+# Only what the change can have broken (docs/qualidade/testes.md, "Testes
+# afetados"): `testrun affected` (Go test cache, the changed packages and their
+# dependents), the linter on the changed packages, and, when web/ changed,
+# Vitest on the related tests plus Biome and tsc. The whole fast suite runs
+# before the push (tools/githooks/pre-push).
+lint_changed() {
+	# go.mod, go.sum or the linter configuration can change every result.
+	if printf '%s\n' "$files" | grep -qE '^(go\.mod|go\.sum|\.golangci\.yml)$'; then
+		golangci-lint run --build-tags full ./...
+		return
+	fi
+	dirs="$(printf '%s\n' "$files" | grep '\.go$' | xargs -r -n1 dirname | sort -u |
+		while read -r d; do [ -d "$d" ] && echo "./$d"; done)"
+	[ -z "$dirs" ] || golangci-lint run --build-tags full $dirs
 }
-if printf '%s\n' "$files" | grep -q '^web/'; then
-	with_suite_lock web_suite
-else
-	with_suite_lock go run ./tools/testrun fast -only go
-fi
+# Vitest does not work in a path with a ".git" folder in it, where the snapshot
+# lives, so the web side runs from a copy of web/ in the temporary folder.
+web_changed() {
+	w="$(web_copy "$root")"
+	webfiles="$(printf '%s\n' "$files" | sed -n 's|^web/||p' | grep -v '^$' | while read -r f; do [ -f "$w/web/$f" ] && echo "$f"; done)"
+	cd "$w/web"
+	if [ -n "$webfiles" ]; then
+		# shellcheck disable=SC2086
+		npx --no-install vitest related --run --passWithNoTests $webfiles
+	fi
+	npx --no-install biome check . && npx --no-install tsc --noEmit
+}
+affected_suite() {
+	go run ./tools/testrun affected -only go
+	lint_changed
+	if printf '%s\n' "$files" | grep -q '^web/'; then
+		(web_changed)
+	fi
+}
+with_suite_lock affected_suite
 mark "$key"

@@ -58,8 +58,8 @@ Na raiz do repositório (o que cada suíte contém e quando roda está em [teste
 
 | Comando | Para quê |
 |---|---|
-| `go run ./tools/testrun affected` | durante o trabalho |
-| `go run ./tools/testrun fast` | antes de cada commit (inclui o golangci-lint e a verificação de docs) |
+| `go run ./tools/testrun affected` | durante o trabalho e antes de cada commit |
+| `go run ./tools/testrun fast` | antes de cada push (inclui o golangci-lint e a verificação de docs) |
 | `go run ./tools/testrun full` | antes do merge |
 | `go run ./tools/testrun fast -race` (ou `full -race`) | o que o CI Linux roda a mais fora do PR (no push para a `main` e sob demanda): o detector de corridas, com orçamento 3 vezes maior (precisa de cgo e de `gcc`); o job `race` do CI passa `-only go`, porque não instala o Node |
 | `go run ./tools/docscheck` | só a [verificação de docs](../qualidade/verificacao-de-docs.md) |
@@ -70,8 +70,8 @@ Na raiz do repositório (o que cada suíte contém e quando roda está em [teste
 
 Versionados em `tools/githooks/`. Ligue uma vez em cada clone, na raiz: `git config core.hooksPath tools/githooks` (no Windows, o Git for Windows roda os ganchos com o `sh` dele). Os dois testam **o que vai ser gravado ou enviado**, não a pasta de trabalho: escrevem esse conteúdo numa pasta dentro da pasta do git, sempre com o mesmo caminho, para o cache de compilação do Go e do lint continuar quente. Nada da pasta de trabalho é guardado, trocado ou restaurado (sem `stash`): edições não adicionadas e arquivos novos não entram no teste.
 
-- **`pre-commit`** roda a rápida sobre o índice (`git checkout-index`, que vale também para `commit -a` e `commit <caminhos>`), em `precommit-snapshot`. Se o commit muda **só documentos** (`docs/`, os `.md` da raiz e `LICENSE`, a mesma regra do CI), roda no lugar dela o `docscheck`, o `codecheck` e os testes que abrem um documento, como o CI faz.
-- **`pre-push`** roda o [`testrun prepush`](../qualidade/testes.md#antes-do-push) sobre o commit enviado (`git read-tree` num índice próprio, em `prepush-snapshot`): a completa, sem `-race`, só nos pacotes mudados em relação à branch remota (numa branch nova, em relação a `origin/main`) e nos que os importam. Se só documentos mudaram, sai na hora, sem montar nada. Imprime os segundos gastos. Mexer em `pkg/clock` leva a completa inteira. Em emergência, `git push --no-verify`: o CI roda a rápida e a completa de qualquer jeito. O `-race` nunca roda antes do merge (só no push para a `main`), então uma corrida só aparece depois que o PR foi juntado.
+- **`pre-commit`** roda só o que a mudança pode ter quebrado, sobre o índice (`git checkout-index`, que vale também para `commit -a` e `commit <caminhos>`), em `precommit-snapshot`: `testrun affected -only go` (cache de testes do Go), o `golangci-lint` só nos pacotes mudados (tudo, se `go.mod`, `go.sum` ou `.golangci.yml` mudou) e, se `web/` mudou, `vitest related`, Biome e `tsc`. Se o commit muda **só documentos** (`docs/`, os `.md` da raiz e `LICENSE`, a mesma regra do CI), roda no lugar dela o `docscheck`, o `codecheck` e os testes que abrem um documento, como o CI faz.
+- **`pre-push`** roda o [`testrun prepush`](../qualidade/testes.md#antes-do-push) sobre o commit enviado (`git read-tree` num índice próprio, em `prepush-snapshot`): a **rápida inteira** (o painel só se `web/` mudou no que vai ser enviado) e depois a completa, sem `-race`, só nos pacotes mudados em relação à branch remota (numa branch nova, em relação a `origin/main`) e nos que os importam. Se só documentos mudaram, sai na hora, sem montar nada. Imprime os segundos gastos. Mexer em `pkg/clock` leva a completa inteira. Em emergência, `git push --no-verify`: o CI roda a rápida e a completa de qualquer jeito. O `-race` nunca roda antes do merge (só no push para a `main`), então uma corrida só aparece depois que o PR foi juntado.
 
 Os dois ganchos (`tools/githooks/suite.sh`, usado pelos dois) fazem duas coisas a mais:
 - **Uma suíte por vez na máquina:** seguram um `flock` (`/tmp/mestre-suite.lock`, ou `MESTRE_SUITE_LOCK`) enquanto o `testrun` roda. Clones, worktrees e sessões esperam a vez em vez de brigar pela CPU; a espera não conta no orçamento, porque o executor só começa a medir depois dela. Sem `flock` (Git for Windows) o gancho roda direto.

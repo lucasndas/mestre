@@ -39,3 +39,30 @@ mark() {
 	: >"$1.$(date +%Y-%m-%d)"
 	find "$(dirname "$1")" -type f -mtime +2 -exec rm -f {} + 2>/dev/null || true
 }
+
+# web_copy ROOT: copies web/ of the current folder (a snapshot, inside the git
+# directory) to a temporary folder and prints its path. Vitest does not work in
+# a path with a ".git" folder in it, so the web side runs from that copy,
+# borrowing the node_modules of the working tree ROOT. The testrun built from
+# the snapshot is put next to it.
+web_copy() {
+	exe="$(go env GOEXE)"
+	wsnap="${TMPDIR:-/tmp}/mestre-web-snapshot-$(printf '%s' "$1" | cksum | cut -d' ' -f1)"
+	rm -rf "$wsnap"
+	mkdir -p "$wsnap/test"
+	cp -R web "$wsnap/web"
+	[ ! -f test/quarantine.yaml ] || cp test/quarantine.yaml "$wsnap/test/"
+	[ ! -d "$1/web/node_modules" ] || ln -s "$1/web/node_modules" "$wsnap/web/node_modules"
+	go build -o "$wsnap/testrun$exe" ./tools/testrun
+	printf '%s\n' "$wsnap"
+}
+
+# fast_suite ROOT WEB: the whole fast suite of the current folder (a snapshot):
+# the Go side, and the web side when WEB is 1.
+fast_suite() {
+	go run ./tools/testrun fast -only go || return 1
+	if [ "$2" = 1 ]; then
+		w="$(web_copy "$1")"
+		(cd "$w" && "./testrun$(go env GOEXE)" fast -only web) || return 1
+	fi
+}

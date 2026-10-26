@@ -1,6 +1,6 @@
 # Convenções de desenvolvimento
 
-> **Assunto:** layout do código Go e do painel, idioma, estilo, código gerado, commits, branches, PRs e definição de pronto · **Componente:** Projeto · **Atualizado:** 2026-10-20
+> **Assunto:** layout do código Go e do painel, idioma, estilo, código gerado, commits, branches, PRs e definição de pronto · **Componente:** Projeto · **Atualizado:** 2026-10-26
 
 ## Layout do repositório
 
@@ -138,7 +138,7 @@ Conventional Commits 1.0.0, em inglês:
 Esta seção é a fonte única do que é "pronto"; outros documentos fazem link para cá. Uma mudança está pronta quando valem os itens 1 a 6; um marco, quando vale também o 7:
 
 1. O comportamento está descrito no documento da funcionalidade e os critérios de aceite dele têm teste, na suíte indicada, com o identificador acima do teste (`// CA-…`).
-2. A **suíte rápida** passa dentro do orçamento (`go run ./tools/testrun fast`, também no gancho de pré-commit); antes do merge, a **completa** também ([testes](../qualidade/testes.md)).
+2. A **suíte rápida** passa dentro do orçamento (`go run ./tools/testrun fast`, que o gancho de pré-push roda; o de pré-commit roda só os afetados); antes do merge, a **completa** também ([testes](../qualidade/testes.md)).
 3. A **documentação** afetada foi atualizada na mesma mudança (documento de funcionalidade novo entra no mapa da [ordem de implementação](ordem-de-implementacao.md)) e a [verificação de docs](../qualidade/verificacao-de-docs.md) passa: cada documento tem até 150 linhas (aviso acima de 150, falha acima de 200).
 4. Linter limpo e arquivos gerados em dia.
 5. Nada fora do [escopo do MVP](../produto/escopo-mvp.md) foi acrescentado.
