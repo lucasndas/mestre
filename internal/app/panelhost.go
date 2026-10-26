@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/mestre-ia/mestre/internal/github"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -24,6 +25,13 @@ type PanelSource interface {
 // nil: its routes then answer that they are not available.
 type PanelAdminSource interface {
 	PanelAdmin() (panel.PersonalGitHub, panel.SecretVault)
+}
+
+// PanelCreationSource is what an IntegrationRun may also be: the creation of the Apps
+// by link, whose pages the panel serves (nil: no link, the Apps screen shows the
+// state only).
+type PanelCreationSource interface {
+	PanelCreation() *github.Creation
 }
 
 // mountPanel puts the panel on the engine port, on every path no other route
@@ -63,6 +71,9 @@ func (e *Engine) openPanel(ctx context.Context, db *store.DB, integ IntegrationR
 	if e.deps.PanelChat != nil {
 		opts.Chat = e.deps.PanelChat
 	}
+	if c, ok := integ.(PanelCreationSource); ok {
+		opts.Creation = c.PanelCreation()
+	}
 	p, err := panel.New(opts)
 	if err != nil {
 		e.log.Error("app: the panel could not be made; this period has none", "err", err)
@@ -82,6 +93,7 @@ func (e *Engine) openPanel(ctx context.Context, db *store.DB, integ IntegrationR
 	} else {
 		p.SetCanvas(canvasHost{get: e.orc.Load, clk: e.clk})
 	}
+	p.SetManage(func() panel.Manage { return e.panelManage(db) })
 	e.relay.Store(rel)
 	e.panel.Store(p)
 	run(func() { p.Run(ctx) })

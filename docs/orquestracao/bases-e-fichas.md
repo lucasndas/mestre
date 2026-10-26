@@ -115,6 +115,7 @@ Agente que age na área de trabalho do usuário, com a conta dele, por tempo cur
 ### No código
 
 `internal/orchestration/presets` (bases, fichas, exportar e importar, escolha da máquina) e `internal/orchestration/accounts` (perfis e configuração inicial); `bases` e `sheets` ficam no banco da Cidadela e `account_profiles` no da máquina. Ao salvar, a base passa pela mesma conferência que o adaptador roda a cada início (`providers.CheckBase`), com o provedor deduzido do comando (`claude`, `codex`, `agy`), e a ficha por ela com o `agent` dela.
+- **No painel:** cada base e ficha é editada como YAML, no formato da exportação (`internal/panel/routes_presets.go`); o arquivo importado passa por `PlanImport` e `ApplyImport`, e o Dono escolhe substituir, renomear ou pular por conflito.
 - **Ficha × classe:** `restrictions` que dá o que a classe proíbe (um `allow` coberto por um `deny` dela, um interruptor que ela desligou) é recusada; um `allow` que a classe só não dá é guardado com aviso e ignorado. A classe é achada pelo nome; não achada, a ficha é guardada com aviso (cada workspace resolve a sua), menos na base `operador`, que exige uma com `operator: true`.
 - **Perfis:** o primeiro perfil de um provedor é o padrão; `<provedor>-padrao` é o que o Mestre cria quando a máquina não tem nenhum (sempre no Codex). Remover um perfil guarda a pasta, com o login. Só exportar "tudo" deixa de fora a base `operador` e as fichas dela (numa seleção explícita a base pode ir; a ficha dela sozinha não a puxa).
 

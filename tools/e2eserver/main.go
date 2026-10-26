@@ -116,7 +116,7 @@ func runWith(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, o r
 		}
 		rk.Destroy()
 		if o.Seed {
-			if err := seedRequest(ctx, guildDB); err != nil {
+			if err := seedRequest(ctx, guildDB, paths.Workspaces); err != nil {
 				return fmt.Errorf("seeding the request: %w", err)
 			}
 		}

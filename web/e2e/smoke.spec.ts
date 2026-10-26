@@ -154,3 +154,32 @@ test("the Owner makes a decree and revokes it", async ({ page }) => {
   await expect(page.getByText("Decreto 1 revogado.")).toBeVisible();
   await expect(page.getByText("Nenhum decreto em vigor neste workspace.")).toBeVisible();
 });
+
+// The classes and presets step of the smoke: the approved class of the throwaway Guild is
+// listed, and the sheet "Dev Claude" goes out as a YAML file and comes back, replacing itself.
+test("the Owner sees the classes and exports and imports a sheet", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Nome de login").fill("maria");
+  await page.getByLabel("Senha").fill("uma senha bem longa");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.getByRole("link", { name: "Classes", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Classes", level: 1 })).toBeVisible();
+  await expect(page.getByRole("rowheader", { name: "revisor" })).toBeVisible();
+
+  await page.getByRole("link", { name: "Bases e fichas" }).click();
+  await expect(page.getByRole("heading", { name: "Bases e fichas", level: 1 })).toBeVisible();
+  // the checkbox is drawn by its label: the click goes to the label
+  await page.getByRole("group", { name: "Fichas a exportar" }).getByText("Dev Claude").click();
+  const [file] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Exportar" }).click(),
+  ]);
+  await expect(page.getByText("Arquivo exportado.")).toBeVisible();
+  await page.getByLabel("Arquivo para importar").setInputFiles(await file.path());
+  await page.getByRole("button", { name: "Conferir o arquivo" }).click();
+  await page.getByLabel("Ficha Dev Claude").selectOption({ label: "Substituir" });
+  await page.getByRole("button", { name: "Importar", exact: true }).click();
+  await page.getByLabel("PIN").fill("123456");
+  await page.getByRole("button", { name: "Importar", exact: true }).click();
+  await expect(page.getByText(/Importação concluída/)).toContainText("substituídas: 1");
+});

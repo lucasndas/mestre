@@ -252,6 +252,9 @@ type Orchestration struct {
 	TableRules *tablerules.Service
 	// Policy is the approval policy the chain reads (nil unless the chain was built).
 	Policy chain.Policy
+	// Libraries gives the library of classes of a workspace (nil without them): the
+	// classes screen of the panel reads and approves through it.
+	Libraries func(workspace string) *classes.Library
 	// ClassCommands are the commands of classes (nil without libraries).
 	ClassCommands *classes.Commands
 	Rituals       *rituals.Service
@@ -599,7 +602,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if o.Logger == nil {
 		o.Logger = slog.New(slog.DiscardHandler)
 	}
-	orc := &Orchestration{log: o.Logger, Verifier: o.QuestVerifier}
+	orc := &Orchestration{log: o.Logger, Verifier: o.QuestVerifier, Libraries: o.ClassLibraries}
 	gate := func() error {
 		if f := orc.fence.Load(); f != nil {
 			return f.Allow(guild.ExternalGitHub)

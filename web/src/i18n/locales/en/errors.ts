@@ -92,6 +92,14 @@ const errors: Widen<typeof pt> = {
   too_large: "The text is larger than the limit.",
   no_folder: "The workspace has no main folder yet.",
   github_no_right: "Your level or your workspaces do not allow the personal credential.",
+  proposal_stale:
+    "The class changed since you opened the proposal. Look at the current version and try again.",
+  proposal_invalid: "This proposal cannot be approved: {{message}}",
+  preset_invalid: "The text is not valid and nothing was written: {{message}}",
+  preset_in_use: "It cannot be deleted, the item is in use: {{message}}",
+  profile_invalid: "The profile was not accepted: {{message}}",
+  app_state: "This App is not waiting for a link now.",
+  app_limit: "The account reached the GitHub limit of Apps.",
   refused: "The Citadel refused the action.",
   conflict: "This changed since you opened it. Look at the current version and try again.",
 };

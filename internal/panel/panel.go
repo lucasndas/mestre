@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/github"
 	"github.com/mestre-ia/mestre/internal/protocol"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -66,6 +67,9 @@ type Options struct {
 	// Chat is the conversation with the Grão-Mestre (nil: the panel answers that it is
 	// not available).
 	Chat ChatSource
+	// Creation is the creation of the GitHub Apps by link: the page of the link is
+	// served at /github/apps/novo/<token> (nil: the Owner cannot make a link now).
+	Creation *github.Creation
 }
 
 // Panel is the panel of the acting Citadel.
@@ -96,6 +100,10 @@ type Panel struct {
 	canvas atomic.Pointer[canvasHolder]
 	// rules is the backend of the screens of the rules and of the chain (SetRules).
 	rules atomic.Pointer[rulesHolder]
+	// manage is the engine side of the screens of the classes, bases, profiles and usage (SetManage).
+	manage atomic.Pointer[manageHolder]
+	// creation is the creation of the Apps by link (nil: no link, no Apps screen action).
+	creation *github.Creation
 	// slots bound the argon2 hashes at once: each takes 64 MiB, and the routes
 	// that hash are open to anybody
 	slots chan struct{}
@@ -115,7 +123,7 @@ func New(o Options) (*Panel, error) {
 	if o.Rand == nil {
 		o.Rand = newRand()
 	}
-	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, github: o.GitHub, vault: o.Vault, vaultChanged: o.VaultChanged, log: o.Logger, ids: protocol.NewIDGen(o.Clock), appr: o.Approvals, notes: o.Notices, chat: o.Chat}
+	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, github: o.GitHub, vault: o.Vault, vaultChanged: o.VaultChanged, log: o.Logger, ids: protocol.NewIDGen(o.Clock), appr: o.Approvals, notes: o.Notices, chat: o.Chat, creation: o.Creation}
 	p.sessions = &Sessions{db: o.DB, clk: o.Clock, ids: p.ids, rnd: o.Rand}
 	p.hub = newHub(p)
 	p.slots = make(chan struct{}, hashSlots)
@@ -132,6 +140,12 @@ func New(o Options) (*Panel, error) {
 		a.mount(r)
 	}
 	mux.HandleFunc("GET /ws/ui", p.serveWS)
+	if o.Creation != nil {
+		// the three pages of the creation of an App: the link, the return of the manifest
+		// and the return of the installation; they say who is logged in through the panel
+		web := &github.Web{Creation: o.Creation, Who: p.whoIs}
+		mux.Handle("/github/", web.Handler())
+	}
 	mux.Handle("/api/", p.require(func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, Err(CodeNotFound, "não encontrado", nil))
 	}, false))
@@ -248,6 +262,16 @@ func (p *Panel) authenticate(r *http.Request) (context.Context, *APIError) {
 	}
 	ctx := context.WithValue(r.Context(), keyUser, u)
 	return context.WithValue(ctx, keySession, ss), nil
+}
+
+// whoIs is the user logged in for a request outside the API (the pages of the creation
+// of an App): the session of the cookie, the same as the API's.
+func (p *Panel) whoIs(r *http.Request) (users.User, bool) {
+	ctx, apiErr := p.authenticate(r)
+	if apiErr != nil {
+		return users.User{}, false
+	}
+	return UserOf(r.WithContext(ctx)), true
 }
 
 // require wraps h: the Origin of a mutating request, then a valid session

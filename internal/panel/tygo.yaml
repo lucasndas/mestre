@@ -17,3 +17,4 @@ packages:
       - types_approvals.go
       - types_canvas.go
       - types_chat.go
+      - types_manage.go

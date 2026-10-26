@@ -239,6 +239,10 @@ func (a *OwnerAlerts) OwnerNotice(ctx context.Context, kind notices.Kind, text s
 	a.ownerAlert(ctx, text)
 }
 
+// OwnerPrivate tells the Owner on the Telegram only: it is not kept in the bell of the
+// panel. It is for what carries a secret in the text, such as the link that creates an App.
+func (a *OwnerAlerts) OwnerPrivate(ctx context.Context, text string) { a.ownerAlert(ctx, text) }
+
 func (a *OwnerAlerts) ownerAlert(ctx context.Context, text string) {
 	bot := a.bot.Load()
 	if bot == nil {

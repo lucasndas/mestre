@@ -16,13 +16,18 @@ import { Approvals } from "../screens/Approvals";
 import { Audit } from "../screens/admin/Audit";
 import { Ceiling } from "../screens/admin/Ceiling";
 import { Chain } from "../screens/admin/Chain";
+import { Classes } from "../screens/admin/Classes";
 import { Decrees } from "../screens/admin/Decrees";
 import { Delegations } from "../screens/admin/Delegations";
+import { GitHubApps } from "../screens/admin/GitHubApps";
 import { GitHubConnect } from "../screens/admin/GitHubConnect";
 import { Instructions } from "../screens/admin/Instructions";
 import { Policy } from "../screens/admin/Policy";
+import { Presets } from "../screens/admin/Presets";
+import { Profiles } from "../screens/admin/Profiles";
 import { Secrets } from "../screens/admin/Secrets";
 import { Transfer } from "../screens/admin/Transfer";
+import { Usage } from "../screens/admin/Usage";
 import { Users } from "../screens/admin/Users";
 import { FirstAccess } from "../screens/FirstAccess";
 import { Login } from "../screens/Login";
@@ -135,6 +140,31 @@ const instructionsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/instrucoes",
   component: Instructions,
+});
+const classesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/classes",
+  component: Classes,
+});
+const appsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/apps",
+  component: GitHubApps,
+});
+const presetsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/bases-e-fichas",
+  component: Presets,
+});
+const profilesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/perfis",
+  component: Profiles,
+});
+const usageRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/consumo",
+  component: Usage,
 });
 const githubRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -256,6 +286,11 @@ const routeTree = rootRoute.addChildren([
     ceilingRoute,
     policyRoute,
     instructionsRoute,
+    classesRoute,
+    appsRoute,
+    presetsRoute,
+    profilesRoute,
+    usageRoute,
     githubRoute,
     transferRoute,
     terminalRoute,

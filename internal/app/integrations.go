@@ -48,6 +48,10 @@ type IntegrationEnv struct {
 	// Transcribers are the Towers that transcribe now, from the sheets of the
 	// Guild and the connections (nil: none; docs/telegram/anexos-e-transcricao.md).
 	Transcribers func(ctx context.Context) Fleet
+	// PanelURL is the address of the panel, `https://mestre.local:<port>` (always the
+	// name, never an IP): where GitHub sends the Owner back after the creation of an
+	// App. Nil: the Apps cannot be created by link.
+	PanelURL func() string
 }
 
 // GuildApprover is what an IntegrationRun may also be: the question to the Owner

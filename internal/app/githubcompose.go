@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/ghcli"
 	"github.com/mestre-ia/mestre/internal/github"
 	"github.com/mestre-ia/mestre/internal/orchestration/basesync"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
@@ -118,6 +119,14 @@ func (r *stdRun) githubSetup() error {
 		API: r.s.GitHubBase, Web: r.s.GitHubWeb, HTTP: r.s.HTTP, Logger: r.env.Log})
 	if err != nil {
 		return fmt.Errorf("app: the personal credentials: %w", err)
+	}
+	if r.env.Vault != nil && r.env.PanelURL != nil {
+		// the creation of the Apps by link: the pages of the link are the panel's
+		r.creation, err = github.NewCreation(github.CreationOptions{Apps: apps, Tokens: r.tokens, Vault: r.env.Vault, API: r.s.GitHubBase, Web: r.s.GitHubWeb, HTTP: r.s.HTTP,
+			Panel: r.env.PanelURL, OwnerLogin: r.ownerLogin, Tell: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) }, Logger: r.env.Log})
+		if err != nil {
+			return fmt.Errorf("app: the creation of Apps: %w", err)
+		}
 	}
 	r.installs = &github.Installs{Apps: apps, Tokens: r.tokens, Personal: r.personal, Owner: r.ownerID, API: r.s.GitHubBase, Web: r.s.GitHubWeb, HTTP: r.s.HTTP}
 	return nil
@@ -289,4 +298,60 @@ func (r *stdRun) GuildReconcile(orc *Orchestration, anchor func(ctx context.Cont
 		})
 		return rec.Reconcile(ctx)
 	}
+}
+
+// ownerLogin is the login on GitHub of the Owner: the App is made in his account.
+func (r *stdRun) ownerLogin(ctx context.Context) (string, error) {
+	all, err := r.users.List(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, u := range all {
+		if u.Level == users.Owner && u.State == users.Active {
+			return u.GitHubLogin, nil
+		}
+	}
+	return "", errors.New("app: the Owner is not registered")
+}
+
+// PanelCreation implements PanelCreationSource: the creation of Apps, whose pages the
+// panel serves (nil: the vault or the address of the panel is not there).
+func (r *stdRun) PanelCreation() *github.Creation { return r.creation }
+
+// CreationLoop runs the sweep of the creation of Apps until the period ends: it ends the
+// links nobody opened, fails the codes not handed back in an hour and looks for the
+// installations whose return did not come.
+func (r *stdRun) CreationLoop(ctx context.Context) error {
+	if r.creation != nil {
+		r.creation.Run(ctx)
+	}
+	return nil
+}
+
+// appCreator is `mestre app create`: it makes the link of the creation and sends it
+// to the Owner by the Telegram (the link opens the page of the panel, which only the
+// Owner passes). The link never returns to the Grand Master.
+type appCreator struct {
+	c    *github.Creation
+	tell func(ctx context.Context, text string)
+}
+
+func (a appCreator) Available(context.Context) string {
+	if a.c == nil {
+		return "the creation of Apps by link is not available in this period: the vault or the address of the panel is missing"
+	}
+	return ""
+}
+
+func (a appCreator) Begin(ctx context.Context, app, requestedBy string) (ghcli.AppLink, error) {
+	if a.c == nil {
+		return ghcli.AppLink{}, errors.New("the creation of Apps needs the panel")
+	}
+	link, err := a.c.Begin(ctx, app, requestedBy)
+	if err != nil {
+		return ghcli.AppLink{}, err
+	}
+	a.tell(ctx, fmt.Sprintf("O Grão-Mestre pediu o App %s. Abra o link no seu navegador, entre no painel como Dono e clique em \"Criar no GitHub\" (vale até %s): %s",
+		link.App, link.ExpiresAt.Format("02/01 15:04"), link.URL))
+	return ghcli.AppLink{ExpiresAt: link.ExpiresAt, ID: link.App}, nil
 }

@@ -97,6 +97,8 @@ sequenceDiagram
 
 - **Implementação:** `github.Installs` (`internal/github/installs.go`) e `sessionzero.GitHubInstallations` são o lado do GitHub da etapa `apps`: `Missing` relê a lista de repositórios da instalação de cada App fixo (o Dono pode ter marcado o repositório no GitHub) e é assim que a etapa conclui sozinha; `AddRepository` faz o `PUT` com a [credencial pessoal](aprovacao-no-github.md#credencial-pessoal-user-access-token-pelo-device-flow) do Dono (`github.ErrNoCredential` vira `sessionzero.ErrNoPersonalCredential`); `InstallLink` é a página de configuração da instalação, ou a da primeira instalação se o App ainda não está instalado. A conversão do manifesto guarda no cofre o segredo de cliente do App "Grão-Mestre", que renova e revoga os tokens de usuário.
 
+- **No painel (M6):** as três páginas são de `github.Web`, montadas pelo painel em `/github/…` com o login do painel (`Panel.whoIs`); o formulário só existe para o Dono e a política de conteúdo deixa o envio apenas ao `github.com`. O link refeito pelo painel ("novo link", Dono, com PIN) aparece uma única vez na resposta: o banco guarda só o hash do token, então um link já enviado não é mostrado de novo. `mestre app create` manda o link ao Dono pelo Telegram, sem passar pelo sino do painel.
+
 ## Critérios de aceite
 
 - **CA-GH-APPS-01** · *rápida* — **Dado** um pedido com `state` X, **quando** chega um callback com `state` Y, **então** a Cidadela recusa e não troca o `code`.
