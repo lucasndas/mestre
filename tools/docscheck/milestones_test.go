@@ -529,3 +529,36 @@ func TestAnAnchorWrittenInCodeMustExist(t *testing.T) {
 		})
 	}
 }
+
+// CA-VERDOCS-24
+func TestMarkersInTheTestsOfThePanel(t *testing.T) {
+	t.Parallel()
+	web := func(p, body string) map[string]string { return map[string]string{p: body} }
+	for name, c := range map[string]struct {
+		files map[string]string
+		want  string // the error about the marker; "" passes
+	}{
+		"a vitest test":     {web("web/src/x.test.ts", "// CA-A-01\ntest(\"a\", () => {});\n"), ""},
+		"a tsx describe":    {web("web/src/x.test.tsx", "// CA-A-01: what,\n// in two lines.\ndescribe(\"a\", () => {});\n"), ""},
+		"far from the test": {web("web/src/x.test.ts", "// CA-A-01\n\ntest(\"a\", () => {});\n"), "logo acima"},
+		"above a helper":    {web("web/src/x.test.ts", "// CA-A-01\nfunction helper() {}\n"), "logo acima"},
+		"an e2e spec":       {web("web/e2e/x.spec.ts", "// CA-A-01\ntest(\"a\", async () => {});\n"), "suíte pesada"},
+		"part of":           {web("web/e2e/x.spec.ts", "// Part of CA-A-01\ntest(\"a\", async () => {});\n"), ""},
+		"a source file":     {web("web/src/x.ts", "// CA-A-01\ntest(\"a\", () => {});\n"), ""},
+		"in node_modules":   {web("web/node_modules/p/x.test.ts", "// CA-Z-99\ntest(\"a\", () => {});\n"), ""},
+		"in the generated":  {web("web/src/gen/x.test.ts", "// CA-Z-99\ntest(\"a\", () => {});\n"), ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var got []string
+			for _, e := range only(run1(t, gate(map[int]string{1: audited}, "", c.files)), ckCoverage) {
+				if strings.HasPrefix(e, "web/") {
+					got = append(got, e)
+				}
+			}
+			if (c.want == "") != (len(got) == 0) || c.want != "" && !strings.Contains(strings.Join(got, "\n"), c.want) {
+				t.Fatalf("errors = %q, want %q", got, c.want)
+			}
+		})
+	}
+}

@@ -21,7 +21,7 @@ Um PR só entra na fila com a revisão independente aplicada (só leitura; Opus 
 ## A fila de merge
 
 1. Com o PR revisado e o CI do PR verde, quem coordena o põe na fila: `gh pr merge <n> --squash --auto` (ou o botão **Merge when ready**).
-2. O GitHub monta lotes de até 5 PRs (espera até 5 minutos por mais PRs antes de montar), cria a branch temporária do lote sobre a `main` do momento e roda nela o CI inteiro (`merge_group`): as duas verificações exigidas e o `race`, que não é exigido.
+2. O GitHub monta lotes de até 5 PRs (espera até 5 minutos por mais PRs antes de montar), cria a branch temporária do lote sobre a `main` do momento e roda nela o CI inteiro (`merge_group`): as seis verificações exigidas (`test`, `web` e `e2e`, nos dois sistemas) e o `race`, que não é exigido.
 3. Lote verde: os PRs entram na `main`, um squash por PR, sem outro CI. Lote vermelho: o GitHub tira o PR que quebrou, avisa no PR e refaz o lote com os outros.
 4. Um PR não precisa estar em dia com a `main` para entrar na fila; só precisa não ter conflito com ela.
 

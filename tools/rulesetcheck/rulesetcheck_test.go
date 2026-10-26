@@ -238,13 +238,15 @@ func TestServerFieldsAndOrderAreNotDrift(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, runner := range []string{"ubuntu-latest", "windows-latest"} {
-			context := "test (" + runner + ")"
-			if !strings.Contains(string(md), `"context": "`+context+`"`) {
-				t.Errorf("the documented ruleset does not require %q", context)
-			}
-			if !strings.Contains(string(ci), "name: test (${{ matrix.os }})") || !strings.Contains(string(ci), "os: [ubuntu-latest, windows-latest]") {
-				t.Errorf("ci.yml does not produce the check %q", context)
+		for _, job := range []string{"test", "web", "e2e"} {
+			for _, runner := range []string{"ubuntu-latest", "windows-latest"} {
+				context := job + " (" + runner + ")"
+				if !strings.Contains(string(md), `"context": "`+context+`"`) {
+					t.Errorf("the documented ruleset does not require %q", context)
+				}
+				if !strings.Contains(string(ci), "name: "+job+" (${{ matrix.os }})") || !strings.Contains(string(ci), "os: [ubuntu-latest, windows-latest]") {
+					t.Errorf("ci.yml does not produce the check %q", context)
+				}
 			}
 		}
 	})

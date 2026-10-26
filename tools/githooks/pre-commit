@@ -12,6 +12,7 @@
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 . "$(dirname "$0")/suite.sh"
+root="$(pwd)"
 gitdir="$(cd "$(git rev-parse --git-dir)" && pwd)"
 snap="$gitdir/precommit-snapshot"
 # The tree of this commit (the index): the same tree passed today, say on an
@@ -46,7 +47,27 @@ if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qvE '^docs/|^[^/]+\.md$|^
 	with_suite_lock docs_checks
 	mark "$gitdir/suite-passed/docs-$tree"
 	exit 0
+fi
+# The web side (Vitest, Biome and tsc, with a budget of its own) runs only
+# when the commit touches web/; the Go side runs always. Vitest does not work
+# in a path with a ".git" folder in it, where the snapshot lives, so the web
+# side runs from a copy of web/ in the temporary folder, borrowing the
+# node_modules of the working tree, with the testrun built from the snapshot.
+web_suite() {
+	exe="$(go env GOEXE)"
+	wsnap="${TMPDIR:-/tmp}/mestre-web-snapshot-$(printf '%s' "$root" | cksum | cut -d' ' -f1)"
+	rm -rf "$wsnap"
+	mkdir -p "$wsnap/test"
+	cp -R web "$wsnap/web"
+	[ ! -f test/quarantine.yaml ] || cp test/quarantine.yaml "$wsnap/test/"
+	[ ! -d "$root/web/node_modules" ] || ln -s "$root/web/node_modules" "$wsnap/web/node_modules"
+	go build -o "$wsnap/testrun$exe" ./tools/testrun
+	go run ./tools/testrun fast -only go
+	(cd "$wsnap" && "./testrun$exe" fast -only web)
+}
+if printf '%s\n' "$files" | grep -q '^web/'; then
+	with_suite_lock web_suite
 else
-	with_suite_lock go run ./tools/testrun fast
+	with_suite_lock go run ./tools/testrun fast -only go
 fi
 mark "$key"
