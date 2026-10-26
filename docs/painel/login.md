@@ -77,6 +77,7 @@ O painel esconde o que o nível não permite, mas quem decide é o servidor, em 
 | `POST /api/first-access` | todos | `{code, login, password, pin?}`: primeiro acesso, ou nova senha após redefinição (sem PIN) |
 | `POST /api/logout`, `GET /api/me`, `POST /api/password` | sessão | sair; `{user, session, capabilities, timezone}` (`timezone` é o fuso da Guilda, em que o painel mostra todo horário); `{current, new}` |
 | `PUT /api/me/language` | sessão | `{language: "pt-BR"\|"en"}` guarda o idioma do usuário e devolve o `Me`; outro valor é `bad_request` |
+| `PUT /api/me/workspace` | sessão | `{workspace}` guarda o último workspace aberto (o `Me` traz `user.last_workspace`) e devolve o `Me`; um workspace que o usuário não vê é `not_found` |
 | `GET /api/sessions`, `DELETE /api/sessions/{id}` | sessão | as próprias; o Dono encerra qualquer uma |
 | `GET /api/admin/sessions` | Dono | as de todos |
 | `POST /api/users/{id}/access-code` | Dono, com PIN | `{kind: "first"\|"reset"}` devolve `{code, kind, expires_at}`; o código só aparece nessa resposta |

@@ -371,6 +371,9 @@ func (s *Service) red(ctx context.Context, q Quest, st Step, c characters.Charac
 		switch {
 		case fresh.Returns < cur.MaxReturns && fail.Fingerprint != "" && fail.Count >= cur.Def.SameMax():
 			kind, pause = doneSameFailure, ReasonSameFailure
+			if err := tx.KeepPausedFailure(q.ID, fail); err != nil {
+				return err
+			}
 			if err := tx.SetFailure(fresh.UID, Failure{}); err != nil {
 				return err
 			}

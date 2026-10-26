@@ -110,6 +110,8 @@ type Panel struct {
 	creation *github.Creation
 	// workspaces is the engine of the workspaces for their screens (SetWorkspaces).
 	workspaces atomic.Pointer[workspaceHolder]
+	// view is the engine of the workspace view (SetWorkspaceView).
+	view atomic.Pointer[viewHolder]
 	// guild is the engine of the Guild for its screen (SetGuild).
 	guild atomic.Pointer[guildHolder]
 	// guildFollow keeps the polling of the Guild while somebody follows it.

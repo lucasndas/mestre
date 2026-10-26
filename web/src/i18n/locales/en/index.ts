@@ -20,6 +20,7 @@ import shell from "./shell";
 import terminal from "./terminal";
 import usage from "./usage";
 import users from "./users";
+import workspace from "./workspace";
 import workspaces from "./workspaces";
 
 export const en: Widen<typeof ptBR> = {
@@ -44,4 +45,5 @@ export const en: Widen<typeof ptBR> = {
   profiles,
   usage,
   workspaces,
+  workspace,
 };

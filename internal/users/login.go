@@ -456,3 +456,18 @@ func (s *Service) SetLanguage(ctx context.Context, id, language string) error {
 		return nil
 	})
 }
+
+// SetLastWorkspace records the workspace the user opened last in the panel; the
+// caller checks that the user may see it.
+func (s *Service) SetLastWorkspace(ctx context.Context, id, workspace string) error {
+	return s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `UPDATE users SET last_workspace = ?, updated_at = ? WHERE id = ? AND state = ?`, workspace, ms(s.clk.Now()), id, string(Active))
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return fmt.Errorf("%w: %s", ErrNoUser, id)
+		}
+		return nil
+	})
+}

@@ -82,6 +82,13 @@ type UserInfo struct {
 	HasPIN     bool     `json:"has_pin"`
 	// Language is the language the user chose ("" until chosen: the browser decides).
 	Language string `json:"language"`
+	// LastWorkspace is the workspace the user opened last ("" if none), kept on the Citadel.
+	LastWorkspace string `json:"last_workspace"`
+}
+
+// LastWorkspaceRequest is PUT /api/me/workspace: the workspace the user opened.
+type LastWorkspaceRequest struct {
+	Workspace string `json:"workspace"`
 }
 
 // SessionInfo is a session of the panel.

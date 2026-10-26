@@ -203,6 +203,9 @@ type Deps struct {
 	// PanelCanvas is the engine of the tables the canvas shows (nil: the one of the
 	// orchestration of the period).
 	PanelCanvas panel.CanvasSource
+	// PanelView is the engine of the workspace view (nil: the one of the orchestration
+	// of the period).
+	PanelView panel.ViewSource
 	// PanelGuild is the engine of the Guild the panel shows (nil: the Citadel's own).
 	PanelGuild panel.GuildSource
 	// LocalNetworks are the networks that count as "the local network" of the Guild

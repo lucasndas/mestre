@@ -325,6 +325,16 @@ export interface UserInfo {
    * Language is the language the user chose ("" until chosen: the browser decides).
    */
   language: string;
+  /**
+   * LastWorkspace is the workspace the user opened last ("" if none), kept on the Citadel.
+   */
+  last_workspace: string;
+}
+/**
+ * LastWorkspaceRequest is PUT /api/me/workspace: the workspace the user opened.
+ */
+export interface LastWorkspaceRequest {
+  workspace: string;
 }
 /**
  * SessionInfo is a session of the panel.
@@ -2451,6 +2461,182 @@ export interface InstructionsInput {
  */
 export interface RuleWorkspaces {
   workspaces: string[];
+}
+
+//////////
+// source: types_view.go
+
+/**
+ * WaitPaused: the table is paused; Reason says by whom or why.
+ */
+export const WaitPaused = "paused";
+/**
+ * WaitQuota: the table waits for the quota of a provider (or the limit of use).
+ */
+export const WaitQuota = "quota";
+/**
+ * WaitTable: the table waits for the merge of another table.
+ */
+export const WaitTable = "table";
+/**
+ * WaitApproval: the current step waits for an approval.
+ */
+export const WaitApproval = "approval";
+/**
+ * WaitSameFailure: the mission paused because the same failure came back.
+ */
+export const WaitSameFailure = "same_failure";
+/**
+ * WaitOther: any other thing a step waits for.
+ */
+export const WaitOther = "other";
+/**
+ * ViewQuest is the mission of the table that is in progress.
+ */
+export interface ViewQuest {
+  id: string;
+  /**
+   * Name is the name of the mission; Issue is its issue on GitHub (0 until made).
+   */
+  name: string;
+  issue: number /* int */;
+  state: string;
+  /**
+   * Step is the title of the step in progress ("" when none is).
+   */
+  step: string;
+}
+/**
+ * ViewMachine is the badge of a machine in the party of a table.
+ */
+export interface ViewMachine {
+  machine: string;
+  machine_name: string;
+  characters: number /* int */;
+}
+/**
+ * ViewWait is something a table waits for. Fingerprint and Where are set for the
+ * same failure again ("arquivo:linha" when the return brought `--where`).
+ */
+export interface ViewWait {
+  kind: string;
+  reason: string;
+  fingerprint?: string;
+  where?: string;
+}
+/**
+ * ViewCriteria is the proof of the criteria of the current mission: Total criteria,
+ * Proven with a proof, Verified among those verified by the engine.
+ */
+export interface ViewCriteria {
+  total: number /* int */;
+  proven: number /* int */;
+  verified: number /* int */;
+}
+/**
+ * ViewUsage is the use of a table against its limit.
+ */
+export interface ViewUsage {
+  used: number /* float64 */;
+  limit: number /* float64 */;
+  /**
+   * Unit is usd, tokens or hours.
+   */
+  unit: string;
+  percent: number /* float64 */;
+  /**
+   * HasData says the use has data in the unit of the limit (false: the gap is shown).
+   */
+  has_data: boolean;
+}
+/**
+ * TableBlock is a table of the workspace as its block shows it.
+ */
+export interface TableBlock {
+  id: string;
+  epic: number /* int */;
+  epic_title: string;
+  branch: string;
+  state: string;
+  paused: boolean;
+  /**
+   * IssueWarning is why the table has no issue on GitHub ("" when it has).
+   */
+  issue_warning?: string;
+  quest?: ViewQuest;
+  party: ViewMachine[];
+  party_size: number /* int */;
+  waits: ViewWait[];
+  criteria?: ViewCriteria;
+  /**
+   * LastDelivery is the last useful delivery (nil when there was none).
+   */
+  last_delivery?: string;
+  /**
+   * Stalled says the table is at work and delivered nothing for longer than the
+   * limit of the warning; QuietSeconds is for how long.
+   */
+  stalled: boolean;
+  quiet_seconds: number /* int64 */;
+  pr: number /* int */;
+  usage?: ViewUsage;
+}
+/**
+ * ViewGrandMaster is the Grand Master of the workspace, the center of the view.
+ */
+export interface ViewGrandMaster {
+  id: string;
+  name: string;
+  state: string;
+  machine: string;
+  machine_name: string;
+  has_terminal: boolean;
+}
+/**
+ * ViewData is what the engine gives of an active workspace.
+ */
+export interface ViewData {
+  grand_master?: ViewGrandMaster;
+  tables: TableBlock[];
+  /**
+   * Layout is where the Grand Master ("gm") and each table ("table:<id>") stand;
+   * the ones with no place are not in it.
+   */
+  layout: CanvasItem[];
+}
+/**
+ * WorkspaceView is GET /api/workspaces/{slug}/view.
+ */
+export interface WorkspaceView {
+  /**
+   * Workspace carries the state and the steps of the session zero (a preparing
+   * workspace shows them and no table).
+   */
+  workspace: WorkspaceRow;
+  grand_master?: ViewGrandMaster;
+  tables: TableBlock[];
+  layout: CanvasItem[];
+  /**
+   * CanPause says the user may pause a table from its block (the server checks again).
+   */
+  can_pause: boolean;
+  /**
+   * CanType says the user may type in the terminal of the Grand Master.
+   */
+  can_type: boolean;
+}
+/**
+ * ViewLayoutRequest is PUT /api/workspaces/{slug}/view/layout.
+ */
+export interface ViewLayoutRequest {
+  items: CanvasItem[];
+}
+/**
+ * PauseTableResponse is POST /api/workspaces/{slug}/tables/{table}/pause: Changed
+ * is false when the table was paused already.
+ */
+export interface PauseTableResponse {
+  changed: boolean;
 }
 
 //////////

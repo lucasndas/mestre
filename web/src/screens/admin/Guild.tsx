@@ -22,7 +22,7 @@ import { Badge, NativeSelect, PageHeader } from "./kit";
 type Say = (k: string, o?: object) => string;
 
 const GUILD_TOPIC = "guild:main";
-const guildQuery = {
+export const guildQuery = {
   queryKey: ["admin", "guild"],
   queryFn: () => api<GuildView>("GET", "/api/guild"),
 };

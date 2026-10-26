@@ -20,3 +20,4 @@ packages:
       - types_guild.go
       - types_chat.go
       - types_manage.go
+      - types_view.go
