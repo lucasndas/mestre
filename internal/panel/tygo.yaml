@@ -12,3 +12,4 @@ packages:
       - errors.go
       - ws.go
       - types_admin.go
+      - terminals_types.go

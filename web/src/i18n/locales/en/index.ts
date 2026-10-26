@@ -8,6 +8,7 @@ import github from "./github";
 import secrets from "./secrets";
 import sessions from "./sessions";
 import shell from "./shell";
+import terminal from "./terminal";
 import users from "./users";
 
 export const en: Widen<typeof ptBR> = {
@@ -20,4 +21,5 @@ export const en: Widen<typeof ptBR> = {
   audit,
   github,
   errors,
+  terminal,
 };

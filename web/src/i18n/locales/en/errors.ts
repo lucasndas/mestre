@@ -23,6 +23,9 @@ const errors: Widen<typeof pt> = {
   not_found: "Not found.",
   unknown_topic: "Unknown topic.",
   unavailable: "The Citadel is not available right now. Try again shortly.",
+  permission_prompt:
+    "The agent is waiting for your decision on a permission screen. Answer through the approval, not the terminal keyboard.",
+  too_many_streams: "Too many terminals are open on this account. Close one and try again.",
   internal: "Something went wrong in the Citadel. Try again.",
   mismatch_password: "The two passwords are not the same.",
   mismatch_pin: "The two PINs are not the same.",

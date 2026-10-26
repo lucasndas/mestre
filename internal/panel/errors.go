@@ -31,6 +31,8 @@ const (
 	CodeNotFound           Code = "not_found"
 	CodeUnknownTopic       Code = "unknown_topic"
 	CodeUnavailable        Code = "unavailable"
+	CodePermissionPrompt   Code = "permission_prompt"
+	CodeTooManyStreams     Code = "too_many_streams"
 	CodeInternal           Code = "internal"
 )
 
@@ -70,6 +72,8 @@ var status = map[Code]int{
 	CodeNotFound:           http.StatusNotFound,
 	CodeUnknownTopic:       http.StatusNotFound,
 	CodeUnavailable:        http.StatusServiceUnavailable,
+	CodePermissionPrompt:   http.StatusConflict,
+	CodeTooManyStreams:     http.StatusTooManyRequests,
 	CodeInternal:           http.StatusInternalServerError,
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +36,12 @@ func (s *Service) Report(ctx context.Context, r Report) error {
 	if !r.State.Valid() {
 		return fmt.Errorf("character %s: unknown state %q", r.Character, r.State)
 	}
+	if !ownsTerminal(c, r.Terminal) {
+		// a machine may report only the terminal the Citadel gave the character
+		// (its id, or id-n at a restart): a Tower cannot claim another's
+		s.log.Warn("characters: a report with a terminal id the character does not have, refused", "id", c.ID, "terminal", r.Terminal)
+		return fmt.Errorf("character %s: %w: terminal %q", r.Character, ErrForeignTerminal, r.Terminal)
+	}
 	at := r.At
 	if at.IsZero() {
 		at = s.clk.Now()
@@ -57,6 +64,29 @@ func (s *Service) Report(ctx context.Context, r Report) error {
 	err = s.after(ctx, c, from)
 	s.observe(func(o Observer) error { return o.StateChanged(ctx, c, from) })
 	return err
+}
+
+// ErrForeignTerminal: a report names a terminal that is not the character's.
+var ErrForeignTerminal = errors.New("the terminal is not the character's")
+
+// ownsTerminal says whether the terminal id of a report is one the character
+// may have: none, the one the registry has (or the first, while it has none), or
+// its id or id-n.
+func ownsTerminal(c Character, terminal string) bool {
+	if terminal == "" || terminal == c.TerminalID || terminal == c.ID {
+		return true
+	}
+	if c.TerminalID == "" {
+		// none recorded yet: the first one is taken, unless another living character holds
+		// it (the unique index of the registry refuses that write)
+		return true
+	}
+	n, ok := strings.CutPrefix(terminal, c.ID+"-")
+	if !ok {
+		return false
+	}
+	_, err := strconv.Atoi(n)
+	return err == nil
 }
 
 // observe calls the Observer, if there is one; what it returns is logged.

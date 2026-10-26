@@ -1,6 +1,6 @@
 # Terminal
 
-> **Assunto:** terminal de cada agente na máquina onde roda: o processo `mestre-pty` (PTY/ConPTY, emulador, buffer), socket e aperto de mão com o motor, volta do motor sem parar os agentes, tamanho fixo, log, digitação e encerramento da árvore de processos · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** terminal de cada agente na máquina onde roda: o processo `mestre-pty` (PTY/ConPTY, emulador, buffer), socket e aperto de mão com o motor, volta do motor sem parar os agentes, tamanho fixo, log, digitação e encerramento da árvore de processos · **Componente:** Motor · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
@@ -71,12 +71,12 @@ Enquanto o motor está fora, o agente continua, a saída vai para o buffer, nada
 
 ### Buffer, painel e log
 
-- **Buffer circular de 1 MiB** (padrão) por terminal, no `mestre-pty`, com os bytes crus e o deslocamento de cada um. A Cidadela não guarda buffer: para mostrar um terminal no painel ou no `attach`, ou depois de uma reconexão, ela pede à máquina `terminal.replay` a partir de um deslocamento ([protocolo](../conectividade/protocolo.md#multiplexação-e-prioridade)). Trecho que já saiu do buffer aparece como "trecho perdido".
+- **Buffer circular de 1 MiB** (padrão) por terminal, no `mestre-pty`, com os bytes crus e o deslocamento de cada um. A Cidadela não guarda buffer: para mostrar um terminal no painel ou no `attach`, ou depois de uma reconexão, ela pede à máquina `terminal.replay` a partir de um deslocamento ([protocolo](../conectividade/protocolo.md#multiplexação-e-prioridade)). O motor da máquina (o da Torre, ou o da Cidadela para os terminais dela) atende lendo o buffer do `mestre-pty` com o `replay` do protocolo acima, em respostas de até 4 MiB, e depois espera a saída nova (o log do motor já a recebe pelo `follow`) e a lê do buffer de novo; nada disso copia o buffer para o motor. Trecho que já saiu do buffer aparece como "trecho perdido".
 - **Log completo** de cada terminal, gravado **pelo motor** no disco da máquina, com rotação e mascaramento por linha ([persistência](persistencia.md#logs)). Fica no motor porque o mascaramento usa os valores do cofre, que o `mestre-agente` nunca vê, e porque um arquivo escrito pela conta dos agentes poderia ser alterado por qualquer agente. O `mestre-pty` guarda, além do buffer, os bytes que o motor ainda não confirmou (`ack`), até 64 MiB (padrão); passou disso, o log marca o trecho perdido. O fluxo ao vivo não é mascarado: é a tela do agente.
 
 ### Digitação
 
-- Só o motor digita num terminal, pela mensagem `input`. As origens são: entregas da caixa de entrada, só com o alvo livre ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)); entrada crua de `mestre ask --raw` ([CLI](../cli/comunicacao.md#mestre-ask)); respostas a telas reconhecidas pelo adaptador; e a digitação de um usuário pelo painel ([canvas](../painel/canvas.md#digitar-no-terminal)) ou pelo [`mestre attach`](../cli/attach.md), sempre com a mesma regra de nível e auditoria do canvas.
+- Só o motor digita num terminal, pela mensagem `input`. As origens são: entregas da caixa de entrada, só com o alvo livre ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)); entrada crua de `mestre ask --raw` ([CLI](../cli/comunicacao.md#mestre-ask)); respostas a telas reconhecidas pelo adaptador; e a digitação de um usuário pelo painel ([canvas](../painel/canvas.md#digitar-no-terminal)) ou pelo [`mestre attach`](../cli/attach.md), sempre com a mesma regra de nível e auditoria do canvas. A do painel chega ao motor como `terminal.input` de modo `keys` e vai ao PTY como veio, sem a recusa de personagem ocupado da entrada crua: quem pediu a confirmação foi o painel.
 - Mensagens para agentes são digitadas pela operação `TypeMessage` do adaptador (colagem entre colchetes e tecla de envio do provedor; [adaptador](../provedores/adaptador.md#digitação-de-mensagens)). Entrada crua vai byte a byte, como recebida.
 
 ### Encerramento

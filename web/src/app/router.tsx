@@ -7,6 +7,8 @@ import {
   type RouterHistory,
   redirect,
 } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
+import { useTranslation } from "react-i18next";
 import { ApiError } from "../lib/api";
 import { meQuery, statusQuery } from "../lib/queries";
 import { Audit } from "../screens/admin/Audit";
@@ -105,6 +107,32 @@ const transferRoute = createRoute({
   component: Transfer,
 });
 
+// xterm.js is most of the weight of the panel: the terminal screen loads when it is opened
+const TerminalScreen = lazy(() =>
+  import("../screens/TerminalScreen").then((m) => ({ default: m.TerminalScreen })),
+);
+
+function TerminalLoading() {
+  const { t } = useTranslation("terminal");
+  return (
+    <p role="status" className="text-muted">
+      {t("loading")}
+    </p>
+  );
+}
+
+const terminalRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/terminal/$character",
+  component: function TerminalPage() {
+    return (
+      <Suspense fallback={<TerminalLoading />}>
+        <TerminalScreen character={terminalRoute.useParams().character} />
+      </Suspense>
+    );
+  },
+});
+
 // The screens before the login go to the panel when there is a session already.
 async function leaveIfSignedIn(qc: QueryClient) {
   if (await sessionOrNull(qc)) throw redirect({ to: "/" });
@@ -156,6 +184,7 @@ const routeTree = rootRoute.addChildren([
     auditRoute,
     githubRoute,
     transferRoute,
+    terminalRoute,
   ]),
   loginRoute,
   firstAccessRoute,

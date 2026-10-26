@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/protocol"
@@ -75,6 +76,8 @@ type Panel struct {
 	sessions     *Sessions
 	hub          *Hub
 	handler      http.Handler
+	// terminals are the terminals of the Guild (SetTerminals).
+	terminals atomic.Pointer[terminalHolder]
 	// slots bound the argon2 hashes at once: each takes 64 MiB, and the routes
 	// that hash are open to anybody
 	slots chan struct{}

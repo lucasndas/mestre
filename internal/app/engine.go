@@ -196,6 +196,10 @@ type Deps struct {
 	// embedded in the binary, internal/panel/webdist). The tests of the engine
 	// give a fstest.MapFS: none depends on the build.
 	PanelAssets fs.FS
+	// PanelTerminals are the terminals the panel shows (nil: the ones of the
+	// characters of the Guild, through their machines). The browser smoke test
+	// gives it the terminal of a fake agent.
+	PanelTerminals panel.TerminalSource
 	// Whisper is the whisper-server of this machine, which it uses to transcribe
 	// the audio another machine of the Guild sends it (nil: this machine does not
 	// transcribe for others; the installation sets it, milestone 7).
@@ -251,6 +255,7 @@ type Engine struct {
 	mach     atomic.Pointer[machineRouter]   // the machines of the orchestration of the period
 	srvp     atomic.Pointer[protocol.Server] // the protocol server of the period of the Citadel
 	panel    atomic.Pointer[panel.Panel]     // the panel of the period of the Citadel that acts
+	relay    atomic.Pointer[terminalRelay]   // the terminals of the browser of that panel
 	sent     replies                         // the ends of the table.done the Citadel waits for
 	tabs     atomic.Pointer[tables.Service]  // the tables of the period of the Citadel, for the bundles of the Towers
 	member   *guild.Member

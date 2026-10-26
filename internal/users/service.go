@@ -342,6 +342,14 @@ func (s *Service) Edit(ctx context.Context, by User, id string, e Edit) (User, e
 					narrowed = true
 				}
 			}
+			if narrowed && !relevel {
+				// what a user sees live (a terminal) must not outlast the workspace:
+				// like a change of level, losing a workspace ends the sessions
+				relevel = true
+				if err := endSessions(ctx, tx, id, ""); err != nil {
+					return err
+				}
+			}
 			if _, err := tx.ExecContext(ctx, `DELETE FROM user_workspaces WHERE user_id = ?`, id); err != nil {
 				return err
 			}

@@ -34,6 +34,7 @@ const (
 	TypeTerminalStatus       = "terminal.status"
 	TypeTerminalReplay       = "terminal.replay"
 	TypeTerminalReplayed     = "terminal.replayed"
+	TypeTerminalUnfollow     = "terminal.unfollow"
 	TypeTerminalScreen       = "terminal.screen"
 	TypeTerminalScreenResult = "terminal.screen_result"
 	TypeInboxDeliver         = "inbox.deliver"
@@ -120,6 +121,7 @@ func DefaultRegistry() *Registry {
 		Spec{Type: TypeTerminalStatus, Dir: TowerToCitadel, Ack: true, Payload: TerminalStatus{}},
 		Spec{Type: TypeTerminalReplay, Dir: CitadelToTower, Payload: TerminalReplay{}},
 		Spec{Type: TypeTerminalReplayed, Dir: TowerToCitadel, Payload: TerminalReplayed{}},
+		Spec{Type: TypeTerminalUnfollow, Dir: CitadelToTower, Payload: TerminalUnfollow{}},
 		Spec{Type: TypeTerminalScreen, Dir: CitadelToTower, Ack: true, Payload: TerminalScreen{}},
 		Spec{Type: TypeTerminalScreenResult, Dir: TowerToCitadel, Payload: TerminalScreenResult{}},
 		Spec{Type: TypeInboxDeliver, Dir: CitadelToTower, Ack: true, Payload: InboxDeliver{}},

@@ -31,6 +31,16 @@ test("the Owner creates the Guild, signs out and signs in again", async ({ page 
   await page.getByLabel("Senha").fill("uma senha bem longa");
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByRole("heading", { name: "Sua Guilda está pronta" })).toBeVisible();
+
+  // the terminal of a character whose agent is the fake one shows its replay: what the
+  // agent printed before the browser opened the terminal, which the Citadel asked of the
+  // machine and relayed, drawn by xterm.js at the fixed size of the PTY
+  await page.goto("/terminal/e2e-dev");
+  await expect(page.getByRole("heading", { name: "Terminal de Dev-1" })).toBeVisible();
+  const screen = page.getByRole("region", { name: "Terminal de Dev-1" });
+  await expect(screen.locator(".xterm-accessibility-tree")).toContainText("Claude Code (fake)");
+  // the Owner may type: the keyboard is released by a button, and refused until then
+  await expect(page.getByRole("button", { name: "Digitar" })).toBeVisible();
 });
 
 // The administration step of the smoke: the Owner registers a user (with the PIN, as

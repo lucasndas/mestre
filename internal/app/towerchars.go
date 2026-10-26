@@ -47,6 +47,7 @@ const permissionPromptMark = "permission_prompt"
 // registerTowerCharacters puts in the router of a Tower the handlers of the
 // commands of the Citadel for its characters.
 func (e *Engine) registerTowerCharacters(router *protocol.Router) {
+	e.registerTowerTerminals(router)
 	guard := func(typ string, f func(ctx context.Context, rt *characters.Runtime, m *protocol.Message) (*protocol.Reply, error)) {
 		router.HandleFunc(typ, func(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
 			if !e.fromCitadel(m.Peer) {
@@ -121,12 +122,23 @@ func (e *Engine) registerTowerCharacters(router *protocol.Router) {
 	})
 	guard(protocol.TypeTerminalInput, func(ctx context.Context, rt *characters.Runtime, m *protocol.Message) (*protocol.Reply, error) {
 		p, ok := m.Payload.(*protocol.TerminalInput)
-		if !ok || p.Mode != protocol.InputRaw {
-			return nil, protocol.NewError(protocol.CodeInvalidPayload, "terminal.input: only the raw input of a terminal is typed here")
+		if !ok || (p.Mode != protocol.InputRaw && p.Mode != protocol.InputKeys) {
+			return nil, protocol.NewError(protocol.CodeInvalidPayload, "terminal.input: only the raw input or the keys of a person are typed here")
 		}
 		id, ok := rt.AgentOf(p.TerminalID)
 		if !ok {
 			return nil, protocol.NewError(protocol.CodeNotFound, "terminal.input: no terminal %s on this machine", p.TerminalID)
+		}
+		if p.Mode == protocol.InputKeys {
+			// a person at the panel: the Citadel checked the level; the engine of
+			// the machine types it, busy or not, and never through the inbox
+			if len(p.Data) > maxKeysInput {
+				return nil, protocol.NewError(protocol.CodeTooLarge, "terminal.input: %d bytes of keys, the most is %d", len(p.Data), maxKeysInput)
+			}
+			if err := rt.Type(ctx, id, []byte(p.Data)); err != nil {
+				return nil, towerCharacterError("terminal.input", err)
+			}
+			return nil, nil
 		}
 		if err := rt.Input(ctx, id, []byte(p.Data)); err != nil {
 			return nil, towerCharacterError("terminal.input", err)
@@ -166,7 +178,7 @@ func (e *Engine) registerTowerCharacters(router *protocol.Router) {
 			return nil, protocol.NewError(protocol.CodeInternal, "terminal.screen: %v", err)
 		}
 		return &protocol.Reply{Type: protocol.TypeTerminalScreenResult, InAck: true, Payload: protocol.TerminalScreenResult{
-			Text: sc.Text, Cursor: protocol.Object{"row": cursor}, CapturedAt: protocol.Timestamp{Time: e.clk.Now().UTC()}, History: sc.History,
+			Text: sc.Text, Cursor: protocol.Object{"row": cursor}, CapturedAt: protocol.Timestamp{Time: e.clk.Now().UTC()}, History: sc.History, Offset: sc.Offset,
 		}}, nil
 	})
 }

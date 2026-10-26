@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -93,13 +94,18 @@ func run(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader) error {
 	}
 	rk.Destroy()
 
+	// the terminal of a fake agent, which the panel shows as the one of a character
+	terms, err := startFakeTerminal(ctx, filepath.Join(dir, "agent"))
+	if err != nil {
+		return fmt.Errorf("starting the fake agent: %w", err)
+	}
 	masker := logging.NewMasker()
 	deps := app.Deps{
 		Version: "e2e", Masker: masker, Logger: logging.New(stderr, masker, logging.Options{Clock: clock.Real{}}),
 		// the real integration, with no bot (no token in the vault) and GitHub
 		// pointed at a closed port: no network is ever used
 		HostOrchestration: true, Integration: app.StandardIntegration{GitHubBase: "http://127.0.0.1:1", GitHubWeb: "http://127.0.0.1:1", TelegramBase: "http://127.0.0.1:1"},
-		PanelAssets: panel.Assets(),
+		PanelAssets: panel.Assets(), PanelTerminals: terms,
 	}
 	e, err := app.New(cfg, paths, deps)
 	if err != nil {

@@ -9,12 +9,14 @@ import { TransferBanner } from "../screens/admin/Transfer";
 import { Brand } from "./AuthLayout";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { useCan, useMe } from "./session";
+import { SocketContext } from "./socket";
 
 /** The band that tells the Citadel is out of reach; the state is reloaded when it is back. */
-function useConnection(): SocketState {
+function useConnection(): { state: SocketState; socket: UiSocket | null } {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [state, setState] = useState<SocketState>("connecting");
+  const [socket, setSocket] = useState<UiSocket | null>(null);
   useEffect(() => {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     const sock = new UiSocket({
@@ -27,9 +29,13 @@ function useConnection(): SocketState {
       },
     });
     sock.start();
-    return () => sock.stop();
+    setSocket(sock);
+    return () => {
+      sock.stop();
+      setSocket(null);
+    };
   }, [qc, navigate]);
-  return state;
+  return { state, socket };
 }
 
 export function ReconnectingBand({ state }: { state: SocketState }) {
@@ -135,7 +141,7 @@ export function Shell() {
   const { t } = useTranslation("shell");
   const { i18n } = useTranslation();
   const me = useMe();
-  const state = useConnection();
+  const { state, socket } = useConnection();
   // the language the user chose follows him to any browser
   useEffect(() => {
     const l = me.user.language;
@@ -159,7 +165,9 @@ export function Shell() {
       </div>
       <Nav />
       <main id="content" className="min-w-0 px-5 py-8 md:px-10">
-        <Outlet />
+        <SocketContext.Provider value={socket}>
+          <Outlet />
+        </SocketContext.Provider>
       </main>
     </div>
   );

@@ -1,6 +1,6 @@
 # Canvas da mesa
 
-> **Assunto:** canvas infinito da mesa: personagens com terminal ao vivo, conexões, pergaminhos, missões, esperas, ajuda nos termos e digitação no terminal · **Componente:** Painel · **Atualizado:** 2026-10-19
+> **Assunto:** canvas infinito da mesa: personagens com terminal ao vivo, conexões, pergaminhos, missões, esperas, ajuda nos termos e digitação no terminal · **Componente:** Painel · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
@@ -36,16 +36,17 @@ Mostrar, em tempo real, tudo o que acontece numa mesa: o Mestre da mesa, a party
 ### Terminais no canvas
 
 - O PTY tem tamanho fixo, definido pela máquina (padrão 200 × 50; [terminal](../arquitetura/terminal.md)). O navegador nunca redimensiona: o xterm.js desenha nesse tamanho e o nó do canvas mostra com rolagem e zoom; redimensionar o nó do canvas não muda o PTY.
-- Ao conectar ou reconectar, a Cidadela pede à máquina o **buffer recente** do terminal (`terminal.replay`; o buffer de 1 MiB fica na máquina, a Cidadela não guarda) e depois repassa o fluxo ao vivo. Cliente lento recebe um retrato da tela em vez da fila inteira.
+- Ao conectar ou reconectar, a Cidadela pede à máquina o **buffer recente** do terminal (`terminal.replay`; o buffer de 1 MiB fica na máquina, a Cidadela não guarda) e depois repassa o fluxo ao vivo. Cliente lento recebe um retrato da tela em vez da fila inteira: o evento `screen` (texto e deslocamento), e o fluxo segue dali. O navegador assina `terminal:<id>`, recebe o retrato do tópico (`snapshot`, com o `frame_id` dos quadros, o estado e o tamanho 200 × 50), os quadros binários desde o deslocamento 0, e os eventos `replayed`, `signal` e `screen` ([protocolo](../conectividade/protocolo.md#canal-do-navegador)); um primeiro quadro depois do 0, ou um salto, é "trecho perdido" e a tela mostra a marca. O componente é `web/src/terminal/TerminalView`, que o canvas embute; a rota `/terminal/<personagem>` mostra um terminal sozinho (`GET /api/characters/{id}/terminal` acha o terminal) e mantém a tela também como texto para leitor de tela.
 - Para não pesar o navegador: no máximo 8 terminais com renderização WebGL ao mesmo tempo (padrão); todos os demais, os fora da tela, os muito afastados no zoom e os que passam do limite, viram um retrato estático, atualizado a cada 2 s.
 - As classes `nodrag`, `nowheel` e `nopan` do React Flow ficam no terminal, para o mouse e a rolagem irem para o xterm.
 
 ### Digitar no terminal
 
+- **Poder deliberado de pessoa:** digitar no terminal de um personagem é o mesmo poder de abrir um terminal naquela máquina, e por isso é só de Administrador ou acima. Pode rodar comandos que não passam pela cadeia de aprovação nem pelos decretos (o modo de shell de uma CLI, por exemplo): é uma escolha do produto, não uma brecha, e o limite é o nível, a auditoria de cada sessão (abaixo) e a recusa enquanto o personagem espera uma tela nativa de permissão. Ver também [segurança](../arquitetura/seguranca.md).
 - Só **Administrador ou acima** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)). Para os outros, o terminal é só leitura (cursor oculto, sem foco de teclado).
 - A digitação vai ao PTY pelo motor da máquina, sem passar pela caixa de entrada ([digitação](../arquitetura/terminal.md#digitação)). Antes de liberar o teclado num personagem ocupado, o painel mostra o aviso "o agente está trabalhando".
-- Cada sessão de digitação fica na auditoria: usuário, personagem, início e fim (o conteúdo digitado não é guardado na auditoria; ele já está no log do terminal).
-- O servidor confere o nível de novo a cada mensagem de entrada; o bloqueio no navegador é só conveniência.
+- Cada sessão de digitação fica na auditoria (`panel.terminal_typing_started` e `panel.terminal_typing_ended`): usuário, personagem, início e fim (o conteúdo digitado não é guardado na auditoria; ele já está no log do terminal). A sessão começa na primeira entrada aceita e termina em "Parar de digitar", ao sair do terminal ou ao fechar o socket; uma entrada recusada também a encerra e vai à auditoria (`panel.terminal_input_refused`, sem o conteúdo).
+- O servidor confere o nível de novo a cada mensagem de entrada; o bloqueio no navegador é só conveniência. Personagem parado numa tela nativa de permissão não recebe teclas (`permission_prompt`): a decisão vai pela aprovação ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). As respostas automáticas do xterm.js às perguntas do programa (posição do cursor, atributos, cores) nunca vão como digitação. Cada usuário segue no máximo 16 terminais ao mesmo tempo (`too_many_streams`), e quem perde o workspace do terminal tem as sessões encerradas, como numa mudança de nível.
 
 ### Ações no canvas
 
@@ -78,7 +79,7 @@ Depois de `mestre recruit --replace`, o nó do personagem novo fica na posição
 
 - Ação recusada pelo motor (nível, regra do documento dono) → o canvas desfaz o gesto e mostra o motivo devolvido.
 - WebSocket caiu → faixa "reconectando", com backoff; ao voltar, o estado é recarregado da Cidadela.
-- Máquina do personagem fora do ar → terminal em cinza com "máquina sem sinal desde HH:MM"; o retrato fica visível.
+- Máquina do personagem fora do ar → terminal em cinza com "máquina sem sinal desde HH:MM" (no fuso da Guilda); o retrato fica visível e, ao voltar o sinal, a Cidadela pede o fluxo de novo de onde parou. A digitação nessa máquina é recusada (`unavailable`).
 
 ## Critérios de aceite
 

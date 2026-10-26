@@ -21,6 +21,12 @@
   --color-warn-ink: #2a1c00;
   --font-display: "Fraunces Variable", Georgia, serif;
   --font-body: "Newsreader Variable", Georgia, serif;
+  /* the terminal: a dark screen on the paper, the colors xterm.js is given */
+  --font-mono: ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --color-term-bg: #1f1a14;
+  --color-term-fg: #efe6d2;
+  --color-term-cursor: #f1b04c;
+  --color-term-selection: #5a4a36;
   --radius-field: 3px;
   --shadow-card: 0 1px 0 var(--color-line), 0 12px 30px -18px rgb(90 61 26 / 0.35);
   --shadow-pop: 0 10px 28px -10px rgb(42 33 24 / 0.45);
