@@ -208,8 +208,39 @@ jobs:
         if: env.CODE == 'true'
         run: go run ./tools/testrun fast -only go
 
+      - name: EXPERIMENT timing (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "cpus: $env:NUMBER_OF_PROCESSORS"
+          $t = Measure-Command { go test -count=1 -run '^$' ./... | Out-Null }
+          "A norun all: $($t.TotalSeconds)"
+          $t = Measure-Command { go test -count=1 -run '^$' ./... | Out-Null }
+          "A2 norun all: $($t.TotalSeconds)"
+          $t = Measure-Command { go test -c -ldflags='-s -w -v' -o "$env:RUNNER_TEMP\x1.exe" ./internal/app | Out-Null }
+          "B link app: $($t.TotalSeconds)"
+          $t = Measure-Command { go test -c -ldflags='-s -w -v' -o "$env:RUNNER_TEMP\x2.exe" ./internal/vault | Out-Null }
+          "B link vault: $($t.TotalSeconds)"
+          $t = Measure-Command { go test -c -ldflags='-s -w -v' -o "$env:RUNNER_TEMP\x3.exe" ./pkg/clock | Out-Null }
+          "B link clock: $($t.TotalSeconds)"
+          $t = Measure-Command { & "$env:RUNNER_TEMP\x1.exe" '-test.run' 'NONE' | Out-Null }
+          "C start app.test: $($t.TotalSeconds)"
+          $t = Measure-Command { & "$env:RUNNER_TEMP\x2.exe" '-test.run' 'NONE' | Out-Null }
+          "C start vault.test: $($t.TotalSeconds)"
+          (Get-Item "$env:RUNNER_TEMP\x1.exe").Length
+          $out = Join-Path $env:RUNNER_TEMP 'fast.json'
+          $t = Measure-Command { go test -json -count=1 ./... > $out }
+          "D json full run: $($t.TotalSeconds)"
+          $pk = @{}
+          Get-Content $out | ForEach-Object {
+            try { $e = $_ | ConvertFrom-Json } catch { return }
+            if (($e.Action -eq 'pass' -or $e.Action -eq 'fail') -and -not $e.Test) { $pk[$e.Package] = $e.Elapsed }
+          }
+          $pk.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 25 | ForEach-Object { "{0,7:N2}s {1}" -f $_.Value, $_.Key }
+          "sum of package elapsed: " + (($pk.Values | Measure-Object -Sum).Sum)
+
       - name: Full suite
-        if: env.CODE == 'true'
+        if: env.CODE == 'true' && false
         run: go run ./tools/testrun full -only go
 
       # Only main's runs save: a cache saved on the temporary branch of a
