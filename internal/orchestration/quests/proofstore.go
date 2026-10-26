@@ -170,3 +170,12 @@ func (t *Tx) ForgetFailures(quest string) error {
 	_, err := t.tx.ExecContext(t.ctx, `DELETE FROM step_failures WHERE step IN (SELECT uid FROM quest_steps WHERE quest = ?)`, quest)
 	return err
 }
+
+// KeepPausedFailure keeps the failure that paused the quest (the count of the step
+// starts again at the pause, so the panel could not read it from there); the next
+// pause for the same reason writes over it.
+func (t *Tx) KeepPausedFailure(quest string, f Failure) error {
+	_, err := t.tx.ExecContext(t.ctx, `INSERT INTO quest_paused_failure (quest, fingerprint, count, places) VALUES (?, ?, ?, ?)
+		ON CONFLICT (quest) DO UPDATE SET fingerprint = excluded.fingerprint, count = excluded.count, places = excluded.places`, quest, f.Fingerprint, f.Count, jsonList(f.Places))
+	return err
+}

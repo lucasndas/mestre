@@ -286,6 +286,9 @@ func (s *Service) finishRun(ctx context.Context, q Quest, st Step, sd StepDef, c
 				cur.Dirty++
 				out.questState = Paused
 				out.st = st
+				if err := tx.KeepPausedFailure(q.ID, fail); err != nil { // the panel shows why the quest waits
+					return err
+				}
 				if err := tx.SetFailure(st.UID, Failure{}); err != nil { // after the pause the count starts again
 					return err
 				}

@@ -225,7 +225,7 @@ function Workspace({ w }: { w: WorkspaceRow }) {
   );
 }
 
-function Stages({ w, canRetry }: { w: WorkspaceRow; canRetry: boolean }) {
+export function Stages({ w, canRetry }: { w: WorkspaceRow; canRetry: boolean }) {
   const { t } = useTranslation("workspaces");
   const say = t as unknown as Say;
   return (

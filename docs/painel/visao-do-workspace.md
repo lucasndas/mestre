@@ -1,6 +1,6 @@
 # Visão do workspace
 
-> **Assunto:** tela do workspace com o Grão-Mestre ao centro e as mesas ao redor, e o seletor de workspaces · **Componente:** Painel · **Atualizado:** 2026-10-19
+> **Assunto:** tela do workspace com o Grão-Mestre ao centro e as mesas ao redor, e o seletor de workspaces · **Componente:** Painel · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
@@ -46,6 +46,14 @@ Dar, numa tela só, o estado de todas as mesas de um workspace e o caminho para 
 - Abrir a [conversa com o Grão-Mestre](conversa-e-aprovacoes.md) do workspace.
 - Contador de aprovações pendentes do usuário, que leva à [central de aprovações](conversa-e-aprovacoes.md#central-de-aprovações).
 - Selo de saúde (Cidadela e Torres), que leva a [administração](administracao.md#guilda-e-saúde-das-máquinas).
+
+### Implementação
+
+- **Código:** `internal/panel/routes_view.go` e `types_view.go` (rotas e tipos), `internal/app/viewhost.go` (o motor: blocos, entrega útil, esperas, uso), `internal/orchestration/quests/viewing.go` (critérios e falha repetida) e `web/src/workspace/` (seletor, tela, canvas e bloco). A rota do navegador é `/workspaces/<workspace>`.
+- **Rotas** (o servidor confere nível e workspace em todas): `GET /api/workspaces/{slug}/view` (Observador ou acima; um workspace que o usuário não vê é `not_found`, e `preparing` traz as etapas e nenhuma mesa), `PUT /api/workspaces/{slug}/view/layout` (só as chaves `gm` e `table:<id>`), `POST /api/workspaces/{slug}/tables/{table}/pause` (**Pausar mesa**: Aprovador ou acima que atua no workspace, sem PIN, auditada como `panel.workspace.table_paused`) e `PUT /api/me/workspace` (o último aberto, em `users.last_workspace`; só um que o usuário vê).
+- **Tempo real:** a tela segue o tópico `workspaces:all`; cada `changed` (qualquer gravação no banco, depois de 150 ms de calma) faz ler a visão de novo.
+- **Escolhas:** o selo "sem entrega há" usa o limite padrão de 3 h da [supervisão](../orquestracao/supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira); a posição é por workspace, compartilhada entre os usuários, como a do canvas da mesa; a impressão da falha repetida fica em `quest_paused_failure`, porque a contagem do passo recomeça na pausa; "Criar workspace…" do seletor leva à [tela dos workspaces](administracao.md), onde a sessão zero roda; o selo de saúde só aparece para quem vê a Guilda (Dono).
+- **Mesa sem issue:** só o aviso do bloco quando o épico da mesa não tem número (`epic` 0), com o motivo; o `table open` já exige o épico, então é um caso defensivo.
 
 ## Regras e erros
 

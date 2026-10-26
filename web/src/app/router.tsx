@@ -38,6 +38,7 @@ import { Sessions } from "../screens/Sessions";
 import { Setup } from "../screens/Setup";
 import { TableScreen } from "../screens/TableScreen";
 import { Workspaces } from "../screens/workspaces/Workspaces";
+import { WorkspaceScreen } from "../workspace/WorkspaceScreen";
 import { Shell } from "./Shell";
 
 export interface RouterContext {
@@ -188,6 +189,14 @@ const workspacesRoute = createRoute({
   path: "/workspaces",
   component: Workspaces,
 });
+// The view of a workspace (docs/painel/visao-do-workspace.md): the Grand Master and the tables
+const workspaceRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/workspaces/$workspace",
+  component: function WorkspacePage() {
+    return <WorkspaceScreen workspace={workspaceRoute.useParams().workspace} />;
+  },
+});
 const approvalsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/aprovacoes",
@@ -305,6 +314,7 @@ const routeTree = rootRoute.addChildren([
     usageRoute,
     guildRoute,
     workspacesRoute,
+    workspaceRoute,
     githubRoute,
     transferRoute,
     terminalRoute,

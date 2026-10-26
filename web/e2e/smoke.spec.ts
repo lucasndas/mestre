@@ -121,6 +121,35 @@ test("the canvas of a table draws its nodes and the terminal of a character", as
   await expect(dev.getByRole("button", { name: "Desafixar Dev-1" })).toBeVisible();
 });
 
+// The workspace view step of the smoke: the Grand Master of the double is the center, with its
+// terminal over the socket, the table is a block around it, and a click on the block
+// opens the canvas of the table.
+// Part of CA-VWS-03 (the screen test is in web/src/workspace/workspace.test.tsx)
+test("the workspace view shows the Grand Master and a table block, and a click opens its canvas", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByLabel("Nome de login").fill("maria");
+  await page.getByLabel("Senha").fill("uma senha bem longa");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page.getByRole("heading", { name: "Sua Guilda está pronta" })).toBeVisible();
+  // the selector of the top bar leads to the view of the workspace
+  await page.getByLabel("Workspace", { exact: true }).selectOption("e2e");
+  await expect(page.getByRole("heading", { name: "Workspace e2e", level: 1 })).toBeVisible();
+  const canvas = page.getByRole("region", { name: "Canvas do workspace e2e" });
+  const gm = canvas.getByRole("article", { name: "Grão-Mestre Grão-Mestre" });
+  await expect(gm).toBeVisible();
+  await expect(gm.locator(".xterm")).toBeVisible();
+  const block = canvas.getByRole("article", { name: "Mesa mesa-e2e" });
+  await expect(block).toBeVisible();
+  await expect(block.getByText("Login com Google")).toBeVisible();
+  await expect(block.getByText("em trabalho")).toBeVisible();
+  await expect(block.getByText("Critérios 2 de 3 (1 verificado)")).toBeVisible();
+  await block.getByText("epico/7-login").click();
+  await expect(page).toHaveURL(/\/workspaces\/e2e\/mesas\/mesa-e2e$/);
+  await expect(page.getByRole("region", { name: "Canvas da mesa mesa-e2e" })).toBeVisible();
+});
+
 // The rules step of the smoke: the Owner opens the decrees screen, makes a rule (a
 // proposal first, then the click) and revokes it. The engine is the real one.
 test("the Owner makes a decree and revokes it", async ({ page }) => {

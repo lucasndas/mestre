@@ -65,6 +65,7 @@ func mountWorkspaces(r *Router) {
 	r.Require("POST /api/workspaces/{slug}/versioning", a.handleVersioning, users.ConfigureWorkspace)
 	r.Require("GET /api/workspaces/{slug}/verification", a.handleVerification, users.Status)
 	r.Require("PUT /api/workspaces/{slug}/verification", a.handleConfirm, users.ConfigureWorkspace)
+	mountView(r, a)
 }
 
 func (p *Panel) workspaceSource() WorkspaceSource {
@@ -134,7 +135,7 @@ func (a *workspaceArea) fail(w http.ResponseWriter, err error) {
 			params[k] = v
 		}
 		WriteError(w, Err(CodeRefused, ref.Message, params))
-	case errors.Is(err, ErrWorkspaceNotFound):
+	case errors.Is(err, ErrWorkspaceNotFound), errors.Is(err, ErrCanvasNotFound):
 		WriteError(w, Err(CodeNotFound, "workspace não encontrado", nil))
 	default:
 		a.p.log.Warn("panel: an action of the workspaces failed", "err", err)

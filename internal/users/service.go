@@ -89,7 +89,7 @@ func fromMs(v int64) time.Time {
 	return time.UnixMilli(v).UTC()
 }
 
-const userColumns = `id, name, level, state, telegram_id, github_login, pin_hash <> '', pin_locked_until, created_at, login, language`
+const userColumns = `id, name, level, state, telegram_id, github_login, pin_hash <> '', pin_locked_until, created_at, login, language, last_workspace`
 
 func scanUser(sc interface{ Scan(...any) error }) (User, error) {
 	var (
@@ -98,7 +98,7 @@ func scanUser(sc interface{ Scan(...any) error }) (User, error) {
 		hasPIN         bool
 		locked, create int64
 	)
-	if err := sc.Scan(&u.ID, &u.Name, &level, &state, &u.TelegramID, &u.GitHubLogin, &hasPIN, &locked, &create, &u.Login, &u.Language); err != nil {
+	if err := sc.Scan(&u.ID, &u.Name, &level, &state, &u.TelegramID, &u.GitHubLogin, &hasPIN, &locked, &create, &u.Login, &u.Language, &u.LastWorkspace); err != nil {
 		return User{}, err
 	}
 	u.Level, u.State, u.HasPIN, u.PINLockedUntil, u.CreatedAt = Level(level), State(state), hasPIN, fromMs(locked), fromMs(create)

@@ -18,6 +18,7 @@ import shell from "./shell";
 import terminal from "./terminal";
 import usage from "./usage";
 import users from "./users";
+import workspace from "./workspace";
 import workspaces from "./workspaces";
 
 export const ptBR = {
@@ -42,4 +43,5 @@ export const ptBR = {
   profiles,
   usage,
   workspaces,
+  workspace,
 } as const;

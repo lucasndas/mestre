@@ -74,6 +74,8 @@ func TestAClassThatAsksForProofRefusesTheDoneThatLacksOne(t *testing.T) {
 // Part of CA-PROVA-06 (the story with the three returns, the other print in the
 // middle and the event is in the full suite): the same print twice in a row
 // pauses the quest before the returns run out, and the return is not made.
+// CA-VWS-09
+// (the part of the engine) the workspace view reads the fingerprint and the place.
 func TestTheSamePlaceTwiceInARowPausesTheQuestAndTellsTheMaster(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -97,6 +99,11 @@ func TestTheSamePlaceTwiceInARowPausesTheQuestAndTellsTheMaster(t *testing.T) {
 	}
 	if got := w.quest(q.ID); got.PausedReason != "mesma falha repetida" {
 		t.Errorf("paused for %q", got.PausedReason)
+	}
+	// the workspace view reads the fingerprint and the place
+	pr, err := w.orc.Quests.Progress(w.ctx, w.quest(q.ID))
+	if err != nil || pr.Failure.Fingerprint == "" || pr.Failure.Count != 2 || len(pr.Failure.Places) == 0 || !strings.Contains(pr.Failure.Places[0], "src/login.go:40") {
+		t.Errorf("progress = %+v (%v)", pr, err)
 	}
 	found := false
 	for _, d := range w.machines.Delivered(w.master) {
@@ -394,3 +401,25 @@ func contains(l []string, s string) bool {
 }
 
 const criteriaBody = "Login com senha.\n\n## Critérios\n- [ ] C1 aceita senha correta\n- [ ] C2 recusa senha vazia\n- [ ] C3 bloqueia depois de cinco erros\n"
+
+// CA-VWS-07 (the part of the engine): the view counts the criteria, the ones with a
+// proof and the ones the engine verified itself.
+func TestTheProgressCountsTheCriteriaAndTheirProofs(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	n := w.issueOf("- [ ] C1 primeiro\n- [ ] C2 segundo\n- [ ] C3 terceiro\n")
+	q := w.run(w.create(fmt.Sprintf("name: Prova\nissue: %d\nsteps:\n  - {id: qa, sheet: QA Antigravity}\n", n)))
+	if r := w.done("QA Antigravity 1", map[string]any{"proof": []string{"C1=visto", "C2=lido"}}, "x"); !r.OK {
+		t.Fatalf("done = %+v", r.Error)
+	}
+	cur := w.quest(q.ID)
+	if err := w.orc.Quests.Store().Do(w.ctx, func(tx *quests.Tx) error {
+		return tx.PutProof(quests.Proof{Quest: q.ID, Round: cur.Round, Criterion: "C1", Text: "rodou", Origin: quests.ProofVerified, By: "engine", Step: "qa", At: w.clk.Now()})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	pr, err := w.orc.Quests.Progress(w.ctx, cur)
+	if err != nil || pr.Criteria != 3 || pr.Proven != 2 || pr.Verified != 1 {
+		t.Errorf("progress = %+v (%v), want 3 criteria, 2 with proof, 1 verified", pr, err)
+	}
+}

@@ -95,6 +95,7 @@ export const ME = {
     workspaces: [],
     has_pin: true,
     language: "",
+    last_workspace: "",
   },
   session: {
     id: "s1",

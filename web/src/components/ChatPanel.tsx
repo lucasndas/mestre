@@ -6,16 +6,10 @@ import { useFormatDateTime, useMe } from "../app/session";
 import { useConnectionState } from "../app/socket";
 import type { ChatConversation, ChatEntry, ChatSent, ChatStatus } from "../gen/panel";
 import { ApiError, api } from "../lib/api";
-import {
-  chatOverviewQuery,
-  chatQuery,
-  humanSize,
-  newMessageId,
-  storeChatWorkspace,
-  storedChatWorkspace,
-} from "../lib/chatQueries";
+import { chatOverviewQuery, chatQuery, humanSize, newMessageId } from "../lib/chatQueries";
 import { errorText } from "../lib/errors";
 import { formatTime } from "../lib/format";
+import { useCurrentWorkspace } from "../workspace/current";
 import { ChatMarkdown } from "./Markdown";
 import { Term } from "./Term";
 import { Alert, Button } from "./ui";
@@ -549,9 +543,12 @@ function Conversation({ workspace }: { workspace: string }) {
 export function ChatPanel({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation("chat");
   const { data: overview, isPending } = useQuery(chatOverviewQuery);
-  const [chosen, setChosen] = useState(storedChatWorkspace());
+  const current = useCurrentWorkspace();
   const list = overview?.workspaces ?? [];
-  const workspace = list.some((w) => w.slug === chosen) ? chosen : (list[0]?.slug ?? "");
+  // the conversation follows the selector of the top bar; a workspace the user cannot talk in falls to the first that works
+  const workspace = list.some((w) => w.slug === current.slug)
+    ? current.slug
+    : (list[0]?.slug ?? "");
   return (
     <aside aria-label={t("title")} className="flex h-dvh min-h-0 flex-col bg-surface">
       <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
@@ -569,29 +566,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
       </header>
       {isPending ? <p className="p-4 text-muted">{t("loading")}</p> : null}
       {overview && list.length === 0 ? <p className="p-4 text-muted">{t("noWorkspace")}</p> : null}
-      {list.length > 1 ? (
-        <div className="flex items-center gap-2 border-b border-line px-4 py-2">
-          <label htmlFor="chat-workspace" className="text-sm font-semibold">
-            {t("workspace")}
-          </label>
-          <select
-            id="chat-workspace"
-            value={workspace}
-            onChange={(e) => {
-              setChosen(e.target.value);
-              storeChatWorkspace(e.target.value);
-            }}
-            className="min-h-11 rounded-field border border-line bg-paper px-2"
-          >
-            {list.map((w) => (
-              <option key={w.slug} value={w.slug}>
-                {w.slug}
-                {w.unread > 0 ? ` (${w.unread})` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : list.length === 1 ? (
+      {list.length > 0 ? (
         <p className="border-b border-line px-4 py-2 text-sm text-muted">
           {t("workspace")}: <span className="font-semibold text-ink">{workspace}</span> ·{" "}
           {t("privacy")}

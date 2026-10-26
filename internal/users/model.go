@@ -21,11 +21,13 @@ type User struct {
 	// Login is the login name of the panel (empty until the first access).
 	Login string
 	// Language is the language of the panel the user chose ("" until chosen).
-	Language    string
-	Level       Level
-	State       State
-	TelegramID  int64
-	GitHubLogin string
+	Language string
+	// LastWorkspace is the workspace the user opened last in the panel ("" if none).
+	LastWorkspace string
+	Level         Level
+	State         State
+	TelegramID    int64
+	GitHubLogin   string
 	// HasPIN says the user set a PIN; the hash never leaves the package.
 	HasPIN bool
 	// PINLockedUntil is when the lock of the PIN ends (zero: not locked).

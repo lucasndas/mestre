@@ -22,6 +22,7 @@ func mountAuth(r *Router) {
 	r.Public("POST /api/first-access", p.handleFirstAccess)
 	r.Auth("POST /api/logout", p.handleLogout)
 	r.Auth("PUT /api/me/language", p.handleLanguage)
+	r.Auth("PUT /api/me/workspace", p.handleLastWorkspace)
 	r.Auth("GET /api/me", p.handleMe)
 	r.Auth("POST /api/password", p.handlePassword)
 	r.Sensitive("POST /api/users/{id}/access-code", "users.access_code", users.ManageUsers, p.handleAccessCode)
@@ -77,7 +78,7 @@ func (p *Panel) me(ctx context.Context, u users.User, ss Session) Me {
 		ws = []string{}
 	}
 	return Me{
-		User:         UserInfo{ID: u.ID, Name: u.Name, Login: u.Login, Level: string(u.Level), LevelName: u.Level.Name(), Workspaces: ws, HasPIN: u.HasPIN, Language: u.Language},
+		User:         UserInfo{ID: u.ID, Name: u.Name, Login: u.Login, Level: string(u.Level), LevelName: u.Level.Name(), Workspaces: ws, HasPIN: u.HasPIN, Language: u.Language, LastWorkspace: u.LastWorkspace},
 		Session:      SessionInfo{ID: ss.ID, UserID: ss.UserID, Device: ss.Device, IP: ss.IP, CreatedAt: ss.CreatedAt, LastUsedAt: ss.LastUsedAt, Current: true},
 		Capabilities: caps,
 		Timezone:     p.timezone(ctx),
@@ -415,5 +416,25 @@ func (p *Panel) handleLanguage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u.Language = in.Language
+	WriteJSON(w, http.StatusOK, p.me(r.Context(), u, SessionOf(r)))
+}
+
+// handleLastWorkspace remembers the workspace the user opened last. Only one the
+// user sees is kept: the server decides, not the browser.
+func (p *Panel) handleLastWorkspace(w http.ResponseWriter, r *http.Request) {
+	u := UserOf(r)
+	var in LastWorkspaceRequest
+	if !decode(w, r, &in) {
+		return
+	}
+	if in.Workspace == "" || !visible(u, in.Workspace) {
+		WriteError(w, Err(CodeNotFound, "workspace não encontrado", nil))
+		return
+	}
+	if err := p.users.SetLastWorkspace(r.Context(), u.ID, in.Workspace); err != nil {
+		WriteError(w, errInternal())
+		return
+	}
+	u.LastWorkspace = in.Workspace
 	WriteJSON(w, http.StatusOK, p.me(r.Context(), u, SessionOf(r)))
 }

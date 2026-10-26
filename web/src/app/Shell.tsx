@@ -11,7 +11,9 @@ import { chatOverviewQuery, chatQuery } from "../lib/chatQueries";
 import { type Live, LiveContext, useLiveEvents } from "../lib/live";
 import { type SocketState, UiSocket } from "../lib/ws";
 import { TransferBanner } from "../screens/admin/Transfer";
+import { WorkspaceSelector } from "../workspace/WorkspaceSelector";
 import { Brand } from "./AuthLayout";
+import { ChatControlContext } from "./chatControl";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { useCan, useMe } from "./session";
 import { ConnectionContext, SocketContext } from "./socket";
@@ -193,11 +195,13 @@ function TopBar({ chatOpen, onChat }: { chatOpen: boolean; onChat: () => void })
     }
   };
   return (
-    <header className="flex items-center gap-3 border-b border-line bg-surface px-4 py-2">
+    <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-surface px-4 py-2">
       <Brand />
-      {/* Slots of the later units: the workspace selector, the counter of pending
-          approvals and the bell of the notices (docs/painel/design.md#a-barra-de-cima). */}
-      <div data-slot="workspace-selector" className="flex items-center" />
+      {/* The workspace selector, the counter of pending approvals and the bell of the
+          notices (docs/painel/design.md#a-barra-de-cima). */}
+      <div data-slot="workspace-selector" className="flex items-center">
+        <WorkspaceSelector />
+      </div>
       <div className="flex-1" />
       <div data-slot="approvals-counter" className="flex items-center">
         <ApprovalsCounter />
@@ -235,6 +239,10 @@ export function Shell() {
   const me = useMe();
   const { state, socket } = useConnection();
   const [chatOpen, setChatOpen] = useState(false);
+  const chatControl = useMemo(
+    () => ({ open: chatOpen, toggle: () => setChatOpen((o) => !o) }),
+    [chatOpen],
+  );
   // the events of the channel for the screens (the counter, the bell, the central), and the
   // topics of this user: his approvals and his notices
   const userId = me.user.id;
@@ -265,32 +273,34 @@ export function Shell() {
     <LiveContext.Provider value={live}>
       <ConnectionContext.Provider value={state}>
         <ChatLive />
-        <div
-          className={`grid min-h-dvh grid-rows-[auto_auto_1fr] md:grid-rows-[auto_1fr] ${chatOpen ? "md:grid-cols-[14rem_1fr_26rem]" : "md:grid-cols-[14rem_1fr]"}`}
-        >
-          <a
-            href="#content"
-            className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-surface focus:p-2"
+        <ChatControlContext.Provider value={chatControl}>
+          <div
+            className={`grid min-h-dvh grid-rows-[auto_auto_1fr] md:grid-rows-[auto_1fr] ${chatOpen ? "md:grid-cols-[14rem_1fr_26rem]" : "md:grid-cols-[14rem_1fr]"}`}
           >
-            {t("top.skip")}
-          </a>
-          <div className="md:col-span-full">
-            <TopBar chatOpen={chatOpen} onChat={() => setChatOpen((o) => !o)} />
-            <ReconnectingBand state={state} />
-            <TransferBanner />
-          </div>
-          <Nav />
-          <main id="content" className="min-w-0 px-5 py-8 md:px-10">
-            <SocketContext.Provider value={socket}>
-              <Outlet />
-            </SocketContext.Provider>
-          </main>
-          {chatOpen ? (
-            <div className="fixed inset-0 z-40 md:sticky md:inset-auto md:top-0 md:z-auto md:col-start-3 md:row-span-2 md:row-start-1 md:h-dvh md:border-l md:border-line">
-              <ChatPanel onClose={() => setChatOpen(false)} />
+            <a
+              href="#content"
+              className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-surface focus:p-2"
+            >
+              {t("top.skip")}
+            </a>
+            <div className="md:col-span-full">
+              <TopBar chatOpen={chatOpen} onChat={() => setChatOpen((o) => !o)} />
+              <ReconnectingBand state={state} />
+              <TransferBanner />
             </div>
-          ) : null}
-        </div>
+            <Nav />
+            <main id="content" className="min-w-0 px-5 py-8 md:px-10">
+              <SocketContext.Provider value={socket}>
+                <Outlet />
+              </SocketContext.Provider>
+            </main>
+            {chatOpen ? (
+              <div className="fixed inset-0 z-40 md:sticky md:inset-auto md:top-0 md:z-auto md:col-start-3 md:row-span-2 md:row-start-1 md:h-dvh md:border-l md:border-line">
+                <ChatPanel onClose={() => setChatOpen(false)} />
+              </div>
+            ) : null}
+          </div>
+        </ChatControlContext.Provider>
       </ConnectionContext.Provider>
     </LiveContext.Provider>
   );
