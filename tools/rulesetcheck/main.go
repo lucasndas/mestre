@@ -130,6 +130,9 @@ func keyOf(v any) (string, bool) {
 	return "", false
 }
 
+// isZero says whether a value the document leaves out is at its zero value: an
+// object counts as zero when every field of it is (a setting the server adds
+// switched off, like {"enabled": false, "allowed_actors": []}).
 func isZero(v any) bool {
 	switch x := v.(type) {
 	case nil:
@@ -143,7 +146,12 @@ func isZero(v any) bool {
 	case []any:
 		return len(x) == 0
 	case map[string]any:
-		return len(x) == 0
+		for _, f := range x {
+			if !isZero(f) {
+				return false
+			}
+		}
+		return true
 	}
 	return false
 }
