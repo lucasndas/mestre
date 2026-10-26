@@ -1,6 +1,6 @@
 # Segurança
 
-> **Assunto:** modelo de ameaças, TLS e CA da Guilda, nomes dos certificados (`mestre.local` só na Cidadela), credenciais de máquina, uma Cidadela por vez, risco de máquina roubada, isolamento dos agentes, git do motor, mascaramento em logs e quem vê o quê · **Componente:** Todos · **Atualizado:** 2026-10-19
+> **Assunto:** modelo de ameaças, TLS e CA da Guilda, nomes dos certificados (`mestre.local` só na Cidadela), credenciais de máquina, uma Cidadela por vez, risco de máquina roubada, isolamento dos agentes, git do motor, mascaramento em logs e quem vê o quê · **Componente:** Todos · **Atualizado:** 2026-10-26
 
 ## O que proteger
 
@@ -8,7 +8,7 @@
 2. **Token do bot do Telegram** e a lista de usuários autorizados.
 3. **Contas dos provedores** (assinaturas do Claude, Codex, Antigravity) nos perfis de conta.
 4. **O código** dos repositórios e as branches protegidas.
-5. **As máquinas:** nenhuma ação deve dar a alguém (pessoa ou agente) acesso livre a elas.
+5. **As máquinas:** nenhuma ação deve dar a alguém (pessoa ou agente) acesso livre a elas. **Exceção deliberada, da pessoa:** digitar no terminal de um personagem pelo painel ([canvas](../painel/canvas.md#digitar-no-terminal)) é um poder de pessoa, só de Administrador ou acima, e vale o mesmo que abrir um terminal naquela máquina: pode rodar comandos que não passam pela cadeia de aprovação nem pelos decretos (o modo de shell de uma CLI, por exemplo). Cada sessão de digitação fica na auditoria (quem, personagem, início e fim, nunca o conteúdo), e a digitação é recusada enquanto o personagem espera uma tela nativa de permissão.
 
 ## Ameaças e proteções
 

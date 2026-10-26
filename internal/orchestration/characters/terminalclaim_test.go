@@ -3,6 +3,7 @@ package characters_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
@@ -30,6 +31,10 @@ func TestAReportCannotClaimTheTerminalOfAnotherCharacter(t *testing.T) {
 	c, err := r.reg.ByTerminal(r.ctx, vt)
 	if err != nil || c.ID != victim.ID {
 		t.Fatalf("the terminal of the victim resolves to %q, %v", c.ID, err)
+	}
+	// and even a write that got past the check meets the unique index of the living terminals
+	if _, _, err := r.reg.Transition(r.ctx, thief.ID, characters.Busy, characters.Change{Reason: "turn", At: time.Date(2026, 10, 26, 9, 0, 0, 0, time.UTC), Terminal: vt}); err == nil {
+		t.Fatal("two living characters now hold one terminal id")
 	}
 	// its own, in both forms, is fine
 	for _, own := range []string{thief.ID, thief.ID + "-2"} {

@@ -42,6 +42,7 @@ Mostrar, em tempo real, tudo o que acontece numa mesa: o Mestre da mesa, a party
 
 ### Digitar no terminal
 
+- **Poder deliberado de pessoa:** digitar no terminal de um personagem é o mesmo poder de abrir um terminal naquela máquina, e por isso é só de Administrador ou acima. Pode rodar comandos que não passam pela cadeia de aprovação nem pelos decretos (o modo de shell de uma CLI, por exemplo): é uma escolha do produto, não uma brecha, e o limite é o nível, a auditoria de cada sessão (abaixo) e a recusa enquanto o personagem espera uma tela nativa de permissão. Ver também [segurança](../arquitetura/seguranca.md).
 - Só **Administrador ou acima** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)). Para os outros, o terminal é só leitura (cursor oculto, sem foco de teclado).
 - A digitação vai ao PTY pelo motor da máquina, sem passar pela caixa de entrada ([digitação](../arquitetura/terminal.md#digitação)). Antes de liberar o teclado num personagem ocupado, o painel mostra o aviso "o agente está trabalhando".
 - Cada sessão de digitação fica na auditoria (`panel.terminal_typing_started` e `panel.terminal_typing_ended`): usuário, personagem, início e fim (o conteúdo digitado não é guardado na auditoria; ele já está no log do terminal). A sessão começa na primeira entrada aceita e termina em "Parar de digitar", ao sair do terminal ou ao fechar o socket; uma entrada recusada também a encerra e vai à auditoria (`panel.terminal_input_refused`, sem o conteúdo).

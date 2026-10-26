@@ -70,9 +70,15 @@ func (s *Service) Report(ctx context.Context, r Report) error {
 var ErrForeignTerminal = errors.New("the terminal is not the character's")
 
 // ownsTerminal says whether the terminal id of a report is one the character
-// may have: none, the one the registry has, or its id or id-n.
+// may have: none, the one the registry has (or the first, while it has none), or
+// its id or id-n.
 func ownsTerminal(c Character, terminal string) bool {
 	if terminal == "" || terminal == c.TerminalID || terminal == c.ID {
+		return true
+	}
+	if c.TerminalID == "" {
+		// none recorded yet: the first one is taken, unless another living character holds
+		// it (the unique index of the registry refuses that write)
 		return true
 	}
 	n, ok := strings.CutPrefix(terminal, c.ID+"-")
