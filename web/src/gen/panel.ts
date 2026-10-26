@@ -108,6 +108,111 @@ export interface ErrorBody {
 }
 
 //////////
+// source: terminals_types.go
+
+/**
+ * TypeTerminalInput (browser → Citadel) types into the terminal; the Citadel
+ * checks the level of the user at each one. A refusal comes as an error
+ * message with reply_to; success has no answer.
+ */
+export const TypeTerminalInput = "terminal.input";
+/**
+ * TypeTerminalTypingEnd (browser → Citadel) ends the typing session (the
+ * keyboard was released); the session also ends with the subscription.
+ */
+export const TypeTerminalTypingEnd = "terminal.typing_end";
+/**
+ * EventReplayed says the replay reached the live output (TerminalReplayed).
+ */
+export const EventReplayed = "replayed";
+/**
+ * EventSignal says the machine of the terminal lost, or got back, its
+ * signal (TerminalSignal).
+ */
+export const EventSignal = "signal";
+/**
+ * EventScreen is the picture of the screen a slow browser gets instead of the
+ * output it lost (TerminalScreenEvent); the frames go on from its Offset.
+ */
+export const EventScreen = "screen";
+/**
+ * TerminalInfo is GET /api/characters/{id}/terminal and the snapshot of the
+ * topic "terminal:<id>".
+ */
+export interface TerminalInfo {
+  terminal_id: string;
+  /**
+   * FrameID is the ULID that the binary frames of the terminal carry in the
+   * browser channel (the terminal ids are not ULIDs): the panel derives it from
+   * the terminal id, and the front end learns it here, before the first frame.
+   */
+  frame_id: string;
+  character: string;
+  name: string;
+  machine: string;
+  workspace: string;
+  /**
+   * State is the state of the character; Busy says it is working (typing
+   * into it asks for a confirmation).
+   */
+  state: string;
+  busy: boolean;
+  /**
+   * Cols and Rows are the fixed size of the PTY; the browser never changes it.
+   */
+  cols: number /* int */;
+  rows: number /* int */;
+  /**
+   * Signal is false while the machine of the terminal is out of reach, since
+   * NoSignalSince.
+   */
+  signal: boolean;
+  no_signal_since?: string;
+  /**
+   * CanType says the user may type (decided by the server at each input).
+   */
+  can_type: boolean;
+}
+/**
+ * TerminalInputMessage is the payload of TypeTerminalInput.
+ */
+export interface TerminalInputMessage {
+  terminal_id: string;
+  data: string;
+}
+/**
+ * TerminalTypingEndMessage is the payload of TypeTerminalTypingEnd.
+ */
+export interface TerminalTypingEndMessage {
+  terminal_id: string;
+}
+/**
+ * TerminalReplayed is the payload of EventReplayed: the replay covered the
+ * bytes from From to To, and Lost says that before From some bytes already left
+ * the buffer of the machine ("trecho perdido").
+ */
+export interface TerminalReplayed {
+  from: number /* uint64 */;
+  to: number /* uint64 */;
+  lost: boolean;
+}
+/**
+ * TerminalSignal is the payload of EventSignal.
+ */
+export interface TerminalSignal {
+  signal: boolean;
+  since?: string;
+}
+/**
+ * TerminalScreenEvent is the payload of EventScreen: the text of the screen at
+ * byte Offset of the output.
+ */
+export interface TerminalScreenEvent {
+  text: string;
+  offset: number /* uint64 */;
+}
+
+//////////
 // source: types.go
 
 /**

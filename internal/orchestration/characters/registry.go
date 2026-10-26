@@ -110,6 +110,18 @@ func (r Registry) OnMachine(ctx context.Context, machine string) ([]Character, e
 	return r.list(ctx, `state <> 'stopped' AND machine_id = ?`, machine)
 }
 
+// ByTerminal finds the character whose terminal has the id (ErrNoCharacter).
+func (r Registry) ByTerminal(ctx context.Context, terminal string) (Character, error) {
+	cs, err := r.list(ctx, `terminal_id = ? AND state <> 'stopped'`, terminal)
+	switch {
+	case err != nil:
+		return Character{}, err
+	case len(cs) == 0 || terminal == "":
+		return Character{}, fmt.Errorf("%w: terminal %s", ErrNoCharacter, terminal)
+	}
+	return cs[0], nil
+}
+
 // ByName finds the living character with the name in the table, without
 // difference of case.
 func (r Registry) ByName(ctx context.Context, workspace, table, name string) (Character, error) {

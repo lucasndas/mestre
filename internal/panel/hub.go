@@ -16,7 +16,10 @@ const (
 	// sendQueue is how many messages wait for a slow browser; a browser that lets
 	// the queue of events fill is closed, and one that lets the binary frames
 	// fill loses them (it asks for the replay again).
-	sendQueue    = 256
+	sendQueue = 256
+	// frameQueue is how many of those places the binary frames may take: the
+	// text (events, answers, the picture of a screen) keeps the rest.
+	frameQueue   = sendQueue * 3 / 4
 	maxUIMessage = 1 << 20
 )
 
@@ -29,6 +32,80 @@ type Topic struct {
 	Authorize func(u users.User, id string) bool
 	// Snapshot is the state the subscriber gets first (nil: no snapshot).
 	Snapshot func(ctx context.Context, u users.User, id string) (any, error)
+	// Open is called once the subscription is accepted and its snapshot queued:
+	// the area starts what it pushes to the subscriber (the stream of a terminal)
+	// and returns what ends it, called when the subscriber leaves the topic, when
+	// its socket closes, and before a second subscribe to the same topic opens
+	// again (nil: nothing to start).
+	Open func(ctx context.Context, sub *Subscription, u users.User, id string) (stop func())
+}
+
+// MessageHandler runs a message of the browser that the hub does not know (the
+// areas register theirs with Hub.HandleMessage). It runs in the reading
+// goroutine of the socket, one message at a time, so it must return soon.
+type MessageHandler func(ctx context.Context, s Socket, env UIEnvelope)
+
+// Socket is one browser socket, as the handlers of an area see it.
+type Socket struct {
+	h *Hub
+	c *uiConn
+}
+
+// Subscription is a socket that follows a topic.
+type Subscription struct {
+	Socket
+	Topic, ID string
+	// State is whatever the area keeps for the subscription (set by Open).
+	State any
+}
+
+// Subscription is the subscription of the socket to the topic, nil if none.
+func (s Socket) Subscription(topic string) *Subscription {
+	s.c.mu.Lock()
+	defer s.c.mu.Unlock()
+	return s.c.subs[topic]
+}
+
+// Fresh reads the user again: the level may have changed since the socket
+// opened. It is false when the user is gone, and the socket is then closed.
+func (s Socket) Fresh(ctx context.Context) (users.User, bool) {
+	u, err := s.h.p.users.Get(ctx, s.c.user.ID)
+	if err != nil || u.State != users.Active {
+		s.c.close(CloseSessionEnded, "session ended")
+		return users.User{}, false
+	}
+	return u, true
+}
+
+// SessionID is the session the socket belongs to.
+func (s Socket) SessionID() string { return s.c.sessionID }
+
+// Reply sends a message to the browser, answering replyTo.
+func (s Socket) Reply(typ, replyTo string, payload any) { s.h.reply(s.c, typ, replyTo, payload) }
+
+// Fail answers replyTo with an error.
+func (s Socket) Fail(replyTo string, e *APIError) { s.h.reply(s.c, TypeUIError, replyTo, e) }
+
+// Event sends a ui.event of the topic to this socket only.
+func (s Socket) Event(topic, event string, data any) {
+	d, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	if b, err := s.h.envelope(TypeUIEvent, "", UIEvent{Topic: topic, Event: event, Data: d}); err == nil {
+		s.c.enqueue(websocket.MessageText, b)
+	}
+}
+
+// Frame queues a binary frame for this socket; false when its queue is full (the
+// frame is lost and the caller must resynchronise).
+func (s Socket) Frame(frame []byte) bool { return s.c.enqueue(websocket.MessageBinary, frame) }
+
+// HandleMessage registers the handler of a type of message of the browser.
+func (h *Hub) HandleMessage(typ string, f MessageHandler) {
+	h.mu.Lock()
+	h.msgs[typ] = f
+	h.mu.Unlock()
 }
 
 // Hub is the channel of the browser: it keeps the sockets of /ws/ui and fans the
@@ -39,10 +116,11 @@ type Hub struct {
 	mu     sync.Mutex
 	conns  map[*uiConn]struct{}
 	topics map[string]Topic
+	msgs   map[string]MessageHandler
 }
 
 func newHub(p *Panel) *Hub {
-	return &Hub{p: p, conns: map[*uiConn]struct{}{}, topics: map[string]Topic{}}
+	return &Hub{p: p, conns: map[*uiConn]struct{}{}, topics: map[string]Topic{}, msgs: map[string]MessageHandler{}}
 }
 
 // Provide registers the kind of topic.
@@ -66,6 +144,34 @@ type uiConn struct {
 
 	mu     sync.Mutex
 	topics map[string]bool
+	subs   map[string]*Subscription
+	stops  map[string]func()
+}
+
+// leave ends the subscription to the topic: what the area started stops.
+func (c *uiConn) leave(topic string) {
+	c.mu.Lock()
+	delete(c.topics, topic)
+	delete(c.subs, topic)
+	stop := c.stops[topic]
+	delete(c.stops, topic)
+	c.mu.Unlock()
+	if stop != nil {
+		stop()
+	}
+}
+
+// leaveAll ends every subscription (the socket closed).
+func (c *uiConn) leaveAll() {
+	c.mu.Lock()
+	topics := make([]string, 0, len(c.stops))
+	for t := range c.stops {
+		topics = append(topics, t)
+	}
+	c.mu.Unlock()
+	for _, t := range topics {
+		c.leave(t)
+	}
 }
 
 func (c *uiConn) subscribed(topic string) bool {
@@ -76,13 +182,18 @@ func (c *uiConn) subscribed(topic string) bool {
 
 // enqueue puts a message on the queue of the socket; text that does not fit
 // closes the socket, binary that does not fit is lost.
-func (c *uiConn) enqueue(typ websocket.MessageType, data []byte) {
+func (c *uiConn) enqueue(typ websocket.MessageType, data []byte) bool {
+	if typ == websocket.MessageBinary && len(c.send) >= frameQueue {
+		return false // the rest of the queue is for the text, which must never be lost
+	}
 	select {
 	case c.send <- outgoing{typ, data}:
+		return true
 	default:
 		if typ == websocket.MessageText {
 			c.close(websocket.StatusPolicyViolation, "too slow")
 		}
+		return false
 	}
 }
 
@@ -210,10 +321,12 @@ func (p *Panel) serveWS(w http.ResponseWriter, r *http.Request) {
 	}
 	ws.SetReadLimit(maxUIMessage)
 	cctx, cancel := context.WithCancel(context.Background())
-	c := &uiConn{ws: ws, user: UserOf(r), sessionID: SessionOf(r).ID, cancel: cancel, send: make(chan outgoing, sendQueue), topics: map[string]bool{}}
+	c := &uiConn{ws: ws, user: UserOf(r), sessionID: SessionOf(r).ID, cancel: cancel, send: make(chan outgoing, sendQueue), topics: map[string]bool{},
+		subs: map[string]*Subscription{}, stops: map[string]func(){}}
 	p.hub.add(c)
 	defer func() {
 		p.hub.remove(c)
+		c.leaveAll()
 		cancel()
 		_ = ws.CloseNow()
 	}()
@@ -273,15 +386,20 @@ func (h *Hub) handle(ctx context.Context, c *uiConn, data []byte) {
 			return
 		}
 	default:
-		h.reply(c, TypeUIError, env.ID, Err(CodeBadRequest, "tipo de mensagem desconhecido", map[string]any{"type": env.Type}))
+		h.mu.Lock()
+		f := h.msgs[env.Type]
+		h.mu.Unlock()
+		if f == nil {
+			h.reply(c, TypeUIError, env.ID, Err(CodeBadRequest, "tipo de mensagem desconhecido", map[string]any{"type": env.Type}))
+			return
+		}
+		f(ctx, Socket{h, c}, env)
 		return
 	}
 	if env.Type == TypeUIUnsubscribe {
-		c.mu.Lock()
 		for _, t := range in.Topics {
-			delete(c.topics, t)
+			c.leave(t)
 		}
-		c.mu.Unlock()
 		h.reply(c, TypeUISubscribed, env.ID, UISubscribed{Topics: []string{}, Rejected: []UIRejected{}})
 		return
 	}
@@ -306,21 +424,30 @@ func (h *Hub) handle(ctx context.Context, c *uiConn, data []byte) {
 			rejected = append(rejected, UIRejected{Topic: topic, Code: CodeForbiddenLevel})
 			continue
 		}
+		c.leave(topic) // a second subscribe starts the topic again
+		sub := &Subscription{Socket: Socket{h, c}, Topic: topic, ID: id}
 		c.mu.Lock()
 		c.topics[topic] = true
+		c.subs[topic] = sub
 		c.mu.Unlock()
 		ok = append(ok, topic)
-		if t.Snapshot == nil {
-			continue
+		if t.Snapshot != nil {
+			snap, err := t.Snapshot(ctx, u, id)
+			if err != nil {
+				h.p.log.Warn("panel: the snapshot of a topic failed", "topic", topic, "err", err)
+			} else {
+				d, _ := json.Marshal(snap)
+				if b, err := h.envelope(TypeUIEvent, env.ID, UIEvent{Topic: topic, Event: EventSnapshot, Data: d}); err == nil {
+					c.enqueue(websocket.MessageText, b)
+				}
+			}
 		}
-		snap, err := t.Snapshot(ctx, u, id)
-		if err != nil {
-			h.p.log.Warn("panel: the snapshot of a topic failed", "topic", topic, "err", err)
-			continue
-		}
-		d, _ := json.Marshal(snap)
-		if b, err := h.envelope(TypeUIEvent, env.ID, UIEvent{Topic: topic, Event: EventSnapshot, Data: d}); err == nil {
-			c.enqueue(websocket.MessageText, b)
+		if t.Open != nil {
+			if stop := t.Open(ctx, sub, u, id); stop != nil {
+				c.mu.Lock()
+				c.stops[topic] = stop
+				c.mu.Unlock()
+			}
 		}
 	}
 	h.reply(c, TypeUISubscribed, env.ID, UISubscribed{Topics: ok, Rejected: rejected})

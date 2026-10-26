@@ -683,6 +683,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		// every Tower that connects learns the machines and the refusals
 		OnReady: func(s *protocol.Session) { go e.sendConfig(pctx, run, s.Peer().ID) },
 	})
+	pcfg.Hooks = e.relayHooks(pcfg.Hooks) // the terminals of the panel follow the Towers that come and go
 	if srv, err = protocol.NewServer(pcfg); err != nil {
 		return transition{err: err}
 	}

@@ -310,7 +310,7 @@ func (m *machineRouter) ScreenLines(ctx context.Context, machine, character stri
 	if err := json.Unmarshal(raw, &res); err != nil {
 		return characters.Screen{}, fmt.Errorf("%s answered the screen with something that is not a screen", machine)
 	}
-	sc := characters.Screen{Text: res.Text, History: res.History}
+	sc := characters.Screen{Text: res.Text, History: res.History, Offset: res.Offset}
 	if raw, ok := res.Cursor["row"]; ok {
 		_ = json.Unmarshal(raw, &sc.Row)
 	}
@@ -451,6 +451,7 @@ func (e *Engine) registerCitadelCharacters(router *protocol.Router, run *citadel
 	h := func(typ string, f func(ctx context.Context, orc *Orchestration, m *protocol.Message) (*protocol.Reply, error)) {
 		router.HandleFunc(typ, run.gated(protocol.HandlerFunc(e.citadelHandler(f))))
 	}
+	e.registerCitadelTerminals(router, run)
 	h(protocol.TypeTableNotice, e.handleTableNotice)
 	h(protocol.TypeTableSent, func(_ context.Context, _ *Orchestration, m *protocol.Message) (*protocol.Reply, error) {
 		if p, ok := m.Payload.(*protocol.TableSent); ok && e.sent.deliver(m.Env.ReplyTo, m.Peer.ID, *p) {

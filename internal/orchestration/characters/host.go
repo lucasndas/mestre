@@ -31,6 +31,9 @@ type Screen struct {
 	Row  int
 	// History is the lines that scrolled off, when they were asked for.
 	History string
+	// Offset is the end of the output the screen shows, in bytes since the
+	// terminal began (0 when the process does not say).
+	Offset uint64
 }
 
 // Process is a terminal the engine holds: what the runtime does with the
@@ -290,13 +293,24 @@ func (p *terminalProcess) Input(ctx context.Context, data []byte) error {
 }
 func (p *terminalProcess) Screen(ctx context.Context) (Screen, error) {
 	s, err := p.t.Screen(ctx, 0)
-	return Screen{Text: s.Text, Row: s.Row}, err
+	return Screen{Text: s.Text, Row: s.Row, Offset: s.Offset}, err
 }
 
 // ScreenLines is the screen with up to lines lines of the history.
 func (p *terminalProcess) ScreenLines(ctx context.Context, lines int) (Screen, error) {
 	s, err := p.t.Screen(ctx, lines)
-	return Screen{Text: s.Text, Row: s.Row, History: s.History}, err
+	return Screen{Text: s.Text, Row: s.Row, History: s.History, Offset: s.Offset}, err
+}
+
+// Replay implements Streamer.
+func (p *terminalProcess) Replay(ctx context.Context, from uint64) (terminal.Replayed, error) {
+	return p.t.Replay(ctx, from)
+}
+
+// WaitOutput implements Streamer: the log holds what the terminal printed, so
+// waiting for it to reach after+1 waits for new output.
+func (p *terminalProcess) WaitOutput(ctx context.Context, after uint64) error {
+	return p.t.WaitLogged(ctx, after+1)
 }
 func (p *terminalProcess) Exited() <-chan struct{} { return p.t.Exited() }
 func (p *terminalProcess) PTY() PTYInfo {

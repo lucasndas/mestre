@@ -281,8 +281,12 @@ type TerminalOpened struct {
 
 // The modes of terminal.input and terminal.close.
 const (
-	InputMessage  = "message"
-	InputRaw      = "raw"
+	InputMessage = "message"
+	InputRaw     = "raw"
+	// InputKeys is what a person typed on the keyboard of the panel: it goes to
+	// the PTY as it is, even if the character is busy (the panel asked the
+	// person to confirm), and never through the inbox.
+	InputKeys     = "keys"
 	CloseGraceful = "graceful"
 	CloseKill     = "kill"
 )
@@ -296,8 +300,8 @@ type TerminalInput struct {
 
 // Validate checks the mode.
 func (t *TerminalInput) Validate() error {
-	if t.Mode != InputMessage && t.Mode != InputRaw {
-		return fmt.Errorf("mode %q is not message or raw", t.Mode)
+	if t.Mode != InputMessage && t.Mode != InputRaw && t.Mode != InputKeys {
+		return fmt.Errorf("mode %q is not message, raw or keys", t.Mode)
 	}
 	return nil
 }
@@ -509,19 +513,34 @@ type CharacterTurn struct {
 	LastMessage string `json:"last_message,omitempty"`
 }
 
-// TerminalReplay is `terminal.replay`.
+// TerminalReplay is `terminal.replay`: the machine sends the output of the
+// terminal from offset From on, in frames 0x01 whose ID is Stream (the
+// terminal's own ULID when Stream is empty), then TerminalReplayed, and goes on
+// sending the live output on the same stream until `terminal.unfollow`, the end
+// of the terminal or the end of the connection.
 type TerminalReplay struct {
 	TerminalID string `json:"terminal_id" proto:"req"`
 	From       uint64 `json:"from" proto:"req"`
+	// Stream is the ULID the Citadel gives the stream (one per browser that
+	// follows the terminal), so that the frames of two replays of the same
+	// terminal never mix.
+	Stream string `json:"stream,omitempty"`
 }
 
-// TerminalReplayed is `terminal.replayed`; Lost marks a stretch that already
-// left the buffer.
+// TerminalReplayed is `terminal.replayed`: the replay reached the live output.
+// From is the first byte sent, To the end of the replay; Lost marks a stretch
+// that already left the buffer before From.
 type TerminalReplayed struct {
 	TerminalID string `json:"terminal_id,omitempty"`
 	From       uint64 `json:"from" proto:"req"`
 	To         uint64 `json:"to" proto:"req"`
 	Lost       bool   `json:"lost"`
+	Stream     string `json:"stream,omitempty"`
+}
+
+// TerminalUnfollow is `terminal.unfollow`: the Citadel stops a stream.
+type TerminalUnfollow struct {
+	Stream string `json:"stream" proto:"req"`
 }
 
 // TerminalScreen is `terminal.screen`.
@@ -537,6 +556,9 @@ type TerminalScreenResult struct {
 	CapturedAt Timestamp `json:"captured_at" proto:"req"`
 	// History is the lines that scrolled off, when `lines` asked for them.
 	History string `json:"history,omitempty"`
+	// Offset is the end of the output the text shows, in bytes of the stream of
+	// the terminal (the panel goes on from it after a picture).
+	Offset uint64 `json:"offset,omitempty"`
 }
 
 // InboxDeliver is `inbox.deliver`.

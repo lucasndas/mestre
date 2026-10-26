@@ -6,6 +6,7 @@ import github from "./github";
 import secrets from "./secrets";
 import sessions from "./sessions";
 import shell from "./shell";
+import terminal from "./terminal";
 import users from "./users";
 
 export const ptBR = {
@@ -18,4 +19,5 @@ export const ptBR = {
   audit,
   github,
   errors,
+  terminal,
 } as const;
