@@ -140,6 +140,22 @@ func TestAnEntryExpiresInTheHourOfTheEntry(t *testing.T) {
 	}
 }
 
+// The hour of the entry ends it twice: the deadline of the chain and the
+// expiry of the entry in the Citadel, which takes the question down. When the
+// Citadel gets there first, the request is still expired, not cancelled.
+func TestAnEntryTakenDownAtTheEndOfItsHourIsExpiredWhicheverEndsItFirst(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOpts{flow: true})
+	id := w.entry()
+	w.clk.SkipWall(chain.GuildEntryValidity) // the hour is over and the deadline has not fired yet
+	if err := w.ch.Withdraw(w.ctx, id, "acabou"); err != nil {
+		t.Fatal(err)
+	}
+	if w.request(id).State != chain.Expired {
+		t.Fatalf("state = %s, want expired", w.request(id).State)
+	}
+}
+
 func TestAnEntryTakenDownIsCancelledAndOnlyTheTypesOfTheEngineAreOpenedThisWay(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, worldOpts{flow: true})

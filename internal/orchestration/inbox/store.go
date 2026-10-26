@@ -140,6 +140,20 @@ func (s *Store) ByKey(ctx context.Context, key string) (Item, bool, error) {
 	return items[0], true, nil
 }
 
+// ByAsk finds the item that carries the question of the ask (Refs.Ask). It is
+// there from the insert, before the ask records its id: a turn that answers a
+// question delivered at once can end first.
+func (s *Store) ByAsk(ctx context.Context, ask string) (Item, bool, error) {
+	if ask == "" {
+		return Item{}, false, nil
+	}
+	items, err := s.list(ctx, `json_valid(refs) AND json_extract(refs, '$.ask') = ? LIMIT 1`, ask)
+	if err != nil || len(items) == 0 {
+		return Item{}, false, err
+	}
+	return items[0], true, nil
+}
+
 // ForRun finds an item `quest` of the run (Refs.Run) put in the inbox of the
 // target, in whatever state.
 func (s *Store) ForRun(ctx context.Context, run int64, target string) (Item, bool, error) {
