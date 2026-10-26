@@ -12,6 +12,7 @@ packages:
       - errors.go
       - ws.go
       - types_admin.go
+      - types_rules.go
       - terminals_types.go
       - types_approvals.go
       - types_canvas.go

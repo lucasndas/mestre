@@ -17,3 +17,7 @@ tests:
     issue: https://github.com/mestre-ia/mestre/issues/354
     added: 2026-10-26
     reason: on Windows CI the copies of the scrolls did not reach the worktree of the Tower in time, in a PR that touched no scroll or Tower code
+  - test: TestARequestForOneProviderTestsOnlyItAndReplacesItsPreviousResult
+    issue: https://github.com/mestre-ia/mestre/issues/363
+    added: 2026-10-26
+    reason: on the Windows full suite of a PR that touched no conformance code the fake Claude Code step 4 did not see the denied pre_tool after 27 s

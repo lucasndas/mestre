@@ -26,6 +26,9 @@ var (
 	ErrNoTable = errors.New("no such table")
 	// ErrTableOver: the table ended or is ending.
 	ErrTableOver = errors.New("the table is over")
+	// ErrCharacterPause: the pause is the Grão-Mestre's and who asks may not resume it
+	// (PauseRequest.RefuseCharacterPause).
+	ErrCharacterPause = errors.New("the pause of the Grão-Mestre is resumed by the Grão-Mestre")
 	// ErrReasonRequired: a pause or a resume says why.
 	ErrReasonRequired = errors.New("a reason is required")
 )
@@ -267,6 +270,10 @@ type PauseRequest struct {
 	Workspace, Table string
 	Reason           string
 	By               Actor
+	// RefuseCharacterPause makes a resume by a person refuse the pause of a character (the
+	// Grão-Mestre), checked under the same lock that reads the pause: the panel
+	// sets it, since there only the Grão-Mestre resumes its own pause.
+	RefuseCharacterPause bool
 }
 
 // PauseAutonomy pauses the autonomy of a table: the Mestre da mesa stops
@@ -319,6 +326,10 @@ func (s *Supervisor) ResumeAutonomy(ctx context.Context, r PauseRequest) (bool, 
 	if err != nil || !paused {
 		s.mu.Unlock()
 		return false, err
+	}
+	if r.RefuseCharacterPause && r.By.Character == nil && p.Kind == "character" {
+		s.mu.Unlock()
+		return false, ErrCharacterPause
 	}
 	if p.Kind == "person" && !r.By.approverOrAbove() {
 		s.mu.Unlock()

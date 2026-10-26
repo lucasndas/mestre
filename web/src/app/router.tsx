@@ -14,7 +14,13 @@ import { meQuery, statusQuery } from "../lib/queries";
 import { ApprovalHistoryScreen } from "../screens/ApprovalHistory";
 import { Approvals } from "../screens/Approvals";
 import { Audit } from "../screens/admin/Audit";
+import { Ceiling } from "../screens/admin/Ceiling";
+import { Chain } from "../screens/admin/Chain";
+import { Decrees } from "../screens/admin/Decrees";
+import { Delegations } from "../screens/admin/Delegations";
 import { GitHubConnect } from "../screens/admin/GitHubConnect";
+import { Instructions } from "../screens/admin/Instructions";
+import { Policy } from "../screens/admin/Policy";
 import { Secrets } from "../screens/admin/Secrets";
 import { Transfer } from "../screens/admin/Transfer";
 import { Users } from "../screens/admin/Users";
@@ -98,6 +104,37 @@ const auditRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/auditoria",
   component: Audit,
+});
+// The rules and the chain (docs/painel/administracao.md): the same, the server decides.
+const decreesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/decretos",
+  component: Decrees,
+});
+const delegationsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/delegacoes",
+  component: Delegations,
+});
+const chainRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/cadeia",
+  component: Chain,
+});
+const ceilingRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/teto",
+  component: Ceiling,
+});
+const policyRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/politica",
+  component: Policy,
+});
+const instructionsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/instrucoes",
+  component: Instructions,
 });
 const githubRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -213,6 +250,12 @@ const routeTree = rootRoute.addChildren([
     usersRoute,
     secretsRoute,
     auditRoute,
+    decreesRoute,
+    delegationsRoute,
+    chainRoute,
+    ceilingRoute,
+    policyRoute,
+    instructionsRoute,
     githubRoute,
     transferRoute,
     terminalRoute,

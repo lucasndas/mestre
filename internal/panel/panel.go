@@ -94,6 +94,8 @@ type Panel struct {
 	stopWatch context.CancelFunc
 	// canvas is the engine of the tables for the canvas (SetCanvas).
 	canvas atomic.Pointer[canvasHolder]
+	// rules is the backend of the screens of the rules and of the chain (SetRules).
+	rules atomic.Pointer[rulesHolder]
 	// slots bound the argon2 hashes at once: each takes 64 MiB, and the routes
 	// that hash are open to anybody
 	slots chan struct{}
