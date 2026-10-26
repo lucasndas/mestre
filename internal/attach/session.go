@@ -163,9 +163,15 @@ func (s *session) once(ctx context.Context, lostSince *time.Time) (outcome, erro
 			// the Citadel moved or does not answer: find it again before the next try
 			rctx, cancel := clock.WithTimeout(ctx, s.env.Clock, 10*time.Second)
 			defer cancel()
-			if rerr := s.c.resolve(rctx, s.c.base); rerr != nil {
+			next, rerr := s.c.resolve(rctx, s.c.current())
+			if rerr != nil {
 				return lost, nil
 			}
+			if !s.c.sameSessionHost(next) {
+				// the Citadel is somewhere else: the session is not carried there
+				return sessionEnded, nil
+			}
+			s.c.setBase(next)
 		}
 		return lost, nil
 	}
@@ -202,7 +208,7 @@ func (s *session) once(ctx context.Context, lostSince *time.Time) (outcome, erro
 
 // dial opens /ws/ui with the cookie and the Origin of the panel.
 func (s *session) dial(ctx context.Context) (*websocket.Conn, int, error) {
-	u := url.URL{Scheme: "wss", Host: s.c.base.Host, Path: "/ws/ui"}
+	u := url.URL{Scheme: "wss", Host: s.c.current().Host, Path: "/ws/ui"}
 	h := http.Header{}
 	s.c.sign(h)
 	dctx, cancel := clock.WithTimeout(ctx, s.env.Clock, 20*time.Second)

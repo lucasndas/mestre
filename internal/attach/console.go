@@ -53,7 +53,13 @@ func (c *osConsole) ReadLine(prompt string) (string, error) {
 	return strings.TrimRight(line, "\r\n"), nil
 }
 
+// drain drops what the line reader holds beyond the line it returned: the password
+// is read from the descriptor, and a password pasted with the login must be neither
+// echoed nor left in a buffer to be typed into an agent later.
+func (c *osConsole) drain() { _, _ = c.rd.Discard(c.rd.Buffered()) }
+
 func (c *osConsole) ReadPassword(prompt string) (string, error) {
+	c.drain()
 	fmt.Fprint(c.out, prompt)
 	b, err := term.ReadPassword(c.in.Fd())
 	fmt.Fprintln(c.out)
@@ -69,6 +75,7 @@ func (c *osConsole) Size() (int, int) {
 }
 
 func (c *osConsole) EnterRaw() (func(), error) {
+	c.drain()
 	state, err := term.MakeRaw(c.in.Fd())
 	if err != nil {
 		return nil, err

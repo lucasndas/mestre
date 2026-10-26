@@ -105,9 +105,11 @@ func run(ctx context.Context, env Env, args []string) error {
 	defer c.logout()
 
 	// find the Citadel of now (a Tower sends us there with a 307), before any password is typed
-	if err := c.resolve(ctx, start); err != nil {
+	base, err := c.resolve(ctx, start)
+	if err != nil {
 		return err
 	}
+	c.setBase(base)
 	me, err := c.loginPrompt(ctx, env.Console)
 	if err != nil {
 		return err

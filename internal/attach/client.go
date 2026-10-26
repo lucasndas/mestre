@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/panel"
@@ -48,8 +49,10 @@ func loadCA(path string) (*x509.CertPool, error) {
 type panelClient struct {
 	hc         *http.Client // calls with a timeout
 	ws         *http.Client // the same TLS, no timeout (the socket lives long)
-	base       *url.URL     // https://host:port of the Citadel of now
+	mu         sync.Mutex
+	base       *url.URL // https://host:port of the Citadel of now
 	token      string
+	tokenHost  string // the host the session was opened on: the only one the cookie goes to
 	userAgent  string
 	cookieName string
 }
@@ -98,39 +101,60 @@ func unreachable(err error) failure {
 
 // resolve finds the Citadel of now: it asks the status of the panel and follows
 // the 307 of a Tower or of a suspended Citadel that knows where the Citadel is.
-func (c *panelClient) resolve(ctx context.Context, start *url.URL) error {
+func (c *panelClient) resolve(ctx context.Context, start *url.URL) (*url.URL, error) {
 	base := start
 	for hop := 0; hop <= maxHops; hop++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, base.String()+"/api/status", nil)
 		if err != nil {
-			return fail(codeInternal, "this is a bug", "%v", err)
+			return nil, fail(codeInternal, "this is a bug", "%v", err)
 		}
 		req.Header.Set("User-Agent", c.userAgent)
 		res, err := c.hc.Do(req)
 		if err != nil {
-			return unreachable(err)
+			return nil, unreachable(err)
 		}
 		_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, maxBody))
 		_ = res.Body.Close()
 		switch {
 		case res.StatusCode == http.StatusOK:
-			c.base = base
-			return nil
+			return base, nil
 		case res.StatusCode >= 300 && res.StatusCode < 400:
 			next, err := url.Parse(res.Header.Get("Location"))
 			if err != nil || next.Hostname() == "" {
-				return fail(codeUnavailable, "try again in a moment", "the panel redirected to an address that makes no sense")
+				return nil, fail(codeUnavailable, "try again in a moment", "the panel redirected to an address that makes no sense")
 			}
 			next = base.ResolveReference(next)
 			if next.Scheme != "https" {
-				return fail(codeUnavailable, "the panel is served over https", "the panel redirected to a plain address")
+				return nil, fail(codeUnavailable, "the panel is served over https", "the panel redirected to a plain address")
 			}
 			base = &url.URL{Scheme: "https", Host: next.Host}
 		default:
-			return fail(codeUnavailable, "the Citadel is suspended or being changed; try again in a moment", "the panel answered %d and is not serving now", res.StatusCode)
+			return nil, fail(codeUnavailable, "the Citadel is suspended or being changed; try again in a moment", "the panel answered %d and is not serving now", res.StatusCode)
 		}
 	}
-	return fail(codeUnavailable, "the Guild is changing its Citadel; try again in a moment", "too many redirects looking for the Citadel")
+	return nil, fail(codeUnavailable, "the Guild is changing its Citadel; try again in a moment", "too many redirects looking for the Citadel")
+}
+
+// current is the Citadel the client talks to now.
+func (c *panelClient) current() *url.URL {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.base
+}
+
+func (c *panelClient) setBase(u *url.URL) {
+	c.mu.Lock()
+	c.base = u
+	c.mu.Unlock()
+}
+
+// sameSessionHost says whether u is the host the session was opened on (true
+// before any login). A session is never carried to another host, as a browser
+// never sends a __Host- cookie to one.
+func (c *panelClient) sameSessionHost(u *url.URL) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.tokenHost == "" || c.tokenHost == u.Host
 }
 
 // apiError is the error body of the panel.
@@ -150,7 +174,7 @@ func (c *panelClient) call(ctx context.Context, method, path string, in, out any
 		}
 		body = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.base.String()+path, body)
+	req, err := http.NewRequestWithContext(ctx, method, c.current().String()+path, body)
 	if err != nil {
 		return 0, nil, nil, err
 	}
@@ -185,9 +209,11 @@ func (c *panelClient) call(ctx context.Context, method, path string, in, out any
 // sign puts on a request what a browser would: the Origin of the panel, which
 // the server checks against its own address, and the cookie of the session.
 func (c *panelClient) sign(h http.Header) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	h.Set("Origin", "https://"+c.base.Host)
 	h.Set("User-Agent", c.userAgent)
-	if c.token != "" {
+	if c.token != "" && c.tokenHost == c.base.Host {
 		h.Set("Cookie", c.cookieName+"="+c.token)
 	}
 }
@@ -207,7 +233,9 @@ func (c *panelClient) login(ctx context.Context, login, password string) (panel.
 	}
 	for _, ck := range (&http.Response{Header: hdr}).Cookies() {
 		if ck.Name == c.cookieName && ck.Value != "" {
-			c.token = ck.Value
+			c.mu.Lock()
+			c.token, c.tokenHost = ck.Value, c.base.Host
+			c.mu.Unlock()
 			return me, nil
 		}
 	}
@@ -216,13 +244,18 @@ func (c *panelClient) login(ctx context.Context, login, password string) (panel.
 
 // logout ends the session on the Citadel; the session lives only in this process.
 func (c *panelClient) logout() {
-	if c.token == "" {
+	c.mu.Lock()
+	has := c.token != ""
+	c.mu.Unlock()
+	if !has {
 		return
 	}
 	ctx, cancel := clock.WithTimeout(context.Background(), clock.Real{}, 3*time.Second)
 	defer cancel()
 	_, _, _, _ = c.call(ctx, http.MethodPost, "/api/logout", nil, nil)
+	c.mu.Lock()
 	c.token = ""
+	c.mu.Unlock()
 }
 
 // find lists the visible terminals of the characters with the name.
