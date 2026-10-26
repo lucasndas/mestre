@@ -15,8 +15,8 @@ import (
 )
 
 // WebBudget is the time of the web side of a suite, apart from the Go
-// budgets. Provisional: the owner sets the final value after the first
-// measurements on the CI (docs/qualidade/testes.md#executor-testrun).
+// budgets; the owner set it after the first measurements on the CI
+// (docs/qualidade/testes.md#executor-testrun).
 const WebBudget = 15 * time.Second
 
 // webSuite is the quarantine suite name of the entries that name a Vitest

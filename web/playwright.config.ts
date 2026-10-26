@@ -10,7 +10,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "e2e",
   retries: 0,
-  reporter: [["list"]],
+  reporter: [["list"], ["./e2e/budget-reporter.ts"]],
   // The Guild CA is not in any trust store of the machine.
   use: { browserName: "chromium", ignoreHTTPSErrors: true, locale: "pt-BR" },
   webServer: {
