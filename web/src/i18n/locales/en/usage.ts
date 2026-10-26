@@ -1,0 +1,65 @@
+import type { Widen } from "../../shape";
+import type pt from "../pt-BR/usage";
+
+const usage: Widen<typeof pt> = {
+  title: "Usage",
+  intro:
+    "What the characters cost and how long they worked, by day, workspace, table, mission and account, and how much is left for each limit.",
+  loading: "Loading the usage…",
+  period: "Period",
+  days: "Last {{count}} days",
+  noData: "no data",
+  noDataNote: "“no data” means the provider did not report it: it is not zero.",
+  empty: "No usage recorded in this period yet.",
+  cost: "Cost (US$)",
+  tokens: "Tokens",
+  active: "Active time",
+  turns: "Turns",
+  name: "Name",
+  workspace: "Workspace",
+  hours: "{{n}} h",
+  minutes: "{{n}} min",
+  seconds: "{{n}} s",
+  daily: {
+    title: "By day",
+    chart: "Cost per day in dollars",
+    chartHours: "Active time per day in hours",
+    caption: "Usage by day",
+    day: "Day",
+  },
+  groups: {
+    workspaces: "By workspace",
+    tables: "By table",
+    quests: "By mission",
+    characters: "By character",
+    accounts: "By account",
+  },
+  captions: {
+    workspaces: "Usage by workspace",
+    tables: "Usage by table",
+    quests: "Usage by mission",
+    characters: "Usage by character",
+    accounts: "Usage by account",
+  },
+  accountsNote: "Accounts and the total of the day show only for the Owner.",
+  limits: {
+    title: "Limits",
+    empty: "No limit is set.",
+    caption: "Limits and what is left",
+    limit: "Limit",
+    used: "Used",
+    left: "Left",
+    percent: "{{percent}}% of {{effective}}",
+    noData: "no data yet",
+    period: "{{period}} period",
+    scope: {
+      mission: "Mission",
+      table: "Table",
+      workspace: "Workspace",
+      day: "Day of the workspace",
+      day_total: "Day, all workspaces",
+    },
+    unit: { usd: "US$", tokens: "tokens", hours: "h" },
+  },
+};
+export default usage;

@@ -1,0 +1,38 @@
+export default {
+  title: "Perfis de conta",
+  intro:
+    "As contas que os agentes usam nesta máquina. A configuração guiada leva cada perfil da instalação do programa até a conferência final.",
+  loading: "Carregando os perfis…",
+  machine: "Máquina: {{machine}}",
+  empty: "Ainda não há nenhum perfil de conta nesta máquina. Crie o primeiro abaixo.",
+  noSetup:
+    "A configuração guiada ainda não está disponível nesta máquina. Os perfis podem ser criados e removidos, mas o login é feito à mão.",
+  default: "padrão",
+  steps: {
+    title: "Etapas da configuração",
+    install: "Instalar o programa do provedor",
+    login: "Entrar na conta do provedor",
+    hooks: "Aprovar os hooks do Mestre",
+    conformance: "Conferir o funcionamento",
+    done: "Pronto",
+    stateDone: "feita",
+    stateCurrent: "agora",
+    statePending: "depois",
+  },
+  waiting: "Esperando: {{what}}",
+  advance: "Continuar a configuração de {{name}}",
+  advanced: "Pronto: o perfil {{name}} está configurado.",
+  terminal: "Abrir o terminal para continuar",
+  notConformant: "Ainda não passou na conferência: {{reason}}",
+  makeDefault: "Tornar {{name}} o padrão",
+  defaultDone: "O padrão agora é {{name}}.",
+  remove: "Remover {{name}}",
+  removed: "Perfil {{name}} removido. A pasta com o login fica na máquina.",
+  add: {
+    title: "Novo perfil",
+    name: "Nome do perfil",
+    provider: "Provedor",
+    submit: "Criar perfil",
+    done: "Perfil {{name}} criado.",
+  },
+} as const;

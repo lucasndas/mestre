@@ -90,6 +90,14 @@ export default {
   too_large: "O texto é maior do que o limite.",
   no_folder: "O workspace ainda não tem a pasta principal.",
   github_no_right: "O seu nível ou os seus workspaces não permitem a credencial pessoal.",
+  proposal_stale:
+    "A classe mudou desde que você abriu a proposta. Veja a versão atual e tente de novo.",
+  proposal_invalid: "Esta proposta não pode ser aprovada: {{message}}",
+  preset_invalid: "O texto não é válido e nada foi gravado: {{message}}",
+  preset_in_use: "Não dá para apagar, o item está em uso: {{message}}",
+  profile_invalid: "O perfil não foi aceito: {{message}}",
+  app_state: "Este App não espera um link agora.",
+  app_limit: "A conta chegou ao limite de Apps do GitHub.",
   refused: "A Cidadela recusou a ação.",
   conflict: "Isto mudou desde que você abriu. Veja a versão atual e tente de novo.",
 } as const;

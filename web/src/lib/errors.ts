@@ -20,6 +20,8 @@ export function errorText(t: TFunction<"errors">, err: unknown): string {
       const params: Record<string, unknown> = { ...err.params };
       const secs = params.retry_after_seconds;
       if (typeof secs === "number") params.minutes = Math.max(1, Math.ceil(secs / 60));
+      // some texts carry the detail the server gave (the line of a YAML, who uses a base)
+      if (params.message === undefined) params.message = err.message;
       // the key was checked above; the params depend on the code, which the types cannot follow
       const say = t as unknown as (k: string, o?: object) => string;
       // a refusal of level names the level that is required (CA-ADM-01), in the language of the panel

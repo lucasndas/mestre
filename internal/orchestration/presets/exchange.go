@@ -184,7 +184,7 @@ func (c *Catalog) PlanImport(ctx context.Context, d *Document) (*Plan, error) {
 	}
 	// With every name taken as the file spells it (replacing).
 	cand := &Document{Kind: Kind, Version: Version, Bases: d.Bases, Sheets: d.Sheets}
-	warnings, err := c.checkState(ctx, st.overlay(cand), cand)
+	warnings, err := c.checkState(ctx, st, st.overlay(cand), cand)
 	plan.Warnings = warnings
 	return plan, err
 }
@@ -232,7 +232,7 @@ func (st state) overlay(d *Document) state {
 // checkState validates what the file brings (cand) and every sheet that uses
 // a base the file brings, in the state after the import. All the problems
 // come back at once.
-func (c *Catalog) checkState(ctx context.Context, after state, cand *Document) (warnings []string, err error) {
+func (c *Catalog) checkState(ctx context.Context, before, after state, cand *Document) (warnings []string, err error) {
 	var p problems
 	seen := map[Item]bool{}
 	dup := func(it Item) bool {
@@ -253,10 +253,11 @@ func (c *Catalog) checkState(ctx context.Context, after state, cand *Document) (
 			p.add("base `%s`: %s", b.Name, trimInvalid(err))
 		}
 		if b.Name == OperatorBase {
-			if _, ok := after.bases[OperatorBase]; ok {
-				if err := checkOperatorEdit(b); err != nil {
-					p.add("base `%s`: %s", b.Name, trimInvalid(err))
-				}
+			// the Mestre makes it, when the Operator is enabled: a file never does, nor by a rename
+			if _, ok := before.bases[OperatorBase]; !ok {
+				p.add("base `%s`: é criada pelo Mestre quando o Operador do PC está habilitado; um arquivo não a cria", b.Name)
+			} else if err := checkOperatorEdit(b); err != nil {
+				p.add("base `%s`: %s", b.Name, trimInvalid(err))
 			}
 		}
 	}
@@ -358,7 +359,7 @@ func (c *Catalog) ApplyImport(ctx context.Context, plan *Plan, choices map[Item]
 			final.Sheets = append(final.Sheets, s)
 		}
 		after := cur.overlay(final)
-		if _, err := c.checkState(ctx, after, final); err != nil {
+		if _, err := c.checkState(ctx, cur, after, final); err != nil {
 			return err
 		}
 		for _, b := range final.Bases {

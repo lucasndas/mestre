@@ -343,3 +343,22 @@ func TestExportingASelectionBringsTheBasesOfTheSheetsAndNeverTheOperatorBase(t *
 		t.Errorf("yaml: %s, %v", out, err)
 	}
 }
+
+// A file never creates the base `operador`, which the Mestre makes when the Operator of the PC
+// is enabled: neither by its name nor by renaming another base to it (it would become undeletable).
+func TestAnImportNeverCreatesTheOperatorBase(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	if _, err := f.importFile("kind: mestre/presets\nversion: 1\nbases:\n  - {name: operador, command: claude.exe, args: [--chrome], platforms: [{os: windows}], requires: {operador: true}, ready: hook}\n", nil); err == nil {
+		t.Fatal("a file created the base operador")
+	}
+	f.mustImportExample()
+	file := "kind: mestre/presets\nversion: 1\nbases:\n  - {name: claude-code, command: claude, platforms: [{os: linux}], ready: hook}\n"
+	choices := map[presets.Item]presets.Choice{{Kind: "base", Name: "claude-code"}: {Action: presets.Rename, NewName: presets.OperatorBase}}
+	if _, err := f.importFile(file, choices); err == nil {
+		t.Fatal("a rename created the base operador")
+	}
+	if _, ok, _ := f.cat.Base(context.Background(), presets.OperatorBase); ok {
+		t.Fatal("the base operador exists after the refused imports")
+	}
+}

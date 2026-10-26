@@ -222,6 +222,8 @@ type stdRun struct {
 	// personal and installs are the personal credentials and GitHub's side of the
 	// stage apps (githubcompose.go).
 	personal *github.Personal
+	// creation is the creation of the Apps by link (nil without the vault).
+	creation *github.Creation
 	installs *github.Installs
 	// approver and settings apply the approvals on GitHub (approvalhost.go), made
 	// when the orchestration exists.
@@ -786,7 +788,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	}
 	h := r.ghHandlers(orc)
 	h.Register(fwd)
-	(&ghcli.Apps{Characters: orc.Registry, Store: &github.Registry{DB: r.env.DB}, Creator: appCreator{}}).Register(fwd)
+	(&ghcli.Apps{Characters: orc.Registry, Store: &github.Registry{DB: r.env.DB}, Creator: appCreator{c: r.creation, tell: r.alert.OwnerPrivate}}).Register(fwd)
 	(&decrees.ProposeHandler{Service: r.decrees, Characters: orc.Registry, Message: inboxMessages{&inbox.Store{DB: r.env.DB}}.Source, Offer: r.dc}).Register(fwd)
 	(&decrees.SubHandler{Service: r.decrees, Characters: orc.Registry}).Register(fwd)
 	poll, perr := r.poller(orc)

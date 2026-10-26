@@ -1,0 +1,55 @@
+export default {
+  title: "Apps do GitHub",
+  intro:
+    "Os Apps fixos e os de cada classe, os workspaces em que estão instalados e quantos Apps a conta já tem.",
+  loading: "Carregando os Apps…",
+  count: "{{total}} de {{limit}} Apps na conta",
+  countDetail: "{{mine}} do Mestre e {{others}} de outros.",
+  near: "Perto do limite de {{limit}} Apps do GitHub: criar mais pode falhar.",
+  others: {
+    label: "Outros Apps da conta",
+    hint: "O Mestre não lê a página de Apps do GitHub: informe quantos Apps que não são dele a conta tem e atualize quando mudar.",
+    save: "Salvar",
+    saved: "Número de outros Apps atualizado.",
+  },
+  list: {
+    title: "Apps",
+    empty: "Ainda não há nenhum App. Eles aparecem quando uma classe ou o Mestre precisa de um.",
+    caption: "Apps do Mestre",
+    name: "App",
+    role: "Papel",
+    class: "Classe",
+    state: "Estado",
+    repos: "Instalado em",
+    noRepos: "nenhum workspace",
+    request: "Pedido",
+    actions: "Ação",
+    fixed: "fixo",
+  },
+  requests: {
+    title: "Pedidos de criação",
+    empty: "Nenhum pedido de criação aberto.",
+    expires: "vale até {{when}}",
+    expired: "vencido",
+    status: {
+      link: "link emitido",
+      opened: "página aberta",
+      exchanging: "criando",
+      expired: "vencido",
+      failed: "falhou",
+      unconfirmed: "sem confirmação",
+    },
+  },
+  link: {
+    new: "Novo link para {{name}}",
+    make: "Gerar link para {{name}}",
+    title: "Link de criação do App {{name}}",
+    detail:
+      "Abra o link no navegador em que você está logado no GitHub com a sua conta pessoal. Vale até {{when}}.",
+    once: "Este link aparece só agora. Se perder, gere outro.",
+    done: "Já copiei",
+  },
+  unavailable:
+    "A criação de Apps não está disponível neste período; os links voltam quando estiver.",
+  ownerOnly: "Só o Dono gera links de criação e informa o número de outros Apps.",
+} as const;

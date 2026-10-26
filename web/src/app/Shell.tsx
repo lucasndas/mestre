@@ -74,7 +74,12 @@ function NavLink({
     | "/cadeia"
     | "/teto"
     | "/politica"
-    | "/instrucoes";
+    | "/instrucoes"
+    | "/classes"
+    | "/apps"
+    | "/bases-e-fichas"
+    | "/perfis"
+    | "/consumo";
   children: string;
 }) {
   return (
@@ -98,6 +103,8 @@ function Nav() {
   const canAudit = useCan("activate_classes");
   const canRules = useCan("status");
   const canInstructions = useCan("configure_workspace");
+  const canClasses = useCan("approve_workspace_cls");
+  const canProfiles = useCan("account_profiles");
   return (
     <nav
       aria-label={t("nav.main")}
@@ -110,6 +117,11 @@ function Nav() {
       {canGitHub ? <NavLink to="/github">{t("nav.github")}</NavLink> : null}
       {canUsers ? <NavLink to="/usuarios">{t("nav.users")}</NavLink> : null}
       {canSecrets ? <NavLink to="/segredos">{t("nav.secrets")}</NavLink> : null}
+      {canClasses ? <NavLink to="/classes">{t("nav.classes")}</NavLink> : null}
+      {canClasses ? <NavLink to="/apps">{t("nav.apps")}</NavLink> : null}
+      {canSecrets ? <NavLink to="/bases-e-fichas">{t("nav.presets")}</NavLink> : null}
+      {canProfiles ? <NavLink to="/perfis">{t("nav.profiles")}</NavLink> : null}
+      <NavLink to="/consumo">{t("nav.usage")}</NavLink>
       {canAudit ? <NavLink to="/auditoria">{t("nav.audit")}</NavLink> : null}
       {canRules ? <NavLink to="/decretos">{t("nav.decrees")}</NavLink> : null}
       {canRules ? <NavLink to="/delegacoes">{t("nav.delegations")}</NavLink> : null}

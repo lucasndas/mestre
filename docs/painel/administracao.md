@@ -97,6 +97,19 @@ Código: `internal/panel/routes_users.go`, `routes_secrets.go` e `routes_audit.g
 
 Auditoria desta área (`panel.user.*`, `panel.access_code.created`, `panel.pairing_code.created`, `panel.transfer.*`, `panel.secret.*`, `panel.recovery_key.renewed`, `panel.github.*`): `user_id` de quem fez, `target` ou `secret` e `before`/`after` com o que a tela mostra, sem valor, código nem PIN. O filtro "o quê" da tela escolhe entre estas famílias.
 
+### Implementação: classes, Apps, bases e fichas, perfis e consumo
+
+Código: `internal/panel/routes_{classes,apps,presets,profiles,usage}.go` (tipos em `types_manage.go`; o motor entra por `Panel.SetManage`, `internal/app/panelmanage.go`) e `web/src/screens/admin/`. Tudo com o nível conferido no servidor; mudança pede o PIN.
+
+| Rota | Quem | O que faz |
+|---|---|---|
+| `GET /api/classes` · `POST /api/classes/proposals/{id}/approve` | Administrador; PIN | classes global, do workspace e da mesa com o App e o estado dele; propostas do Grão-Mestre (`request`) e mudanças feitas por fora (`disk`), todas "não testada" até o M7; a faixa de 90 Apps vem em `apps`; "Aprovar" leva o hash visto e a `Library.Approve` confere nível, hash, problemas e teto (`proposal_stale`, `proposal_invalid`) |
+| `GET /api/github/apps` · `PUT /api/github/apps/others` · `POST /api/github/apps/{name}/link` | Administrador lê; Dono muda; PIN no link | "N de 100 Apps"; quem não é Dono vê só os Apps fixos e os instalados nos repositórios dos seus workspaces; os pedidos de criação e o "novo link" são do Dono; o link sai nesta resposta, uma vez, porque só o hash do token fica guardado |
+| `GET /github/apps/novo/{token}` (e `/github/manifest/callback`, `/github/apps/instalado`) | Dono | páginas de `github.Web` montadas no painel; outro nível vê "exige Dono" e nenhum formulário (CA-GH-APPS-04) |
+| `GET /api/presets` · `PUT`/`DELETE /api/presets/{bases,sheets}/{name}` · `GET /api/presets/export` · `POST /api/presets/import[/plan]` | Dono; PIN ao mudar | cada base e ficha é editada como YAML (o formato da exportação); importar valida o arquivo inteiro, mostra os conflitos e aplica tudo ou nada (CA-ADM-05) |
+| `GET`/`POST /api/profiles` · `DELETE /api/profiles/{name}` · `POST …/default` · `POST …/advance` | Dono; PIN, menos `advance` | perfis desta máquina e o passo da configuração guiada; sem os passos da máquina (instalador, terminal de login, conformidade: M7) `advance` responde `unavailable` |
+| `GET /api/usage?days=` | qualquer nível; o servidor limita aos workspaces do usuário | consumo por dia, workspace, mesa, missão, personagem e conta (só o Dono), com os limites, o que falta e o vazio quando o provedor não deu o dado |
+
 ## Regras e erros
 
 - O servidor confere o nível em toda requisição; telas sem permissão nem aparecem no menu.

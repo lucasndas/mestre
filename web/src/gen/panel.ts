@@ -1506,6 +1506,337 @@ export interface ChatChoice {
 }
 
 //////////
+// source: types_manage.go
+
+/**
+ * The codes of the errors of these screens.
+ */
+export const CodeProposalStale: Code = "proposal_stale";
+/**
+ * The codes of the errors of these screens.
+ */
+export const CodeProposalBad: Code = "proposal_invalid";
+/**
+ * The codes of the errors of these screens.
+ */
+export const CodePresetInvalid: Code = "preset_invalid";
+/**
+ * The codes of the errors of these screens.
+ */
+export const CodePresetInUse: Code = "preset_in_use";
+/**
+ * The codes of the errors of these screens.
+ */
+export const CodeProfileInvalid: Code = "profile_invalid";
+/**
+ * The codes of the errors of these screens.
+ */
+export const CodeAppState: Code = "app_state";
+/**
+ * The codes of the errors of these screens.
+ */
+export const CodeAppLimit: Code = "app_limit";
+/**
+ * AppCount is the "N de 100 Apps na conta" of the Apps screen and the band of the
+ * classes screen: the Apps of the Mestre, counted in the database, plus the others
+ * the Owner informed.
+ */
+export interface AppCount {
+  mine: number /* int */;
+  others: number /* int */;
+  total: number /* int */;
+  /**
+   * Limit is the 100 of GitHub and Warn the count from which the band shows.
+   */
+  limit: number /* int */;
+  warn: number /* int */;
+  near: boolean;
+}
+/**
+ * ClassRow is a class of a scope. State is the one of the library (approved,
+ * pending, new, missing, unreadable); AppState the label of the App of the class
+ * ("em criação", "pronto", "com erro", or "" when the class has none).
+ */
+export interface ClassRow {
+  name: string;
+  scope: string;
+  workspace: string;
+  table: string;
+  state: string;
+  version: number /* int64 */;
+  app: string;
+  app_state: string;
+  problems: string[];
+}
+/**
+ * ProposalRow is a change of a class that waits for an Administrator or above:
+ * Origin "request" came through the Mestre (the Grand Master proposed it) and
+ * "disk" is a change made outside (manual edit, git pull). Tested is always false
+ * until the test of classes exists (M7): the screen marks "não testada".
+ */
+export interface ProposalRow {
+  id: number /* int64 */;
+  workspace: string;
+  name: string;
+  scope: string;
+  table: string;
+  origin: string;
+  by: string;
+  hash: string;
+  problems: string[];
+  tested: boolean;
+  created_at: string;
+}
+/**
+ * ClassesPage is the classes screen.
+ */
+export interface ClassesPage {
+  apps: AppCount;
+  classes: ClassRow[];
+  proposals: ProposalRow[];
+}
+/**
+ * ApproveProposalRequest is the "Aprovar" of a proposal: the hash is the one the
+ * approver saw, so a package that changed meanwhile is not approved.
+ */
+export interface ApproveProposalRequest {
+  workspace: string;
+  hash: string;
+}
+/**
+ * AppRow is a GitHub App of the Mestre. State is the label of the state; Repos the
+ * repositories it is installed on (the workspaces).
+ */
+export interface AppRow {
+  name: string;
+  slug: string;
+  role: string;
+  class: string;
+  state: string;
+  state_label: string;
+  repos: string[];
+  /**
+   * Request is the status of the open request of creation, "" when none.
+   */
+  request: string;
+  /**
+   * CanLink says the Owner may ask for a link of creation now (the App waits for
+   * its creation or its link expired, and the creation is available).
+   */
+  can_link: boolean;
+}
+/**
+ * AppRequestRow is a request of creation that is open or expired, for the Owner.
+ * The link itself is shown once, when it is made: only its hash is kept.
+ */
+export interface AppRequestRow {
+  app: string;
+  status: string;
+  expires_at: string;
+  expired: boolean;
+}
+/**
+ * AppsPage is the Apps screen.
+ */
+export interface AppsPage {
+  count: AppCount;
+  apps: AppRow[];
+  requests: AppRequestRow[];
+  /**
+   * Creation says the link of creation is available in this period.
+   */
+  creation: boolean;
+}
+/**
+ * OthersRequest is the number of Apps of the account that are not the Mestre's.
+ */
+export interface OthersRequest {
+  count: number /* int */;
+}
+/**
+ * AppLinkResponse is the link of creation of an App, shown once.
+ */
+export interface AppLinkResponse {
+  app: string;
+  url: string;
+  expires_at: string;
+}
+/**
+ * BaseRow is a base of terminals; YAML is the base alone in the format of the export.
+ */
+export interface BaseRow {
+  name: string;
+  command: string;
+  ready: string;
+  platforms: string[];
+  builtin: boolean;
+  yaml: string;
+}
+/**
+ * SheetRow is a character sheet. Incomplete says what is missing (the sheet of the
+ * Operator of the PC without its class), "" when nothing is.
+ */
+export interface SheetRow {
+  name: string;
+  base: string;
+  agent: string;
+  class: string;
+  account: string;
+  lifecycle: string;
+  incomplete: string;
+  yaml: string;
+}
+/**
+ * PresetsPage is the screen of the bases and sheets.
+ */
+export interface PresetsPage {
+  bases: BaseRow[];
+  sheets: SheetRow[];
+}
+/**
+ * PresetSave is a base or a sheet written as YAML (the same fields as the export).
+ */
+export interface PresetSave {
+  yaml: string;
+}
+/**
+ * PresetSaved is what a save answers: the warnings are what is kept but has no
+ * effect.
+ */
+export interface PresetSaved {
+  name: string;
+  warnings: string[];
+}
+/**
+ * ImportItem names a base or a sheet of a file.
+ */
+export interface ImportItem {
+  kind: string;
+  name: string;
+}
+/**
+ * ImportChoice is the answer for a name that already exists: "replace", "rename"
+ * (with NewName) or "skip".
+ */
+export interface ImportChoice {
+  kind: string;
+  name: string;
+  action: string;
+  new_name: string;
+}
+/**
+ * ImportFile is a file to import: the text, YAML or JSON, and the choices for the
+ * conflicts (only on the import itself).
+ */
+export interface ImportFile {
+  content: string;
+  choices: ImportChoice[];
+}
+/**
+ * ImportPlan is the file checked as a whole, before anything is written.
+ */
+export interface ImportPlan {
+  bases: number /* int */;
+  sheets: number /* int */;
+  conflicts: ImportItem[];
+  warnings: string[];
+}
+/**
+ * ImportResult is what an import did, in numbers of bases and sheets.
+ */
+export interface ImportResult {
+  added: number /* int */;
+  replaced: number /* int */;
+  renamed: number /* int */;
+  skipped: number /* int */;
+}
+/**
+ * ProfileRow is an account profile of a machine: Step is where the guided setup is
+ * (install, login, hooks, conformance, done) and Detail what it waits for.
+ */
+export interface ProfileRow {
+  name: string;
+  provider: string;
+  machine: string;
+  dir: string;
+  default: boolean;
+  step: string;
+  detail: string;
+  created_at: string;
+  setup_done_at?: string;
+}
+/**
+ * ProfilesPage is the profiles screen. Setup says the guided setup is available.
+ */
+export interface ProfilesPage {
+  machine: string;
+  providers: string[];
+  profiles: ProfileRow[];
+  setup: boolean;
+}
+/**
+ * ProfileAdd creates a profile.
+ */
+export interface ProfileAdd {
+  name: string;
+  provider: string;
+}
+/**
+ * ProfileSetupStatus is where the guided setup stands after a step.
+ */
+export interface ProfileSetupStatus {
+  step: string;
+  done: boolean;
+  waiting: string;
+  terminal: string;
+  conformant: boolean;
+  reason: string;
+}
+/**
+ * UsageTotals is the sum of some rows of use. Cost and Tokens are null when no row
+ * had the datum: the screen shows the gap, not a zero.
+ */
+export interface UsageTotals {
+  key: string;
+  label: string;
+  workspace: string;
+  cost_usd?: number /* float64 */;
+  tokens?: number /* int64 */;
+  active_seconds: number /* int64 */;
+  turns: number /* int64 */;
+}
+/**
+ * UsageLimit is a limit with what is used and what is left in its period.
+ */
+export interface UsageLimit {
+  scope: string;
+  key: string;
+  unit: string;
+  value: number /* float64 */;
+  effective: number /* float64 */;
+  used: number /* float64 */;
+  left: number /* float64 */;
+  percent: number /* float64 */;
+  period: string;
+  has_data: boolean;
+}
+/**
+ * UsagePage is the usage screen: per day, workspace, table, quest, character and
+ * account, and the limits. The Owner sees everything; the others, the workspaces
+ * they act in (and neither the accounts nor the total of the day).
+ */
+export interface UsagePage {
+  today: string;
+  days: UsageTotals[];
+  workspaces: UsageTotals[];
+  tables: UsageTotals[];
+  quests: UsageTotals[];
+  characters: UsageTotals[];
+  accounts: UsageTotals[];
+  limits: UsageLimit[];
+}
+
+//////////
 // source: types_rules.go
 
 /**
