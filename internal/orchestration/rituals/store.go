@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // Store is the rituals and ritual_firings tables of the Guild database. Every

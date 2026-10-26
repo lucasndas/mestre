@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // Store is the notes, tomes and note_counters tables of the Guild database.

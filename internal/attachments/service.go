@@ -17,11 +17,11 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/safefile"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // DefaultLimit is the biggest attachment: 20 MB, which is also the most the Bot

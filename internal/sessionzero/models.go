@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/cli"
+	"github.com/mestre-ia/mestre/internal/cli"
 )
 
 // Role is the level of a character: what the model of its Mestre layer

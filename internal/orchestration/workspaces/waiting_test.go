@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
 // A stage that waits for something outside the engine (the Apps installed in

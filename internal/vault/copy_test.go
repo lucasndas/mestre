@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/store/guild"
-	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store/guild"
+	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
 )
 
 // deletableKeys is memKeys that can forget the key.

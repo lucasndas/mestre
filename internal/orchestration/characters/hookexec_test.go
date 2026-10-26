@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/hook"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // Part of CA-CLASSES-04: the asynchronous hook of a class runs in the terminal

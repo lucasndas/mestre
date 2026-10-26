@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/machinesheet"
+	"github.com/mestre-ia/mestre/internal/machinesheet"
 )
 
 // Class is a class package read and checked: the frontmatter, the

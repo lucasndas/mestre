@@ -37,11 +37,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/store/machine"
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store/machine"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 var (

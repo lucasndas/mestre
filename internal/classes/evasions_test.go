@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // The evasions of the shell analysis (docs/classes/permissoes.md, fixed

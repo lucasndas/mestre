@@ -11,11 +11,11 @@ import (
 
 	"github.com/brutella/dnssd"
 
-	"github.com/lucasndas/mestre/internal/discovery"
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/testkit/protorig"
-	"github.com/lucasndas/mestre/internal/transport"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/discovery"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/testkit/protorig"
+	"github.com/mestre-ia/mestre/internal/transport"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The full suite of the discovery uses real sockets: UDP on the machine it

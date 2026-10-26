@@ -6,10 +6,10 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/guild"
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/vault"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/vault"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Part of CA-COFRE-23

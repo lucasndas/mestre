@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // hookFiles is `hookfiles`: it writes, in the worktree -root, the hook files

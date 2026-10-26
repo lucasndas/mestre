@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/guild"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
 // Part of CA-CIDADELA-16, the half without `terminais`: a machine whose

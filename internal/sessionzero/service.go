@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // AppsPoll is how often the stage apps looks again while it waits for the

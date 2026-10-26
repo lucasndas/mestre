@@ -5,7 +5,7 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // PolicyAdjust is what the active decrees of policy (docs/aprovacoes/politica.md#decretos-ajustam-a-política)

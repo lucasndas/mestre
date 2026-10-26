@@ -8,9 +8,9 @@ import (
 	"net"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/testkit/fakenet"
-	"github.com/lucasndas/mestre/internal/transport"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
+	"github.com/mestre-ia/mestre/internal/transport"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 const citadelAddr = "citadel:7443"

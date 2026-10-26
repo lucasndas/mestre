@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/lucasndas/mestre/internal/decrees"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
-	"github.com/lucasndas/mestre/internal/telegram"
+	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/telegram"
 )
 
 // inboxMessages reads the messages of the users from the inbox of the Grão-Mestre:

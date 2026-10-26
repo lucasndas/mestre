@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // Kind tells a permanent rule from a one-time exception.

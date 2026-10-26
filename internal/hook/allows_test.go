@@ -3,7 +3,7 @@ package hook_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // Part of CA-RIT-11: the pre-run of a ritual is decided by the engine of the

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/hook"
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Part of CA-CIDADELA-18: the libraries of classes are those of the main clone

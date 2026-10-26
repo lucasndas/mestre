@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/conformance"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/conformance"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // A failed step 12 turns the plan B on for that provider only, and the

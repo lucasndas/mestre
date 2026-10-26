@@ -11,13 +11,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/hook"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/orchestration/quests"
-	"github.com/lucasndas/mestre/internal/orchestration/scrolls"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/quests"
+	"github.com/mestre-ia/mestre/internal/orchestration/scrolls"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // CA-MIS-05: with the engine of a machine down and `qa` under way, when it is

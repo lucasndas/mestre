@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Directory tells the use who a character is (the registry and the sheets).

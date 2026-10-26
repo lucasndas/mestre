@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
 // CA-PERS-11: the senders of the engine and the reserved names cannot be taken,

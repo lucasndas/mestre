@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/lucasndas/mestre/internal/launcher"
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/launcher"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // NewLauncherClient is the Spawner of the engine on Windows for the

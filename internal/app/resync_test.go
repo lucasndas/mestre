@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/guild"
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 type resyncRig struct {

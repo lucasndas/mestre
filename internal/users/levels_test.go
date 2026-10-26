@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // The table of levels of the document: what each level can do.

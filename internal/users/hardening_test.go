@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // The level that counts is the one stored now, not the one of the struct the

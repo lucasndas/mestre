@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/users"
-	"github.com/lucasndas/mestre/internal/vault"
+	"github.com/mestre-ia/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/vault"
 )
 
 // chatsTold are the chats that got a message about a credential, with how many.

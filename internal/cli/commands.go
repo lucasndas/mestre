@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/localchan"
 )
 
 // Role is the level of a character

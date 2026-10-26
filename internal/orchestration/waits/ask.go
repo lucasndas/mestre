@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 )
 
 // AskRequest is `mestre ask "<Name>" "<prompt>"`.

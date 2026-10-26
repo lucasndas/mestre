@@ -13,10 +13,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/sessionzero"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/sessionzero"
 )
 
 // --- fakes of the session zero of the table ---

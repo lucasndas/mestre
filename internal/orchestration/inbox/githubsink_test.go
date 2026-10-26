@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/testkit/fakegithub"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/testkit/fakegithub"
 )
 
 // situation: one table, one PR.

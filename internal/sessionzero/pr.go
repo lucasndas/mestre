@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
-	"github.com/lucasndas/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
 // PRBranch is the branch of the pull request of the session zero.

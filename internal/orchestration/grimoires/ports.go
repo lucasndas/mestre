@@ -3,13 +3,13 @@ package grimoires
 import (
 	"context"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/connections"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/orchestration/presets"
-	"github.com/lucasndas/mestre/internal/orchestration/quests"
-	"github.com/lucasndas/mestre/internal/orchestration/scrolls"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/connections"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/presets"
+	"github.com/mestre-ia/mestre/internal/orchestration/quests"
+	"github.com/mestre-ia/mestre/internal/orchestration/scrolls"
 )
 
 // Characters is the Service of the characters (*characters.Service).

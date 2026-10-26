@@ -14,21 +14,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/hook"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/machinesheet"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/presets"
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/sessionzero"
-	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
-	machinedb "github.com/lucasndas/mestre/internal/store/machine"
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/testkit/leakcheck"
-	"github.com/lucasndas/mestre/internal/testkit/sheetfake"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/machinesheet"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/presets"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/sessionzero"
+	"github.com/mestre-ia/mestre/internal/store"
+	guilddb "github.com/mestre-ia/mestre/internal/store/guild"
+	machinedb "github.com/mestre-ia/mestre/internal/store/machine"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/testkit/leakcheck"
+	"github.com/mestre-ia/mestre/internal/testkit/sheetfake"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The full suite of the characters starts real processes: the mestre-pty, the
@@ -68,9 +68,9 @@ func buildFull(t *testing.T) {
 		fullBuilds.mestre = filepath.Join(dir, "mestre"+exe)
 		fullBuilds.claude = filepath.Join(fullBuilds.bin, "claude"+exe)
 		for _, b := range [][]string{
-			{"-o", fullBuilds.pty, "-ldflags", "-X main.version=" + fullPTYVersion, "github.com/lucasndas/mestre/cmd/mestre-pty"},
-			{"-o", fullBuilds.mestre, "github.com/lucasndas/mestre/cmd/mestre"},
-			{"-o", fullBuilds.claude, "github.com/lucasndas/mestre/cmd/fakeagent"},
+			{"-o", fullBuilds.pty, "-ldflags", "-X main.version=" + fullPTYVersion, "github.com/mestre-ia/mestre/cmd/mestre-pty"},
+			{"-o", fullBuilds.mestre, "github.com/mestre-ia/mestre/cmd/mestre"},
+			{"-o", fullBuilds.claude, "github.com/mestre-ia/mestre/cmd/fakeagent"},
 		} {
 			if out, err := exec.Command("go", append([]string{"build"}, b...)...).CombinedOutput(); err != nil {
 				fullErr = fmt.Errorf("go build %v: %v\n%s", b, err, out)

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 func codexAdapter(opts providers.Options) providers.Adapter { return providers.NewCodex(opts) }

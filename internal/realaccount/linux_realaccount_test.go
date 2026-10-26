@@ -25,12 +25,12 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/lucasndas/mestre/internal/launcher"
-	"github.com/lucasndas/mestre/internal/realaccount"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/store/machine"
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/launcher"
+	"github.com/mestre-ia/mestre/internal/realaccount"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store/machine"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The Linux side. The mestre-launcher is the unit of packaging/systemd (with a

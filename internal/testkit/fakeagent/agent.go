@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/testkit"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // CommandRunner runs the commands of `run` steps, the way an agent's shell

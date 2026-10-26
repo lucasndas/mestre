@@ -12,9 +12,9 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/testkit/localrig"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/testkit/localrig"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // bubble runs f in a testing/synctest bubble with a started rig: the engine

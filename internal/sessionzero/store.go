@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // Versioning is the answer to whether .mestre/ goes into the project.

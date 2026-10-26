@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // The bound of the analysis, measured on the inputs built to take long, up

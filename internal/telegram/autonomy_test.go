@@ -6,11 +6,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // supChars knows one Grand Master and no table master.

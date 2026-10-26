@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // personalRig is the Guild with the App "Grão-Mestre" ready, its device flow on,

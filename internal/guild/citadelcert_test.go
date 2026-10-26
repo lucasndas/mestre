@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/guild"
-	"github.com/lucasndas/mestre/internal/transport"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/transport"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // mestre.local goes only in the certificate of the acting Citadel, valid for

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // Store is the waits, asks and wait_cycles tables of the Guild database.

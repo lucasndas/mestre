@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store/guild"
 )
 
 // CA-PERSIST-08

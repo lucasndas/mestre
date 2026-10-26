@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // NewSystemIdentifier returns the identifier of Windows.

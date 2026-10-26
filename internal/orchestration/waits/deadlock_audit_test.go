@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/waits"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/waits"
 )
 
 // A step that gets its character later closes a ring that had no arrow when

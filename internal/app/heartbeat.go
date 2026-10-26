@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/machinesheet"
-	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/machinesheet"
+	"github.com/mestre-ia/mestre/internal/protocol"
 )
 
 // towerHeartbeat is the `machine.heartbeat` of a Tower: the disk that is

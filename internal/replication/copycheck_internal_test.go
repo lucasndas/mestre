@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
-	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/store"
+	guilddb "github.com/mestre-ia/mestre/internal/store/guild"
+	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
 )
 
 // CA-REPL-01

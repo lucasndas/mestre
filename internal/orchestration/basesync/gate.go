@@ -8,11 +8,11 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/orchestration/quests"
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/quests"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 )
 
 // NoCommandWarning is what the Grão-Mestre reads when the workspace has no

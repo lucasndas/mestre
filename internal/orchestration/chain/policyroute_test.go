@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 )
 
 // CA-CADEIA-16

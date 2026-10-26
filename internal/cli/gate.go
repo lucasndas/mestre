@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/logging"
 )
 
 // Profiles gives the engine's record of a character: the level and the class

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // outcome is the verdict of one check, with the reason and the layer.

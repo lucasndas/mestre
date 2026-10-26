@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // CeilingDB keeps the approved versions of the ceilings in the Guild

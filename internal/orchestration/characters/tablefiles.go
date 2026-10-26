@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/sessionzero"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/sessionzero"
 )
 
 // TableFiles is the session zero of the tables (sessionzero.Table) for the

@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/quests"
-	"github.com/lucasndas/mestre/internal/orchestration/verification"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/quests"
+	"github.com/mestre-ia/mestre/internal/orchestration/verification"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The terminal runner of the verification (the proof with a real account, CA-PROVA-09, is M8): the commands of the

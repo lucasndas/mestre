@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
-	"github.com/lucasndas/mestre/internal/orchestration/digest"
-	"github.com/lucasndas/mestre/internal/telegram"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/orchestration/digest"
+	"github.com/mestre-ia/mestre/internal/telegram"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // fakeTablePauser is the supervision behind the button Pausar mesa.

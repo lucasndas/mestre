@@ -15,7 +15,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Routes of port 7443 (docs/arquitetura/componentes.md#portas).

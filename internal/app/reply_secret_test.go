@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/app"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/app"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 )
 
 // sentReplies is the channel of the users of a world: it keeps what is sent.

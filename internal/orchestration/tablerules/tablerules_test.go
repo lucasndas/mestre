@@ -8,15 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/tablerules"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // fakeChars is the registry of the characters: a Mestre da mesa, a Grão-Mestre

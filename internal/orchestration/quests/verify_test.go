@@ -8,9 +8,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/orchestration/quests"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/orchestration/quests"
 )
 
 // verifyRules makes every class verify, and ask for a proof when proof is set.

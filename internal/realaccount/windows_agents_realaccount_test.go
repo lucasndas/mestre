@@ -23,12 +23,12 @@ import (
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
 
-	"github.com/lucasndas/mestre/internal/launcher"
-	"github.com/lucasndas/mestre/internal/realaccount"
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/winsvc"
-	"github.com/lucasndas/mestre/internal/winsvc/dpapi"
-	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
+	"github.com/mestre-ia/mestre/internal/launcher"
+	"github.com/mestre-ia/mestre/internal/realaccount"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/winsvc"
+	"github.com/mestre-ia/mestre/internal/winsvc/dpapi"
+	"github.com/mestre-ia/mestre/internal/winsvc/logonsweep"
 )
 
 // The Windows side, part one: the services and the agents. The test binary is

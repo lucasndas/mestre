@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 func doneClass(t *testing.T, front, perms string) classes.Examination {

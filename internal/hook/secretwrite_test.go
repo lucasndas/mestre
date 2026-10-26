@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 const writesSrcYAML = `version: 1

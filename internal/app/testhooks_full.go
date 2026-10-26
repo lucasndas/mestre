@@ -17,14 +17,14 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/guild"
-	"github.com/lucasndas/mestre/internal/hook"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The hooks of the full suite (docs/qualidade/testes.md#troca-de-cidadela-e-replicação-na-completa),

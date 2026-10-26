@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // Rotation steps, in order. A crash after any of them leaves every secret

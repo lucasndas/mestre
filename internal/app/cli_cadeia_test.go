@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
 // CA-CADEIA-13: `mestre list` shows what a character waits for: the level

@@ -10,10 +10,10 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/machinesheet"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/machinesheet"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // ErrInvalid wraps every refusal when a base or a sheet is saved; the text

@@ -18,17 +18,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/guild"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/testkit/fakegithub"
-	"github.com/lucasndas/mestre/internal/vault"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/testkit/fakegithub"
+	"github.com/mestre-ia/mestre/internal/vault"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // prWorld is the Citadel and a Tower of two real engines with a table that has

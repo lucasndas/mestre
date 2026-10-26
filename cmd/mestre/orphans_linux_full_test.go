@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/hook"
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // A descendant that leaves the process group of the hook (`setsid cmd &`, the

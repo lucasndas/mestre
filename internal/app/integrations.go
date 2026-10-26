@@ -5,13 +5,13 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/guild"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/telegram"
-	"github.com/lucasndas/mestre/internal/vault"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/telegram"
+	"github.com/mestre-ia/mestre/internal/vault"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The integrations are the pieces of milestone 5 that talk to the world and to

@@ -3,7 +3,7 @@ package gitx_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 func TestParseTrackedStatus(t *testing.T) {

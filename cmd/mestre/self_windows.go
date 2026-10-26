@@ -3,8 +3,8 @@ package main
 import (
 	"os"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/winsvc"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/winsvc"
 )
 
 // allowEngine lets the engine of the instance open this process to identify

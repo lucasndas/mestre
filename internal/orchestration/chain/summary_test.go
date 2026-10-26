@@ -3,7 +3,7 @@ package chain_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 )
 
 // The `resumo` of the policy file: absent keys are the default, and anything out

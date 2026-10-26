@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/logging"
 )
 
 // Finding is one secret-shaped string found in a recording.

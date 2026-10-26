@@ -13,8 +13,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/protocol"
 )
 
 // The mirrors (docs/guilda/replicacao.md#arquivos-e-espelhos): every Tower

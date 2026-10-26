@@ -10,14 +10,14 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/presets"
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
-	"github.com/lucasndas/mestre/internal/safefile"
-	"github.com/lucasndas/mestre/internal/sessionzero"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/presets"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/internal/sessionzero"
 )
 
 // The session zero of a character, Citadel side (docs/sessao-zero/personagem.md,

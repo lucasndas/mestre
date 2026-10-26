@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/app"
-	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/app"
+	"github.com/mestre-ia/mestre/internal/localchan"
 )
 
 // The result of a call that waited in the outbox of a Tower goes to the inbox of

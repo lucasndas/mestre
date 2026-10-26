@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/localchan"
 )
 
 // runHelp is `mestre help [command]`. The list is the one the engine

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // State is the state of a character or of a simple terminal

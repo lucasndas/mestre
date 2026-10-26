@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/localchan"
 )
 
 // QueuedToInbox is the OnQueuedResult that delivers the result of a call that

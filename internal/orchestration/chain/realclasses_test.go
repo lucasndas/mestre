@@ -4,8 +4,8 @@ import (
 	"context"
 	"slices"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
 // fakeDecrees gives the real builder the exceptions the fake grants made.

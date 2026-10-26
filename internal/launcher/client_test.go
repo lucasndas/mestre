@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/launcher"
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/internal/launcher"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
 )
 
 // clientFor connects a client to the rig's server over in-memory

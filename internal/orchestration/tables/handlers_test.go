@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 )
 
 // run calls a command of the tables as the character agent, the way the

@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // GitxState is the GitState of the engine, over internal/gitx, for one

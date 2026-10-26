@@ -5,7 +5,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // NewClient is the Spawner of the engine on Linux: it asks the launcher at

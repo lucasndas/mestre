@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // The allow of the dispatcher carries the decided tool to the formatter, so

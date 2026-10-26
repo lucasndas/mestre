@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/app"
-	"github.com/lucasndas/mestre/internal/guild"
-	"github.com/lucasndas/mestre/internal/testkit/fakenet"
-	"github.com/lucasndas/mestre/internal/testkit/sheetfake"
-	"github.com/lucasndas/mestre/internal/vault"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/app"
+	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
+	"github.com/mestre-ia/mestre/internal/testkit/sheetfake"
+	"github.com/mestre-ia/mestre/internal/vault"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // CA-COFRE-02

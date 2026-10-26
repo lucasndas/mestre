@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // ObjectKind is what the engine created on GitHub.

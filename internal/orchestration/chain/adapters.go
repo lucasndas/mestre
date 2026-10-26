@@ -3,8 +3,8 @@ package chain
 import (
 	"context"
 
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/orchestration/quests"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/quests"
 )
 
 // InboxTasks gives, as the original task of a character, the text of the last

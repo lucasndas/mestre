@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/localchan"
 )
 
 // CmdCheck is the command `mestre class check`.

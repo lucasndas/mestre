@@ -14,13 +14,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/orchestration/accounts"
-	"github.com/lucasndas/mestre/internal/orchestration/presets"
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/orchestration/accounts"
+	"github.com/mestre-ia/mestre/internal/orchestration/presets"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
 // AccountResolver finds the account profile a sheet uses on this machine

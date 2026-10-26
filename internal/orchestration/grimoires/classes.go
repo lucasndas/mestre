@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
 // LibraryClasses is the Classes of the Libraries of the workspaces

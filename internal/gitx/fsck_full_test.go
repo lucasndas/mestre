@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // A bundle comes from another machine, where agents write: the objects in it

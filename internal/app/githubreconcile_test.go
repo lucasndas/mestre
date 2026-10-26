@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/github"
 )
 
 // Part of CA-CIDADELA-12: the reconciliation the standard integration gives to the fence

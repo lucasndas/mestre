@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/testkit"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // HookCall is one hook command to run, with the payload on stdin.

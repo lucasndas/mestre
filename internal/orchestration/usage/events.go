@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // Where the use of each provider comes from (docs/plataforma/limites-de-uso.md).

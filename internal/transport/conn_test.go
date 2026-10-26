@@ -14,8 +14,8 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/transport"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/transport"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // CA-PROTO-11 (the Citadel sees the machine_id of the SAN)

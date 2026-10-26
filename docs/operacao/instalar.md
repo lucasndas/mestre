@@ -30,7 +30,7 @@ O instalador é o mesmo em toda máquina e não pergunta papel. Ele procura uma 
 1. Rode o instalador:
 
    ```bash
-   curl -fsSLO https://github.com/lucasndas/mestre/releases/latest/download/install.sh
+   curl -fsSLO https://github.com/mestre-ia/mestre/releases/latest/download/install.sh
    sudo bash install.sh
    ```
 

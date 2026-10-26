@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/approvals"
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/approvals"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // The engine rule behind CA-APROV-POL-09 (the criterion, through the command

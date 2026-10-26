@@ -5,15 +5,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/orchestration/quests"
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
-	"github.com/lucasndas/mestre/internal/orchestration/usage"
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/quests"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/orchestration/usage"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // usageReason is why the limits of use pause what they pause: only a pause with

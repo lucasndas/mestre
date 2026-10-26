@@ -3,10 +3,10 @@ package protocol_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/testkit/fakegit"
-	"github.com/lucasndas/mestre/internal/testkit/gitxsuite"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/testkit/fakegit"
+	"github.com/mestre-ia/mestre/internal/testkit/gitxsuite"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The criterion CA-PROTO-05 is in the full suite (bundle_full_test.go, with the

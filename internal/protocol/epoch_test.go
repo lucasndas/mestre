@@ -7,8 +7,8 @@ import (
 	"testing"
 	"testing/synctest"
 
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/testkit/protorig"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/testkit/protorig"
 )
 
 // A higher epoch in the middle of a connection, between a real Citadel and a

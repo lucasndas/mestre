@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/lucasndas/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/github"
 )
 
 // GitHubSink delivers what changed at GitHub to the Grand Master

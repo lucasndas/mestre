@@ -22,17 +22,17 @@ import (
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 
-	"github.com/lucasndas/mestre/internal/launcher"
-	"github.com/lucasndas/mestre/internal/realaccount"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/store/machine"
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
-	"github.com/lucasndas/mestre/internal/vault"
-	"github.com/lucasndas/mestre/internal/winsvc"
-	"github.com/lucasndas/mestre/internal/winsvc/dpapi"
-	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/launcher"
+	"github.com/mestre-ia/mestre/internal/realaccount"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store/machine"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/internal/vault"
+	"github.com/mestre-ia/mestre/internal/winsvc"
+	"github.com/mestre-ia/mestre/internal/winsvc/dpapi"
+	"github.com/mestre-ia/mestre/internal/winsvc/logonsweep"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The Windows side, part two: the tests. They run as the engine service

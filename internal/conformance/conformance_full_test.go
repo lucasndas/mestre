@@ -16,17 +16,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/conformance"
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/machinesheet"
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/testkit"
-	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
-	"github.com/lucasndas/mestre/internal/testkit/leakcheck"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/conformance"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/machinesheet"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
+	"github.com/mestre-ia/mestre/internal/testkit/leakcheck"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The full suite runs the conformance with the fake agent as the CLI of the
@@ -50,9 +50,9 @@ func TestMain(m *testing.M) {
 	builds.mestre = filepath.Join(dir, "bin", "mestre"+exe)
 	builds.claude = filepath.Join(dir, "fake", "claude"+exe) // the fake agent called claude is the fake Claude Code
 	for _, b := range [][]string{
-		{"-o", builds.pty, "-ldflags", "-X main.version=" + ptyVersion, "github.com/lucasndas/mestre/cmd/mestre-pty"},
-		{"-o", builds.mestre, "github.com/lucasndas/mestre/cmd/mestre"},
-		{"-o", builds.claude, "github.com/lucasndas/mestre/cmd/fakeagent"},
+		{"-o", builds.pty, "-ldflags", "-X main.version=" + ptyVersion, "github.com/mestre-ia/mestre/cmd/mestre-pty"},
+		{"-o", builds.mestre, "github.com/mestre-ia/mestre/cmd/mestre"},
+		{"-o", builds.claude, "github.com/mestre-ia/mestre/cmd/fakeagent"},
 	} {
 		if out, err := exec.Command("go", append([]string{"build"}, b...)...).CombinedOutput(); err != nil {
 			fmt.Fprintf(os.Stderr, "go build %v: %v\n%s", b, err, out)

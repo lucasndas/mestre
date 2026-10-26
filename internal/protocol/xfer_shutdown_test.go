@@ -7,7 +7,7 @@ import (
 	"testing"
 	"testing/synctest"
 
-	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/protocol"
 )
 
 // stuck is a Finalizer that never finishes by itself: it ends when its context

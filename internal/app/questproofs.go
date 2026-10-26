@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 
-	"github.com/lucasndas/mestre/internal/orchestration/quests"
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/orchestration/quests"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 )
 
 // questProofs gives `mestre table status` the proof of each criterion of the

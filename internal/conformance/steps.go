@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The messages of the steps, typed by TypeMessage. Step 2 has three lines:

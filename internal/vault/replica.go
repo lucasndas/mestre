@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"slices"
 
-	"github.com/lucasndas/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/logging"
 )
 
 // GuardianReplica is the restricted copy sent to the Guardians

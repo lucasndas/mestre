@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // ReconcileWindow is how far back the new Citadel reads what the Apps of the

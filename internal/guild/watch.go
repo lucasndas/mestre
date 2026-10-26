@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The notice to the Owner when the Citadel does not come back

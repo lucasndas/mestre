@@ -3,9 +3,9 @@ package app
 import (
 	"context"
 
-	"github.com/lucasndas/mestre/internal/orchestration/digest"
-	"github.com/lucasndas/mestre/internal/orchestration/progress"
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/orchestration/digest"
+	"github.com/mestre-ia/mestre/internal/orchestration/progress"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
 // The message of progress over the pieces of the Citadel: the workspaces that

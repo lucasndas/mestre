@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
 // The session transcript of Codex ($CODEX_HOME/sessions/AAAA/MM/DD/

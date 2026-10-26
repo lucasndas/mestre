@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // Report applies a transition its machine saw. The machine is the truth about

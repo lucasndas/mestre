@@ -9,17 +9,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/app"
-	"github.com/lucasndas/mestre/internal/approvals"
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/guild"
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/testkit/fakechannel"
-	"github.com/lucasndas/mestre/internal/users"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/app"
+	"github.com/mestre-ia/mestre/internal/approvals"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/testkit/fakechannel"
+	"github.com/mestre-ia/mestre/internal/users"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The pieces of the chain a request of the engine does not touch: it has no

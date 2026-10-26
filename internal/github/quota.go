@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Quota follows the primary quota GitHub gives each App from the headers it

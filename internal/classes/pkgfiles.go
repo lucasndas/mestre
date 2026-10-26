@@ -12,7 +12,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
 // Limits of a class package. A package travels whole in the Guild database,

@@ -15,9 +15,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The hook queue (docs/provedores/despachante-de-hooks.md#modo-degradado):

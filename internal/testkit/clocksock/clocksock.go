@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // answerWithin bounds the wait for a process to answer: a process that died

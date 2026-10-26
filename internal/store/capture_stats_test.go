@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // A statement that writes without being DML (ANALYZE creates sqlite_stat1,

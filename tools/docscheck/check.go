@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/glossary"
+	"github.com/mestre-ia/mestre/internal/glossary"
 )
 
 // Issue is one finding, printed as <file>:<line>: <check>: <message>.

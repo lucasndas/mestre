@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/grimoires"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/orchestration/grimoires"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // CA-GRIM-07: the report to the Master of the table lists what was restored by

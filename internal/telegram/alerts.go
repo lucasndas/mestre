@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/users"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/users"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The numbers of the alerts of strangers (docs/telegram/seguranca-do-canal.md#filtro-de-entrada).

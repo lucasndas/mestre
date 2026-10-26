@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/terminal/ptyd"
-	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/terminal/ptyd"
+	"github.com/mestre-ia/mestre/internal/testkit"
 )
 
 // The start screens of the real CLIs, captured as raw terminal output by the

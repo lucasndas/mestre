@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/machinesheet"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/machinesheet"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // Resolved is a base for the system of one machine: the command and

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
 // reviewSteps is an AppReview that records the steps and fails on demand.

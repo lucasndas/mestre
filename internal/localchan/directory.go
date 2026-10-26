@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // Directory is the Terminals and JobAsker of the engine, built on the

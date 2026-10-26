@@ -11,13 +11,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
-	"github.com/lucasndas/mestre/internal/sessionzero"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/sessionzero"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Options are the pieces of the Service.

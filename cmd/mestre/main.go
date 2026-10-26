@@ -14,10 +14,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/lucasndas/mestre/internal/app"
-	"github.com/lucasndas/mestre/internal/cli"
-	"github.com/lucasndas/mestre/internal/hook"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/app"
+	"github.com/mestre-ia/mestre/internal/cli"
+	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // version is the version of the binary; the release sets it with

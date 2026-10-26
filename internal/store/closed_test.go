@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // A database that was closed (a machine that left the Guild wipes its

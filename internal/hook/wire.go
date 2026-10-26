@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // Defaults of the dispatcher (docs/provedores/despachante-de-hooks.md#uma-chamada).

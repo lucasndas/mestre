@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // Store is the tables, table_worktrees and bundle_transfers tables of the

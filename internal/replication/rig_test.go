@@ -16,17 +16,17 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/replication"
-	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
-	"github.com/lucasndas/mestre/internal/testkit/fakenet"
-	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
-	"github.com/lucasndas/mestre/internal/testkit/protorig"
-	"github.com/lucasndas/mestre/internal/vault"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/replication"
+	"github.com/mestre-ia/mestre/internal/store"
+	guilddb "github.com/mestre-ia/mestre/internal/store/guild"
+	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
+	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
+	"github.com/mestre-ia/mestre/internal/testkit/protorig"
+	"github.com/mestre-ia/mestre/internal/vault"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 const (

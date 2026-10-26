@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The defaults of the validity notices (docs/plataforma/cofre.md#credenciais-de-site).

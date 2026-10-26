@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/testkit/leakcheck"
+	"github.com/mestre-ia/mestre/internal/testkit/leakcheck"
 )
 
 // The guard of the rigs: a process that holds the needle (and its child) is

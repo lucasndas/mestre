@@ -10,8 +10,8 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/testkit/countfs"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/testkit/countfs"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 var today = time.Date(2026, 10, 12, 15, 0, 0, 0, time.UTC)

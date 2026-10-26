@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/lucasndas/mestre/internal/orchestration/digest"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/orchestration/digest"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // DigestChannel is the summary over the bot (docs/aprovacoes/resumo-e-sugestoes.md):

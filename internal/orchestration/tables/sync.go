@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/privdir"
-	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/privdir"
+	"github.com/mestre-ia/mestre/internal/protocol"
 )
 
 // The branches of the tables travel between the Citadel and the Towers as git

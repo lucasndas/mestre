@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // confirm answers a request of PIN for the action, right.

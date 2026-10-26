@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/quests"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/quests"
 )
 
 const returnDef = `

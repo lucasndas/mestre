@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/attachments"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/attachments"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // fakeWhisper is the whisper-server of a Tower: it keeps what it was sent and

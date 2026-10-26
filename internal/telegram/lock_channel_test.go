@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/telegram"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/telegram"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 func lockChanWorld(t *testing.T) *world {

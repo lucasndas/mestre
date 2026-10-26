@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/terminal/ptyd"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/terminal/ptyd"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // blockWatch is the character state of the test: it tells the test when the
@@ -110,7 +110,7 @@ func TestUsageLimitMenuOfTheFakeAgentInARealTerminal(t *testing.T) {
 		exe = ".exe"
 	}
 	bin := filepath.Join(t.TempDir(), "fakeagent"+exe)
-	if out, err := exec.Command("go", "build", "-o", bin, "github.com/lucasndas/mestre/cmd/fakeagent").CombinedOutput(); err != nil {
+	if out, err := exec.Command("go", "build", "-o", bin, "github.com/mestre-ia/mestre/cmd/fakeagent").CombinedOutput(); err != nil {
 		t.Fatalf("go build fakeagent: %v\n%s", err, out)
 	}
 	rig := newFakeRig(t, map[string]string{"script.yaml": "prompts:\n  - match: go\n    steps:\n      - limit: session\n"})

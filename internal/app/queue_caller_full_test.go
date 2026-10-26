@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/cli"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/cli"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Part of CA-CIDADELA-14, the half of the cli.call: the Citadel believes the character

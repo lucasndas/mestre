@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/lucasndas/mestre/internal/winsvc/dpapi"
+	"github.com/mestre-ia/mestre/internal/winsvc/dpapi"
 	"golang.org/x/sys/windows"
 )
 

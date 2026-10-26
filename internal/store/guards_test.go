@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // CA-REPL-11

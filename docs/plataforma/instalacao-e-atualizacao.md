@@ -12,7 +12,7 @@ Definir o que a instalação cria em cada máquina e como as versões ficam no d
 
 | Plataforma | Artefato | O que faz |
 |---|---|---|
-| Ubuntu (LTS atual) | `mestre_<versão>_amd64.deb` (depende de `ffmpeg` e `avahi-daemon`), mais um `install.sh` que baixa o `.deb` das [Releases](https://github.com/lucasndas/mestre/releases), confere o SHA-256 e roda `apt install` | coloca os binários em `/usr/lib/mestre/pacote/` e chama `mestre install` |
+| Ubuntu (LTS atual) | `mestre_<versão>_amd64.deb` (depende de `ffmpeg` e `avahi-daemon`), mais um `install.sh` que baixa o `.deb` das [Releases](https://github.com/mestre-ia/mestre/releases), confere o SHA-256 e roda `apt install` | coloca os binários em `/usr/lib/mestre/pacote/` e chama `mestre install` |
 | Windows 11 ou superior | instalador `mestre-<versão>-x64.msi` (MSI gerado com WiX v4), elevado, com o `ffmpeg.exe` numa versão fixada | copia os binários e chama `mestre install`; com a propriedade `JOIN=<endereço>` (`msiexec /i mestre-<versão>-x64.msi JOIN=<endereço>`), chama `mestre install --join <endereço>` |
 
 - **Sem papel para escolher:** o instalador é o mesmo em toda máquina. Ele procura uma Guilda na rede e **entra** nela, ou, sem nenhuma, **cria** a Guilda e a máquina vira a Cidadela ([formação](../guilda/guilda.md#formação)). As quatro composições (só Linux, Cidadela Linux + Torre Windows, Cidadela Windows + Torre Linux, só Windows) saem só da ordem em que as máquinas são instaladas ([ADR 0020](../decisoes/0020-linux-e-windows-em-qualquer-papel.md)); os critérios de aceite delas são o CA-GUILDA-10 e o CA-GUILDA-11 da [Guilda](../guilda/guilda.md).

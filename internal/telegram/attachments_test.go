@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/attachments"
-	"github.com/lucasndas/mestre/internal/telegram"
-	"github.com/lucasndas/mestre/internal/testkit/faketelegram"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/attachments"
+	"github.com/mestre-ia/mestre/internal/telegram"
+	"github.com/mestre-ia/mestre/internal/testkit/faketelegram"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // fakeConverter makes "wav" of the audio: the content is only passed through.

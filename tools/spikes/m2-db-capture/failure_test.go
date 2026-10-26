@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // TestHelperProcess is the child of the crash tests: it is killed (SIGKILL

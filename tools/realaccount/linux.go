@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/realaccount"
+	"github.com/mestre-ia/mestre/internal/realaccount"
 )
 
 // The Linux machine: two system users (the engine's and the agents'), the

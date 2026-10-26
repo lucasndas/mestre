@@ -3,8 +3,8 @@ package localchan_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/winsvc"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/winsvc"
 )
 
 // The ACL itself, with real SIDs and a socket, is internal/winsvc's test.

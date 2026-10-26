@@ -6,7 +6,7 @@ import (
 	"context"
 	"os/exec"
 
-	"github.com/lucasndas/mestre/internal/testkit/fakeagent"
+	"github.com/mestre-ia/mestre/internal/testkit/fakeagent"
 )
 
 // command runs line with sh -c, as the providers do outside Windows.

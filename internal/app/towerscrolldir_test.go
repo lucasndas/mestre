@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/scrolls"
-	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/orchestration/scrolls"
+	"github.com/mestre-ia/mestre/internal/protocol"
 )
 
 // The worktree a Tower is told about is judged by its real path, whatever the

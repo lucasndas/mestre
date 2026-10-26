@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 )
 
 // SettingsClient is the part of GitHub the settings of the repository use

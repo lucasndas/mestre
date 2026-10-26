@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/testkit"
 )
 
 const modelDir = "../../testdata/projetos/go-basico"

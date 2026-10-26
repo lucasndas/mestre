@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/testkit/fakegithub"
-	"github.com/lucasndas/mestre/internal/users"
-	"github.com/lucasndas/mestre/internal/vault"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/testkit/fakegithub"
+	"github.com/mestre-ia/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/vault"
 )
 
 // keepVault is the vault of the creation: it keeps what is put, gives it to Use

@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/quests"
+	"github.com/mestre-ia/mestre/internal/orchestration/quests"
 )
 
 // Two dones of the same character at the same time record one done: the second

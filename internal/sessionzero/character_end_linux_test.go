@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/sessionzero"
+	"github.com/mestre-ia/mestre/internal/sessionzero"
 )
 
 // An agent can leave a fifo or a socket in its MESTRE_TMP and in its folder:

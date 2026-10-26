@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // envRecord turns this test binary into a fake git that appends each call

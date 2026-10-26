@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/protocol"
 )
 
 // resumeRank is the order of the resumption: the Grand Master, the table

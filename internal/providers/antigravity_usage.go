@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // agyUsageTimeout bounds `agy -p "/usage"`: it calls no model, so a long wait

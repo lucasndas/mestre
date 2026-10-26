@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/glossary"
+	"github.com/mestre-ia/mestre/internal/glossary"
 )
 
 const doc = `# Glossário

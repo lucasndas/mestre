@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/connections"
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/connections"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 )
 
 // CA-MM-01: a table just opened has its table master, called Mestre, pinned,

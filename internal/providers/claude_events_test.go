@@ -11,9 +11,9 @@ import (
 	"testing"
 	"testing/synctest"
 
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/testkit/fakeagent"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/testkit/fakeagent"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 type capturedHook struct {

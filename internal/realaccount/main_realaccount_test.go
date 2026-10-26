@@ -17,10 +17,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/realaccount"
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/realaccount"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The tests of this package run as the engine of the instance, in the

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/machinesheet"
+	"github.com/mestre-ia/mestre/internal/machinesheet"
 )
 
 // The parts a test can make fail.

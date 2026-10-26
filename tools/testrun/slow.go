@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // summaryEnv is the file GitHub Actions gives a step for its job summary.

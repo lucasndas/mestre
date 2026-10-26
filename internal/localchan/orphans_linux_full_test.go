@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/testkit/leakcheck"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/testkit/leakcheck"
 )
 
 // envInScope tells the test binary it is running in the delegated scope.

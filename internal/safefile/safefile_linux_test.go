@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
 // A FIFO in place of teto.yaml would block a plain read forever; a device

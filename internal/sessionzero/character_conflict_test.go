@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/sessionzero"
+	"github.com/mestre-ia/mestre/internal/sessionzero"
 )
 
 // CA-CLI-SKL-05

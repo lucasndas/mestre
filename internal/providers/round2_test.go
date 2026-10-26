@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // N-B regression: NormalizePath follows a dangling symlink to the target a

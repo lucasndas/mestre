@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
 // MkdirAll makes folders the way Write does: missing ones are made, the same

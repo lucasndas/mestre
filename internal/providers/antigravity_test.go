@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/testkit"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 func agy(t testing.TB, opts providers.Options) providers.Adapter {

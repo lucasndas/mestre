@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/testkit"
 )
 
 // Untrust gives the file back as it was before PreTrust: the entry of the

@@ -10,8 +10,8 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
 // NativeFiles writes the native control files. Update reads the file (nil

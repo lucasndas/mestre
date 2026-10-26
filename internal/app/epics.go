@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lucasndas/mestre/internal/approvals"
-	"github.com/lucasndas/mestre/internal/ghcli"
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/approvals"
+	"github.com/mestre-ia/mestre/internal/ghcli"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 )
 
 // stdEpics is GitHub's side of the tables (tables.GitHub): the epics and the

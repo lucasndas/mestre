@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 func ms(t time.Time) int64 {

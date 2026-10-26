@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/testkit/clocksock"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/testkit/clocksock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // follower is a process that follows the clock: it answers each line with the

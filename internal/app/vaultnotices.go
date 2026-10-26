@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/telegram"
-	"github.com/lucasndas/mestre/internal/users"
-	"github.com/lucasndas/mestre/internal/vault"
+	"github.com/mestre-ia/mestre/internal/telegram"
+	"github.com/mestre-ia/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/vault"
 )
 
 // vaultNotices takes the notices of the validity of the site credentials to the

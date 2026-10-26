@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/github"
 )
 
 // Part of CA-GH-ID-08 (MVP-5; the heavy composition with the lab closes it in M7, the doubles say the same here)

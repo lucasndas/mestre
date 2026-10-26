@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
-	"github.com/lucasndas/mestre/internal/testkit/fakegit"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/testkit/fakegit"
 )
 
 // The regression tests of the audit of milestone 4 (git sync of the tables).

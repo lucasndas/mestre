@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/lucasndas/mestre/internal/discovery"
+	"github.com/mestre-ia/mestre/internal/discovery"
 )
 
 // ErrCitadelDown is the installer's "a Guilda existe, mas a Cidadela está

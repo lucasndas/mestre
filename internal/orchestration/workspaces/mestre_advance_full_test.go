@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/testkit"
 )
 
 // The project versions .mestre/ while the main clone holds the engine's own

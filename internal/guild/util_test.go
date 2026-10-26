@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/protocol"
 )
 
 // decode and reply are the JSON of the handlers the tests write by hand.

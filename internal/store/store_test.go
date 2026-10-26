@@ -14,8 +14,8 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 func files(sql ...string) fstest.MapFS {

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // FixedDenyCommands are the commands of the fixed rules that every provider

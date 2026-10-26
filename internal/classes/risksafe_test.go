@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // The list of known-safe programs (docs/classes/lista-de-seguros.md): baixo

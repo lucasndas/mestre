@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
 func TestRemoveEntryTakesAFifoAndALinkButNotAFolder(t *testing.T) {

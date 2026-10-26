@@ -7,7 +7,7 @@ import (
 	"testing"
 	"testing/synctest"
 
-	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/protocol"
 )
 
 // Part of CA-COFRE-21: the credential travels only in the ack of the request, and

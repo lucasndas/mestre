@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
 // InstallationSource is GitHub's side of the stage apps (*github.Installs).

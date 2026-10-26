@@ -16,9 +16,9 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/lucasndas/mestre/internal/launcher"
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/testkit/delegated"
+	"github.com/mestre-ia/mestre/internal/launcher"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/testkit/delegated"
 )
 
 // osEnv is the Linux side of the fixture: the launcher listens on a Unix

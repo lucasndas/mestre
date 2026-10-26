@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 func underCeiling(t *testing.T, ceil, class string) (*classes.Rules, error) {

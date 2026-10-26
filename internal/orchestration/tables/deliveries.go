@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // Stall is a table at work that has not delivered anything useful for a long

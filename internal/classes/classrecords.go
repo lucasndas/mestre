@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // LevelTableMaster is the Mestre da mesa: the author of a change of a class

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/testkit"
 )
 
 // appInfo is an App registered in the double: its public key (the double checks

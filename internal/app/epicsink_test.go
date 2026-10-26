@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/github"
 )
 
 type closedCall struct {

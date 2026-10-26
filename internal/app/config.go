@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/lucasndas/mestre/internal/hook"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/privdir"
-	"github.com/lucasndas/mestre/internal/replication"
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/privdir"
+	"github.com/mestre-ia/mestre/internal/replication"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // Defaults of an instance (docs/arquitetura/componentes.md#instâncias).

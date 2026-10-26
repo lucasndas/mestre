@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/realaccount"
+	"github.com/mestre-ia/mestre/internal/realaccount"
 )
 
 // CA-CONTAS-01

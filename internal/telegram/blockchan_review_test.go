@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/blocking"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/blocking"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 func TestABadPanelLinkCostsTheButtonNeverTheNotice(t *testing.T) {

@@ -4,7 +4,7 @@ O Mestre orquestra agentes de IA (Claude Code, Codex, Antigravity CLI ou um shel
 
 Diferente de um orquestrador local, o Mestre é distribuído e se cura sozinho: a mesma instalação em cada máquina, Linux ou Windows, forma uma **Guilda**, com uma máquina no comando (a **Cidadela**) e as outras (as **Torres**) rodando agentes, guardando uma cópia do estado e prontas para assumir se a Cidadela cair de vez, com a sua aprovação. Cada máquina tem um **Guardião** que vigia e conserta o motor, sem SSH. Uma máquina só também funciona. Não há interface gráfica além do painel no navegador; os agentes são de terminal.
 
-Repositório: https://github.com/lucasndas/mestre
+Repositório: https://github.com/mestre-ia/mestre
 
 > Estado: em desenvolvimento, na ordem dos [marcos](docs/desenvolvimento/ordem-de-implementacao.md#marcos); a tabela deles diz o que cada marco entrega e quais já foram auditados. Ainda não há instalador nem painel. A documentação em [`docs/`](docs/INDEX.md) é a base do desenvolvimento.
 

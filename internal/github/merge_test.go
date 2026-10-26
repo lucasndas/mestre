@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/testkit/fakegithub"
-	"github.com/lucasndas/mestre/internal/testkit/fakenet"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/testkit/fakegithub"
+	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // mergeRig is a PR of the double and the REST client of the Grão-Mestre.

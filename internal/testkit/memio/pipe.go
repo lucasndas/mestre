@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // ErrClosedPipe is returned when using a side that was closed locally.

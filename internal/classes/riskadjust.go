@@ -12,7 +12,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // RiskAdjustments are the owner's adjustments of the risco section of the

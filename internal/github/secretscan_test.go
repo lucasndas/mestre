@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // Part of CA-CLI-GH-07: the formats the scan knows, the exceptions it has, and

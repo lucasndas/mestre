@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 )
 
 // inboxUsers is inbox.Users over the bot of the Telegram: a notice "Sistema" that

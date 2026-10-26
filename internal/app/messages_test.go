@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/decrees"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 )
 
 // What an agent wrote around the click of a button is no order of the user: the

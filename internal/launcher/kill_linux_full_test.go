@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/launcher"
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/launcher"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // proc is a process of the test, reaped when it ends and killed with its

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/approvals"
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/approvals"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // The request of a merge is of type merge, names the PR and the

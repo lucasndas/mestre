@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
 // CA-CLI-GH-03

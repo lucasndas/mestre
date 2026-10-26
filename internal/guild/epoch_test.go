@@ -9,13 +9,13 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/guild"
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
-	"github.com/lucasndas/mestre/internal/testkit/protorig"
-	"github.com/lucasndas/mestre/internal/transport"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
+	"github.com/mestre-ia/mestre/internal/testkit/protorig"
+	"github.com/mestre-ia/mestre/internal/transport"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // signedEpoch is the certificate of an epoch signed by ca.

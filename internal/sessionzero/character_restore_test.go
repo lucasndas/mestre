@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/sessionzero"
+	"github.com/mestre-ia/mestre/internal/sessionzero"
 )
 
 // The gitconfig of a character is in a folder the agent writes: whatever it

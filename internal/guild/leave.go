@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Leave takes this machine out of the Guild: the Wiper erases the replica,

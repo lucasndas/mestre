@@ -9,9 +9,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/transport"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/transport"
 )
 
 // MachineState is where a machine stands in the registry.

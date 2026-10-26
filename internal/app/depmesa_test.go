@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/app"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
-	"github.com/lucasndas/mestre/internal/orchestration/waits"
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/app"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/orchestration/waits"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // CA-DEPMESA-05: the table #43 waits for #42. When the table #42 is cancelled,

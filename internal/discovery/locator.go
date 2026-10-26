@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/transport"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/transport"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Verifier is the identity check: it opens TLS to an address and says which

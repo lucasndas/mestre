@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // CA-NATIVO-01: Antigravity without internet runs without --sandbox on

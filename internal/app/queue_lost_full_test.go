@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/cli"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/cli"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Part of CA-CLI-CONV-05: a `done` that went to the Citadel, ran there and

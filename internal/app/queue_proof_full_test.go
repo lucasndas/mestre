@@ -7,10 +7,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/cli"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/cli"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The transport behind CA-PROVA-15 (the criterion itself is in the fast suite,

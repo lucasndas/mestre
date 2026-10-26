@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/hook"
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // HookRunner is a Process that can run the hooks of the class as its agent:

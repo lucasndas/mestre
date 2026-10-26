@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/users"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/users"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Refusals.

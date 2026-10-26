@@ -87,7 +87,7 @@ O CI é `.github/workflows/ci.yml`: em cada PR, em cada push na `main` e sob dem
 Passo do Dono, uma vez, com a conta dele (`gh auth login`): criar o ruleset da `main` que exige as duas verificações, PR com squash e proíbe apagar e forçar push. Rulesets em repositório privado pedem plano pago do GitHub.
 
 ```bash
-gh api -X POST repos/lucasndas/mestre/rulesets --input - <<'JSON'
+gh api -X POST repos/mestre-ia/mestre/rulesets --input - <<'JSON'
 {
   "name": "main",
   "target": "branch",
@@ -110,7 +110,7 @@ gh api -X POST repos/lucasndas/mestre/rulesets --input - <<'JSON'
 JSON
 ```
 
-Conferir com `gh api repos/lucasndas/mestre/rulesets`. O `integration_id` 15368 é o do GitHub Actions; o nome das verificações muda se mudar o `name` do job no `ci.yml`, e o ruleset muda junto.
+Conferir com `gh api repos/mestre-ia/mestre/rulesets`. O `integration_id` 15368 é o do GitHub Actions; o nome das verificações muda se mudar o `name` do job no `ci.yml`, e o ruleset muda junto.
 
 ## Conta `mestre-agente` nesta máquina (Linux)
 

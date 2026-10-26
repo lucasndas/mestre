@@ -6,8 +6,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/store/machine"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store/machine"
 )
 
 // CA-PERSIST-08

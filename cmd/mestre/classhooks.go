@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/hook"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // hookWaitDelay is how long the runner waits, after the time limit ended the

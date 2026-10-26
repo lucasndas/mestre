@@ -5,8 +5,8 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/discovery"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/discovery"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // A forged answer of a huge epoch that points to a machine of the Guild that

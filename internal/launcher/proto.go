@@ -31,8 +31,8 @@ import (
 	"regexp"
 	"runtime"
 
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
 )
 
 // The requests.

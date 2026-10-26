@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 )
 
 // point is the request of a point of approval of a step.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lucasndas/mestre/internal/replication"
+	"github.com/mestre-ia/mestre/internal/replication"
 )
 
 // Mirrors is the set of mirrors of the Citadel for the replication to send to

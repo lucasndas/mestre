@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // HostSpec is what the host needs to create the terminal of a character: the

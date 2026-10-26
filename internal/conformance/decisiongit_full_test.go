@@ -6,8 +6,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/conformance"
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/conformance"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // decisionGit is the git of the runner of the rig, with the state the engine

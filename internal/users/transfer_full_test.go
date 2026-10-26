@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // CA-USR-08

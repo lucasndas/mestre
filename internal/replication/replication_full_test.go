@@ -13,16 +13,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/replication"
-	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
-	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
-	"github.com/lucasndas/mestre/internal/testkit/protorig"
-	"github.com/lucasndas/mestre/internal/transport"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/replication"
+	"github.com/mestre-ia/mestre/internal/store"
+	guilddb "github.com/mestre-ia/mestre/internal/store/guild"
+	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
+	"github.com/mestre-ia/mestre/internal/testkit/protorig"
+	"github.com/mestre-ia/mestre/internal/transport"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The full suite runs the Citadel and a Tower of the same computer as two

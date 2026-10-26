@@ -10,12 +10,12 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/connections"
-	"github.com/lucasndas/mestre/internal/orchestration/grimoires"
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/orchestration/quests"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/connections"
+	"github.com/mestre-ia/mestre/internal/orchestration/grimoires"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/quests"
 )
 
 // team makes the team of the examples in workspace A: Dev and QA, the scroll

@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 
-	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/localchan"
 )
 
 // Lease is the lease of the epoch over GitHub (docs/guilda/trava-no-github.md#aluguel):

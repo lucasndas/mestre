@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/app"
+	"github.com/mestre-ia/mestre/internal/app"
 )
 
 // An agent never starts the engine: MESTRE_AGENT_ID in the environment, even

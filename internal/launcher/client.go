@@ -8,7 +8,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // Packed is what goes with a start-pty request besides its fields: the

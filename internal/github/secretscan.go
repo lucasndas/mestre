@@ -1,8 +1,8 @@
 package github
 
 import (
-	"github.com/lucasndas/mestre/internal/gitx"
-	"github.com/lucasndas/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/logging"
 )
 
 // SecretFinding is a line of the diff that carries a secret of a known format:

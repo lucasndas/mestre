@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // Part of CA-PERM-25 and CA-PERM-32 (the sizes of the criterion, up to the 4 MiB

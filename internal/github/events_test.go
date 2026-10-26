@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/github"
 )
 
 type batch struct {

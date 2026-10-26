@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 
-	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
+	"github.com/mestre-ia/mestre/internal/winsvc/logonsweep"
 )
 
 // Session is the logon of the agent account for one terminal: what the

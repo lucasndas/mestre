@@ -11,7 +11,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/localchan"
 )
 
 // ErrNoProcess is what the fake /proc says about a process it does not know.

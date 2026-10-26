@@ -10,8 +10,8 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/testkit/protorig"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/testkit/protorig"
 )
 
 // The outbox and the processed ids of the Citadel live in the database of

@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Default waits of the termination steps

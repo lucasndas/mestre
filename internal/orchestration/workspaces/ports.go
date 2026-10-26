@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // Git is the git the workspaces need: gitx.Real, or the fake of

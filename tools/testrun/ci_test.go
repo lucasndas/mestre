@@ -9,7 +9,7 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The solo re-runs of slow tests are one go test per package, not per test.

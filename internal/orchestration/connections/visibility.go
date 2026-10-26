@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
 // ScrollView is a scroll an agent can see, with what it is connected to among

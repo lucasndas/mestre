@@ -6,8 +6,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // A command argument link/../x is where the system writes it: on Linux next

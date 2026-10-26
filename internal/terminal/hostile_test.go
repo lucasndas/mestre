@@ -14,9 +14,9 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // What a mestre-pty says to the engine is what the agent of the terminal lets it

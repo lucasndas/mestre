@@ -3,7 +3,7 @@ package classes_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // The index plumbing that moves files to protected paths is a fixed deny

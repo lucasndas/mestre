@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
+	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
 )
 
 // seedGuild leaves in the folder of the Guild database the file migrated

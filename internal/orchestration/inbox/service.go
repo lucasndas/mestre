@@ -8,9 +8,9 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // DefaultMaxQueue is how many items an inbox may hold before the table master

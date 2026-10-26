@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/decrees"
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
 type roster map[string]characters.Character

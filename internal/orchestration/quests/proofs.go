@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 )
 
 // criterionRe is an item `- [ ] C<n> <text>` of the body of an issue

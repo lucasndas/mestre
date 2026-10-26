@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
 var errOffline = errors.New("fatal: unable to access 'https://github.com/lucas/Meu_App.git/': Could not resolve host: github.com")

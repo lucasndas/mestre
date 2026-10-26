@@ -9,9 +9,9 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/guild"
-	"github.com/lucasndas/mestre/internal/testkit/fakelock"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/testkit/fakelock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // advance moves the time of the bubble and lets everything settle.

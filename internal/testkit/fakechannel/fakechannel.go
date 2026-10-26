@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/approvals"
+	"github.com/mestre-ia/mestre/internal/approvals"
 )
 
 // Channel records the questions and the edits.

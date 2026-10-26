@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/mestre-ia/mestre/internal/store"
+	guilddb "github.com/mestre-ia/mestre/internal/store/guild"
 )
 
 // StmtCache is how many prepared statements each connection of a test database

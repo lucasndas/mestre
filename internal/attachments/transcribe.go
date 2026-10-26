@@ -15,8 +15,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/lucasndas/mestre/internal/attachments/ffmpeg"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/attachments/ffmpeg"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // MinTimeout is the shortest time a transcription may take; the limit is the

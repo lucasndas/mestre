@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/localchan"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
 // Approvals opens the request of approval that deleting a scroll needs when a

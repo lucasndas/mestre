@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // C6: teto.yaml is in the main clone, which the agents write. A link to an

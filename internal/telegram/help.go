@@ -6,7 +6,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/lucasndas/mestre/internal/glossary"
+	"github.com/mestre-ia/mestre/internal/glossary"
 )
 
 // commonWords are the one-word terms of the glossary that are also a verb or a

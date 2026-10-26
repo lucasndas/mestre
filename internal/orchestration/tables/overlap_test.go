@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // overlapSnapshot is everything the reading must leave as it was: the refs of

@@ -6,7 +6,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/logging"
 )
 
 // maxLogLine caps a line that never ends (a progress bar redrawn with \r):

@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/rituals"
-	"github.com/lucasndas/mestre/internal/orchestration/scrolls"
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/rituals"
+	"github.com/mestre-ia/mestre/internal/orchestration/scrolls"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // How long the Citadel waits for a Tower: the start prepares the files and

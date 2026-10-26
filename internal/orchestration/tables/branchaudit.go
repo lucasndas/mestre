@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // BranchDeleteAction is the audit action of the record the engine keeps of the

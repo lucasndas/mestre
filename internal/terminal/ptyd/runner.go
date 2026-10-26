@@ -10,7 +10,7 @@ import (
 
 	"github.com/aymanbagabas/go-pty"
 
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
 )
 
 // PTYRunner starts the agent on a real PTY (ConPTY on Windows) through

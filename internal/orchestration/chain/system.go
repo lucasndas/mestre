@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // The requests of the Guild are of a fixed rule: they do not enter the chain of

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // ScrollRef is a scroll or a tome of a table, as the scrolls (stage 7) know

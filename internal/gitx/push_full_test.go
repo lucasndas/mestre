@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // The refusals of a push are told apart by what the remote says: GitHub answers

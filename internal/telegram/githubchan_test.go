@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/internal/telegram"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/telegram"
 )
 
 // mismatchPersonal is the personal credential of GitHub when the account that

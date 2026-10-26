@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal"
 )
 
 // PeerPolicy accepts only the engine of the instance: the account (uid) it

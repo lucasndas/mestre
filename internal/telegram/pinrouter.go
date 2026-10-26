@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/users"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // PINRouter takes the answers of the PIN to whoever asked for them: a request of

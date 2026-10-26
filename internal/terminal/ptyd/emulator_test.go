@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/terminal/ptyd"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/terminal/ptyd"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 func newVT(cols, rows, history int) (ptyd.Emulator, *replies) {

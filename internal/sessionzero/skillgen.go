@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/cli"
+	"github.com/mestre-ia/mestre/internal/cli"
 )
 
 // The skills the Mestre generates are made of two parts

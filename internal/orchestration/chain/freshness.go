@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/classes"
 )
 
 // Freshness is the gate of freshness of the requests of a PR

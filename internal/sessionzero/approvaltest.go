@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
 // reviewApproved is the reviewDecision of a pull request whose required

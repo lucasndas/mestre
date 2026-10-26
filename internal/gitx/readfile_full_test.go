@@ -7,7 +7,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/gitx"
 )
 
 // A folder (a tree) at the path is not a file: ReadFile answers

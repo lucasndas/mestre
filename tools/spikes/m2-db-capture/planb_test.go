@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // logPair is a plan B primary with a full Tower replica and an excluded one.

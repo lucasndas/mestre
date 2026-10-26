@@ -13,9 +13,9 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/testkit/fakenet"
-	"github.com/lucasndas/mestre/internal/testkit/testca"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
+	"github.com/mestre-ia/mestre/internal/testkit/testca"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 func TestDialRefusedWithoutListener(t *testing.T) {

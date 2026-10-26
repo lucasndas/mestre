@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/testkit"
 )
 
 // Request is one call the double answered, for the tests that count what a

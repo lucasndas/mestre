@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // antigravity is the Antigravity CLI (`agy`) adapter

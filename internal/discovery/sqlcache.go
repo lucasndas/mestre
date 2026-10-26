@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // SQLCache keeps the addresses in the known_addresses table of the machine

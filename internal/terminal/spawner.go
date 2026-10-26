@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
 )
 
 // SpawnSpec is what it takes to start the mestre-pty of a terminal.

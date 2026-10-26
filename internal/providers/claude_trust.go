@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
 // trustAttempts is how many times PreTrust reads, merges and writes the

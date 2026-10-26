@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/attachments"
+	"github.com/mestre-ia/mestre/internal/attachments"
 )
 
 // DefaultBaseURL is the Telegram Bot API.

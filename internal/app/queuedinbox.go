@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/mestre-ia/mestre/internal/localchan"
 )
 
 // queuedToInbox is what the commands of GitHub tell when a command they answered

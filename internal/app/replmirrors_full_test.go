@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/testkit"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // CA-REPL-18: the engine that hosts the orchestration sends the mirror of each

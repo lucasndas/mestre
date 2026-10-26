@@ -11,10 +11,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/orchestration/connections"
-	"github.com/lucasndas/mestre/internal/safefile"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/connections"
+	"github.com/mestre-ia/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Linker is the connections as the scrolls use them: the scroll is connected

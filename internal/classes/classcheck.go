@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // DefaultProviderHookSeconds is the time limit the hook files of the

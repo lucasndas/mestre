@@ -9,8 +9,8 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/safefile"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
 // MestreDir is the folder of the Mestre in a project

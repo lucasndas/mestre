@@ -3,8 +3,8 @@ package classes_test
 import (
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // judgeAs decides a command line as the tool of a provider names it.

@@ -8,7 +8,7 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Timing holds the intervals of docs/conectividade/protocolo.md#heartbeat-e-reconexão.

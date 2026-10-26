@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/testkit"
 )
 
 var at = time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)

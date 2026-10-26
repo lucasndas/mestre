@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // The two checks below serve the registration of the use of a decree after the

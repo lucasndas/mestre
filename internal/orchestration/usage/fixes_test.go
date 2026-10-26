@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/classes"
-	"github.com/lucasndas/mestre/internal/orchestration/usage"
+	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/orchestration/usage"
 )
 
 func TestAnApprovedExtraResumesOnlyWhatTheLimitPaused(t *testing.T) {

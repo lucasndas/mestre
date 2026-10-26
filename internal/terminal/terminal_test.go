@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/terminal/ptyd"
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
-	"github.com/lucasndas/mestre/internal/testkit/fakenet"
-	"github.com/lucasndas/mestre/internal/testkit/fakepty"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal/ptyd"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
+	"github.com/mestre-ia/mestre/internal/testkit/fakepty"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // rig is a mestre-pty (session and server) on the fake PTY and the fake

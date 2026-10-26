@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // This test binary is also the stand-in for the `mestre` binary at the stable

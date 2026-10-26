@@ -12,7 +12,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 )
 
 // DefaultMaxReturns is the number of returns a step that hands work back may

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 )
 
 // DefaultStallAfter is how long a table at work may deliver nothing useful

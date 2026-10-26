@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/orchestration/presets"
+	"github.com/mestre-ia/mestre/internal/orchestration/presets"
 )
 
 func hookBase(name string) presets.Base {

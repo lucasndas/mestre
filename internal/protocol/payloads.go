@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/lucasndas/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/logging"
 )
 
 // The payload of every message type of docs/conectividade/mensagens.md. The

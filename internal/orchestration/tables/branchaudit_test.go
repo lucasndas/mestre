@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 )
 
 // auditedTips are the records of the tip of a branch in the audit trail, as

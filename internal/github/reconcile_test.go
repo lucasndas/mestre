@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/github"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // Part of CA-CIDADELA-12: after the swap the new Citadel reads what the Apps of the

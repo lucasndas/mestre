@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lucasndas/mestre/internal/machinesheet"
-	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/machinesheet"
+	"github.com/mestre-ia/mestre/internal/providers"
 )
 
 // Terminal is a terminal the panel opens for the Owner, as the agents'

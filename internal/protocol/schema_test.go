@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/logging"
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/logging"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 func TestTheEnvelopeEncodesAsDocumented(t *testing.T) {

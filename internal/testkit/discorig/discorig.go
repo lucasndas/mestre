@@ -8,8 +8,8 @@ package discorig
 import (
 	"context"
 
-	"github.com/lucasndas/mestre/internal/discovery"
-	"github.com/lucasndas/mestre/internal/testkit/fakenet"
+	"github.com/mestre-ia/mestre/internal/discovery"
+	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
 )
 
 // Packets is the discovery.PacketNetwork of a host of the fake network.

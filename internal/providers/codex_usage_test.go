@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/providers"
-	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/mestre-ia/mestre/internal/providers"
+	"github.com/mestre-ia/mestre/internal/testkit"
 )
 
 // writeRollout appends the recorded transcript lines [from, to) to a

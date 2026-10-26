@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/protocol"
 )
 
 // rawTower dials the Citadel as the Tower, without a Client: the test plays

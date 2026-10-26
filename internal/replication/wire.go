@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/protocol"
-	"github.com/lucasndas/mestre/internal/store"
+	"github.com/mestre-ia/mestre/internal/protocol"
+	"github.com/mestre-ia/mestre/internal/store"
 )
 
 // Defaults of docs/guilda/replicacao.md.

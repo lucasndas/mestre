@@ -18,9 +18,9 @@ import (
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc/mgr"
 
-	"github.com/lucasndas/mestre/internal/launcher"
-	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/launcher"
+	"github.com/mestre-ia/mestre/internal/winsvc/logonsweep"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The mestre-launcher on Windows (docs/arquitetura/windows.md#iniciador-mestre-launcher):

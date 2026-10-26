@@ -10,7 +10,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/privdir"
+	"github.com/mestre-ia/mestre/internal/privdir"
 )
 
 // PTYEntry is a mestre-pty the launcher started, by PID and start identity

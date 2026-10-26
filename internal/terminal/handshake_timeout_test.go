@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/terminal"
-	"github.com/lucasndas/mestre/internal/terminal/ptywire"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/terminal"
+	"github.com/mestre-ia/mestre/internal/terminal/ptywire"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // slowWriter is the end of a connection whose writes wait for the gate: a

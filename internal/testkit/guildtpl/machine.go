@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/lucasndas/mestre/internal/store"
-	machinedb "github.com/lucasndas/mestre/internal/store/machine"
+	"github.com/mestre-ia/mestre/internal/store"
+	machinedb "github.com/mestre-ia/mestre/internal/store/machine"
 )
 
 var (

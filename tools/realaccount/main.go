@@ -20,8 +20,8 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/lucasndas/mestre/internal/realaccount"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/realaccount"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // options are what a run needs, besides the machine.

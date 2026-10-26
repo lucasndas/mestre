@@ -21,11 +21,11 @@ import (
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 
-	"github.com/lucasndas/mestre/internal/realaccount"
-	"github.com/lucasndas/mestre/internal/winsvc"
-	"github.com/lucasndas/mestre/internal/winsvc/dpapi"
-	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
-	"github.com/lucasndas/mestre/pkg/clock"
+	"github.com/mestre-ia/mestre/internal/realaccount"
+	"github.com/mestre-ia/mestre/internal/winsvc"
+	"github.com/mestre-ia/mestre/internal/winsvc/dpapi"
+	"github.com/mestre-ia/mestre/internal/winsvc/logonsweep"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The Windows machine: the local account of the agents, with the rights the
