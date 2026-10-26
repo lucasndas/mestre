@@ -56,6 +56,9 @@ type fakeDeliverer struct {
 	got  []protocol.InboxDeliver
 	busy map[string]bool
 	err  error
+	// cut is called while an item is being typed, as a cut of the connection the call came in
+	// would: it cancels the context of the caller, and the delivery ends with its error.
+	cut func()
 }
 
 func (f *fakeDeliverer) Deliver(ctx context.Context, _ string, d protocol.InboxDeliver) (protocol.InboxResult, error) {
@@ -64,6 +67,12 @@ func (f *fakeDeliverer) Deliver(ctx context.Context, _ string, d protocol.InboxD
 		err := f.err
 		f.mu.Unlock()
 		return protocol.InboxResult{}, err
+	}
+	if f.cut != nil {
+		cut := f.cut
+		f.mu.Unlock()
+		cut()
+		return protocol.InboxResult{}, ctx.Err()
 	}
 	if f.busy[d.TerminalID] {
 		f.mu.Unlock()

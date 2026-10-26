@@ -371,7 +371,10 @@ func (s *Service) pumpOnce(ctx context.Context, target string) error {
 		s.tellProgress(ctx, it.Refs.Ask, "delivered")
 		return nil
 	}
-	if rerr := s.st.Requeue(ctx, it.ID); rerr != nil {
+	// Giving the item back is bookkeeping of a delivery that was marked: it must not depend on
+	// the connection the report came in (a cut cancels it), or the item stays in flight for good
+	// (the report that would have unstuck it is seen already, and its resend is dropped).
+	if rerr := s.st.Requeue(context.WithoutCancel(ctx), it.ID); rerr != nil {
 		s.log.Warn("inbox: an item was not given back to the queue", "item", it.ID, "err", rerr)
 	}
 	return err // busy is not an error: the next change of state tries again
@@ -426,7 +429,8 @@ func (s *Service) StateChanged(ctx context.Context, c characters.Character, _ ch
 		// with that reason: its turn did not happen, and the item stays in
 		// flight for the failure to give it back.
 		if c.Reason != characters.ReasonDeliveryFailed {
-			if _, err := s.st.DeliverInFlight(ctx, c.ID, s.clk.Now()); err != nil {
+			// the turn ended and the report is seen: recording it is not for a cut to undo
+			if _, err := s.st.DeliverInFlight(context.WithoutCancel(ctx), c.ID, s.clk.Now()); err != nil {
 				return err
 			}
 		}

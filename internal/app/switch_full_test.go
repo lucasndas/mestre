@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"os"
 	"os/exec"
@@ -15,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -137,22 +139,45 @@ func tail(s string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
-// freePorts finds n free TCP ports on the loopback.
+// The ports the instances of the tests take come from a range below the ones the system hands out
+// for outgoing connections and for ":0" (32768 and up on Linux, 49152 and up on Windows): an
+// instance that is stopped and started again on its port (a Citadel that falls and returns) must
+// find it free, and a port in the dynamic range may have been taken meanwhile by any connection of
+// any test on the machine, or by the self connection of a Tower that tried it while nothing listened.
+const (
+	testPortLow  = 20000
+	testPortSpan = 10000
+)
+
+var (
+	testPortsMu   sync.Mutex
+	testPortsUsed = map[int]bool{}
+)
+
+// freePorts finds n free TCP ports on the loopback, out of the range of the system, and keeps
+// them from being handed out again in this process.
 func freePorts(t *testing.T, n int) []int {
 	t.Helper()
 	sys := transport.SystemNetwork{Suite: suite()}
 	var out []int
-	var lns []net.Listener
-	for range n {
-		ln, err := sys.Listen("127.0.0.1:0")
-		if err != nil {
-			t.Fatal(err)
+	for tries := 0; len(out) < n; tries++ {
+		if tries > 10000 {
+			t.Fatalf("no free port in %d..%d", testPortLow, testPortLow+testPortSpan)
 		}
-		lns = append(lns, ln)
-		out = append(out, ln.Addr().(*net.TCPAddr).Port)
-	}
-	for _, ln := range lns {
+		port := testPortLow + rand.IntN(testPortSpan)
+		testPortsMu.Lock()
+		taken := testPortsUsed[port]
+		testPortsUsed[port] = true
+		testPortsMu.Unlock()
+		if taken {
+			continue
+		}
+		ln, err := sys.Listen(net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		if err != nil {
+			continue // in use by something else: not ours
+		}
 		ln.Close()
+		out = append(out, port)
 	}
 	return out
 }
