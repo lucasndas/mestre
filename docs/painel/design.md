@@ -19,7 +19,7 @@ Escolhida pelo Dono em 2026-10-26, entre três propostas vistas em telas reais (
 
 - **Entrada** (assistente, login, primeiro acesso): um cartão centrado sobre o papel, com a marca, o título, uma linha de apoio e o formulário; o seletor de idioma no canto.
 - **Dentro do painel:** barra de cima, navegação lateral (vira uma linha rolável no celular) e área de conteúdo. A navegação mostra só o que o nível do usuário pode fazer; o servidor decide de qualquer forma ([nível em cada tela](login.md#nível-em-cada-tela)).
-- **Barra de cima:** marca, seletor de workspace, contador de aprovações pendentes, sino de avisos, idioma e menu da conta, nessa ordem. Seletor, contador e sino são **espaços reservados** (`data-slot`) que as unidades seguintes preenchem ([visão do workspace](visao-do-workspace.md), [conversa e aprovações](conversa-e-aprovacoes.md)); vazios, não aparecem.
+- **Barra de cima:** marca, seletor de workspace, contador de aprovações pendentes, sino de avisos, idioma e menu da conta, nessa ordem. Seletor, contador e sino são **espaços reservados** (`data-slot`) que as unidades preenchem ([visão do workspace](visao-do-workspace.md), [conversa e aprovações](conversa-e-aprovacoes.md)); vazios, não aparecem. O contador (só para quem decide aprovações) e o sino já estão preenchidos: o número vem de `/api/approvals/count` e de eventos `count` do assunto `approvals:<usuário>`, e o sino é um balão (`DialogTrigger`) com a lista de avisos.
 - Um cabeçalho de página por tela, `h1` único; um link "Ir para o conteúdo" para quem navega por teclado.
 
 ## Estados
@@ -36,6 +36,10 @@ Escolhida pelo Dono em 2026-10-26, entre três propostas vistas em telas reais (
 - Ações que se desfazem oferecem "Desfazer" no lugar do aviso de sucesso; as que não se desfazem (encerrar sessão de outro aparelho, apagar) dizem isso antes de executar.
 - **PIN:** o campo aparece **depois** do botão da ação sensível e vai na própria requisição; não há "lembrar PIN" ([PIN em ações sensíveis](login.md#pin-em-ações-sensíveis)). O componente é `SensitiveButton`.
 - **Mostrado uma vez** (código de acesso, chave de recuperação): o componente `ShownOnce` mostra o valor grande, com "Copiar" e o aviso de que não volta; some quando a pessoa diz que anotou, e nada o guarda (nem o cache de consultas). Valores de segredos não têm tela: a lista mostra só nome, tipo, impressão, datas e metadados.
+
+## Tempo real
+
+O canal `/ws/ui` chega às telas pelo contexto `LiveContext` do `Shell` (`useLiveEvents(prefixo, fn)`): a tela segue os assuntos dela e ouve os eventos. O evento só diz que algo mudou (e, num pedido encerrado, quem respondeu): a tela busca de novo o que mostra e mantém na lista, sem botões, o item que acabou de ser respondido ("Já respondido por …").
 
 ## Reconexão
 

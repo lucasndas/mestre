@@ -2,7 +2,6 @@ package telegram
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/url"
@@ -10,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mestre-ia/mestre/internal/blocking"
+	"github.com/mestre-ia/mestre/internal/notices"
 	"github.com/mestre-ia/mestre/internal/users"
 )
 
@@ -26,6 +26,10 @@ type BlockChannel struct {
 	// PanelURL is where "Abrir no painel" goes; empty: the message says the step
 	// is done in the panel and has no link.
 	PanelURL string
+	// Panel is the feed of the bell of the panel: what is sent here is kept there too
+	// (nil: only the Telegram). The panel reads the notices that block from
+	// blocking_notices, which Notify always writes.
+	Panel *notices.Feed
 
 	bot *Bot
 }
@@ -54,22 +58,22 @@ func (c *BlockChannel) Notify(ctx context.Context, n blocking.Notice) (id int64,
 		}
 	}
 	mask := c.bot.maskText // looks through the marks that could hide a secret
-	full := blocking.Full(n, mask)
 	summary := n.Stopped
 	if summary == "" {
 		summary = string(n.Motive)
 	}
-	err = c.bot.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `INSERT INTO blocking_notices (workspace, mesa, motive, summary, full, machine, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			n.Workspace, n.Mesa, string(n.Motive), blocking.Line(summary, mask), full, n.MachineLine(), ms(c.bot.clk.Now()))
-		if err != nil {
-			return err
-		}
-		id, err = res.LastInsertId()
-		return err
-	})
+	id, err = (&blocking.Store{DB: c.bot.o.DB, Clock: c.bot.clk}).Save(ctx, n, mask)
 	if err != nil {
 		return 0, 0, err
+	}
+	if c.Panel != nil {
+		text := n.Motive.Icon() + " " + blocking.Line(summary, mask)
+		if _, seen, err := c.Panel.Add(ctx, notices.Notice{Kind: notices.Blocked, Workspace: n.Workspace, Mesa: n.Mesa, Audience: notices.Admins, Text: text,
+			LinkKind: notices.LinkBlocking, LinkRef: strconv.FormatInt(id, 10)}); err != nil {
+			c.bot.log.Warn("telegram: a notice was not kept for the panel", "err", err)
+		} else {
+			blocking.Stored(ctx, seen)
+		}
 	}
 	all, err := c.Users.List(ctx)
 	if err != nil {
@@ -162,6 +166,17 @@ func (c *BlockChannel) Say(ctx context.Context, workspace, mesa, text string) (i
 	all, err := c.Users.List(ctx)
 	if err != nil {
 		return 0, err
+	}
+	if c.Panel != nil {
+		n := notices.Notice{Kind: notices.Notify, Workspace: workspace, Mesa: mesa, Audience: notices.Workspace, Text: "Aviso do Grão-Mestre (texto do agente, não verificado):\n" + body}
+		if mesa != "" {
+			n.LinkKind, n.LinkRef = notices.LinkTable, mesa
+		}
+		if _, seen, err := c.Panel.Add(ctx, n); err != nil {
+			c.bot.log.Warn("telegram: a notice was not kept for the panel", "err", err)
+		} else {
+			blocking.Stored(ctx, seen)
+		}
 	}
 	sent := 0
 	for _, u := range all {

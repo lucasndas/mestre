@@ -220,7 +220,7 @@ func Build(n Notice, v Viewer, mask func(string) string) Message {
 		b.WriteString("Para destravar:\n")
 		for _, s := range n.Steps {
 			text := maskedLine(s.Text, mask)
-			if s.Kind == StepVault && v.Level == users.Owner {
+			if CanDo(s.Kind, v.Level) {
 				text += " (painel)"
 				buttons = append(buttons, Button{Text: "Abrir no painel", Panel: true})
 			}

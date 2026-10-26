@@ -1,9 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button as AriaButton, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { useTranslation } from "react-i18next";
+import { ApprovalsCounter, NoticesBell } from "../components/TopBarSlots";
 import { api } from "../lib/api";
+import { type Live, LiveContext } from "../lib/live";
 import { type SocketState, UiSocket } from "../lib/ws";
 import { TransferBanner } from "../screens/admin/Transfer";
 import { Brand } from "./AuthLayout";
@@ -55,14 +57,22 @@ function NavLink({
   to,
   children,
 }: {
-  to: "/" | "/sessoes" | "/senha" | "/usuarios" | "/segredos" | "/auditoria" | "/github";
+  to:
+    | "/aprovacoes"
+    | "/"
+    | "/sessoes"
+    | "/senha"
+    | "/usuarios"
+    | "/segredos"
+    | "/auditoria"
+    | "/github";
   children: string;
 }) {
   return (
     <Link
       to={to}
-      search={to === "/sessoes" ? { todas: false } : undefined}
-      activeOptions={{ exact: true, includeSearch: false }}
+      search={to === "/sessoes" ? { todas: false } : to === "/aprovacoes" ? {} : undefined}
+      activeOptions={{ exact: to !== "/aprovacoes", includeSearch: false }}
       className="block min-h-11 rounded-field px-3 py-2.5 whitespace-nowrap text-muted transition-colors hover:bg-accent-wash [&.active]:bg-accent-wash [&.active]:font-semibold [&.active]:text-ink"
     >
       {children}
@@ -72,6 +82,7 @@ function NavLink({
 
 function Nav() {
   const { t } = useTranslation("shell");
+  const canDecide = useCan("decide_approvals");
   const canGitHub = useCan("connect_own_github");
   const canUsers = useCan("manage_users");
   const canSecrets = useCan("bases_vault_policy");
@@ -82,6 +93,7 @@ function Nav() {
       className="flex gap-1 overflow-x-auto border-b border-line bg-surface p-2 md:flex-col md:border-r md:border-b-0 md:p-3"
     >
       <NavLink to="/">{t("nav.overview")}</NavLink>
+      {canDecide ? <NavLink to="/aprovacoes">{t("nav.approvals")}</NavLink> : null}
       <NavLink to="/sessoes">{t("nav.sessions")}</NavLink>
       <NavLink to="/senha">{t("nav.password")}</NavLink>
       {canGitHub ? <NavLink to="/github">{t("nav.github")}</NavLink> : null}
@@ -112,8 +124,12 @@ function TopBar() {
           approvals and the bell of the notices (docs/painel/design.md#a-barra-de-cima). */}
       <div data-slot="workspace-selector" className="flex items-center" />
       <div className="flex-1" />
-      <div data-slot="approvals-counter" className="flex items-center" />
-      <div data-slot="notices-bell" className="flex items-center" />
+      <div data-slot="approvals-counter" className="flex items-center">
+        <ApprovalsCounter />
+      </div>
+      <div data-slot="notices-bell" className="flex items-center">
+        <NoticesBell />
+      </div>
       <LanguageSwitcher />
       <MenuTrigger>
         <AriaButton
@@ -142,6 +158,20 @@ export function Shell() {
   const { i18n } = useTranslation();
   const me = useMe();
   const { state, socket } = useConnection();
+  // the events of the channel for the screens (the counter, the bell, the central), and the
+  // topics of this user: his approvals and his notices
+  const userId = me.user.id;
+  const canDecide = me.capabilities.includes("decide_approvals");
+  const live = useMemo<Live>(
+    () => ({
+      subscribe: (topics) => socket?.subscribe(topics),
+      listen: (fn) => (socket ? socket.listen({ onEvent: fn }) : () => {}),
+    }),
+    [socket],
+  );
+  useEffect(() => {
+    socket?.subscribe([`notices:${userId}`, ...(canDecide ? [`approvals:${userId}`] : [])]);
+  }, [socket, userId, canDecide]);
   // the language the user chose follows him to any browser
   useEffect(() => {
     const l = me.user.language;
@@ -151,24 +181,26 @@ export function Shell() {
     document.documentElement.lang = i18n.language;
   }, [i18n.language]);
   return (
-    <div className="grid min-h-dvh grid-rows-[auto_auto_1fr] md:grid-cols-[14rem_1fr] md:grid-rows-[auto_1fr]">
-      <a
-        href="#content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-surface focus:p-2"
-      >
-        {t("top.skip")}
-      </a>
-      <div className="md:col-span-2">
-        <TopBar />
-        <ReconnectingBand state={state} />
-        <TransferBanner />
+    <LiveContext.Provider value={live}>
+      <div className="grid min-h-dvh grid-rows-[auto_auto_1fr] md:grid-cols-[14rem_1fr] md:grid-rows-[auto_1fr]">
+        <a
+          href="#content"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-surface focus:p-2"
+        >
+          {t("top.skip")}
+        </a>
+        <div className="md:col-span-2">
+          <TopBar />
+          <ReconnectingBand state={state} />
+          <TransferBanner />
+        </div>
+        <Nav />
+        <main id="content" className="min-w-0 px-5 py-8 md:px-10">
+          <SocketContext.Provider value={socket}>
+            <Outlet />
+          </SocketContext.Provider>
+        </main>
       </div>
-      <Nav />
-      <main id="content" className="min-w-0 px-5 py-8 md:px-10">
-        <SocketContext.Provider value={socket}>
-          <Outlet />
-        </SocketContext.Provider>
-      </main>
-    </div>
+    </LiveContext.Provider>
   );
 }

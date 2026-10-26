@@ -234,6 +234,9 @@ type Orchestration struct {
 	Gate *basesync.Gate
 	// Chain is the chain of approval (nil unless ChainClasses was given).
 	Chain *chain.Service
+	// PanelReach is how many users the central of the panel shows a request to,
+	// for the `delivered.panel` of `mestre approval ask` (nil: 0).
+	PanelReach func(ctx context.Context, request int64) int
 	// Usage is the use and the limits on it (docs/plataforma/limites-de-uso.md).
 	// It is told the events of the characters (OnEvent) by the engine.
 	Usage *usage.Service
@@ -799,6 +802,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	orc.EpicDeps = deps
 	orc.ClassCommands = classCommands(o, reg, ib)
 	orc.Workspaces, orc.Tables, orc.Characters, orc.Connections, orc.Inbox, orc.Waits, orc.Scrolls, orc.Observers = ws, tbl, chars, conns, ib, wt, scr, obs
+	orc.PanelReach = panelReach(o.ChainUsers)
 	if a, ok := o.ChainClasses.(interface{ attach(*Orchestration) }); ok {
 		a.attach(orc)
 	}
@@ -839,7 +843,7 @@ func (o *Orchestration) Register(fwd *localchan.LocalForwarder, approvals scroll
 	}
 	if o.Chain != nil {
 		o.Chain.Register(fwd)
-		(&blocking.AskHandler{Characters: o.Registry, Asker: o.Chain, Requests: o.Chain}).Register(fwd)
+		(&blocking.AskHandler{Characters: o.Registry, Asker: o.Chain, Requests: o.Chain, PanelReach: o.PanelReach}).Register(fwd)
 	}
 }
 

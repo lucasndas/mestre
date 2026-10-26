@@ -11,6 +11,8 @@ import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "../lib/api";
 import { meQuery, statusQuery } from "../lib/queries";
+import { ApprovalHistoryScreen } from "../screens/ApprovalHistory";
+import { Approvals } from "../screens/Approvals";
 import { Audit } from "../screens/admin/Audit";
 import { GitHubConnect } from "../screens/admin/GitHubConnect";
 import { Secrets } from "../screens/admin/Secrets";
@@ -106,6 +108,24 @@ const transferRoute = createRoute({
   path: "/transferencia",
   component: Transfer,
 });
+const approvalsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/aprovacoes",
+  validateSearch: (s: Record<string, unknown>): { pedido?: number; aviso?: number } => {
+    const n = (v: unknown) =>
+      Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : undefined;
+    return { pedido: n(s.pedido), aviso: n(s.aviso) };
+  },
+  component: function ApprovalsPage() {
+    const { pedido, aviso } = approvalsRoute.useSearch();
+    return <Approvals request={pedido} notice={aviso} />;
+  },
+});
+const approvalHistoryRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/aprovacoes/historico",
+  component: ApprovalHistoryScreen,
+});
 
 // xterm.js is most of the weight of the panel: the terminal screen loads when it is opened
 const TerminalScreen = lazy(() =>
@@ -185,6 +205,8 @@ const routeTree = rootRoute.addChildren([
     githubRoute,
     transferRoute,
     terminalRoute,
+    approvalsRoute,
+    approvalHistoryRoute,
   ]),
   loginRoute,
   firstAccessRoute,

@@ -92,6 +92,7 @@ export class UiSocket {
   private topics = new Set<string>();
   private attempts = 0;
   private everOpened = false;
+  private isOpen = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
   private listeners = new Set<SocketListener>();
@@ -109,6 +110,7 @@ export class UiSocket {
     this.timer = null;
     this.socket?.close();
     this.socket = null;
+    this.isOpen = false;
     this.o.onState?.("closed");
   }
 
@@ -139,7 +141,8 @@ export class UiSocket {
   }
 
   private sendEnvelope(type: string, payload: unknown): string {
-    if (!this.socket) return "";
+    // a socket that is still connecting cannot send: onopen sends every topic
+    if (!this.socket || !this.isOpen) return "";
     const id = crypto.randomUUID();
     const env: Pick<UIEnvelope, "type"> & { id: string; ts: string; payload: unknown } = {
       id,
@@ -168,6 +171,7 @@ export class UiSocket {
     this.socket = s;
     s.binaryType = "arraybuffer";
     s.onopen = () => {
+      this.isOpen = true;
       const again = this.everOpened;
       this.everOpened = true;
       this.attempts = 0;
@@ -207,6 +211,7 @@ export class UiSocket {
     };
     s.onclose = (ev) => {
       this.socket = null;
+      this.isOpen = false;
       if (this.stopped) return;
       if (ev.code === CLOSE_SESSION_ENDED) {
         this.o.onSessionEnded?.();

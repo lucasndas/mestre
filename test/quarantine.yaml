@@ -13,3 +13,7 @@ tests:
     issue: https://github.com/mestre-ia/mestre/issues/329
     added: 2026-10-26
     reason: a Tower cut mid-step leaves the item stuck for 20-30 s (a report handler of the Citadel waits on inbox.deliver while the resend of the same report waits for it across connections); the double typing is fixed, this deadlock is not (see the issue)
+  - test: TestTheCopiesOfTheScrollsReachTheWorktreeOfATower
+    issue: https://github.com/mestre-ia/mestre/issues/354
+    added: 2026-10-26
+    reason: on Windows CI the copies of the scrolls did not reach the worktree of the Tower in time, in a PR that touched no scroll or Tower code

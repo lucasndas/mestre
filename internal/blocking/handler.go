@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
@@ -27,6 +28,31 @@ type Channel interface {
 	// were told.
 	Say(ctx context.Context, workspace, mesa, text string) (sent int, err error)
 }
+
+type panelKey struct{}
+
+// PanelCount counts the users the panel actually shows a notice to, as the channels
+// stored it: a channel that keeps the notice for the panel (notices.Feed.Add) tells
+// how many users see it with Stored, and a write that failed tells nothing, so a
+// failed panel write can not hide `not_delivered`.
+type PanelCount struct{ n atomic.Int64 }
+
+// WithPanelCount puts a counter in the context the channel is called with.
+func WithPanelCount(ctx context.Context) (context.Context, *PanelCount) {
+	c := &PanelCount{}
+	return context.WithValue(ctx, panelKey{}, c), c
+}
+
+// Stored adds the users a notice stored for the panel reaches (nothing in a context
+// that has no counter).
+func Stored(ctx context.Context, users int) {
+	if c, ok := ctx.Value(panelKey{}).(*PanelCount); ok {
+		c.n.Add(int64(users))
+	}
+}
+
+// N is how many users the panel shows the notice to.
+func (c *PanelCount) N() int { return int(c.n.Load()) }
 
 // Handler is the command `mestre notify "<message>" --blocked <motive>`
 // (docs/cli/grao-mestre.md#mestre-notify): the Grand Master tells the users that a
@@ -109,14 +135,16 @@ func (h *Handler) handle(ctx context.Context, c *localchan.Call) localchan.Respo
 			}
 			mesa = t.ID
 		}
-		sent, err := h.Channel.Say(ctx, who.Workspace, mesa, args[0])
+		cctx, stored := WithPanelCount(ctx)
+		sent, err := h.Channel.Say(cctx, who.Workspace, mesa, args[0])
 		if err != nil {
 			return localchan.Fail(localchan.CodeInternal, "the notice was not sent: "+err.Error(), "")
 		}
-		if sent == 0 {
+		panel := stored.N()
+		if sent == 0 && panel == 0 {
 			return localchan.Fail("not_delivered", "no user of this workspace could be told now", "try again, or tell the user in the channel of his message").WithExit(localchan.ExitConflict)
 		}
-		return localchan.OK(map[string]any{"text": fmt.Sprintf("aviso enviado a %d usuário(s)", sent), "delivered": map[string]any{"panel": 0, "telegram": sent}, "queued": false})
+		return localchan.OK(map[string]any{"text": fmt.Sprintf("aviso enviado a %d usuário(s) no Telegram e %d no painel", sent, panel), "delivered": map[string]any{"panel": panel, "telegram": sent}, "queued": false})
 	}
 	motive, err := ParseMotive(blocked)
 	if err != nil {
@@ -153,16 +181,18 @@ func (h *Handler) handle(ctx context.Context, c *localchan.Call) localchan.Respo
 	if motive == Credential {
 		n.Steps = []Step{{Text: "cadastrar a chave no cofre", Kind: StepVault}}
 	}
-	id, sent, err := h.Channel.Notify(ctx, n)
+	cctx, stored := WithPanelCount(ctx)
+	id, sent, err := h.Channel.Notify(cctx, n)
 	if err != nil {
 		return localchan.Fail(localchan.CodeInternal, fmt.Sprintf("the notice was not sent: %v", err), "")
 	}
-	if sent == 0 {
+	panel := stored.N()
+	if sent == 0 && panel == 0 {
 		return localchan.Fail("not_delivered", "no user who acts in this workspace could be told (the notice #"+strconv.FormatInt(id, 10)+" is kept for the panel)", "tell a user through another way, or try again").WithExit(localchan.ExitConflict)
 	}
 	return localchan.OK(map[string]any{
-		"text": fmt.Sprintf("aviso %d enviado a %d usuário(s)", id, sent), "id": id,
-		"delivered": map[string]any{"panel": 0, "telegram": sent}, "queued": false, "blocked_by": orEmpty(n.BlockedBy),
+		"text": fmt.Sprintf("aviso %d enviado a %d usuário(s) no Telegram e %d no painel", id, sent, panel), "id": id,
+		"delivered": map[string]any{"panel": panel, "telegram": sent}, "queued": false, "blocked_by": orEmpty(n.BlockedBy),
 	})
 }
 
@@ -191,6 +221,17 @@ type AskHandler struct {
 	Requests interface {
 		Get(ctx context.Context, id int64) (chain.Request, error)
 	}
+	// PanelReach is how many users the central of the panel shows the request to
+	// (approvals.Flow.Eligible): the `delivered.panel` of the answer. Nil: 0.
+	PanelReach func(ctx context.Context, request int64) int
+}
+
+// reach is how many users see the request in the panel.
+func (h *AskHandler) reach(ctx context.Context, request int64) int {
+	if h.PanelReach == nil {
+		return 0
+	}
+	return h.PanelReach(ctx, request)
 }
 
 // Register registers the command.
@@ -251,7 +292,7 @@ func (h *AskHandler) handle(ctx context.Context, c *localchan.Call) localchan.Re
 			return localchan.Fail(localchan.CodeInternal, "the question could not be put to the users", "")
 		}
 		r := localchan.Fail("pending", fmt.Sprintf("the question #%d was put to the users; their answer arrives in your inbox and the engine does nothing else", rid), "").WithExit(localchan.ExitPending)
-		r.Data = localchan.OK(map[string]any{"request": rid, "level": "das pessoas"}).Data
+		r.Data = localchan.OK(map[string]any{"request": rid, "level": "das pessoas", "delivered": map[string]any{"panel": h.reach(ctx, rid)}}).Data
 		return r
 	}
 	// a request of another workspace is not there for this caller
@@ -271,7 +312,7 @@ func (h *AskHandler) handle(ctx context.Context, c *localchan.Call) localchan.Re
 		return localchan.Fail(localchan.CodeInternal, "the request could not be taken to the users: "+err.Error(), "")
 	}
 	r := localchan.Fail("pending", fmt.Sprintf("the request #%d was taken to the users; the decision arrives in your inbox", out.Request), "").WithExit(localchan.ExitPending)
-	r.Data = localchan.OK(map[string]any{"request": out.Request, "level": out.Level.Label()}).Data
+	r.Data = localchan.OK(map[string]any{"request": out.Request, "level": out.Level.Label(), "delivered": map[string]any{"panel": h.reach(ctx, out.Request)}}).Data
 	return r
 }
 

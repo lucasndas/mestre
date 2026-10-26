@@ -23,6 +23,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/guild"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/lockdown"
+	"github.com/mestre-ia/mestre/internal/notices"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/digest"
@@ -99,6 +100,8 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 		return nil, err
 	}
 	r.alert.Users = svc
+	r.feed = &notices.Feed{DB: env.DB, Clock: env.Clock, Users: svc, Mask: env.Masker.Mask}
+	r.alert.Panel = r.feed
 	r.lock, err = lockdown.New(lockdown.Options{DB: env.DB, Clock: env.Clock, Users: svc, Tell: r.alert.Tell, Logger: env.Log})
 	if err != nil {
 		return nil, fmt.Errorf("app: the lock of the channel: %w", err)
@@ -125,7 +128,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	}
 	r.routing = &telegram.Routing{}
 	r.replies = &telegram.Replies{Users: svc}
-	r.block = &telegram.BlockChannel{Users: svc}
+	r.block = &telegram.BlockChannel{Users: svc, Panel: r.feed}
 	r.choose = &telegram.ChooseChannel{Users: svc}
 	r.stall = &telegram.StallChannel{Users: svc}
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
@@ -133,12 +136,12 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r.gh = &telegram.GitHubChannel{Users: svc, Personal: r.personal, Clock: env.Clock, Logger: env.Log, Moment: r.decrees.Moment}
 	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
-		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log})
+		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log, OnChange: r.flowChanged})
 	if err != nil {
 		return nil, fmt.Errorf("app: the flow of approval: %w", err)
 	}
 	r.flow = flow
-	r.notice = &guild.DownNotice{Tell: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) }, Clock: env.Clock,
+	r.notice = &guild.DownNotice{Tell: func(ctx context.Context, text string) { r.alert.OwnerNotice(ctx, notices.GitHubDown, text) }, Clock: env.Clock,
 		Queued: func() int {
 			if f := r.fence.Load(); f != nil {
 				return f.Queued()
@@ -177,6 +180,10 @@ type stdRun struct {
 
 	users *users.Service
 	flow  *approvals.Flow
+	// onFlow is what the panel of the period wants to hear when a request changes.
+	onFlow atomic.Pointer[func(context.Context, int64)]
+	// feed is the bell of the panel: the notices the Telegram also gets.
+	feed *notices.Feed
 	// decrees are the decrees of the users and dc their channel over the bot.
 	decrees *decrees.Service
 	// routing decides the workspace of each message of a user.

@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/notices"
 	"github.com/mestre-ia/mestre/internal/users"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
@@ -34,6 +35,9 @@ type OwnerAlerts struct {
 	bot   atomic.Pointer[Bot]
 	Users *users.Service
 	Clock clock.Clock
+	// Panel is the feed of the bell of the panel: what is told on the Telegram is
+	// also kept there, once, for whoever sees it (nil: only the Telegram).
+	Panel *notices.Feed
 
 	mu      sync.Mutex
 	group   map[int64]*strangerGroup
@@ -42,6 +46,7 @@ type OwnerAlerts struct {
 }
 
 type strangerGroup struct {
+	panel         int64 // the notice of the panel, 0 until it is made
 	first, edited time.Time
 	count         int
 	last          Stranger
@@ -72,7 +77,7 @@ func (a *OwnerAlerts) Bind(b *Bot) {
 		}
 	}
 	for _, text := range pending {
-		a.OwnerAlert(context.Background(), text)
+		a.ownerAlert(context.Background(), text) // the panel has it since it was told
 	}
 }
 
@@ -130,6 +135,9 @@ func (a *OwnerAlerts) Stranger(ctx context.Context, s Stranger) {
 		sent[k] = v
 	}
 	a.mu.Unlock()
+	if first || due {
+		a.mirrorStranger(ctx, g, text)
+	}
 	switch {
 	case first:
 		for _, o := range a.owners(ctx) {
@@ -148,6 +156,41 @@ func (a *OwnerAlerts) Stranger(ctx context.Context, s Stranger) {
 				bot.log.Warn("telegram: the alert of a stranger was not updated", "err", err)
 			}
 		}
+	}
+}
+
+// mirrorStranger keeps the alert of the stranger for the Owner and the Administrators in
+// the panel, and counts the tries in it as the Telegram message does.
+func (a *OwnerAlerts) mirrorStranger(ctx context.Context, g *strangerGroup, text string) {
+	if a.Panel == nil {
+		return
+	}
+	a.mu.Lock()
+	id := g.panel
+	a.mu.Unlock()
+	if id != 0 {
+		if err := a.Panel.Update(ctx, id, text); err != nil {
+			slog.Warn("telegram: the alert of a stranger was not updated in the panel", "err", err)
+		}
+		return
+	}
+	id, _, err := a.Panel.Add(ctx, notices.Notice{Kind: notices.Stranger, Audience: notices.Admins, Text: text})
+	if err != nil {
+		slog.Warn("telegram: the alert of a stranger was not kept for the panel", "err", err)
+		return
+	}
+	a.mu.Lock()
+	g.panel = id
+	a.mu.Unlock()
+}
+
+// keep puts a notice in the panel; a failure costs the bell, never the Telegram.
+func (a *OwnerAlerts) keep(ctx context.Context, n notices.Notice) {
+	if a.Panel == nil {
+		return
+	}
+	if _, _, err := a.Panel.Add(ctx, n); err != nil {
+		slog.Warn("telegram: a notice was not kept for the panel", "kind", n.Kind, "err", err)
 	}
 }
 
@@ -186,6 +229,17 @@ func (a *OwnerAlerts) Unauthorized(ctx context.Context, telegramID int64, reason
 
 // OwnerAlert implements users.Alerts: a notice to the Owner.
 func (a *OwnerAlerts) OwnerAlert(ctx context.Context, text string) {
+	a.OwnerNotice(ctx, notices.System, text)
+}
+
+// OwnerNotice is OwnerAlert for a kind of notice the bell tells apart (the GitHub
+// that is down).
+func (a *OwnerAlerts) OwnerNotice(ctx context.Context, kind notices.Kind, text string) {
+	a.keep(ctx, notices.Notice{Kind: kind, Audience: notices.Owner, Text: text})
+	a.ownerAlert(ctx, text)
+}
+
+func (a *OwnerAlerts) ownerAlert(ctx context.Context, text string) {
 	bot := a.bot.Load()
 	if bot == nil {
 		a.mu.Lock()
@@ -207,9 +261,10 @@ func (a *OwnerAlerts) OwnerAlert(ctx context.Context, text string) {
 // workspace, not with "Sistema". While the bot is not up it waits as a plain
 // notice that names the workspace in its text.
 func (a *OwnerAlerts) OwnerWorkspaceAlert(ctx context.Context, workspace, text string) {
+	a.keep(ctx, notices.Notice{Kind: notices.Alert, Workspace: workspace, Audience: notices.Owner, Text: text})
 	bot := a.bot.Load()
 	if bot == nil {
-		a.OwnerAlert(ctx, fmt.Sprintf("[%s] %s", workspace, text))
+		a.ownerAlert(ctx, fmt.Sprintf("[%s] %s", workspace, text))
 		return
 	}
 	for _, o := range a.owners(ctx) {
@@ -221,6 +276,7 @@ func (a *OwnerAlerts) OwnerWorkspaceAlert(ctx context.Context, workspace, text s
 
 // Tell implements users.Alerts: a notice to one user.
 func (a *OwnerAlerts) Tell(ctx context.Context, userID, text string) {
+	a.keep(ctx, notices.Notice{Kind: notices.System, Audience: notices.User, UserID: userID, Text: text})
 	bot := a.bot.Load()
 	if bot == nil {
 		return
@@ -251,6 +307,7 @@ var ErrQueued = errors.New("telegram: the bot is not up, the alert waits for it"
 // behind by the flush. Nobody to tell is not an error (the caller logs the notice);
 // of the ones told, none is told again, and the ones that failed are logged.
 func (a *OwnerAlerts) AdminAlert(ctx context.Context, workspace, text string) (told int, err error) {
+	a.keep(ctx, notices.Notice{Kind: notices.Alert, Workspace: workspace, Audience: notices.Admins, Text: text})
 	if bot := a.bot.Load(); bot != nil {
 		return a.sendAdmin(ctx, bot, workspace, text)
 	}

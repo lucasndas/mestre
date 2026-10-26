@@ -59,6 +59,10 @@ type Options struct {
 	VaultChanged func(ctx context.Context)
 	// Rand is the source of the tokens (crypto/rand by default).
 	Rand io.Reader
+	// Approvals is the flow the central of approvals answers through (nil: the
+	// central answers "unavailable") and Notices the feed of the bell (nil: no bell).
+	Approvals *ApprovalSource
+	Notices   *NoticeSource
 }
 
 // Panel is the panel of the acting Citadel.
@@ -75,7 +79,12 @@ type Panel struct {
 	ids          *protocol.IDGen
 	sessions     *Sessions
 	hub          *Hub
-	handler      http.Handler
+	appr         *ApprovalSource
+	notes        *NoticeSource
+	// stop ends what the areas registered with the engine (the listeners of the
+	// flow and of the feed), when the panel closes.
+	stop    []func()
+	handler http.Handler
 	// terminals are the terminals of the Guild (SetTerminals).
 	terminals atomic.Pointer[terminalHolder]
 	// slots bound the argon2 hashes at once: each takes 64 MiB, and the routes
@@ -97,11 +106,13 @@ func New(o Options) (*Panel, error) {
 	if o.Rand == nil {
 		o.Rand = newRand()
 	}
-	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, github: o.GitHub, vault: o.Vault, vaultChanged: o.VaultChanged, log: o.Logger, ids: protocol.NewIDGen(o.Clock)}
+	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, github: o.GitHub, vault: o.Vault, vaultChanged: o.VaultChanged, log: o.Logger, ids: protocol.NewIDGen(o.Clock), appr: o.Approvals, notes: o.Notices}
 	p.sessions = &Sessions{db: o.DB, clk: o.Clock, ids: p.ids, rnd: o.Rand}
 	p.hub = newHub(p)
 	p.slots = make(chan struct{}, hashSlots)
 	p.sessions.ended = p.hub.closeSession
+	p.listenApprovals()
+	p.listenNotices()
 	// the sessions the users service ended in the database: close their sockets
 	o.Users.OnSessionsEnded(func(ctx context.Context, userID string) { p.hub.closeUserGone(ctx, userID) })
 
@@ -142,7 +153,12 @@ func (p *Panel) Run(ctx context.Context) {
 }
 
 // Close closes every socket of the browser.
-func (p *Panel) Close() { p.hub.closeAll() }
+func (p *Panel) Close() {
+	for _, stop := range p.stop {
+		stop()
+	}
+	p.hub.closeAll()
+}
 
 // secure sets the headers every answer of the panel carries.
 func secure(next http.Handler) http.Handler {
