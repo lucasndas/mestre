@@ -12,6 +12,12 @@ import { emit, installFakeSocket, openSocket } from "../test-socket";
 import { fakeServer, ME, renderApp } from "../test-utils";
 
 beforeEach(() => installFakeSocket());
+
+// paste is much cheaper than typing key by key, and a field takes it the same way
+async function fill(user: ReturnType<typeof userEvent.setup>, el: HTMLElement, text: string) {
+  await user.click(el);
+  await user.paste(text);
+}
 afterEach(() => vi.unstubAllGlobals());
 
 const ANA = { ...ME, capabilities: ["decide_approvals", "status"] };
@@ -100,8 +106,8 @@ test("the central shows the question, the block of the agent and the answers; th
   // nothing was sent yet
   expect(calls.some((c) => c.method === "POST")).toBe(false);
   await user.clear(field);
-  await user.type(field, "npm install lod*");
-  await user.type(within(card).getByLabelText("PIN"), "123456");
+  await fill(user, field, "npm install lod*");
+  await fill(user, within(card).getByLabelText("PIN"), "123456");
   await user.click(within(card).getByRole("button", { name: "Confirmar" }));
   await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
   const post = calls.find((c) => c.method === "POST");
@@ -121,11 +127,11 @@ test("an answer that needs data shows the field first and does not send it empty
   renderApp("/aprovacoes");
   const card = await screen.findByRole("article", { name: "Pedido #7" });
   await user.click(within(card).getByRole("button", { name: "Aprovar por um tempo" }));
-  await user.type(within(card).getByLabelText("PIN"), "123456");
+  await fill(user, within(card).getByLabelText("PIN"), "123456");
   await user.click(within(card).getByRole("button", { name: "Confirmar" }));
   expect(within(card).getByText("Preencha este campo.")).toBeTruthy();
   expect(calls.some((c) => c.method === "POST")).toBe(false);
-  await user.type(within(card).getByLabelText("Por quanto tempo?"), "3h");
+  await fill(user, within(card).getByLabelText("Por quanto tempo?"), "3h");
   await user.click(within(card).getByRole("button", { name: "Confirmar" }));
   await waitFor(() =>
     expect(calls.find((c) => c.method === "POST")?.body).toEqual({
@@ -136,7 +142,7 @@ test("an answer that needs data shows the field first and does not send it empty
 
   // "Negar com instrução" asks the text; "Negar agora" is just the click
   await user.click(await within(card).findByRole("button", { name: "Negar com instrução" }));
-  await user.type(within(card).getByLabelText("Instrução para quem pediu"), "use pnpm");
+  await fill(user, within(card).getByLabelText("Instrução para quem pediu"), "use pnpm");
   await user.click(within(card).getByRole("button", { name: "Confirmar" }));
   await waitFor(() => expect(calls.filter((c) => c.method === "POST")).toHaveLength(2));
   expect(calls.filter((c) => c.method === "POST")[1]?.body).toEqual({
