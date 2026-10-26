@@ -54,6 +54,14 @@ func (f *fakeTerminals) ByCharacter(_ context.Context, id string) (panel.Termina
 	return f.info, nil
 }
 
+// FindByName makes the fake a panel.TerminalFinder: the one terminal it has.
+func (f *fakeTerminals) FindByName(_ context.Context, name string) ([]panel.TerminalInfo, error) {
+	if !strings.EqualFold(name, f.info.Name) {
+		return nil, nil
+	}
+	return []panel.TerminalInfo{f.info}, nil
+}
+
 func (f *fakeTerminals) Info(_ context.Context, id string) (panel.TerminalInfo, error) {
 	f.mu.Lock()
 	f.infoCalls++
@@ -498,4 +506,33 @@ func TestTheTerminalOfACharacterIsReadWithWhatTheUserMayDo(t *testing.T) {
 	r.ft.info.Workspace = "blog"
 	r.wantErr(r.call("GET", "/api/characters/c1/terminal", nil, opts{cookie: adm}), 404, panel.CodeNotFound)
 	r.wantErr(r.call("GET", "/api/characters/c1/terminal", nil, opts{}), 401, panel.CodeUnauthenticated)
+}
+
+// GET /api/terminals?name=: the terminals of the visible characters with the
+// name (how `mestre attach` finds one), with whether the user may type; a
+// character of a workspace the user does not see is not in the list.
+func TestTheTerminalsAreFoundByTheNameOfTheCharacter(t *testing.T) {
+	t.Parallel()
+	r := newTerminalRig(t)
+	_, adm := r.member("Adm", "adm", users.Administrator)
+	_, obs := r.member("Obi", "obi", users.Observer)
+	got := decodeInto[panel.TerminalList](t, r.call("GET", "/api/terminals?name=dev-1", nil, opts{cookie: adm}))
+	if len(got.Terminals) != 1 || got.Terminals[0].Character != "c1" || !got.Terminals[0].CanType {
+		t.Fatalf("list = %+v", got)
+	}
+	got = decodeInto[panel.TerminalList](t, r.call("GET", "/api/terminals?name=Dev-1&workspace=loja", nil, opts{cookie: obs}))
+	if len(got.Terminals) != 1 || got.Terminals[0].CanType {
+		t.Fatalf("an observer's list = %+v", got)
+	}
+	for _, q := range []string{"name=Dev-1&workspace=outra", "name=ninguem"} {
+		if got = decodeInto[panel.TerminalList](t, r.call("GET", "/api/terminals?"+q, nil, opts{cookie: adm})); len(got.Terminals) != 0 {
+			t.Fatalf("%s: list = %+v", q, got)
+		}
+	}
+	r.ft.info.Workspace = "blog"
+	if got = decodeInto[panel.TerminalList](t, r.call("GET", "/api/terminals?name=Dev-1", nil, opts{cookie: adm})); len(got.Terminals) != 0 {
+		t.Fatalf("a workspace the user does not see: %+v", got)
+	}
+	r.wantErr(r.call("GET", "/api/terminals", nil, opts{cookie: adm}), 400, panel.CodeBadRequest)
+	r.wantErr(r.call("GET", "/api/terminals?name=Dev-1", nil, opts{}), 401, panel.CodeUnauthenticated)
 }

@@ -50,6 +50,7 @@ Garantir que só usuários autorizados usem o painel, cada um com o seu nível e
 - Quando a sessão acaba, o WebSocket do painel é fechado pela Cidadela.
 - **Encerram na hora** todas as sessões do usuário: suspensão, remoção, mudança de nível, redefinição ou troca de senha.
 - Cada usuário vê e encerra as próprias sessões; o Dono vê e encerra as de todos.
+- O [`mestre attach`](../cli/attach.md) entra pelas mesmas rotas, com as mesmas regras e auditoria; a sessão dele aparece com o aparelho "CLI em <máquina>" e acaba quando o comando sai.
 
 ### PIN em ações sensíveis
 

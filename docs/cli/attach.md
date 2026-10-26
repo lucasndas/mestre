@@ -1,6 +1,6 @@
 # CLI: `mestre attach`
 
-> **Assunto:** comando das pessoas para ver, e com nível digitar, o terminal de um personagem de qualquer máquina da Guilda no próprio terminal, como o `tmux attach`: login, tamanho fixo, só leitura, digitação com auditoria e desconectar sem afetar o agente · **Componente:** CLI · **Atualizado:** 2026-10-13
+> **Assunto:** comando das pessoas para ver, e com nível digitar, o terminal de um personagem de qualquer máquina da Guilda no próprio terminal, como o `tmux attach`: login, tamanho fixo, só leitura, digitação com auditoria e desconectar sem afetar o agente · **Componente:** CLI · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
@@ -18,6 +18,17 @@ Deixar uma pessoa abrir o terminal de um agente no terminal dela, de qualquer m�
 - **Desconectar:** `Ctrl-]` (padrão; `--detach-key` muda) fecha o `attach` e sai com 0; o agente segue exatamente como estava. O terminal que termina mostra "terminal encerrado" e sai com 0. Conexão perdida: a CLI tenta de novo por até 60 s (padrão) e então sai com 5.
 - Linux e Windows, o mesmo código; no Windows, o console em modo VT.
 
+### Implementação
+
+- **Código:** `internal/attach` (o cliente; `cmd/mestre/attach.go` o liga às pastas da instância). É cliente da API do painel, como o navegador: `POST /api/login`, `GET /api/terminals?name=<personagem>[&workspace=<slug>]` (os terminais dos personagens vivos com esse nome que a pessoa vê, sem diferença de caixa; o motor da Cidadela responde pelo registro), `GET /api/characters/{id}/terminal` e o tópico `terminal:<id>` do `/ws/ui`, com as mesmas regras de digitação do canvas (`terminal.input`, nível conferido a cada mensagem, `permission_prompt`). Nada novo no servidor além da busca por nome.
+- **CA:** o motor de toda máquina grava `ca.crt` (PEM, certificado público) na pasta de configuração da instância a cada partida. A CLI confia só nela (nunca no repositório do sistema). `--instance` e `--dir` escolhem as pastas, como no `mestre setup-code`; sem `--server`, o endereço vem da porta de `config.json`.
+- **Sessão:** o `Origin` e o cookie `__Host-mestre` seguem as regras do navegador, e o cookie só existe na memória do processo. O aparelho da sessão é `CLI em <máquina>`. Ao sair (qualquer saída), a CLI chama `POST /api/logout`; um processo morto à força deixa a sessão até o fim dela (12 h sem uso). Uma só tentativa de login por execução, com a mesma mensagem para qualquer recusa.
+- **Redirecionamento:** antes de pedir a senha a CLI pergunta `GET /api/status` e segue até 5 `307`, só para endereços `https`, sempre verificando o certificado pela CA. Na reconexão faz de novo.
+- **Tela:** vt a 200×50 (o tamanho que o terminal informa). A janela é consultada a cada redesenho (no máximo a cada 40 ms); a linha de estado diz o tamanho do terminal e da janela e as linhas e colunas à mostra. Nenhuma sequência de redimensionar sai, e as respostas do emulador às perguntas do programa são descartadas, nunca digitadas.
+- **Fim do terminal:** o fluxo de um terminal que acaba só para; a CLI pergunta a cada 2 s se ele ainda existe (e se a sessão ainda vale) e, sem ele, mostra "terminal encerrado" e sai com 0.
+- **`--write` sem confirmação:** se a pessoa responde que não ao aviso "o agente está trabalhando", o `attach` segue só leitura. A tecla de desconectar é uma tecla de controle (`ctrl-a` a `ctrl-z`, `ctrl-\`, `ctrl-]`, `ctrl-^`, `ctrl-_`); Tab, Enter e Esc não servem. `--json` só muda a forma dos erros (a tela é o resultado).
+- Hoje o painel não distingue uma Cidadela em troca de uma suspensa: ambas aparecem como `citadel_unavailable` até a Cidadela dizer o estado.
+
 ## Regras e erros
 
 Códigos de saída e famílias de [convenções da CLI](convencoes.md#regras-e-erros):
@@ -30,6 +41,8 @@ Códigos de saída e famílias de [convenções da CLI](convencoes.md#regras-e-e
 | personagem inexistente ou de workspace que a pessoa não vê | 4 | `not_visible` |
 | nome em mais de um workspace, sem `--workspace` | 2 | `usage` |
 | Cidadela inalcançável, suspensa sem redirecionamento ou em troca | 5 | `citadel_unavailable` ou `citadel_in_failover` |
+| sessão encerrada pela Cidadela com o `attach` aberto (suspensão, troca de senha, perda do workspace) | 3 | `session_ended` |
+| usuário com 16 terminais abertos | 8 | `too_many_streams` |
 
 ## Critérios de aceite
 

@@ -227,6 +227,14 @@ export interface TerminalScreenEvent {
   text: string;
   offset: number /* uint64 */;
 }
+/**
+ * TerminalList is GET /api/terminals?name=<character>[&workspace=<slug>]: the
+ * terminals of the characters with that name that the user sees, which is how
+ * `mestre attach` finds a character by the name the canvas shows.
+ */
+export interface TerminalList {
+  terminals: TerminalInfo[];
+}
 
 //////////
 // source: types.go

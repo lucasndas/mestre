@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -118,6 +119,36 @@ func (r *terminalRelay) ByCharacter(ctx context.Context, id string) (panel.Termi
 		return panel.TerminalInfo{}, err
 	}
 	return r.info(c), nil
+}
+
+// aliveWorld is a relayWorld that can list the living characters (the engine's).
+type aliveWorld interface {
+	Alive(ctx context.Context) ([]characters.Character, error)
+}
+
+var _ panel.TerminalFinder = (*terminalRelay)(nil)
+
+// FindByName implements panel.TerminalFinder: the living characters with the
+// name that have a terminal.
+func (r *terminalRelay) FindByName(ctx context.Context, name string) ([]panel.TerminalInfo, error) {
+	aw, ok := r.w.(aliveWorld)
+	if !ok {
+		return nil, nil
+	}
+	all, err := aw.Alive(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []panel.TerminalInfo
+	for _, c := range all {
+		if !strings.EqualFold(c.Name, name) {
+			continue
+		}
+		if c, err := r.found(c, nil); err == nil {
+			out = append(out, r.info(c))
+		}
+	}
+	return out, nil
 }
 
 // Info implements panel.TerminalSource.

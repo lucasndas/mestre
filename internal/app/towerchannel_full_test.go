@@ -62,6 +62,9 @@ type channelOpts struct {
 	towerHosts bool
 	// resumed records the session each build of the session zero resumes (with builder)
 	resumed *resumeLog
+	// panel gives the Citadel the users and the panel of a real period (see
+	// panelChain); the box says which users service it made
+	panel *usersBox
 }
 
 func newChannelRigWith(t *testing.T, o channelOpts) *channelRig {
@@ -110,6 +113,9 @@ func newChannelRigWith(t *testing.T, o channelOpts) *channelRig {
 		}
 		if o.chain {
 			e.deps.Integration = chainIntegration{}
+		}
+		if o.panel != nil {
+			e.deps.Integration = panelChain{box: o.panel}
 		}
 	}
 	if o.citadelTerminals {

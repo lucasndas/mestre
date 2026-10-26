@@ -58,6 +58,14 @@ type TerminalSource interface {
 	Type(ctx context.Context, terminalID string, data []byte) error
 }
 
+// TerminalFinder is a TerminalSource that can also find the terminals by the
+// name of the character (the list of GET /api/terminals).
+type TerminalFinder interface {
+	// FindByName lists the terminals of the living characters with the name
+	// (without difference of case), in every workspace.
+	FindByName(ctx context.Context, name string) ([]TerminalInfo, error)
+}
+
 // TerminalSink receives a followed terminal.
 type TerminalSink interface {
 	// Output is data at byte offset off of the output, in order. An offset after
@@ -98,6 +106,40 @@ func mountTerminals(r *Router) {
 	p.hub.HandleMessage(TypeTerminalInput, a.input)
 	p.hub.HandleMessage(TypeTerminalTypingEnd, a.typingEnd)
 	r.Require("GET /api/characters/{id}/terminal", a.handleInfo, users.Status)
+	r.Require("GET /api/terminals", a.handleFind, users.Status)
+}
+
+// maxTerminalName bounds the name searched for (a name of a character is short).
+const maxTerminalName = 200
+
+// handleFind lists the terminals of the visible characters with the name; the
+// workspace, when given, narrows it. A terminal of a workspace the user does
+// not see is not there, as in handleInfo.
+func (a *terminalArea) handleFind(w http.ResponseWriter, r *http.Request) {
+	finder, _ := a.p.terminalSource().(TerminalFinder)
+	if finder == nil {
+		WriteError(w, Err(CodeUnavailable, "os terminais não estão disponíveis agora", nil))
+		return
+	}
+	name, ws := r.URL.Query().Get("name"), r.URL.Query().Get("workspace")
+	if name == "" || len(name) > maxTerminalName || len(ws) > maxTerminalName {
+		WriteError(w, errBadRequest())
+		return
+	}
+	infos, err := finder.FindByName(r.Context(), name)
+	if err != nil {
+		a.p.log.Warn("panel: finding terminals by name", "err", err)
+		WriteError(w, errInternal())
+		return
+	}
+	u := UserOf(r)
+	out := TerminalList{Terminals: []TerminalInfo{}}
+	for _, info := range infos {
+		if visible(u, info.Workspace) && (ws == "" || info.Workspace == ws) {
+			out.Terminals = append(out.Terminals, a.fill(info, u))
+		}
+	}
+	WriteJSON(w, http.StatusOK, out)
 }
 
 // visible says whether the user sees the terminals of the workspace.

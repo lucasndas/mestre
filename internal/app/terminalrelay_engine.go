@@ -40,6 +40,14 @@ func (w engineRelayWorld) ByCharacter(ctx context.Context, id string) (character
 	return m.reg.Get(ctx, id)
 }
 
+func (w engineRelayWorld) Alive(ctx context.Context) ([]characters.Character, error) {
+	m, err := w.router()
+	if err != nil {
+		return nil, err
+	}
+	return m.reg.Alive(ctx)
+}
+
 func (w engineRelayWorld) ByTerminal(ctx context.Context, terminal string) (characters.Character, error) {
 	m, err := w.router()
 	if err != nil {

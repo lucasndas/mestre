@@ -456,6 +456,10 @@ func (e *Engine) Run(ctx context.Context) error {
 	if e.epochs, err = guild.LoadEpochs(ctx, guild.EpochsConfig{Member: e.member, Logger: e.log, OnFollow: e.onFollow, OnRefused: e.refusedCert}); err != nil {
 		return err
 	}
+	// the CA of the Guild, for `mestre attach` to check the panel by (a public certificate)
+	if err := writeGuildCA(e.paths.guildCA(), id.CA); err != nil {
+		e.log.Warn("app: keeping the CA of the Guild for mestre attach", "err", err)
+	}
 	e.creds = guild.NewCredentials()
 	if err := e.preflight(ctx); err != nil {
 		return err
