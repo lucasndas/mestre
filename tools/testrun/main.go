@@ -84,6 +84,9 @@ func (e osExec) Run(ctx context.Context, c Cmd, stdout io.Writer) (int, error) {
 	cmd.Env = append(os.Environ(), c.Env...)
 	cmd.Stdout = stdout
 	cmd.Stderr = os.Stderr
+	if c.MergeStderr {
+		cmd.Stderr = stdout
+	}
 	err := cmd.Run()
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {

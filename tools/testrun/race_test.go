@@ -52,28 +52,26 @@ func TestRaceMultipliesTheBudget(t *testing.T) {
 			if (code != 0) != c.wantExit || !strings.Contains(text, c.wantLine) {
 				t.Fatalf("exit %d, want line %q:\n%s", code, c.wantLine, text)
 			}
-			run := ex.callsMatching("./...")
-			var goRun Cmd
-			for _, cmd := range run {
-				if cmd.Name == "go" {
-					goRun = cmd
-				}
+			build := ex.callsMatching("test -c")
+			run := ex.callsMatching("tool test2json")
+			if len(build) != 1 || len(run) != 1 {
+				t.Fatalf("build calls %v, run calls %v", build, run)
 			}
-			args := goRun.String()
+			args := build[0].String()
 			if got := strings.Contains(args, " -race"); got != c.race {
 				t.Fatalf("-race = %v, want %v: %s", got, c.race, args)
 			}
 			if got := strings.Contains(args, RaceGcflags); got != c.race {
 				t.Fatalf("checkptr off for modernc.org = %v, want %v: %s", got, c.race, args)
 			}
-			if !strings.Contains(args, "-timeout "+c.timeout+" ") {
-				t.Fatalf("want -timeout %s: %s", c.timeout, args)
+			if !strings.Contains(run[0].String(), "-test.timeout="+c.timeout) {
+				t.Fatalf("want -test.timeout=%s: %s", c.timeout, run[0])
 			}
-			if got := strings.Contains(strings.Join(goRun.Env, " "), "CGO_ENABLED=1"); got != c.race {
-				t.Fatalf("env = %v, CGO_ENABLED=1 is %v, want %v", goRun.Env, got, c.race)
+			if got := strings.Contains(strings.Join(build[0].Env, " "), "CGO_ENABLED=1"); got != c.race {
+				t.Fatalf("env = %v, CGO_ENABLED=1 is %v, want %v", build[0].Env, got, c.race)
 			}
 			if c.race {
-				if n := len(ex.callsMatching("golangci-lint")) + len(ex.callsMatching("-run")); n != 0 {
+				if n := len(ex.callsMatching("golangci-lint")) + len(ex.callsMatching("-test.run")); n != 0 {
 					t.Fatalf("race run started the linter or timed slow tests (%d calls)", n)
 				}
 			}

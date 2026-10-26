@@ -104,11 +104,10 @@ func (r *Runner) timeAlone(ctx context.Context, s Suite, pkg string, ts []*resul
 	if allowance == 0 {
 		return out, false
 	}
-	args := []string{"test", "-json", "-count=1", "-run", runPattern(ts)}
-	if s.Tags != "" {
-		args = append(args, "-tags", s.Tags)
+	bp, ok := r.built.find(pkg)
+	if !ok {
+		return out, false
 	}
-	args = append(args, pkg)
 	rctx, cancel := ctx, context.CancelFunc(func() {})
 	if allowance > 0 {
 		rctx, cancel = clock.WithTimeout(ctx, r.Clock, allowance)
@@ -116,7 +115,7 @@ func (r *Runner) timeAlone(ctx context.Context, s Suite, pkg string, ts []*resul
 	defer cancel()
 	start := r.Clock.Now()
 	var b bytes.Buffer
-	_, err := r.Exec.Run(rctx, Cmd{Name: "go", Args: args, Env: r.goEnv(s.Name)}, &b)
+	_, err := r.Exec.Run(rctx, r.built.testCmd(bp, r.goEnv(s.Name), "-test.count=1", "-test.run", runPattern(ts)), &b)
 	out.spent = clock.Since(r.Clock, start)
 	if err != nil || rctx.Err() != nil {
 		return out, false
