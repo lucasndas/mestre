@@ -13,6 +13,22 @@ import (
 // PIN) and spent by it: it is worth no other action. The lock of the PIN also ends
 // the session the wrong PINs came in. Nothing is audited with the PIN.
 func (p *Panel) withPIN(action string, h http.HandlerFunc) http.HandlerFunc {
+	return p.withPINRequest(action, func(w http.ResponseWriter, r *http.Request, req string) {
+		u := UserOf(r)
+		if err := p.users.Consume(r.Context(), req, u.ID, action); err != nil {
+			p.log.Error("panel: spending the request of PIN", "err", err)
+			WriteError(w, errInternal())
+			return
+		}
+		p.audit(r.Context(), "panel.pin.ok", map[string]any{"user_id": u.ID, "action": action, "session": SessionOf(r).ID, "ip": clientIP(r)})
+		h(w, r)
+	})
+}
+
+// withPINRequest is withPIN up to the answer being right: h gets the id of the
+// request of PIN, which is still open, for a service that spends it itself in the
+// transaction of the action (the transfer of the post of Owner).
+func (p *Panel) withPINRequest(action string, h func(w http.ResponseWriter, r *http.Request, request string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		u, ss := UserOf(r), SessionOf(r)
@@ -63,12 +79,6 @@ func (p *Panel) withPIN(action string, h http.HandlerFunc) http.HandlerFunc {
 			WriteError(w, errInternal())
 			return
 		}
-		if err := p.users.Consume(ctx, req.ID, u.ID, action); err != nil {
-			p.log.Error("panel: spending the request of PIN", "err", err)
-			WriteError(w, errInternal())
-			return
-		}
-		p.audit(ctx, "panel.pin.ok", detail)
-		h(w, r)
+		h(w, r, req.ID)
 	}
 }

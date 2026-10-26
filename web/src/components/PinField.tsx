@@ -12,10 +12,13 @@ export function SensitiveButton({
   children,
   onConfirm,
   variant = "primary",
+  isDisabled = false,
 }: {
   children: string;
   onConfirm: (pin: string) => Promise<unknown>;
-  variant?: "primary" | "danger";
+  variant?: "primary" | "danger" | "secondary";
+  /** The action is not ready (a form that is not filled): the button cannot be pressed. */
+  isDisabled?: boolean;
 }) {
   const { t } = useTranslation("common");
   const { t: te } = useTranslation("errors");
@@ -26,7 +29,7 @@ export function SensitiveButton({
 
   if (!asking) {
     return (
-      <Button variant={variant} onPress={() => setAsking(true)}>
+      <Button variant={variant} isDisabled={isDisabled} onPress={() => setAsking(true)}>
         {children}
       </Button>
     );

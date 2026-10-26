@@ -1,0 +1,60 @@
+import type { Widen } from "../../shape";
+import type pt from "../pt-BR/audit";
+
+const audit: Widen<typeof pt> = {
+  title: "Audit",
+  intro:
+    "The trail of everything that changed, with who did it and when. Secrets never show up here, only what changed around them.",
+  loading: "Loading the trail…",
+  empty: "No records with these filters.",
+  filters: {
+    title: "Filters",
+    who: "Who",
+    anyone: "Anyone",
+    what: "What",
+    anything: "Anything",
+    from: "From",
+    to: "To",
+    workspace: "Workspace",
+    anyWorkspace: "Any workspace",
+    apply: "Filter",
+    clear: "Clear",
+  },
+  categories: {
+    users: "Users and codes",
+    secrets: "Secrets",
+    recovery: "Recovery key",
+    github: "GitHub connection",
+    transfer: "Owner post",
+    login: "Sign-ins and sign-outs",
+    pin: "PIN",
+  },
+  actions: {
+    panel_user_created: "User registered",
+    panel_user_edited: "User edited",
+    panel_user_suspend: "User suspended",
+    panel_user_reactivate: "User reactivated",
+    panel_user_remove: "User removed",
+    panel_access_code_created: "Access code created",
+    panel_pairing_code_created: "Telegram code created",
+    panel_transfer_started: "Post transfer requested",
+    panel_transfer_cancelled: "Post transfer cancelled",
+    panel_transfer_accepted: "Owner post accepted",
+    panel_secret_created: "Credential registered",
+    panel_secret_replaced: "Secret replaced",
+    panel_secret_deleted: "Secret deleted",
+    panel_recovery_key_renewed: "New recovery key",
+    panel_github_begun: "GitHub connection started",
+    panel_github_connected: "GitHub connected",
+    panel_github_failed: "GitHub connection refused",
+    panel_github_refused: "GitHub connection did not start",
+  },
+  columns: { when: "When", what: "What", who: "Who", workspace: "Workspace" },
+  system: "system",
+  details: "Details",
+  detailsNamed: "Details of {{action}}",
+  more: "Load more",
+  zone: "Times in the {{zone}} time zone.",
+};
+
+export default audit;

@@ -1,6 +1,6 @@
 # Administração no painel
 
-> **Assunto:** telas de administração: decretos, delegações e regras temporárias, usuários, bases, fichas, perfis de conta, classes e Apps, teto, política, consumo, Guilda e saúde das máquinas (excluir máquina, passar a Cidadela, fuso da Guilda), segredos e diagnóstico · **Componente:** Painel · **Atualizado:** 2026-10-19
+> **Assunto:** telas de administração: decretos, delegações e regras temporárias, usuários, bases, fichas, perfis de conta, classes e Apps, teto, política, consumo, Guilda e saúde das máquinas (excluir máquina, passar a Cidadela, fuso da Guilda), segredos e diagnóstico · **Componente:** Painel · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
@@ -76,6 +76,24 @@ Tela só do **Dono** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capac
 ### Exportar e importar
 
 - Bases e fichas: a tela exporta e importa; as regras de formato e de conflito de nomes são as de [exportar e importar](../orquestracao/bases-e-fichas.md#exportar-e-importar).
+
+### Implementação: usuários, segredos e auditoria
+
+Código: `internal/panel/routes_users.go`, `routes_secrets.go` e `routes_audit.go` (tipos em `types_admin.go`, gerados em `web/src/gen/panel.ts`) e `web/src/screens/admin/`. O nível vem da [tabela](../telegram/usuarios-e-niveis.md#níveis-e-capacidades) (`forbidden_level` com `need` e `have`; o painel diz "exige o nível Dono; o seu é Administrador"); toda ação que muda algo pede o PIN na própria requisição.
+
+| Rota | Quem | O que faz |
+|---|---|---|
+| `GET /api/users` | Dono | usuários, workspaces e a passagem de posto que espera |
+| `POST /api/users`, `PATCH /api/users/{id}` | Dono, PIN | cadastra (devolve o código de primeiro acesso, uma vez) e edita nome, nível, workspaces e login do GitHub; workspace desconhecido é `invalid_workspace`, um segundo Dono é `owner_exists` |
+| `POST /api/users/{id}/suspend`, `/reactivate`, `/remove`, `/pairing-code`, `/access-code` | Dono, PIN | suspender (sessões acabam), reativar, remover, código do Telegram e códigos de primeiro acesso e de redefinição; o Dono não age sobre si (`self_action`) |
+| `GET`, `POST`, `DELETE /api/transfer` e `POST /api/transfer/accept` | Dono, PIN; quem aceita, com o PIN dele | passa o posto de Dono, cancela e aceita (as sessões dos dois acabam); é a tela `/transferencia` e a faixa no alto do painel |
+| `GET /api/me/github`, `POST /api/me/github/begin` e `/poll` | Aprovador ou acima | "Conectar GitHub": o device flow de `github.Personal`; conta diferente da cadastrada é `github_login_mismatch` (o motor já descartou o token) e as demais recusas têm código próprio (`github_denied`, `github_expired`, `github_no_login`, `github_flow_off`, `github_not_ready`) |
+| `GET /api/secrets` | Dono | nome, tipo, impressão, datas, metadados e o aviso de validade (`expiring`, `expired`, `stale`, com os dias), nunca valor |
+| `POST /api/secrets/site`, `PUT` e `DELETE /api/secrets/{name}` | Dono, PIN | cadastra credencial de site, substitui e apaga; o painel só mexe nos tipos `site_credential` e `provider_api_key` (os que o próprio Mestre guarda são `secret_managed`) |
+| `POST /api/recovery-key` | Dono, PIN | `{acknowledged: true}` (o aviso dos backups antigos, lido antes do PIN; sem ele `ack_required`) gera a chave, que só vem nessa resposta; `Vault.RewrapRecovery` reenvelopa a chave do cofre e troca a pública da Guilda de uma vez |
+| `GET /api/audit` | Administrador ou acima | `user`, `action` (início do nome), `from` e `to` (dia no fuso da Guilda), `workspace`, `cursor`, `limit`; o Dono vê tudo, os outros só as linhas dos workspaces deles, e o que o Operador do PC fez só como fato |
+
+Auditoria desta área (`panel.user.*`, `panel.access_code.created`, `panel.pairing_code.created`, `panel.transfer.*`, `panel.secret.*`, `panel.recovery_key.renewed`, `panel.github.*`): `user_id` de quem fez, `target` ou `secret` e `before`/`after` com o que a tela mostra, sem valor, código nem PIN. O filtro "o quê" da tela escolhe entre estas famílias.
 
 ## Regras e erros
 

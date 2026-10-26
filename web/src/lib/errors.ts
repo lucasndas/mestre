@@ -21,7 +21,14 @@ export function errorText(t: TFunction<"errors">, err: unknown): string {
       const secs = params.retry_after_seconds;
       if (typeof secs === "number") params.minutes = Math.max(1, Math.ceil(secs / 60));
       // the key was checked above; the params depend on the code, which the types cannot follow
-      return (t as unknown as (k: string, o: object) => string)(err.code, params);
+      const say = t as unknown as (k: string, o?: object) => string;
+      // a refusal of level names the level that is required (CA-ADM-01), in the language of the panel
+      if (err.code === "forbidden_level" && typeof params.need === "string") {
+        const level = (l: unknown) =>
+          typeof l === "string" && isErrorKey(`level_${l}`) ? say(`level_${l}`) : "";
+        return say("forbidden_level_need", { need: level(params.need), have: level(params.have) });
+      }
+      return say(err.code, params);
     }
     return err.message || t("internal");
   }

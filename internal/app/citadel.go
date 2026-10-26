@@ -511,6 +511,9 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 
 	var integ IntegrationRun
 	var hosted *Orchestration
+	// the Primary is made after the panel: the panel tells the Towers about a new
+	// recovery envelope through it
+	var told atomic.Pointer[replication.Primary]
 	if e.deps.HostOrchestration {
 		if e.deps.Integration != nil {
 			var err error
@@ -534,7 +537,11 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 				integ.Close()    // before the database is closed (the deferred function above)
 			}()
 			// the panel is served by the Citadel that acts; it ends before the integration
-			defer e.openPanel(pctx, db, integ, e.deps.PanelAssets, func(f func()) { wg.Go(f) })()
+			defer e.openPanel(pctx, db, integ, e.deps.PanelAssets, func(f func()) { wg.Go(f) }, func(ctx context.Context) {
+				if pr := told.Load(); pr != nil {
+					pr.VaultChanged(ctx)
+				}
+			})()
 		}
 		orc, err := e.hostOrchestration(db, integ)
 		if err != nil {
@@ -648,6 +655,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		return transition{err: err}
 	}
 	run.primary = primary
+	told.Store(primary)
 	if hosted != nil {
 		hosted.Workspaces.OnMirrorMoved(func(_ context.Context, slug string) { primary.MirrorChanged(slug) })
 	}

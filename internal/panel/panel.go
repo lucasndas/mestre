@@ -47,22 +47,34 @@ type Options struct {
 	// Machine is the id of this machine, for the audit.
 	Machine string
 	Logger  *slog.Logger
+	// GitHub is the device flow of the personal credentials (nil: "Conectar
+	// GitHub" answers that it is not available).
+	GitHub PersonalGitHub
+	// Vault is the vault of the Citadel for the screen of the secrets (nil: the
+	// screen answers that it is not available).
+	Vault SecretVault
+	// VaultChanged tells the Towers the vault changed (a new recovery envelope);
+	// nil: nobody is told.
+	VaultChanged func(ctx context.Context)
 	// Rand is the source of the tokens (crypto/rand by default).
 	Rand io.Reader
 }
 
 // Panel is the panel of the acting Citadel.
 type Panel struct {
-	db       *store.DB
-	clk      clock.Clock
-	users    *users.Service
-	alerts   users.Alerts
-	machine  string
-	log      *slog.Logger
-	ids      *protocol.IDGen
-	sessions *Sessions
-	hub      *Hub
-	handler  http.Handler
+	db           *store.DB
+	clk          clock.Clock
+	users        *users.Service
+	alerts       users.Alerts
+	machine      string
+	github       PersonalGitHub
+	vault        SecretVault
+	vaultChanged func(ctx context.Context)
+	log          *slog.Logger
+	ids          *protocol.IDGen
+	sessions     *Sessions
+	hub          *Hub
+	handler      http.Handler
 	// slots bound the argon2 hashes at once: each takes 64 MiB, and the routes
 	// that hash are open to anybody
 	slots chan struct{}
@@ -82,7 +94,7 @@ func New(o Options) (*Panel, error) {
 	if o.Rand == nil {
 		o.Rand = newRand()
 	}
-	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, log: o.Logger, ids: protocol.NewIDGen(o.Clock)}
+	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, github: o.GitHub, vault: o.Vault, vaultChanged: o.VaultChanged, log: o.Logger, ids: protocol.NewIDGen(o.Clock)}
 	p.sessions = &Sessions{db: o.DB, clk: o.Clock, ids: p.ids, rnd: o.Rand}
 	p.hub = newHub(p)
 	p.slots = make(chan struct{}, hashSlots)
@@ -279,6 +291,16 @@ func (r *Router) Sensitive(pattern, action string, c users.Capability, h http.Ha
 		caps = append(caps, c)
 	}
 	r.mux.Handle(pattern, r.p.require(r.p.withPIN(action, h), false, caps...))
+}
+
+// SensitiveRequest is Sensitive for an action whose service spends the request of
+// PIN itself: h gets the id of the request, answered right and still open.
+func (r *Router) SensitiveRequest(pattern, action string, c users.Capability, h func(w http.ResponseWriter, r *http.Request, request string)) {
+	var caps []users.Capability
+	if c != "" {
+		caps = append(caps, c)
+	}
+	r.mux.Handle(pattern, r.p.require(r.p.withPINRequest(action, h), false, caps...))
 }
 
 // area is a set of routes, in a file routes_<area>.go.

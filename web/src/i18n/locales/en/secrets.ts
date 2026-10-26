@@ -1,0 +1,99 @@
+import type { Widen } from "../../shape";
+import type pt from "../pt-BR/secrets";
+
+const secrets: Widen<typeof pt> = {
+  title: "Secrets",
+  intro:
+    "What the vault keeps: name, type, short fingerprint, dates and metadata. No value is ever shown again, not even to the Owner: you can only replace or delete, with your PIN.",
+  loading: "Loading the secrets…",
+  empty: "The vault has no secrets yet.",
+  types: {
+    site_credential: "Site credential",
+    provider_api_key: "Provider API key",
+    telegram_bot_token: "Telegram bot token",
+    github_app_key: "Key of a GitHub App",
+    github_user_token: "A user's GitHub token",
+    operator_capture_key: "Key of the PC Operator captures",
+    ca_key: "Key of the Guild authority",
+  },
+  kinds: {
+    senha_principal: "Main password",
+    senha_de_app: "App password",
+    token: "Token",
+    chave_api: "API key",
+  },
+  kindHint:
+    "Prefer an app password, a token or an API key: they can be changed without touching the main password of the account.",
+  fingerprint: "Fingerprint",
+  created: "Created",
+  updated: "Replaced",
+  lastUsed: "Last used",
+  neverUsed: "never used",
+  owner: "Owner of the credential",
+  classes: "Classes",
+  domains: "Domains",
+  kind: "Kind",
+  expiresAt: "Expires",
+  noExpiry: "no expiry",
+  managed: "Kept by the Mestre itself: shown here, but not changed here.",
+  notice: {
+    expired: "Expired {{count}} day(s) ago. Replace the credential.",
+    expiring: "Expires in {{count}} day(s).",
+    stale: "No expiry and not replaced for {{count}} days: worth replacing.",
+  },
+  site: {
+    open: "Register site credential",
+    close: "Close",
+    title: "New site credential",
+    hint: "This is the only place to register one: never send passwords over Telegram or in the chat with the Grand Master.",
+    name: "Credential name",
+    url: "Login page",
+    user: "User",
+    password: "Password, token or key",
+    kind: "Kind of credential",
+    owner: "Who answers the second factor and gets the notices",
+    classes: "Classes that may use it",
+    classesHint: "Separate with commas. Only characters of these classes use the credential.",
+    domains: "Allowed domains",
+    domainsHint: "Separate with commas, for example: example.com, www.example.com",
+    expires: "Expiry (optional)",
+    selectors: "Field selectors (optional)",
+    selectorsHint: "One per line, as field=selector, only if the page needs it.",
+    success: "Text that shows the login worked (optional)",
+    submit: "Register credential",
+    created: "Credential registered.",
+  },
+  replace: {
+    open: "Replace",
+    openNamed: "Replace {{name}}",
+    close: "Close",
+    hint: "The old value cannot be read, so everything it holds is written again.",
+    value: "New value",
+    submit: "Replace",
+    done: "Secret replaced.",
+  },
+  delete: {
+    open: "Delete",
+    openNamed: "Delete {{name}}",
+    hint: "This cannot be undone: whoever used this secret can no longer do so.",
+    done: "Secret deleted.",
+  },
+  recovery: {
+    title: "Recovery key",
+    intro:
+      "The recovery key opens the vault backup. The Mestre does not keep it: whoever loses it and loses the machines is left without the secrets.",
+    open: "Create new recovery key",
+    warning:
+      "Warning: the backups that already exist still need the old key. Keep the old key for as long as you need them. Without the right key, the vault backup is useless. Only a backup made after this change opens with the new key.",
+    failsafe:
+      "The new key takes effect as soon as you confirm and is shown only once. If the page fails before you save it, create another key, with the PIN.",
+    ack: "I read the warning and want to create the new key",
+    submit: "Create the new key",
+    cancel: "Do not create",
+    shown: "This is your new recovery key",
+    once: "Keep it outside the Mestre, on paper or in a password manager. It is not shown again and is not saved anywhere.",
+    done: "I stored the key",
+  },
+};
+
+export default secrets;
