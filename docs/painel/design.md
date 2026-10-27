@@ -34,6 +34,7 @@ Escolhida pelo Senhor da Guilda em 2026-10-26, entre três propostas vistas em t
 - **Erro:** em cima do campo ou do formulário, com o motivo e a saída; texto traduzido pelo `code` e os `params` do servidor ([login](login.md#implementação)). Um código sem texto cai na mensagem em português do servidor, nunca em "erro desconhecido".
 - **Ocupado:** o botão que dispara fica desabilitado até a resposta; o PIN e as senhas são limpos depois de usados.
 - **Sucesso:** confirmação discreta no próprio lugar ("Sessão encerrada."), sem janela.
+- **Situação da mesa:** palavra, ícone de forma própria e tom (nunca só cor); o que muda por baixo avisa com um aviso na tela (`role="status"`, 9 s, fecha com ×), sem janela ([vida da mesa](vida-da-mesa.md)).
 
 ## Recusa e desfazer
 
