@@ -5,9 +5,10 @@ import { glossary, type TermKey } from "../gen/glossary";
 import type { Language } from "../i18n";
 
 /**
- * A term of the vocabulary with its "?" help. Hover or focus shows it and a
- * press (or a tap) keeps it open. The texts come from the glossary, never from
- * this code: `name` must be a row of docs/produto/glossario.md, or tsc fails.
+ * A term of the vocabulary, underlined with dots, that opens its help. Hover
+ * shows it and a press (or a tap) keeps it open. The texts come from the
+ * glossary, never from this code: `name` must be a row of
+ * docs/produto/glossario.md, or tsc fails.
  */
 export function Term({ name }: { name: TermKey }) {
   const { t, i18n } = useTranslation("common");
@@ -17,7 +18,6 @@ export function Term({ name }: { name: TermKey }) {
   const pinned = useRef(false);
   return (
     <span className="whitespace-nowrap">
-      <span className="border-b border-dotted border-muted">{text.name}</span>
       <Button
         ref={ref}
         aria-label={t("help.open", { term: text.name })}
@@ -30,9 +30,9 @@ export function Term({ name }: { name: TermKey }) {
           pinned.current = !pinned.current || !open;
           setOpen(pinned.current);
         }}
-        className="relative ml-1 inline-grid size-[1.1em] translate-y-[-0.1em] place-items-center rounded-full border border-muted align-middle text-[0.7em] font-semibold leading-none text-muted hover:bg-accent-wash hover:text-ink before:absolute before:-inset-3.5 before:content-['']"
+        className="cursor-help border-b border-dotted border-muted text-inherit hover:border-ink"
       >
-        ?
+        {text.name}
       </Button>
       <Popover
         triggerRef={ref}
