@@ -91,12 +91,8 @@ type runOptions struct {
 	Port int
 }
 
-// run founds the Guild, starts the engine and returns when ctx ends (or stdin,
-// if given, is closed) after the engine has stopped.
-func run(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader) error {
-	return runWith(ctx, stdout, stderr, stdin, runOptions{Seed: true})
-}
-
+// runWith founds the Guild, starts the engine and returns when ctx ends (or
+// stdin, if given, is closed) after the engine has stopped.
 func runWith(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, o runOptions) error {
 	dir := o.Dir
 	if dir == "" {
