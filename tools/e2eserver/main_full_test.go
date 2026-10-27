@@ -34,7 +34,7 @@ func TestTheE2EServerServesTheEmbeddedPanelAndStops(t *testing.T) {
 	errc := make(chan error, 1)
 	var stderr lockedBuffer
 	go func() {
-		err := run(ctx, pw, &stderr, nil)
+		err := runWith(ctx, pw, &stderr, nil, runOptions{Seed: true})
 		pw.Close()
 		errc <- err
 	}()

@@ -45,12 +45,14 @@ const readyTimeout = 60 * time.Second
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	exitOnStdin := flag.Bool("exit-on-stdin-close", false, "shut down when stdin is closed")
+	bind := flag.String("bind", "127.0.0.1", "the IP the panel listens on, such as the LAN address of this machine to open it from another one")
+	port := flag.Int("port", 0, "the port of the panel; 0 picks a free one")
 	flag.Parse()
 	var stdin io.Reader
 	if *exitOnStdin {
 		stdin = os.Stdin
 	}
-	err := run(ctx, os.Stdout, os.Stderr, stdin)
+	err := runWith(ctx, os.Stdout, os.Stderr, stdin, runOptions{Seed: true, Bind: *bind, Port: *port})
 	stop()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "e2eserver:", err)
@@ -82,14 +84,15 @@ type runOptions struct {
 	// Seed puts a request of extra cost waiting for the people, which asks the PIN,
 	// in a Guild that is new: what the smoke test of the central of approvals answers.
 	Seed bool
+	// Bind is the IP the panel listens on and its certificate names; empty is the
+	// loopback.
+	Bind string
+	// Port is the port of the panel; 0 picks a free one.
+	Port int
 }
 
-// run founds the Guild, starts the engine and returns when ctx ends (or stdin,
-// if given, is closed) after the engine has stopped.
-func run(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader) error {
-	return runWith(ctx, stdout, stderr, stdin, runOptions{Seed: true})
-}
-
+// runWith founds the Guild, starts the engine and returns when ctx ends (or
+// stdin, if given, is closed) after the engine has stopped.
 func runWith(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, o runOptions) error {
 	dir := o.Dir
 	if dir == "" {
@@ -99,12 +102,22 @@ func runWith(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, o r
 		}
 		defer os.RemoveAll(dir)
 	}
-	port, err := freePort()
-	if err != nil {
-		return err
+	bind := o.Bind
+	if bind == "" {
+		bind = "127.0.0.1"
+	}
+	if net.ParseIP(bind) == nil {
+		return fmt.Errorf("-bind %q is not an IP", bind)
+	}
+	port := o.Port
+	if port == 0 {
+		var err error
+		if port, err = freePort(bind); err != nil {
+			return err
+		}
 	}
 	cfg := app.Config{
-		Instance: "e2e", Name: "e2e", Hostname: "localhost", IPs: []string{"127.0.0.1"}, Bind: "127.0.0.1",
+		Instance: "e2e", Name: "e2e", Hostname: "localhost", IPs: []string{bind}, Bind: bind,
 		EnginePort: port, NoDiscovery: true, Synchronous: "OFF",
 	}
 	paths := app.DirPaths(dir)
@@ -157,7 +170,7 @@ func runWith(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, o r
 	done := make(chan error, 1)
 	go func() { done <- e.Run(ctx) }()
 
-	url := "https://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	url := "https://" + net.JoinHostPort(bind, strconv.Itoa(port))
 	if err := waitForPanel(ctx, url, done); err != nil {
 		cancel()
 		<-done
@@ -224,9 +237,9 @@ var (
 	portsUsed = map[int]bool{}
 )
 
-// freePort finds a free TCP port on the loopback, out of the range of the system, and keeps it
+// freePort finds a free TCP port on the IP bind, out of the range of the system, and keeps it
 // from being handed out again in this process (the servers of parallel tests).
-func freePort() (int, error) {
+func freePort(bind string) (int, error) {
 	for range 10000 {
 		port := portLow + rand.IntN(portSpan)
 		portsMu.Lock()
@@ -236,7 +249,7 @@ func freePort() (int, error) {
 		if taken {
 			continue
 		}
-		ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		ln, err := net.Listen("tcp", net.JoinHostPort(bind, strconv.Itoa(port)))
 		if err != nil {
 			continue // in use by something else
 		}
