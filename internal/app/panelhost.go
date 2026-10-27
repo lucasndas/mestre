@@ -137,6 +137,18 @@ func (p enginePlacement) Place() panel.Place {
 	return panel.PlaceSuspended
 }
 
+// Hold implements panel.Holder: a request of the panel that changes something holds the gate
+// of the handover until it ends.
+func (p enginePlacement) Hold() (func(), bool) {
+	p.e.mu.Lock()
+	run := p.e.cit
+	p.e.mu.Unlock()
+	if run == nil || !run.gate.enter() {
+		return nil, false
+	}
+	return run.gate.leave, true
+}
+
 // CitadelURL implements panel.Placement: the address of the Citadel of now, which
 // the machine knows when its certificate of epoch names another machine.
 func (p enginePlacement) CitadelURL() string {

@@ -115,10 +115,6 @@ func EnsureStructure(root string) StructureReport {
 		cur, _, err := safefile.Read(full, 1<<20)
 		switch {
 		case err == nil:
-			// a file an earlier version wrote with the group able to write it
-			if terr := tightenRule(f.rel, full); terr != nil {
-				rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: "o grupo do agente pode alterar o arquivo e a permissão não foi corrigida: " + terr.Error()})
-			}
 			if f.check != nil {
 				if cerr := f.check(cur); cerr != nil {
 					rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: "inválido: " + cerr.Error()})
@@ -134,9 +130,9 @@ func EnsureStructure(root string) StructureReport {
 			rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: "não foi lido: " + err.Error()})
 		}
 	}
-	// verificacao.yaml is not born here, but an earlier version wrote it 0664
-	if err := safefile.Tighten(filepath.Join(base, "regras", "verificacao.yaml")); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		rep.Invalid = append(rep.Invalid, Problem{Path: path.Join(MestreDir, "regras/verificacao.yaml"), Reason: "o grupo do agente pode alterar o arquivo e a permissão não foi corrigida: " + err.Error()})
+	// what an earlier version, a checkout or the advance of the clone left writable by the group
+	if err := safefile.TightenRules(base); err != nil {
+		rep.Invalid = append(rep.Invalid, Problem{Path: MestreDir + "/regras", Reason: "o grupo do agente pode alterar arquivos ou pastas e a permissão não foi corrigida: " + err.Error()})
 	}
 	return rep
 }
@@ -148,12 +144,4 @@ func modeOf(rel string) fs.FileMode {
 		return safefile.RulesMode
 	}
 	return 0 // the default of safefile
-}
-
-// tightenRule takes the write of the group off a seed file of regras/.
-func tightenRule(rel, full string) error {
-	if !strings.HasPrefix(rel, "regras/") {
-		return nil
-	}
-	return safefile.Tighten(full)
 }

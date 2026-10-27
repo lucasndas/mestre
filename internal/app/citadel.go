@@ -589,6 +589,12 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		e.log.Warn("app: the epoch was not reconciled with GitHub; reconciling it before acting", "epoch", run.epoch)
 	}
 	run.fence = guild.NewFence(e.fenceConfig(run, integ, reconcile, promoted, wait))
+	run.fence.SetAdmit(func() (func(), bool) {
+		if !run.gate.enter() {
+			return nil, false
+		}
+		return run.gate.leave, true
+	})
 	if integ != nil {
 		integ.BindFence(run.fence)
 	}

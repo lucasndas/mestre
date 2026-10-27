@@ -27,6 +27,15 @@ type Placement interface {
 	CitadelURL() string
 }
 
+// Holder is the optional part of a Placement that holds the gate of the handover of the
+// Citadel for the length of a request that changes something: a change that began
+// before the Citadel drains is waited for, and one that begins after is refused like
+// any request of a Citadel that does not act, so none lands after the last lsn the
+// planned switch reads (docs/guilda/cidadela-e-torres.md#troca-planejada).
+type Holder interface {
+	Hold() (release func(), ok bool)
+}
+
 // Gate puts the placement in front of the panel: the Citadel that acts serves it
 // through next; a Tower answers 307 to the Citadel of now, keeping the path and
 // the query, and gives no data of its own; a suspended Citadel does the same when
@@ -37,6 +46,16 @@ type Placement interface {
 func Gate(pl Placement, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		place := pl.Place()
+		if place == PlaceCitadel && changes(r.Method) {
+			if h, ok := pl.(Holder); ok {
+				release, held := h.Hold()
+				if held {
+					defer release()
+				} else {
+					place = PlaceSuspended
+				}
+			}
+		}
 		if place == PlaceCitadel {
 			next.ServeHTTP(w, r)
 			return
@@ -57,6 +76,15 @@ func Gate(pl Placement, next http.Handler) http.Handler {
 		// a Tower that does not know the Citadel: nothing to show and nothing to give
 		http.Error(w, "the Citadel is not known to this machine", http.StatusServiceUnavailable)
 	})
+}
+
+// changes says whether the method of a request changes something.
+func changes(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	}
+	return true
 }
 
 // suspendedPage is all a suspended Citadel shows: no login, no actions.

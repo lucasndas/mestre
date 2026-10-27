@@ -38,7 +38,7 @@ type CeilingPath string
 
 // Read reads the file.
 func (p CeilingPath) Read(context.Context) ([]byte, error) {
-	data, _, err := safefile.Read(string(p), MaxCeilingBytes)
+	data, _, err := safefile.ReadTrusted(string(p), MaxCeilingBytes)
 	return data, err
 }
 

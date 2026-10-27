@@ -260,6 +260,15 @@ func (g lateGate) Allowed(ctx context.Context) bool {
 	return !g.r.closed.Load() && f != nil && f.Gate(guild.ExternalTelegram).Allowed(ctx)
 }
 
+// Hold holds the gate of the handover while the bot handles a command that changes the Guild.
+func (g lateGate) Hold(ctx context.Context) (func(), bool) {
+	f := g.r.fence.Load()
+	if f == nil {
+		return nil, false
+	}
+	return f.Gate(guild.ExternalTelegram).Hold(ctx)
+}
+
 // lateChain ties the flow to the chain, which the orchestration makes later.
 type lateChain struct{ r *stdRun }
 

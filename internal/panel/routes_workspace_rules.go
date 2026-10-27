@@ -78,6 +78,8 @@ func (p *Panel) ruleDir(w http.ResponseWriter, r *http.Request) (string, bool) {
 		WriteError(w, Err(CodeNoFolder, "a campanha ainda não tem a pasta principal", nil))
 		return "", false
 	}
+	// what an earlier version or a checkout left writable by the group is made right before it is read
+	_ = safefile.TightenRules(filepath.Join(root, sessionzero.MestreDir))
 	return filepath.Join(root, sessionzero.MestreDir, "regras"), true
 }
 
@@ -94,7 +96,7 @@ func readRule(path string, limit int64) ([]byte, error) {
 
 // readRuleInfo is readRule with the state of the file it read, for the guard of the write.
 func readRuleInfo(path string, limit int64) ([]byte, safefile.Info, error) {
-	data, info, err := safefile.Read(path, limit)
+	data, info, err := safefile.ReadTrusted(path, limit)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, safefile.Info{}, nil
 	}
