@@ -1,6 +1,6 @@
 # Painel
 
-> **Assunto:** índice da interface web (primeira jornada e Início, design, canvas, visão da campanha, vida da mesa, conversa e aprovações, administração, login) · **Componente:** Painel · **Atualizado:** 2026-10-27
+> **Assunto:** índice da interface web (primeira jornada e Início, design, canvas, visão da campanha, vida da mesa, conversa e aprovações, administração, login, terminal) · **Componente:** Painel · **Atualizado:** 2026-10-27
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|
@@ -13,4 +13,5 @@
 | [workspaces.md](workspaces.md) | lista e criação de campanhas (ficha do Grão-Mestre), etapas da sessão zero, pausa, pergunta do `.mestre/`, comandos de verificação | trabalhar nas telas de campanhas |
 | [login.md](login.md) | login, assistente do Senhor da Guilda, primeiro acesso, senha, sessões, PIN em ações sensíveis | trabalhar em autenticação do painel |
 | [primeira-jornada.md](primeira-jornada.md) | a jornada de quem acabou de instalar, Primeiros passos, Início "o que acontece agora" e o que cada passo pede do servidor | entender o fio do painel ou trabalhar no Início |
+| [terminal-no-painel.md](terminal-no-painel.md) | a janela de terminal do personagem: fonte e cores, barra de identidade, linha de status (missão, etapa, aprovação, entrega), digitar, estados, cartão do canvas e celular | construir ou mudar o terminal no painel |
 | [design.md](design.md) | direção visual (Pergaminho), estrutura (menu de quatro itens, migalhas, barra de cima, Configurações), tokens, estados, recusa e desfazer, reconexão, ajuda dos termos, idioma e fuso, acessibilidade | construir ou mudar qualquer tela do painel |
