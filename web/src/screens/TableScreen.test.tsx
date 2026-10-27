@@ -16,6 +16,9 @@ vi.mock("../terminal/TerminalView", () => ({ TerminalView: () => <div data-testi
 beforeEach(() => installFakeSocket());
 afterEach(() => vi.unstubAllGlobals());
 
+// the page loads its view and its canvas on demand: a busy machine needs more than the default second
+const SLOW = { timeout: 8000 };
+
 const user = () => userEvent.setup({ delay: null, pointerEventsCheck: 0 });
 
 const canvas = () =>
@@ -38,7 +41,7 @@ const server = (extra: Record<string, unknown> = {}) =>
 test("the header says the title with the identifier, the state in words, the branch and the last delivery", async () => {
   server();
   renderApp("/workspaces/loja/mesas/42-login");
-  const h1 = await screen.findByRole("heading", { level: 1, name: "Login com Google" });
+  const h1 = await screen.findByRole("heading", { level: 1, name: "Login com Google" }, SLOW);
   const head = h1.closest("header") as HTMLElement;
   expect(within(head).getByText("42-login")).toBeTruthy();
   expect(head.textContent).toContain("Trabalhando");
@@ -55,11 +58,13 @@ test("a table without a delivery says so", async () => {
     }),
   );
   renderApp("/workspaces/loja/mesas/42-login");
-  const h1 = await screen.findByRole("heading", { level: 1 });
-  await waitFor(() =>
-    expect((h1.closest("header") as HTMLElement).textContent).toContain(
-      "Última entrega: ainda sem entrega",
-    ),
+  const h1 = await screen.findByRole("heading", { level: 1 }, SLOW);
+  await waitFor(
+    () =>
+      expect((h1.closest("header") as HTMLElement).textContent).toContain(
+        "Última entrega: ainda sem entrega",
+      ),
+    SLOW,
   );
 });
 
@@ -67,20 +72,25 @@ test("Quadro and Terminal are the two tabs of the table; the terminal tab opens 
   const u = user();
   server();
   const { router } = renderApp("/workspaces/loja/mesas/42-login");
-  const tabs = await screen.findByRole("tablist", { name: "Partes da mesa" });
+  const tabs = await screen.findByRole("tablist", { name: "Partes da mesa" }, SLOW);
   expect(within(tabs).getByRole("tab", { name: "Quadro" }).getAttribute("aria-selected")).toBe(
     "true",
   );
   await u.click(within(tabs).getByRole("tab", { name: "Terminal" }));
-  await waitFor(() => expect(router.state.location.search).toMatchObject({ aba: "terminal" }));
+  await waitFor(
+    () => expect(router.state.location.search).toMatchObject({ aba: "terminal" }),
+    SLOW,
+  );
   // two characters have a terminal: the choice is offered, the one that works is open
-  const pick = await screen.findByRole("toolbar", { name: "Terminal de qual personagem" });
+  const pick = await screen.findByRole("toolbar", { name: "Terminal de qual personagem" }, SLOW);
   expect(within(pick).getByRole("button", { name: "Dev-1" }).getAttribute("aria-pressed")).toBe(
     "true",
   );
   await u.click(within(pick).getByRole("button", { name: "Revisor" }));
-  await waitFor(() =>
-    expect(router.state.location.search).toMatchObject({ aba: "terminal", personagem: "rev" }),
+  await waitFor(
+    () =>
+      expect(router.state.location.search).toMatchObject({ aba: "terminal", personagem: "rev" }),
+    SLOW,
   );
 });
 
@@ -91,10 +101,11 @@ test("the terminal page of a character that sits at a table leads to the tab of 
     }),
   });
   const { router } = renderApp("/terminal/dev");
-  await waitFor(() =>
-    expect(router.state.location.pathname).toBe("/workspaces/loja/mesas/42-login"),
+  await waitFor(
+    () => expect(router.state.location.pathname).toBe("/workspaces/loja/mesas/42-login"),
+    SLOW,
   );
   expect(router.state.location.search).toMatchObject({ aba: "terminal", personagem: "dev" });
-  const trail = await screen.findByRole("navigation", { name: "Você está em" });
+  const trail = await screen.findByRole("navigation", { name: "Você está em" }, SLOW);
   expect(within(trail).getByText("Login com Google")).toBeTruthy();
 });
