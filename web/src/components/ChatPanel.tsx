@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { type DragEvent, Fragment, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Button as AriaButton } from "react-aria-components";
 import { useTranslation } from "react-i18next";
-import { useFormatDateTime, useMe } from "../app/session";
+import { useCan, useFormatDateTime, useMe } from "../app/session";
 import { useConnectionState } from "../app/socket";
 import type { ChatConversation, ChatEntry, ChatSent, ChatStatus } from "../gen/panel";
 import { ApiError, api } from "../lib/api";
@@ -13,6 +13,8 @@ import { formatTime } from "../lib/format";
 import { useCurrentWorkspace, useRouteWorkspace } from "../workspace/current";
 import { isEnded } from "../workspace/model";
 import { viewQuery } from "../workspace/queries";
+import { SituationChip } from "../workspace/SituationChip";
+import { situationOf } from "../workspace/situation";
 import { ChatMarkdown } from "./Markdown";
 import { Term } from "./Term";
 import { Alert, Button } from "./ui";
@@ -89,7 +91,11 @@ function StatusLine({ status }: { status: ChatStatus }) {
   );
 }
 
-/** The message of progress: one card at the top, rewritten in place by the engine. */
+/**
+ * The message of progress: the one card of the campaign's progress, closed in one line by default and rewritten in
+ * place by the engine. Open, it lists the tables with their situation (the vocabulary of the design) and what needs
+ * the user. Only the Owner and the Administrators of the campaign receive it (the server decides).
+ */
 function ProgressCard({
   lines,
   updatedAt,
@@ -103,45 +109,74 @@ function ProgressCard({
 }) {
   const { t, i18n } = useTranslation("chat");
   const { timezone } = useMe();
+  const canDecide = useCan("decide_approvals");
   const { data: view } = useQuery(viewQuery(workspace));
-  const tables = (view?.tables ?? []).filter((b) => !isEnded(b));
+  const rows = (view?.tables ?? [])
+    .filter((b) => !isEnded(b))
+    .map((b) => ({ b, s: situationOf(b, canDecide) }));
+  const need = rows.filter((r) => r.s.urgent).length;
   const [head, ...rest] = lines;
+  const time = formatTime(updatedAt, i18n.language, timezone);
   return (
-    <section
+    <details
       aria-label={t("progress.title")}
-      className="mx-4 mt-3 rounded-field border border-line bg-paper p-3 shadow-card"
+      className="group mx-4 mt-3 rounded-field border border-line bg-paper shadow-card"
     >
-      <h2 className="text-base">{t("progress.title")}</h2>
-      {head ? <p className="mt-1 font-semibold break-words">{head}</p> : null}
-      {rest.length > 0 ? (
-        <ul className="mt-1 flex list-disc flex-col gap-0.5 pl-5 text-sm break-words">
-          {rest.map((l, i) => (
-            // the lines of one message, in order, with no id of their own
-            // biome-ignore lint/suspicious/noArrayIndexKey: the message is replaced as a whole
-            <li key={i}>{l.replace(/^[-•]\s*/, "")}</li>
-          ))}
-        </ul>
-      ) : null}
-      {tables.length > 0 ? (
-        <ul aria-label={t("progress.tables")} className="mt-2 flex flex-col">
-          {tables.map((b) => (
-            <li key={b.id}>
-              <Link
-                to="/workspaces/$workspace/mesas/$table"
-                params={{ workspace, table: b.id }}
-                onClick={onNavigate}
-                className="inline-flex min-h-11 items-center text-accent underline underline-offset-4"
-              >
-                {b.epic_title || b.id}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <p className="mt-1 text-sm text-muted">
-        {t("progress.updated", { time: formatTime(updatedAt, i18n.language, timezone) })}
-      </p>
-    </section>
+      <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0 flex-1">
+          <h3 className="font-body text-base font-semibold">{t("progress.title")}</h3>
+          <span className="block text-sm text-muted">
+            {t("progress.tablesCount", { count: rows.length })} ·{" "}
+            {need > 0 ? t("progress.needCount", { count: need }) : t("progress.noneNeed")} · {time}
+          </span>
+        </span>
+        <span aria-hidden="true" className="text-muted transition-transform group-open:rotate-180">
+          ⌄
+        </span>
+      </summary>
+      <div className="border-t border-line px-3 pb-3">
+        {head ? <p className="mt-2 font-semibold break-words">{head}</p> : null}
+        {rest.length > 0 ? (
+          <ul className="mt-1 flex list-disc flex-col gap-0.5 pl-5 text-sm break-words">
+            {rest.map((l, i) => (
+              // the lines of one message, in order, with no id of their own
+              // biome-ignore lint/suspicious/noArrayIndexKey: the message is replaced as a whole
+              <li key={i}>{l.replace(/^[-•]\s*/, "")}</li>
+            ))}
+          </ul>
+        ) : null}
+        {rows.length > 0 ? (
+          <ul aria-label={t("progress.tables")} className="mt-2 flex flex-col">
+            {rows.map(({ b, s }) => (
+              <li key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <Link
+                  to="/workspaces/$workspace/mesas/$table"
+                  params={{ workspace, table: b.id }}
+                  onClick={onNavigate}
+                  className="inline-flex min-h-11 items-center text-accent underline underline-offset-4"
+                >
+                  {b.epic_title || b.id}
+                </Link>
+                <SituationChip s={s} />
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {need > 0 ? (
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 border-t border-line pt-2">
+            <span className="font-semibold">{t("progress.needTitle")}</span>
+            <Link
+              to="/aprovacoes"
+              onClick={onNavigate}
+              className="inline-flex min-h-11 items-center text-accent underline underline-offset-4"
+            >
+              {t("progress.seeApprovals")}
+            </Link>
+          </p>
+        ) : null}
+        <p className="mt-1 text-sm text-muted">{t("progress.updated", { time })}</p>
+      </div>
+    </details>
   );
 }
 
@@ -228,7 +263,7 @@ function EntryView({
       : t("entry.grandMaster");
   return (
     <li
-      className={`flex flex-col gap-1 rounded-field border p-3 ${mine ? "ml-6 border-line bg-accent-wash" : "mr-6 border-line bg-surface"}`}
+      className={`flex max-w-[92%] flex-col gap-1 rounded-field border p-3 ${mine ? "ml-auto border-line bg-accent-wash" : "mr-auto border-line bg-paper"} ${entry.waiting && locked ? "border-warn bg-warn-wash" : ""}`}
       data-entry={entry.id}
     >
       <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
@@ -287,18 +322,21 @@ function Composer({
   conv,
   quote,
   onClearQuote,
+  text,
+  setText,
 }: {
   workspace: string;
   conv: ChatConversation;
   quote: Quote | null;
   onClearQuote: () => void;
+  text: string;
+  setText: (v: string) => void;
 }) {
   const { t, i18n } = useTranslation("chat");
   const { t: te } = useTranslation("errors");
   const me = useMe();
   const qc = useQueryClient();
   const online = useConnectionState() === "open";
-  const [text, setText] = useState("");
   const [files, setFiles] = useState<{ id: number; file: File }[]>([]);
   const nextFile = useRef(0);
   const [problem, setProblem] = useState("");
@@ -403,7 +441,7 @@ function Composer({
       }}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
-      className={`flex flex-col gap-2 border-t border-line p-3 ${dragging ? "bg-accent-wash outline-2 -outline-offset-4 outline-accent outline-dashed" : "bg-surface"}`}
+      className={`flex flex-col gap-2 border-t border-line p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${dragging ? "bg-accent-wash outline-2 -outline-offset-4 outline-accent outline-dashed" : "bg-surface"}`}
     >
       {dragging ? <p className="text-center font-semibold">{t("composer.drop")}</p> : null}
       {quote ? (
@@ -433,9 +471,9 @@ function Composer({
               <AriaButton
                 aria-label={t("composer.removeFile", { name: f.name })}
                 onPress={() => setFiles(files.filter((x) => x.id !== fid))}
-                className="grid size-11 place-items-center rounded-full hover:bg-accent-wash"
+                className="min-h-11 px-3 font-semibold text-accent underline underline-offset-4 hover:bg-accent-wash"
               >
-                <span aria-hidden="true">×</span>
+                {t("composer.remove")}
               </AriaButton>
             </li>
           ))}
@@ -459,7 +497,6 @@ function Composer({
       ) : (
         <p className="text-sm text-muted">{t("composer.hint")}</p>
       )}
-      <p className="text-sm text-muted">{t("composer.limit", { limit, max: conv.max_files })}</p>
       {problem ? <Alert>{problem}</Alert> : null}
       {notice && !problem ? <Alert tone="ok">{notice}</Alert> : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -484,11 +521,71 @@ function Composer({
   );
 }
 
+/** The history is the last 200 of each channel (the server's window). */
+const HISTORY_LIMIT = 200;
+
+const dayOf = (iso: string) => iso.slice(0, 10);
+
+function DayLabel({ at }: { at: string }) {
+  const { i18n } = useTranslation("chat");
+  const { timezone } = useMe();
+  return (
+    <>
+      {new Intl.DateTimeFormat(i18n.language, {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        timeZone: timezone,
+      }).format(new Date(at))}
+    </>
+  );
+}
+
+/** The first message, or a reader who cannot write: what to ask, in words, with three requests that only fill the field. */
+function EmptyConversation({
+  canTalk,
+  onPick,
+}: {
+  canTalk: boolean;
+  onPick: (text: string) => void;
+}) {
+  const { t } = useTranslation("chat");
+  if (!canTalk)
+    return (
+      <div className="px-4 pt-4">
+        <h3 className="text-xl">{t("emptyReadOnly.title")}</h3>
+        <p className="mt-1 text-muted">{t("emptyReadOnly.text")}</p>
+      </div>
+    );
+  const suggestions = ["one", "two", "three"] as const;
+  return (
+    <div className="px-4 pt-4">
+      <h3 className="text-xl">{t("empty.title")}</h3>
+      <p className="mt-1 text-muted">{t("empty.text")}</p>
+      <ul className="mt-3 flex flex-col gap-2">
+        {suggestions.map((k) => (
+          <li key={k}>
+            <AriaButton
+              onPress={() => onPick(t(`suggestion.${k}.text`))}
+              className="min-h-12 w-full rounded-field border border-line bg-paper px-3 py-2 text-left hover:border-accent hover:bg-accent-wash"
+            >
+              <span className="block">{t(`suggestion.${k}.text`)}</span>
+              <span className="block text-sm text-muted">{t(`suggestion.${k}.hint`)}</span>
+            </AriaButton>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function Conversation({ workspace, onNavigate }: { workspace: string; onNavigate: () => void }) {
   const { t } = useTranslation("chat");
   const qc = useQueryClient();
   const { data, isPending, isError } = useQuery(chatQuery(workspace));
   const [quote, setQuote] = useState<Quote | null>(null);
+  const [draft, setDraft] = useState("");
+  const [atEnd, setAtEnd] = useState(true);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const log = useRef<HTMLDivElement>(null);
   const read = useMutation({
@@ -515,6 +612,9 @@ function Conversation({ workspace, onNavigate }: { workspace: string; onNavigate
   useEffect(() => {
     if (log.current) log.current.scrollTop = log.current.scrollHeight;
   }, [total]);
+  const goEnd = () => {
+    if (log.current) log.current.scrollTop = log.current.scrollHeight;
+  };
   if (isPending) return <p className="p-4 text-muted">{t("loading")}</p>;
   if (isError || !data)
     return (
@@ -523,10 +623,20 @@ function Conversation({ workspace, onNavigate }: { workspace: string; onNavigate
       </div>
     );
   const firstFresh = data.entries.findIndex((e) => fresh.has(e.id));
+  const last = data.entries[data.entries.length - 1];
+  const working = data.status.state === "busy" && last?.from === "user";
+  const empty = data.entries.length === 0;
   return (
     <>
       <StatusLine status={data.status} />
-      <div ref={log} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div
+        ref={log}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setAtEnd(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+        }}
+        className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
+      >
         {data.progress ? (
           <ProgressCard
             lines={data.progress.lines}
@@ -535,10 +645,22 @@ function Conversation({ workspace, onNavigate }: { workspace: string; onNavigate
             onNavigate={onNavigate}
           />
         ) : null}
-        {data.entries.length === 0 ? <p className="p-4 text-muted">{t("empty")}</p> : null}
+        {empty ? (
+          <EmptyConversation canTalk={data.can_talk} onPick={(text) => setDraft(text)} />
+        ) : null}
+        {data.entries.length >= HISTORY_LIMIT ? (
+          <p className="px-4 pt-3 text-center text-sm text-muted">
+            {t("last200", { count: HISTORY_LIMIT })}
+          </p>
+        ) : null}
         <ol aria-label={t("log")} className="flex flex-col gap-3 p-4">
           {data.entries.map((e, i) => (
             <Fragment key={e.id}>
+              {i === 0 || dayOf(e.at) !== dayOf(data.entries[i - 1]?.at ?? "") ? (
+                <li className="self-center rounded-full border border-line bg-paper px-3 text-sm text-muted">
+                  <DayLabel at={e.at} />
+                </li>
+              ) : null}
               {i === firstFresh ? (
                 <li
                   aria-hidden="false"
@@ -563,9 +685,24 @@ function Conversation({ workspace, onNavigate }: { workspace: string; onNavigate
               />
             </Fragment>
           ))}
+          {working ? (
+            <li role="status" className="flex items-center gap-2 text-sm text-muted">
+              <span aria-hidden="true" className="size-2.5 animate-pulse rounded-full bg-accent" />
+              {t("working")}
+            </li>
+          ) : null}
         </ol>
+        {firstFresh >= 0 && !atEnd ? (
+          <div className="sticky bottom-2 mt-auto flex justify-center">
+            <Button className="shadow-card" onPress={goEnd}>
+              {t("jump", { count: fresh.size })}
+            </Button>
+          </div>
+        ) : null}
       </div>
       <Composer
+        text={draft}
+        setText={setDraft}
         workspace={workspace}
         conv={data}
         quote={quote}
@@ -592,6 +729,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
   const noTalk = !known && chosen && current.list.some((w) => w.slug === current.slug);
   const workspace = noTalk ? "" : known ? current.slug : (list[0]?.slug ?? "");
   const named = noTalk ? current.slug : workspace;
+  const mayTalk = list.find((w) => w.slug === workspace)?.can_talk ?? true;
   return (
     <aside aria-label={t("title")} className="flex h-dvh min-h-0 flex-col bg-surface">
       <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
@@ -613,7 +751,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
         <div className="flex flex-wrap items-center justify-between gap-x-3 border-b border-line px-4 py-1 text-sm text-muted">
           <p>
             {t("workspace")}: <span className="font-semibold text-ink">{named}</span> ·{" "}
-            {t("privacy")}
+            {mayTalk ? t("privacy") : t("privacyReader")}
           </p>
           <Link
             to="/workspaces/$workspace"

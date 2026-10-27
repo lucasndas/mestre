@@ -16,6 +16,10 @@ export interface CanvasEnv {
   changed: () => void;
   /** Mission being drawn: its arrows are drawn by dragging between characters. */
   drawing: boolean;
+  /** Undoes a group (its cards stay where they are). */
+  ungroup: (id: string) => void;
+  /** Gives a group its name. */
+  renameGroup: (id: string, label: string) => void;
 }
 
 export const CanvasEnvContext = createContext<CanvasEnv | null>(null);

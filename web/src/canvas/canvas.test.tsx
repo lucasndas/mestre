@@ -1,5 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, expect, test, vi } from "vitest";
@@ -22,9 +32,13 @@ const refused = (reason: string, message: string, params: object = {}) => ({
   body: { error: { code: "refused", message, params: { reason, ...params } } },
 });
 
-function wrap(language: "pt-BR" | "en" = "pt-BR", sock: UiSocket | null = null) {
+function wrap(
+  language: "pt-BR" | "en" = "pt-BR",
+  sock: UiSocket | null = null,
+  me: typeof ME = ME,
+) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  qc.setQueryData(["me"], ME);
+  qc.setQueryData(["me"], me);
   const i18n = setupI18n(language);
   // biome-ignore lint/correctness/noComponentHookFactories: a test helper, made once per test
   const Wrapper = ({ children }: { children: ReactNode }) => (
@@ -71,9 +85,9 @@ test("the canvas draws the characters, the machine badge, the state, the mission
   render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
   const devNode = await screen.findByRole("article", { name: "Personagem Dev-1" });
   expect(devNode.textContent).toContain("Máquina windows-pc");
-  expect(devNode.textContent).toContain("ocupado");
+  expect(devNode.textContent).toContain("Trabalhando");
   expect(screen.getByRole("article", { name: "Personagem Revisor" }).textContent).toContain(
-    "aguardando Dev-1",
+    "Esperando Dev-1",
   );
   expect(screen.getByRole("article", { name: "Pergaminho Plano" })).toBeTruthy();
   // the Grand Master is pinned and is on the table, so that its automatic connection has two ends
@@ -281,7 +295,7 @@ test("a change event makes the canvas read the state again", async () => {
   const { Wrapper } = wrap("pt-BR", sock);
   render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
   const node = await screen.findByRole("article", { name: "Personagem Dev-1" });
-  expect(node.textContent).toContain("ocupado");
+  expect(node.textContent).toContain("Trabalhando");
   const subscribed = fake.send.mock.calls.map(
     (c) => JSON.parse(String(c[0])) as { payload: { topics?: string[] } },
   );
@@ -299,7 +313,7 @@ test("a change event makes the canvas read the state again", async () => {
   );
   await waitFor(() =>
     expect(screen.getByRole("article", { name: "Personagem Dev-1" }).textContent).toContain(
-      "ocioso",
+      "Ocioso",
     ),
   );
   sock.stop();
@@ -349,4 +363,219 @@ test("on a phone the board is a list of characters joined by a line, dashed wher
   expect(lines).toHaveLength(3);
   expect(lines[2]?.className).toContain("border-dashed");
   expect(lines[0]?.className).not.toContain("border-dashed");
+});
+
+// The cards of the board and the selection (docs/painel/canvas.md#desenho-do-quadro-por-dentro-m6-unidade-4f).
+const withDecide = { ...ME, capabilities: [...ME.capabilities, "decide_approvals"] };
+
+// CA-CANVAS-19: one card per character, with the words of the vocabulary, the mission line and the two buttons.
+test("the card of a character has the state in words, the mission line, Abrir terminal and Fixar, and no Digitar", async () => {
+  const st = tableState();
+  st.characters = st.characters.map((c) =>
+    c.id === "dev" ? { ...c, has_terminal: true, state: "waiting", reason: "approval:12" } : c,
+  );
+  fakeServer({ [`GET ${path}`]: () => ({ body: st }) });
+  const { Wrapper } = wrap("pt-BR", null, withDecide);
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  const card = await screen.findByRole("article", { name: "Personagem Dev-1" });
+  expect(card.textContent).toContain("Espera a sua decisão");
+  expect(card.textContent).toContain("Missão entrega · Etapa 1 de 2");
+  expect(within(card).getByRole("button", { name: "Decidir a aprovação" })).toBeTruthy();
+  expect(within(card).getByRole("button", { name: "Abrir o terminal de Dev-1" })).toBeTruthy();
+  expect(within(card).getByRole("button", { name: "Fixar Dev-1" }).textContent).toContain("Fixar");
+  expect(within(card).queryByRole("button", { name: /Digitar/ })).toBeNull();
+  // who cannot decide sees the wait without the button
+  cleanup();
+  const { Wrapper: W2 } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: W2 });
+  const plain = await screen.findByRole("article", { name: "Personagem Dev-1" });
+  expect(plain.textContent).toContain("Espera uma aprovação");
+  expect(within(plain).queryByRole("button", { name: "Decidir a aprovação" })).toBeNull();
+});
+
+// CA-CANVAS-13: no loose buttons; a hint, then the bar with the actions in words.
+test("with nothing selected there is a hint and no loose group or grimoire button; with cards selected the bar names each action", async () => {
+  fakeServer({ [`GET ${path}`]: () => ({ body: tableState() }) });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  const { Wrapper } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  await screen.findByRole("article", { name: "Personagem Dev-1" });
+  expect(screen.queryByRole("button", { name: "Agrupar seleção" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Salvar seleção como grimório" })).toBeNull();
+  expect(screen.getByText(/Clique num cartão para selecionar/)).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Selecionar vários" }));
+  fireEvent.click(screen.getByRole("article", { name: "Personagem Dev-1" }));
+  const bar = await screen.findByRole("toolbar", { name: "O que fazer com a seleção" });
+  expect(bar.textContent).toContain("1 selecionado");
+  expect(
+    (within(bar).getByRole("button", { name: "Juntar em grupo" }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  expect(bar.textContent).toContain("Selecione pelo menos 2 cartões para juntar");
+  fireEvent.click(screen.getByRole("article", { name: "Personagem Revisor" }));
+  await waitFor(() => expect(bar.textContent).toContain("2 selecionados"));
+  expect(
+    (within(bar).getByRole("button", { name: "Juntar em grupo" }) as HTMLButtonElement).disabled,
+  ).toBe(false);
+  expect(within(bar).getByRole("button", { name: "Guardar como grimório" })).toBeTruthy();
+  await user.click(within(bar).getByRole("button", { name: "Soltar" }));
+  await waitFor(() => expect(screen.queryByRole("toolbar")).toBeNull());
+});
+
+// CA-CANVAS-14: group and undo it; only the layout is touched.
+test("Juntar em grupo draws a group with a name and Desfazer grupo frees the cards", async () => {
+  const { calls } = fakeServer({
+    [`GET ${path}`]: () => ({ body: tableState() }),
+    [`PUT ${path}/layout`]: () => ({ body: {} }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  const { Wrapper } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  await screen.findByRole("article", { name: "Personagem Dev-1" });
+  await user.click(screen.getByRole("button", { name: "Selecionar vários" }));
+  fireEvent.click(screen.getByRole("article", { name: "Personagem Dev-1" }));
+  fireEvent.click(screen.getByRole("article", { name: "Personagem Revisor" }));
+  await user.click(await screen.findByRole("button", { name: "Juntar em grupo" }));
+  const name = (await screen.findByRole("textbox", { name: "Nome do grupo" })) as HTMLInputElement;
+  expect(name.value).toBe("Grupo");
+  const saved = calls.filter((c) => c.method === "PUT" && c.path === `${path}/layout`);
+  expect(JSON.stringify(saved[0]?.body)).toContain("group:");
+  await user.click(screen.getByRole("button", { name: "Desfazer grupo" }));
+  await waitFor(() => expect(screen.queryByRole("textbox", { name: "Nome do grupo" })).toBeNull());
+  const last = calls.filter((c) => c.method === "PUT" && c.path === `${path}/layout`).pop();
+  expect(JSON.stringify(last?.body)).toContain('"remove":["group:');
+});
+
+// CA-CANVAS-15: each tab says what it is; the restore plan is said before it is confirmed.
+test("the side panel says what each tab is, and a restore tells the renamed names and the missing class first", async () => {
+  fakeServer({
+    [`GET ${path}`]: () => ({ body: tableState() }),
+    [`GET ${path}/rituals`]: () => ({ body: { rituals: [] } }),
+    "GET /api/grimoires": () => ({
+      body: {
+        grimoires: [
+          {
+            name: "Fluxo de login",
+            workspace: "loja",
+            table: "m0",
+            author: "Maria",
+            saved_at: "2026-10-26T15:00:00Z",
+            characters: 2,
+            scrolls: 1,
+            tomes: 0,
+            quests: 1,
+          },
+        ],
+      },
+    }),
+    [`POST ${path}/grimoires/restore`]: () => ({
+      body: {
+        name: "Fluxo de login",
+        renamed: ["Dev-1 → Dev-1 (2)"],
+        choose: ["Revisor"],
+        done: false,
+      },
+    }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  const { Wrapper } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  await screen.findByRole("article", { name: "Personagem Dev-1" });
+  await user.click(
+    screen.getAllByRole("button", { name: "Missões, rituais e grimórios" })[0] as HTMLElement,
+  );
+  const side = await screen.findByRole("complementary", { name: "Missões, rituais e grimórios" });
+  expect(side.textContent).toContain("Uma missão é uma sequência de personagens");
+  await user.click(within(side).getByRole("tab", { name: /Ritual/ }));
+  expect(side.textContent).toContain("Um ritual é uma tarefa que se repete sozinha");
+  await user.click(within(side).getByRole("tab", { name: /Grimório/ }));
+  expect(side.textContent).toContain("Um grimório é um modelo guardado de parte de uma mesa");
+  await user.click(await within(side).findByRole("button", { name: "Restaurar nesta mesa" }));
+  expect(await within(side).findByText("Dev-1 → Dev-1 (2)")).toBeTruthy();
+  expect(side.textContent).toContain("A classe Revisor não existe nesta campanha.");
+});
+
+// CA-CANVAS-16: who cannot edit sees and moves, and every action that changes something says why it is off.
+test("an observer sees a read-only hint and every editing action is off with the reason", async () => {
+  fakeServer({
+    [`GET ${path}`]: () => ({ body: tableState({ can_edit: false }) }),
+    [`GET ${path}/rituals`]: () => ({ body: { rituals: [] } }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  const { Wrapper } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  await screen.findByRole("article", { name: "Personagem Dev-1" });
+  expect(
+    screen.getAllByText(/Só Administrador ou acima muda conexões, missões e rituais/).length,
+  ).toBeGreaterThan(0);
+  expect(screen.queryByRole("button", { name: "Selecionar vários" })).toBeNull();
+  expect((screen.getByRole("button", { name: "Fixar Dev-1" }) as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+  await user.click(
+    screen.getAllByRole("button", { name: "Missões, rituais e grimórios" })[0] as HTMLElement,
+  );
+  const side = await screen.findByRole("complementary", { name: "Missões, rituais e grimórios" });
+  expect(within(side).queryByRole("button", { name: "Montar missão" })).toBeNull();
+  expect(side.textContent).toContain("Só Administrador ou acima muda isto.");
+});
+
+// CA-CANVAS-17: the deadlock is told in words and the legend describes the four lines.
+test("a deadlock says who waits for whom and what to do, and the legend describes the four lines", async () => {
+  fakeServer({
+    [`GET ${path}`]: () => ({
+      body: tableState({
+        waits: [
+          { id: "w1", waiter: "rev", target: "dev", kind: "ask", reason: "Dev-1", deadlock: true },
+        ],
+        deadlocks: [{ text: "Revisor → Dev-1 → Revisor" }],
+      }),
+    }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  const { Wrapper } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("Revisor → Dev-1 → Revisor");
+  expect(alert.textContent).toContain("Peça ao Grão-Mestre para destravar");
+  await user.click(screen.getByRole("button", { name: "Como ler o quadro" }));
+  const legend = await screen.findByRole("region", { name: "Como ler o quadro" });
+  for (const line of [
+    "trabalham juntos",
+    "ordem da missão",
+    "um espera o outro",
+    "impasse: um espera o outro e nenhum anda",
+  ])
+    expect(legend.textContent).toContain(line);
+});
+
+// CA-CANVAS-18: on a phone the list has the actions in a menu and a way to select without Shift.
+test("on a phone the list offers Selecionar, the menu with Fixar and Conectar, and says grouping is for the computer", async () => {
+  const st = tableState();
+  st.characters = st.characters.map((c) => (c.id === "dev" ? { ...c, has_terminal: true } : c));
+  const { calls } = fakeServer({
+    [`GET ${path}`]: () => ({ body: st }),
+    [`POST ${path}/connections`]: () => ({ body: {} }),
+    "PUT /api/characters/dev/pin": () => ({ body: {} }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  const { Wrapper } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  const list = await screen.findByRole("list", { name: "Personagens da mesa m1" });
+  expect(
+    screen.getByText(/Juntar em grupo, arrastar e ligar cartões só no computador/),
+  ).toBeTruthy();
+  await user.click(within(list).getByRole("button", { name: "Mais ações de Dev-1" }));
+  expect(screen.getByText(/Fixar · O personagem não será encerrado sozinho/)).toBeTruthy();
+  await user.click(screen.getByText("Conectar a outro personagem…"));
+  await user.click(screen.getByRole("button", { name: "Conectar" }));
+  await waitFor(() => expect(calls.some((c) => c.path === `${path}/connections`)).toBe(true));
+  await user.click(screen.getByRole("button", { name: "Selecionar" }));
+  await user.click(screen.getByRole("checkbox", { name: "Selecionar Dev-1" }));
+  await user.click(screen.getByRole("checkbox", { name: "Selecionar Revisor" }));
+  const bar = await screen.findAllByRole("toolbar", { name: "O que fazer com a seleção" });
+  expect(bar[bar.length - 1]?.textContent).toContain("2 selecionados");
+  expect(within(bar[bar.length - 1] as HTMLElement).queryByText("Juntar em grupo")).toBeNull();
+  expect(
+    within(bar[bar.length - 1] as HTMLElement).getByText("Guardar como grimório"),
+  ).toBeTruthy();
 });

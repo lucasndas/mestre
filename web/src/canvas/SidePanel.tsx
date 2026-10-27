@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Tab, TabList, TabPanel, Tabs } from "react-aria-components";
+import { Checkbox, Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { Term } from "../components/Term";
 import { Button, Field } from "../components/ui";
@@ -17,13 +17,34 @@ export interface SidePanelProps {
   /** The tab shown; the toolbar opens "missions" when a mission is begun. */
   tab: string;
   setTab: (t: string) => void;
+  /** The cards selected on the board, to keep as a grimoire. */
+  selectedCount: number;
+  /** The form "Guardar a seleção como grimório" is open (it lives in this panel, not in a window). */
+  saving: boolean;
+  setSaving: (v: boolean) => void;
+  /** Keeps the selection; answers "taken" when the name exists, "" when it went. */
+  onSaveGrimoire: (
+    name: string,
+    structureOnly: boolean,
+    replace: boolean,
+  ) => Promise<string | undefined>;
 }
 
 const tabClass =
   "min-h-11 cursor-pointer border-b-2 border-transparent px-3 font-semibold outline-none data-selected:border-accent data-focus-visible:ring-2 data-focus-visible:ring-accent";
 
 /** The side panel of the table: missions (draw and adjust), rituals, and the grimoires to restore. */
-export function SidePanel({ state, draft, setDraft, tab, setTab }: SidePanelProps) {
+export function SidePanel({
+  state,
+  draft,
+  setDraft,
+  tab,
+  setTab,
+  selectedCount,
+  saving,
+  setSaving,
+  onSaveGrimoire,
+}: SidePanelProps) {
   const { t } = useTranslation("canvas");
   return (
     <aside
@@ -47,13 +68,22 @@ export function SidePanel({ state, draft, setDraft, tab, setTab }: SidePanelProp
           </Tab>
         </TabList>
         <TabPanel id="missions" className="min-h-0 flex-1 overflow-auto p-3">
+          <p className="m-0 mb-3 text-muted">{t("side.what.missions")}</p>
           <Missions state={state} draft={draft} setDraft={setDraft} />
         </TabPanel>
         <TabPanel id="rituals" className="min-h-0 flex-1 overflow-auto p-3">
+          <p className="m-0 mb-3 text-muted">{t("side.what.rituals")}</p>
           <Rituals state={state} />
         </TabPanel>
         <TabPanel id="grimoires" className="min-h-0 flex-1 overflow-auto p-3">
-          <Grimoires state={state} />
+          <p className="m-0 mb-3 text-muted">{t("side.what.grimoires")}</p>
+          <Grimoires
+            state={state}
+            selectedCount={selectedCount}
+            saving={saving}
+            setSaving={setSaving}
+            onSave={onSaveGrimoire}
+          />
         </TabPanel>
       </Tabs>
     </aside>
@@ -178,7 +208,9 @@ function Missions({
         <Button variant="secondary" onPress={() => setDraft(emptyDraft())}>
           {t("mission.new")}
         </Button>
-      ) : null}
+      ) : (
+        <p className="m-0 text-sm text-muted">{t("readOnlyHere")}</p>
+      )}
       {state.quests.length === 0 ? (
         <p className="m-0 text-muted">{t("mission.none")}</p>
       ) : (
@@ -236,6 +268,7 @@ function Rituals({ state }: { state: CanvasState }) {
   if (list.length === 0) return <p className="m-0 text-muted">{t("ritual.none")}</p>;
   return (
     <ul className="m-0 flex list-none flex-col gap-2 p-0">
+      {state.can_edit ? null : <li className="text-sm text-muted">{t("readOnlyHere")}</li>}
       {list.map((r) => (
         <RitualRow
           key={r.id}
@@ -313,7 +346,86 @@ function RitualRow({
   );
 }
 
-function Grimoires({ state }: { state: CanvasState }) {
+/** "Guardar a seleção como grimório": the name and the choice of the structure only, here and not in a window. */
+function SaveForm({
+  count,
+  onSave,
+  onClose,
+}: {
+  count: number;
+  onSave: (name: string, structureOnly: boolean, replace: boolean) => Promise<string | undefined>;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation("canvas");
+  const [name, setName] = useState("");
+  const [structure, setStructure] = useState(false);
+  const [taken, setTaken] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const go = async (replace: boolean) => {
+    setBusy(true);
+    const r = await onSave(name.trim(), structure, replace);
+    setBusy(false);
+    setTaken(r === "taken");
+    if (r === "") {
+      setName("");
+      onClose();
+    }
+  };
+  return (
+    <section aria-label={t("grimoire.saveTitle")} className="flex flex-col gap-3">
+      <h2 className="m-0 text-xl">{t("grimoire.saveTitle")}</h2>
+      <p className="m-0 text-sm text-muted">{t("grimoire.saveWhat", { count })}</p>
+      <Field
+        label={t("grimoire.saveName")}
+        value={name}
+        onChange={(v) => {
+          setName(v);
+          setTaken(false);
+        }}
+      />
+      <Checkbox
+        isSelected={structure}
+        onChange={setStructure}
+        className="flex min-h-11 items-center gap-2"
+      >
+        {t("grimoire.structureOnly")}
+      </Checkbox>
+      {taken ? (
+        <p role="alert" className="m-0 text-danger">
+          {t("grimoire.nameTaken")}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {taken ? (
+          <Button variant="danger" isDisabled={busy} onPress={() => void go(true)}>
+            {t("grimoire.replace")}
+          </Button>
+        ) : (
+          <Button isDisabled={busy || !name.trim()} onPress={() => void go(false)}>
+            {t("grimoire.save")}
+          </Button>
+        )}
+        <Button variant="quiet" onPress={onClose}>
+          {t("grimoire.cancelSave")}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function Grimoires({
+  state,
+  selectedCount,
+  saving,
+  setSaving,
+  onSave,
+}: {
+  state: CanvasState;
+  selectedCount: number;
+  saving: boolean;
+  setSaving: (v: boolean) => void;
+  onSave: (name: string, structureOnly: boolean, replace: boolean) => Promise<string | undefined>;
+}) {
   const { t, i18n } = useTranslation("canvas");
   const env = useCanvasEnv();
   const q = useQuery(grimoiresQuery);
@@ -376,6 +488,26 @@ function Grimoires({ state }: { state: CanvasState }) {
   }
   return (
     <section className="flex flex-col gap-3">
+      {state.can_edit ? (
+        saving ? (
+          <SaveForm count={selectedCount} onSave={onSave} onClose={() => setSaving(false)} />
+        ) : (
+          <div className="flex flex-col gap-1">
+            <Button
+              variant="secondary"
+              isDisabled={selectedCount === 0}
+              onPress={() => setSaving(true)}
+            >
+              {t("grimoire.saveOpen")}
+            </Button>
+            {selectedCount === 0 ? (
+              <p className="m-0 text-sm text-muted">{t("grimoire.saveNeedsSelection")}</p>
+            ) : null}
+          </div>
+        )
+      ) : (
+        <p className="m-0 text-sm text-muted">{t("readOnlyHere")}</p>
+      )}
       {plan?.done ? (
         <p role="status" className="m-0 rounded-field bg-accent-wash px-3 py-2">
           {plan.failed && plan.failed.length > 0
