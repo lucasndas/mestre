@@ -15,6 +15,7 @@ import {
   NativeSelect,
   PageHeader,
   StatusStrip,
+  useReaches,
   VocabLine,
 } from "./kit";
 import { labelOr, profilesQuery, type Say } from "./manage";
@@ -42,6 +43,7 @@ export function Profiles() {
   const [notice, setNotice] = useState<string | null>(null);
   // the provider whose form is open ("" when closed)
   const [adding, setAdding] = useState("");
+  const reaches = useReaches("owner");
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin"] });
 
   return (
@@ -60,7 +62,12 @@ export function Profiles() {
           {data.profiles.length === 0 ? (
             <EmptyState title={t("empty.title")} why={t("empty.why")}>
               {data.providers.map((p) => (
-                <Button key={p} variant="secondary" onPress={() => setAdding(p)}>
+                <Button
+                  key={p}
+                  variant="secondary"
+                  isDisabled={!reaches}
+                  onPress={() => setAdding(p)}
+                >
                   {t("empty.pick", { provider: labelOr(say, `providers.${p}`, p) })}
                 </Button>
               ))}
