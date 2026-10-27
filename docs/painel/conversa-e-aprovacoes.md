@@ -1,6 +1,6 @@
 # Conversa e aprovações no painel
 
-> **Assunto:** conversa com o Grão-Mestre pelo painel, central de aprovações e área de avisos · **Componente:** Painel · **Atualizado:** 2026-10-26
+> **Assunto:** conversa com o Grão-Mestre pelo painel, central de aprovações e área de avisos · **Componente:** Painel · **Atualizado:** 2026-10-27
 
 ## Objetivo
 
@@ -10,7 +10,7 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 
 ### Conversa com o Grão-Mestre
 
-- Um painel lateral por workspace (o do seletor, [visão do workspace](visao-do-workspace.md)). Cada usuário vê **a própria conversa** com o Grão-Mestre daquele workspace, como num chat privado.
+- Um painel lateral por workspace: sempre o **workspace atual** ([visão do workspace](visao-do-workspace.md#como-se-chega-e-o-workspace-atual)), dito no cabeçalho da conversa, com o atalho **Abrir workspace**. Cada usuário vê **a própria conversa** com o Grão-Mestre daquele workspace, como num chat privado.
 - Quem pode conversar segue a [tabela de níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades); para quem não pode, o campo de texto fica desligado com a explicação.
 - **Enviar:** a mensagem entra na caixa de entrada do Grão-Mestre com origem "painel" (usuário, sessão, id da mensagem) e a prioridade de mensagem de usuário ([esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)).
 - **Responder a uma mensagem** (citar): o motor informa ao Grão-Mestre a mesa daquela mensagem, como a resposta encadeada do Telegram ([roteamento](../telegram/roteamento.md)).
@@ -18,7 +18,7 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - **Resposta:** o `mestre reply` de uma mensagem vinda do painel volta para o painel daquele usuário. Se ele não estiver com o painel aberto, a resposta fica guardada e aparece ao abrir, com um contador de não lidas.
 - **Histórico:** a conversa mostra também as mensagens trocadas pelo Telegram com o mesmo usuário e workspace, marcadas com um ícone do canal, para a conversa fazer sentido nos dois lugares. A resposta continua indo pelo canal de origem de cada mensagem.
 - Mensagens do Grão-Mestre são Markdown, mostradas sem HTML ativo. Arquivos enviados com `mestre reply --attach` aparecem como download.
-- **Mensagem de progresso** ([Grão-Mestre](../orquestracao/grao-mestre.md#mensagem-de-progresso)): aparece como um cartão no topo da conversa, atualizado no lugar, com a contagem das mesas e uma linha por pendência.
+- **Mensagem de progresso** ([Grão-Mestre](../orquestracao/grao-mestre.md#mensagem-de-progresso)): aparece como um cartão no topo da conversa, atualizado no lugar, com a contagem das mesas e uma linha por pendência; cada mesa listada é um link para ela.
 - **Pergunta de escolha** (`mestre choose`, [CLI](../cli/grao-mestre.md#mestre-choose)): um botão por opção, no canal de origem da mensagem que a causou; a escolha volta ao Grão-Mestre como resposta e vale uma vez.
 - Estado do Grão-Mestre no topo (ocioso, ocupado, itens na fila à frente), para o usuário saber quando esperar resposta.
 - Com o sistema travado, o envio mostra "guardado até destravar" ([segurança do canal](../telegram/seguranca-do-canal.md)).
@@ -27,7 +27,8 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 ### Central de aprovações
 
 - Lista os pedidos `aguardando_usuarios` que o usuário pode responder, em todos os workspaces dele, mais recentes primeiro, com filtro por workspace, mesa e tipo ([fluxo](../aprovacoes/fluxo.md)).
-- Cada item mostra o mesmo conteúdo do Telegram (o que é, onde, por quê, risco, arquivos, motivo da dúvida, recomendação, os níveis da [cadeia](../orquestracao/cadeia-de-aprovacao.md) por onde já passou) e os botões das [respostas](../orquestracao/cadeia-de-aprovacao.md#respostas) que aquele usuário pode dar, filtrados pelo nível e pelo tipo como no [fluxo](../aprovacoes/fluxo.md#pergunta-aos-usuários), mais **Ver detalhes**. As respostas que pedem dado mostram o campo antes de confirmar: a duração em "por um tempo", o padrão (já sugerido pelo motor, editável) em "o padrão", o texto em "negar com instrução" e "perguntar de volta", o escopo em "delegar". No painel, **Ver detalhes** mostra o diff inteiro.
+- **Cartão legível:** o título e as frases vêm do catálogo do painel pelo `type` e pelo `risk` (nunca o código cru como "custo_extra · risco medio" nem a lista de botões do texto do Telegram): faixa com o risco em palavras, workspace › mesa e o prazo; **O que pedem** (o `about` do servidor), **Por quê**, **Quem pediu** ("o Mestre" para pedido do motor, nunca "ninguém"), e as duas linhas **Se você aprovar** e **Se negar**, que dizem o efeito em palavras do dia a dia. O texto cru do Telegram fica em **Ver detalhes técnicos**. Um `type` sem texto no catálogo cai no `about` e no texto do servidor, nunca em tela vazia. As respostas que não são Aprovar e Negar (por um tempo, o padrão, sempre, instrução, perguntar de volta, delegar) ficam em **Mais opções**.
+- Cada item traz o mesmo conteúdo do Telegram (o que é, onde, por quê, risco, arquivos, motivo da dúvida, recomendação, os níveis da [cadeia](../orquestracao/cadeia-de-aprovacao.md) por onde já passou) e os botões das [respostas](../orquestracao/cadeia-de-aprovacao.md#respostas) que aquele usuário pode dar, filtrados pelo nível e pelo tipo como no [fluxo](../aprovacoes/fluxo.md#pergunta-aos-usuários), mais **Ver detalhes**. As respostas que pedem dado mostram o campo antes de confirmar: a duração em "por um tempo", o padrão (já sugerido pelo motor, editável) em "o padrão", o texto em "negar com instrução" e "perguntar de volta", o escopo em "delegar". No painel, **Ver detalhes** mostra o diff inteiro.
 - **Pedido que bloqueia** ([os campos](../aprovacoes/pedido-que-bloqueia.md#os-campos)): os mesmos campos da mensagem do Telegram, com a evidência **inteira** (o Telegram a corta em 3 linhas), já passada pelo mascarador, e o texto do agente dentro do bloco "texto do agente, não verificado". Cada passo de **Para destravar** que o painel sabe fazer vira botão **só para quem tem o nível e o PIN do passo**: o cadastro no cofre, com o nível e o PIN de [credenciais de site](../plataforma/cofre.md#credenciais-de-site), abre a tela de Segredos; abrir o PR, de quem pode ver o workspace.
 - Pedidos parecidos agrupados aparecem como um item com a lista das ações ([fluxo](../aprovacoes/fluxo.md#quórum-e-já-respondido-por)).
 - Tipos que pedem PIN abrem o campo de PIN depois do botão ([login](login.md#pin-em-ações-sensíveis)).
@@ -57,7 +58,7 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
   - **Escolha:** `mestre choose` vai ao canal da mensagem que o causou (`ChooseHandler.ChannelOf`); a pergunta do painel é uma linha de `choose_questions` com `channel = 'panel'`, só o painel responde a ela e só o Telegram responde à do Telegram; o clique vale uma vez e o segundo é recusado.
   - **Andamento:** cada envio da mensagem de progresso também grava o cartão do workspace (`panel_chat_progress`, uma linha por workspace, reescrita no lugar), que só o Dono e os Administradores do workspace veem, como o Telegram.
   - **Arquivos do Grão-Mestre:** a tela e a rota de download existem (anexo, nunca exibido na página, só para o usuário da resposta); os bytes de `mestre reply --attach` ainda não chegam ao motor ([ligação de produção](../desenvolvimento/ligacao-de-producao.md)), então o arquivo aparece pelo nome, sem download, até lá.
-  - **Seletor:** enquanto a barra de cima não tem o seletor de workspace, o painel lateral tem o próprio, com o último escolhido neste navegador.
+  - **Workspace:** a conversa não tem seletor próprio; usa `useCurrentWorkspace` (o da migalha, senão o último aberto no servidor), para a conversa e o resto do painel nunca falarem de workspaces diferentes. Sem workspace, a conversa explica e leva a criar um.
 - **Motor:** `mestre notify` e `mestre approval ask` dizem em `delivered.panel` quantos usuários o painel guardou o aviso para (uma gravação que falhou não conta) (`not_delivered` só quando nem o Telegram nem o painel alcançam ninguém).
 
 ## Regras e erros
@@ -78,6 +79,8 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - **CA-CONV-07** · *rápida* — **Dado** um pedido `alto` aberto nas pessoas, **quando** um Administrador e o Dono abrem a central, **então** os dois veem **Aprovar o padrão** e **Aprovar sempre para a classe**, só o Dono vê **Delegar**, e a rota de delegar chamada pelo Administrador é recusada com o nível exigido; **quando** o Administrador escolhe **Aprovar o padrão**, **então** o campo traz o padrão sugerido pelo motor e o PIN é pedido antes de valer.
 - **CA-CONV-08** · *rápida* — **Dado** um pedido que bloqueia com evidência de 10 linhas contendo um token `ghp_…` e o campo "Por que não decido" vindo do agente, **quando** a central o mostra, **então** aparecem as 10 linhas com o token mascarado, o texto do agente dentro do bloco "não verificado" e o botão do passo "cadastrar no cofre".
 - **CA-CONV-09** · *rápida* — **Dado** o Grão-Mestre perguntando `mestre choose` com 3 opções a um usuário que escreveu pelo painel, **quando** a pergunta chega, **então** a conversa mostra 3 botões, só ela, e o clique entrega a escolha uma vez (um segundo clique é recusado); **dado** a mensagem de progresso, **então** ela é um cartão no topo, atualizado sem duplicar.
+- **CA-CONV-11** · *rápida* — **Dado** um pedido `custo_extra` de risco `medio` pedido pelo motor, **quando** a central o mostra, **então** o título e as linhas "Se você aprovar" e "Se negar" estão em português, "Quem pediu" diz que foi o Mestre, as palavras `custo_extra`, `risco medio` e "Respostas deste nível" só aparecem em "Ver detalhes técnicos", e as respostas além de Aprovar e Negar estão em **Mais opções**.
+- **CA-CONV-12** · *rápida* — **Dado** um pedido de um `type` sem texto no catálogo, **quando** a central o mostra, **então** o cartão mostra o `about` e o texto do servidor, com os botões, sem erro.
 - **CA-CONV-10** · *rápida* — **Dado** um aviso `credencial` com o passo "cadastrar no cofre", **quando** um Administrador e o Dono abrem a central, **então** o Administrador não vê botão de cadastro e o Dono vê o botão que abre Segredos e pede o PIN.
 
 ## Depende de

@@ -1,6 +1,6 @@
 # Workspaces no painel
 
-> **Assunto:** telas de workspaces: lista, criação (com a ficha do Grão-Mestre), etapas da sessão zero e nova tentativa, pausa, pergunta de versionamento do `.mestre/` e comandos de verificação (proposta, edição, confirmação e edição por fora) · **Componente:** Painel · **Atualizado:** 2026-10-26
+> **Assunto:** telas de workspaces: lista, criação (com a ficha do Grão-Mestre), etapas da sessão zero e nova tentativa, pausa, pergunta de versionamento do `.mestre/` e comandos de verificação (proposta, edição, confirmação e edição por fora) · **Componente:** Painel · **Atualizado:** 2026-10-27
 
 ## Objetivo
 
@@ -8,7 +8,7 @@ Dar ao Dono e aos Administradores o lugar onde um workspace nasce e onde se acom
 
 ## Comportamento
 
-- **Lista** (`/workspaces`, ao vivo pelo tópico `workspaces:all` do `/ws/ui`): cada usuário vê só os workspaces dele; o Dono vê todos. Cada cartão mostra repositório, apelido, estado (em preparação, ativo, pausado), a ficha e o estado do Grão-Mestre e o pull request da sessão zero.
+- **Lista** (`/workspaces`, ao vivo pelo tópico `workspaces:all` do `/ws/ui`): cada usuário vê só os workspaces dele; o Dono vê todos. Cada cartão mostra repositório, apelido, estado (em preparação, ativo, pausado), a ficha e o estado do Grão-Mestre, quantas mesas andam e quantos pedidos esperam o usuário, e o pull request da sessão zero; os botões são **Abrir** (a [visão do workspace](visao-do-workspace.md#como-se-chega-e-o-workspace-atual)) e **Conversar**. Sem workspace, o vazio diz que é preciso criar um (e, para o Dono sem os Apps do GitHub, que o passo antes é conectá-los: [Primeiros passos](primeira-jornada.md#primeiros-passos)); "Criar workspace" fica no alto da lista.
 - **Criar** (Administrador ou acima): repositório `dono/nome`, apelido opcional (imutável) e a **ficha do Grão-Mestre**, escolhida entre as fichas que rodam um agente, não usam a base do Operador do PC e têm base executável em toda máquina não excluída (`characters.GrandMasterSheetProblem`, a mesma regra de quem cria o Grão-Mestre por qualquer caminho). A criação abre a sessão zero; a ficha fica guardada e a etapa `files` inicia o Grão-Mestre com ela. Recusas com o motivo: ficha desconhecida, repositório que já é um workspace, repositório ou apelido inválidos. Quem cria sem ser o Dono só atua no workspace novo depois que o Dono o põe na lista dele.
 - **Etapas da sessão zero** (Apps, espelho, arquivos, análise, teste de aprovação), cada uma pendente, em andamento, esperando (e o quê), feita ou com erro (motivo e quantas vezes). **Tentar de novo** (Administrador) roda a etapa agora, sem esperar o recuo; o resultado aparece na própria lista.
 - **Pausar e retomar** (Administrador): pausa as mesas junto; um workspace em preparação não se pausa.

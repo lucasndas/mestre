@@ -1,6 +1,6 @@
 # Canvas da mesa
 
-> **Assunto:** canvas infinito da mesa: personagens com terminal ao vivo, conexões, pergaminhos, missões, esperas, ajuda nos termos e digitação no terminal · **Componente:** Painel · **Atualizado:** 2026-10-26
+> **Assunto:** canvas infinito da mesa: personagens com terminal ao vivo, conexões, pergaminhos, missões, esperas, ajuda nos termos e digitação no terminal · **Componente:** Painel · **Atualizado:** 2026-10-27
 
 ## Objetivo
 
@@ -29,6 +29,8 @@ Mostrar, em tempo real, tudo o que acontece numa mesa: o Mestre da mesa, a party
 
 ### Canvas infinito
 
+- **Zoom inicial legível:** a mesa abre em zoom 100%, nunca encolhida para caber tudo; o texto dos personagens, selos e pergaminhos tem 17 px ou mais ([design](design.md#direção-pergaminho)), e o "Ajustar à tela" é um botão, não o estado inicial. Se a mesa não cabe, o quadro abre centrado no personagem que está trabalhando (senão, no Mestre da mesa). Terminais seguem o tamanho fixo do PTY.
+- **Cabeçalho da tela da mesa:** migalha `Workspaces › workspace › título da mesa` ([visão do workspace](visao-do-workspace.md#como-se-chega-e-o-workspace-atual)), estado da mesa, branch e última entrega, o botão **Conversar sobre esta mesa**, abas **Quadro** e **Terminal**, e, ao lado do quadro, "Em palavras simples": uma frase sobre o que cada personagem faz e o que espera. No celular o quadro vira uma lista vertical de personagens ligados por uma linha (tracejada na espera), cada um com **Ver terminal**.
 - Zoom, arrastar o fundo, selecionar vários, arrastar elementos e agrupar.
 - Posição, tamanho e grupos de cada elemento ficam salvos no banco da Cidadela por mesa (tabela `canvas_items`, chave `<tipo>:<id>`; um grupo é um elemento com rótulo; `internal/orchestration/canvas`). Reabrir o navegador mostra tudo como estava. Quem vê a mesa move e redimensiona; **agrupar** é de quem edita o canvas.
 - Elementos criados pelo motor (recrutamento, missão) aparecem perto de quem os criou, sem sobrepor: ao ler o estado, o que ainda não tem lugar ganha o primeiro espaço livre, em anéis a partir do criador (à direita dele), com uma folga entre os elementos para a linha e o rótulo caberem. Quem some da mesa some do layout; um grupo fica até o usuário o apagar.
@@ -98,6 +100,8 @@ Depois de `mestre recruit --replace`, o nó do personagem novo fica na posição
 - **CA-CANVAS-06** · *rápida* — **Dado** elementos movidos, **quando** recarrego a página, **então** as posições e grupos são os mesmos (MVP-12).
 - **CA-CANVAS-10** · *rápida* — **Dado** a conexão automática do Mestre da mesa e uma conexão criada pelo usuário, **quando** ele apaga as duas, **então** a segunda some e a primeira é recusada com o motivo.
 - **CA-CANVAS-08** · *rápida* — **Dado** uma sessão do Operador ativa e o relógio falso, **quando** um Aprovador e o Dono abrem o painel, **então** os dois veem a faixa com a contagem, o botão **Encerrar agora** aparece só para o Dono (e para um Administrador, que também pode encerrar, [níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)), não para o Aprovador (e a API recusa o encerramento vindo dele), e um toque nele manda encerrar a sessão na hora; ao fim, a faixa some.
+- **CA-CANVAS-11** · *rápida* — **Dado** uma mesa com três personagens, **quando** o quadro abre, **então** o zoom é 100% e o menor texto renderizado tem 17 px ou mais; **dado** uma mesa que não cabe na tela, **então** abre centrada no personagem que trabalha, e **Ajustar à tela** muda o zoom.
+- **CA-CANVAS-12** · *rápida* — **Dado** o canvas da mesa `Login com Google` do workspace `loja`, **quando** abro a tela, **então** a migalha mostra Workspaces › loja › Login com Google com os dois primeiros itens levando de volta, e o item Workspaces do menu está marcado.
 - **CA-CANVAS-07** · *rápida* — **Dado** 12 terminais visíveis, **quando** o canvas renderiza, **então** exatamente 8 usam WebGL e os 4 restantes mostram retrato.
 
 ## Depende de

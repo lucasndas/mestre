@@ -1,8 +1,8 @@
 # Administração: regras e cadeia
 
-> **Assunto:** implementação das telas de decretos, delegações e regras temporárias, supervisão da cadeia, teto, política de aprovação e instruções extras (rotas, níveis, PIN, auditoria e arquivos) · **Componente:** Painel · **Atualizado:** 2026-10-26
+> **Assunto:** implementação das telas de decretos, delegações e regras temporárias, supervisão da cadeia, teto, política de aprovação e instruções extras (rotas, níveis, PIN, auditoria e arquivos) · **Componente:** Painel · **Atualizado:** 2026-10-27
 
-Documento de referência. Diz como as seis telas de [administração](administracao.md#telas) que mexem em regras e na cadeia foram feitas, para quem for mudá-las. O que cada tela mostra está em [administração](administracao.md); as regras de cada assunto ficam no documento dono, linkado lá.
+Documento de referência. As telas aparecem sob **Configurações › Regras e consumo** ([estrutura](design.md#estrutura-da-tela)); as rotas e os arquivos abaixo não mudam. Diz como as seis telas de [administração](administracao.md#telas) que mexem em regras e na cadeia foram feitas, para quem for mudá-las. O que cada tela mostra está em [administração](administracao.md); as regras de cada assunto ficam no documento dono, linkado lá.
 
 ## Implementação
 

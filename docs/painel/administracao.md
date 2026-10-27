@@ -1,6 +1,6 @@
 # Administração no painel
 
-> **Assunto:** telas de administração: decretos, delegações e regras temporárias, usuários, bases, fichas, perfis de conta, classes e Apps, teto, política, consumo, Guilda e saúde das máquinas (excluir máquina, passar a Cidadela, fuso da Guilda), segredos e diagnóstico · **Componente:** Painel · **Atualizado:** 2026-10-26
+> **Assunto:** telas de administração: decretos, delegações e regras temporárias, usuários, bases, fichas, perfis de conta, classes e Apps, teto, política, consumo, Guilda e saúde das máquinas (excluir máquina, passar a Cidadela, fuso da Guilda), segredos e diagnóstico · **Componente:** Painel · **Atualizado:** 2026-10-27
 
 ## Objetivo
 
@@ -9,6 +9,8 @@ Reunir num só lugar as telas para configurar e acompanhar o Mestre. Cada tela �
 ## Comportamento
 
 ### Telas
+
+Todas moram sob **Configurações** (Workspaces tem item próprio no menu): um índice de quatro grupos, cada entrada com a frase do que a tela faz, e migalha `Configurações › grupo › tela` em cada uma ([estrutura](design.md#estrutura-da-tela)). Conta: sessões, senha, GitHub pessoal. Pessoas e acesso: usuários, segredos, auditoria. Infraestrutura: Guilda e máquinas, perfis de conta (com a frase "as contas de IA de cada máquina"), Apps do GitHub, classes, bases e fichas. Regras e consumo: decretos, delegações, supervisão da cadeia, teto, política, instruções extras e consumo de uso. Os endereços atuais (`/usuarios`, `/decretos`…) continuam valendo, para links salvos e avisos. A tabela abaixo diz o que cada tela mostra.
 
 | Tela | O que mostra e permite | Dono das regras |
 |---|---|---|
@@ -146,6 +148,7 @@ Código: `internal/panel/routes_{classes,apps,presets,profiles,usage}.go` (tipos
 - **CA-ADM-12** · *rápida* — **Dado** uma delegação, uma subdelegação e duas regras temporárias ativas, **quando** um Administrador abre a tela de delegações, **então** vê as quatro e revoga uma regra temporária, mas não vê o botão **Revogar todas as delegações** e a API dele recusa com o nível exigido; **quando** o Dono usa o botão e confirma, **então** as quatro ficam revogadas e a auditoria registra.
 - **CA-ADM-13** · *rápida* — **Dado** uma mesa com 3 pedidos `medio` abertos e o mais antigo há 40 min (relógio falso), **quando** um Aprovador toca **Pausar autonomia**, **então** a tela mostra a pausa com quem e quando, as métricas (3 abertos, 40 min) e os pedidos sobem ao Grão-Mestre; um Observador não vê o botão e a API recusa.
 - **CA-ADM-14** · *rápida* — **Dado** o catálogo MCP, **quando** um Administrador acrescenta um servidor comum, **então** é aceito e a impressão da lista de ferramentas é guardada; um servidor `control: true`, só o Dono; **dado** a lista de ferramentas mudada, **então** o servidor fica suspenso até a reaprovação (desde o M7).
+- **CA-ADM-16** · *rápida* — **Dado** o Dono, **quando** abre Configurações, **então** vê quatro grupos, cada entrada com uma frase de uso, toda tela da tabela acima alcançável em até dois cliques e marcada com a migalha `Configurações › grupo › tela`; **dado** um Aprovador, **então** os grupos e entradas que o nível dele não alcança não aparecem, e o endereço antigo de uma tela (`/decretos`) abre a mesma tela.
 - **CA-ADM-15** · *rápida* — **Dado** o `verificacao.yaml` proposto, **quando** um Administrador edita e confirma, **então** vale a versão confirmada e a edição fica na auditoria; um Aprovador não vê a ação.
 
 ## Depende de
