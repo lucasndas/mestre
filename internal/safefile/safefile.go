@@ -27,6 +27,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -39,6 +40,14 @@ import (
 // native file is a secret. On Windows the mode is ignored: the file takes
 // the ACL of its folder.
 const Mode fs.FileMode = 0o664
+
+// RulesMode is the mode of the files that the agents read and never write: the
+// policy of approvals, the ceiling, the verification commands and the extra
+// instructions under .mestre/regras/. Written by the engine (the account
+// mestre) and read by the group; the group mestre-agente cannot change them,
+// not even in place (docs/arquitetura/seguranca.md). On Windows only the write
+// bit counts, as in Mode.
+const RulesMode fs.FileMode = 0o644
 
 // DirMode is the mode of the folders Write creates.
 const DirMode fs.FileMode = 0o755
@@ -122,6 +131,29 @@ func Read(path string, limit int64) ([]byte, Info, error) {
 		return nil, Info{}, wrap(path, fmt.Errorf("%w: it grew past %d bytes", ErrTooLarge, limit))
 	}
 	return data, info, nil
+}
+
+// Tighten takes the write bit of the group and of the others off the regular
+// file at path, which an earlier version wrote with Mode. It does nothing to a
+// file that is already tight and nothing on Windows, where the ACL of the
+// folder decides. Like Open it refuses a link, and the mode is changed on the
+// open file itself.
+func Tighten(path string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	f, info, err := Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if info.Perm&0o022 == 0 {
+		return nil
+	}
+	if err := f.Chmod(info.Perm &^ 0o022); err != nil {
+		return wrap(path, err)
+	}
+	return nil
 }
 
 // Stat is the state of the regular file at path: Exists is false when it is

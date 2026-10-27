@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 
@@ -114,13 +115,17 @@ func EnsureStructure(root string) StructureReport {
 		cur, _, err := safefile.Read(full, 1<<20)
 		switch {
 		case err == nil:
+			// a file an earlier version wrote with the group able to write it
+			if terr := tightenRule(f.rel, full); terr != nil {
+				rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: "o grupo do agente pode alterar o arquivo e a permissão não foi corrigida: " + terr.Error()})
+			}
 			if f.check != nil {
 				if cerr := f.check(cur); cerr != nil {
 					rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: "inválido: " + cerr.Error()})
 				}
 			}
 		case errors.Is(err, fs.ErrNotExist):
-			if werr := safefile.Write(full, []byte(f.content), safefile.Options{}); werr != nil {
+			if werr := safefile.Write(full, []byte(f.content), safefile.Options{Mode: modeOf(f.rel)}); werr != nil {
 				rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: "não foi criado: " + werr.Error()})
 				continue
 			}
@@ -129,5 +134,26 @@ func EnsureStructure(root string) StructureReport {
 			rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: "não foi lido: " + err.Error()})
 		}
 	}
+	// verificacao.yaml is not born here, but an earlier version wrote it 0664
+	if err := safefile.Tighten(filepath.Join(base, "regras", "verificacao.yaml")); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		rep.Invalid = append(rep.Invalid, Problem{Path: path.Join(MestreDir, "regras/verificacao.yaml"), Reason: "o grupo do agente pode alterar o arquivo e a permissão não foi corrigida: " + err.Error()})
+	}
 	return rep
+}
+
+// modeOf is the mode a seed file is born with: the files of regras/ are read by
+// the agents and never written by them (docs/sessao-zero/workspace.md).
+func modeOf(rel string) fs.FileMode {
+	if strings.HasPrefix(rel, "regras/") {
+		return safefile.RulesMode
+	}
+	return 0 // the default of safefile
+}
+
+// tightenRule takes the write of the group off a seed file of regras/.
+func tightenRule(rel, full string) error {
+	if !strings.HasPrefix(rel, "regras/") {
+		return nil
+	}
+	return safefile.Tighten(full)
 }

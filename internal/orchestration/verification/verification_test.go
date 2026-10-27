@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -384,6 +385,11 @@ func TestTheProposalIsWrittenOnceAndHoldsNothingUntilConfirmed(t *testing.T) {
 	}
 	if _, err := verification.Parse(b); err != nil || !strings.Contains(string(b), "go test ./...") {
 		t.Fatalf("proposal %q: %v", b, err)
+	}
+	if runtime.GOOS != "windows" {
+		if st, err := os.Stat(path); err != nil || st.Mode().Perm()&0o022 != 0 {
+			t.Errorf("the verification file is writable by the group or the others: %v, %v", st, err) // the agents run it, they do not write it
+		}
 	}
 	if len(told) != 1 {
 		t.Fatalf("Administrators told %d times", len(told))

@@ -144,12 +144,21 @@ func (c *Citadel) activeNotCitadel(ctx context.Context, id string) (Machine, err
 	return m, nil
 }
 
+// Like every write of the Owner, SetExcluded, Remove, SetPriority and SetTimezone go
+// through the gate (Admit): while the Citadel drains for a switch they are refused with
+// ErrSuspended, so none lands after the last LSN the new Citadel is given.
+//
 // SetExcluded excludes a machine from the secrets, or undoes it (the Owner,
 // with the PIN, in the panel or by /guilda). The Citadel cannot be excluded.
 // The registry changes and the hook fires; sending vault.drop (or the vault
 // again) and guild.config belongs to the replication. The certificates do
 // not change: only the acting Citadel's carries mestre.local.
 func (c *Citadel) SetExcluded(ctx context.Context, machineID string, excluded bool) error {
+	leave, ok := c.enter()
+	if !ok {
+		return ErrSuspended
+	}
+	defer leave()
 	m, err := c.activeNotCitadel(ctx, machineID)
 	if err != nil {
 		return err
@@ -226,6 +235,11 @@ type RemoveResult struct {
 // is refused. Its characters stop being served by the Guild; the history of
 // the machine stays in the database.
 func (c *Citadel) Remove(ctx context.Context, machineID, by string) (RemoveResult, error) {
+	leave, ok := c.enter()
+	if !ok {
+		return RemoveResult{}, ErrSuspended
+	}
+	defer leave()
 	m, err := c.activeNotCitadel(ctx, machineID)
 	if err != nil {
 		return RemoveResult{}, err

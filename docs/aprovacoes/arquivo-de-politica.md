@@ -7,7 +7,7 @@ Documento de referência da [política de aprovação](politica.md), que é dona
 ## Onde fica e quem edita
 
 - Fica em `.mestre/regras/politica-de-aprovacao.yaml`, no clone principal da campanha na Cidadela. É criado na [sessão zero](../sessao-zero/workspace.md) com o conteúdo padrão abaixo.
-- Editado só pelo Senhor da Guilda ([tabela de níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)), no painel ([administração](../painel/administracao.md)) ou direto no arquivo. Nenhum agente pode editá-lo: é regra fixa do Mestre.
+- Editado só pelo Senhor da Guilda ([tabela de níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)), no painel ([administração](../painel/administracao.md)) ou direto no arquivo. Nenhum agente pode editá-lo: é regra fixa do Mestre e também permissão do sistema: o motor o grava 0644 (sem escrita para o grupo `mestre-agente`), como o teto e as instruções extras da pasta `regras/`, e a sessão zero tira a escrita do grupo de um arquivo que uma versão anterior deixou 0664 (CA-SZ-WS-09).
 - O motor lê o arquivo a cada uso, só pelo caminho seguro (um link, um arquivo que não é regular ou com mais de 256 KiB não vale) e valida ao carregar. Arquivo inválido: continua valendo a última versão válida e o Senhor da Guilda recebe alerta com o erro. Cada pedido e cada decisão guardam a versão (hash) do arquivo que valia ([auditoria](fluxo.md#auditoria)).
 
 ## Conteúdo padrão

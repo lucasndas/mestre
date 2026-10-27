@@ -38,6 +38,11 @@ func (c *Citadel) ExtraNames(ctx context.Context) ([]string, error) {
 // transport.ErrBadName. Only the certificate of the acting Citadel carries
 // them: CitadelCertificateDue says it must be issued again.
 func (c *Citadel) SetExtraNames(ctx context.Context, names []string) error {
+	leave, ok := c.enter()
+	if !ok {
+		return ErrSuspended
+	}
+	defer leave()
 	clean, err := transport.CheckExtraNames(names)
 	if err != nil {
 		return fmt.Errorf("guild: the extra names: %w", err)

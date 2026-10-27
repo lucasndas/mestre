@@ -343,7 +343,7 @@ func (h workspaceHost) ConfirmVerification(ctx context.Context, by users.User, s
 	// difference is an edit made outside the panel. The confirmation is already in
 	// force: a file that cannot be written (a link, a folder) does not undo it, and
 	// the screen shows it as an edit outside the panel until it is put right.
-	if err := safefile.Write(h.file(orc, slug), doc, safefile.Options{}); err != nil {
+	if err := safefile.Write(h.file(orc, slug), doc, safefile.Options{Mode: safefile.RulesMode}); err != nil {
 		h.r.env.Log.Warn("app: the confirmed verification commands were not written to the main clone", "workspace", slug, "err", err)
 	}
 	return hash, nil

@@ -53,7 +53,7 @@ func (k Keeper) Propose(ctx context.Context, workspace, dir string, commands []s
 	if len(bytes.TrimSpace(cur)) > 0 {
 		return nil
 	}
-	if err := safefile.Write(path, doc, safefile.Options{}); err != nil {
+	if err := safefile.Write(path, doc, safefile.Options{Mode: safefile.RulesMode}); err != nil {
 		return fmt.Errorf("write %s: %w", File, err)
 	}
 	if k.Notify != nil {

@@ -101,7 +101,8 @@ type CitadelConfig struct {
 	// Citadel takes no entries, docs/guilda/cidadela-e-torres.md#cidadela-suspensa).
 	Suspended func() bool
 	// Admit, when set, is asked before a write that must not reach a Citadel
-	// that hands over (the decision on an entry, its own certificate): it
+	// that hands over (the decision on an entry, its own certificate, and every write of
+	// the Owner on the machines and the Guild): it
 	// returns the function that ends the write, or false to refuse it with
 	// ErrSuspended.
 	Admit func() (leave func(), ok bool)
