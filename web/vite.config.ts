@@ -19,6 +19,11 @@ export default defineConfig({
     css: false,
     // A failed test is never run again (docs/qualidade/testes.md#regras-e-erros).
     retry: 0,
+    // A test that hits this limit is abandoned, not stopped: its body keeps running and renders into
+    // the next test (or the next file, in a shared worker). Heavy screens take 2 to 4 s under load,
+    // so the limit only catches a real hang. The suite budget in testrun is unchanged.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     // Tests above this are flagged by the runner (testrun) as slow.
     slowTestThreshold: 100,
     // A test that stubs a global gives it back, so files can share a worker.
