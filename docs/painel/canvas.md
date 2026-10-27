@@ -92,7 +92,7 @@ Depois de `mestre recruit --replace`, o nó do personagem novo fica na posição
 ## Critérios de aceite
 
 - **CA-CANVAS-01** · *pesada* — **Dado** uma mesa com missão em andamento em duas máquinas, **quando** abro o canvas, **então** vejo personagens com selo da máquina, conexões, pergaminhos ao vivo, setas numeradas com a etapa atual destacada e linhas tracejadas de espera com motivo (MVP-11).
-- **CA-CANVAS-02** · *rápida* — **Dado** o glossário com o termo "Companhia", **quando** o build roda, **então** a ajuda do "?" de Companhia é exatamente a Ajuda curta da tabela; e um termo sem linha faz o build falhar.
+- **CA-CANVAS-02** · *rápida* — **Dado** o glossário com o termo "Companhia", **quando** o build roda, **então** a ajuda do termo Companhia é exatamente a Ajuda curta da tabela; e um termo sem linha faz o build falhar.
 - **CA-CANVAS-03** · *rápida* — **Dado** um Aprovador, **quando** envia entrada para um terminal pelo WebSocket, **então** o servidor recusa e nada chega ao PTY.
 - **CA-CANVAS-04** · *completa* — **Dado** um terminal com saída, **quando** o navegador reconecta, **então** a Cidadela pede à máquina o `terminal.replay` e o fluxo reenviado é, byte a byte, o do buffer da máquina (comparado em Go).
 - **CA-CANVAS-09** · *rápida* — **Dado** esse replay, **quando** o painel (Vitest, xterm.js sem navegador) o recebe, **então** o buffer de linhas renderizado é igual ao do emulador da máquina.

@@ -6,7 +6,7 @@ import { glossary } from "../gen/glossary";
 import { renderWithI18n } from "../test-utils";
 import { Term } from "./Term";
 
-// CA-CANVAS-02: the help of the "?" of a term is exactly the short help of the
+// CA-CANVAS-02: the help of a term is exactly the short help of the
 // glossary table. gen/glossary.ts is the table at build time (a Go test proves the
 // file is not stale), and a term with no row of its own does not type-check.
 // CA-CANVAS-02
