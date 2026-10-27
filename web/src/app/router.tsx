@@ -35,6 +35,7 @@ import { Login } from "../screens/Login";
 import { Overview } from "../screens/Overview";
 import { Password } from "../screens/Password";
 import { Sessions } from "../screens/Sessions";
+import { Settings } from "../screens/Settings";
 import { Setup } from "../screens/Setup";
 import { TableScreen } from "../screens/TableScreen";
 import { Workspaces } from "../screens/workspaces/Workspaces";
@@ -78,6 +79,11 @@ const overviewRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/",
   component: Overview,
+});
+const settingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/configuracoes",
+  component: Settings,
 });
 const passwordRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -187,7 +193,12 @@ const transferRoute = createRoute({
 const workspacesRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/workspaces",
-  component: Workspaces,
+  // ?criar=1 opens the form of the new campaign (the first steps of the Início lead here)
+  validateSearch: (s: Record<string, unknown>): { criar?: boolean } =>
+    s.criar === true || s.criar === "1" || s.criar === "true" ? { criar: true } : {},
+  component: function WorkspacesPage() {
+    return <Workspaces create={workspacesRoute.useSearch().criar === true} />;
+  },
 });
 // The view of a workspace (docs/painel/visao-do-workspace.md): the Grand Master and the tables
 const workspaceRoute = createRoute({
@@ -296,6 +307,7 @@ const setupRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   appRoute.addChildren([
     overviewRoute,
+    settingsRoute,
     sessionsRoute,
     passwordRoute,
     usersRoute,

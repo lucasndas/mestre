@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { type DragEvent, Fragment, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Button as AriaButton } from "react-aria-components";
 import { useTranslation } from "react-i18next";
@@ -10,6 +11,8 @@ import { chatOverviewQuery, chatQuery, humanSize, newMessageId } from "../lib/ch
 import { errorText } from "../lib/errors";
 import { formatTime } from "../lib/format";
 import { useCurrentWorkspace } from "../workspace/current";
+import { isEnded } from "../workspace/model";
+import { viewQuery } from "../workspace/queries";
 import { ChatMarkdown } from "./Markdown";
 import { Term } from "./Term";
 import { Alert, Button } from "./ui";
@@ -87,9 +90,21 @@ function StatusLine({ status }: { status: ChatStatus }) {
 }
 
 /** The message of progress: one card at the top, rewritten in place by the engine. */
-function ProgressCard({ lines, updatedAt }: { lines: string[]; updatedAt: string }) {
+function ProgressCard({
+  lines,
+  updatedAt,
+  workspace,
+  onNavigate,
+}: {
+  lines: string[];
+  updatedAt: string;
+  workspace: string;
+  onNavigate: () => void;
+}) {
   const { t, i18n } = useTranslation("chat");
   const { timezone } = useMe();
+  const { data: view } = useQuery(viewQuery(workspace));
+  const tables = (view?.tables ?? []).filter((b) => !isEnded(b));
   const [head, ...rest] = lines;
   return (
     <section
@@ -104,6 +119,22 @@ function ProgressCard({ lines, updatedAt }: { lines: string[]; updatedAt: string
             // the lines of one message, in order, with no id of their own
             // biome-ignore lint/suspicious/noArrayIndexKey: the message is replaced as a whole
             <li key={i}>{l.replace(/^[-•]\s*/, "")}</li>
+          ))}
+        </ul>
+      ) : null}
+      {tables.length > 0 ? (
+        <ul aria-label={t("progress.tables")} className="mt-2 flex flex-col">
+          {tables.map((b) => (
+            <li key={b.id}>
+              <Link
+                to="/workspaces/$workspace/mesas/$table"
+                params={{ workspace, table: b.id }}
+                onClick={onNavigate}
+                className="inline-flex min-h-11 items-center text-accent underline underline-offset-4"
+              >
+                {b.epic_title || b.id}
+              </Link>
+            </li>
           ))}
         </ul>
       ) : null}
@@ -453,7 +484,7 @@ function Composer({
   );
 }
 
-function Conversation({ workspace }: { workspace: string }) {
+function Conversation({ workspace, onNavigate }: { workspace: string; onNavigate: () => void }) {
   const { t } = useTranslation("chat");
   const qc = useQueryClient();
   const { data, isPending, isError } = useQuery(chatQuery(workspace));
@@ -497,7 +528,12 @@ function Conversation({ workspace }: { workspace: string }) {
       <StatusLine status={data.status} />
       <div ref={log} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {data.progress ? (
-          <ProgressCard lines={data.progress.lines} updatedAt={data.progress.updated_at} />
+          <ProgressCard
+            lines={data.progress.lines}
+            updatedAt={data.progress.updated_at}
+            workspace={workspace}
+            onNavigate={onNavigate}
+          />
         ) : null}
         {data.entries.length === 0 ? <p className="p-4 text-muted">{t("empty")}</p> : null}
         <ol aria-label={t("log")} className="flex flex-col gap-3 p-4">
@@ -545,7 +581,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
   const { data: overview, isPending } = useQuery(chatOverviewQuery);
   const current = useCurrentWorkspace();
   const list = overview?.workspaces ?? [];
-  // the conversation follows the selector of the top bar; a workspace the user cannot talk in falls to the first that works
+  // the conversation is about the current campaign (the one of the trail, else the last opened); one the user cannot talk in falls to the first that works
   const workspace = list.some((w) => w.slug === current.slug)
     ? current.slug
     : (list[0]?.slug ?? "");
@@ -567,12 +603,24 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
       {isPending ? <p className="p-4 text-muted">{t("loading")}</p> : null}
       {overview && list.length === 0 ? <p className="p-4 text-muted">{t("noWorkspace")}</p> : null}
       {list.length > 0 ? (
-        <p className="border-b border-line px-4 py-2 text-sm text-muted">
-          {t("workspace")}: <span className="font-semibold text-ink">{workspace}</span> ·{" "}
-          {t("privacy")}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 border-b border-line px-4 py-1 text-sm text-muted">
+          <p>
+            {t("workspace")}: <span className="font-semibold text-ink">{workspace}</span> ·{" "}
+            {t("privacy")}
+          </p>
+          <Link
+            to="/workspaces/$workspace"
+            params={{ workspace }}
+            onClick={onClose}
+            className="inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-4"
+          >
+            {t("openWorkspace")}
+          </Link>
+        </div>
       ) : null}
-      {workspace ? <Conversation key={workspace} workspace={workspace} /> : null}
+      {workspace ? (
+        <Conversation key={workspace} workspace={workspace} onNavigate={onClose} />
+      ) : null}
     </aside>
   );
 }

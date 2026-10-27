@@ -2,11 +2,12 @@ import type { Widen } from "../../shape";
 import type pt from "../pt-BR/chat";
 
 const chat: Widen<typeof pt> = {
-  toggle: "Chat",
+  toggle: "Grand Master",
   toggleUnread: "Chat with the Grand Master, {{count}} new",
   toggleOpen: "Open the chat with the Grand Master",
   title: "Chat with the Grand Master",
   close: "Close the chat",
+  openWorkspace: "Open campaign",
   workspace: "Campaign",
   loading: "Loading the conversation…",
   loadError: "I could not load the conversation.",
@@ -24,6 +25,7 @@ const chat: Widen<typeof pt> = {
     locked: "System locked: what you send is kept until it is unlocked.",
   },
   progress: {
+    tables: "Tables",
     title: "Campaign progress",
     updated: "Updated at {{time}}",
   },

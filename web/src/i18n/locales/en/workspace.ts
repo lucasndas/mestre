@@ -2,11 +2,10 @@ import type { Widen } from "../../shape";
 import type ptBR from "../pt-BR/workspace";
 
 const workspace: Widen<typeof ptBR> = {
-  selector: {
-    label: "Campaign",
-    create: "Create campaign…",
-    none: "No campaign",
-    placeholder: "Choose a campaign",
+  switch: {
+    label: "Campaign {{workspace}}: switch campaign",
+    title: "Switch campaign",
+    all: "See all",
   },
   title: "Campaign {{workspace}}",
   region: "Canvas of campaign {{workspace}}",

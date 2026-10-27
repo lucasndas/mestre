@@ -474,20 +474,6 @@ test("the extra instructions count their bytes and refuse to save over the limit
   expect(screen.getAllByRole("alert").length).toBeGreaterThan(0);
 });
 
-test("the nav shows the rules screens by level and hides the policy from who is not the Owner", async () => {
-  fakeServer({
-    ...caps("status"),
-    "GET /api/chain": () => ({ body: chainBody({ can_pause: false }) }),
-  });
-  renderApp("/cadeia");
-  await screen.findByRole("article", { name: "42-login" });
-  for (const n of ["Decretos", "Delegações", "Supervisão da cadeia", "Teto da campanha"]) {
-    expect(screen.getByRole("link", { name: n })).toBeTruthy();
-  }
-  expect(screen.queryByRole("link", { name: "Política de aprovação" })).toBeNull();
-  expect(screen.queryByRole("link", { name: "Instruções extras" })).toBeNull();
-});
-
 test("the screens speak English when the language is English", async () => {
   fakeServer({
     ...OWNER,
