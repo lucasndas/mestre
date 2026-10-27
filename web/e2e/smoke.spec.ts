@@ -116,7 +116,7 @@ test("the canvas of a table draws its nodes and the terminal of a character", as
   const dev = canvas.getByRole("article", { name: "Personagem Dev-1" });
   await expect(dev).toBeVisible();
   await expect(dev.getByText("Máquina e2e")).toBeVisible();
-  await expect(dev.getByRole("status")).toHaveText("ocupado");
+  await expect(dev.getByRole("status")).toHaveText("Trabalhando");
   await expect(canvas.getByRole("article", { name: "Personagem Revisor" })).toBeAttached();
   await expect(canvas.getByRole("article", { name: "Pergaminho Plano" })).toBeAttached();
   // the terminal of Dev-1 is the real one, over the socket
@@ -125,7 +125,7 @@ test("the canvas of a table draws its nodes and the terminal of a character", as
   // the lines: the number of the step of the mission (the arrow into step 2, highlighted because step 1 is under way) and the reason of the wait
   await expect(canvas.locator('[data-edge-kind="step"]')).toHaveText("2");
   await expect(canvas.locator('[data-edge-kind="step"]')).toHaveAttribute("data-current", "true");
-  await expect(canvas.locator('[data-edge-kind="wait"]')).toHaveText("aguardando Dev-1");
+  await expect(canvas.locator('[data-edge-kind="wait"]')).toHaveText("Esperando Dev-1");
   // an action goes to the engine and the canvas shows its answer: pin Dev-1
   await dev.getByRole("button", { name: "Fixar Dev-1" }).click();
   await expect(dev.getByRole("button", { name: "Desafixar Dev-1" })).toBeVisible();
