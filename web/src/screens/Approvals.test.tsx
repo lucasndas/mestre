@@ -376,6 +376,28 @@ test("a request of a type without text in the catalog shows the about and the te
   expect(within(card).getByRole("button", { name: "Negar agora" })).toBeTruthy();
 });
 
+// the security review: a grouped request must not say "one action, once", and the card keeps
+// who asked in full and why it reached the user
+test("grouped requests say the answer applies to all of them and the card keeps who asked and why it arrived", async () => {
+  fakeServer(
+    base([
+      item({
+        text: "Pedido de aprovação #7 · tipo permissao_de_classe · risco alto\nComando exato: npm install a\nQuem pediu: Dev · classe Dev · mesa 42-login · máquina pc1\nPor que chegou a este nível: o Mestre da mesa não decide risco alto",
+        members: [
+          { id: 7, about: "npm install a" },
+          { id: 8, about: "npm install b" },
+        ],
+      }),
+    ]),
+  );
+  renderApp("/aprovacoes");
+  const card = await screen.findByRole("article", { name: "Pedido #7" });
+  expect(within(card).getByText(/Vale para os 2 pedidos listados abaixo/)).toBeTruthy();
+  expect(card.textContent).not.toContain("uma vez");
+  expect(within(card).getByText(/Dev · classe Dev · mesa 42-login · máquina pc1/)).toBeTruthy();
+  expect(within(card).getByText(/o Mestre da mesa não decide risco alto/)).toBeTruthy();
+});
+
 const blocking = (can: boolean): BlockingView => ({
   id: 3,
   workspace: "loja",
@@ -405,7 +427,7 @@ test("a blocking notice shows the whole evidence and the text of the agent apart
   expect(card.textContent).toContain("checkout_test.go:10 → falhou");
   expect(card.textContent).not.toContain("ghp_");
   expect(within(card).getByText(/com \*\*\*/)).toBeTruthy();
-  expect(within(card).getByText("Senhor da Guilda: Lucas")).toBeTruthy();
+  expect(within(card).getByText("Quem resolve: Lucas")).toBeTruthy();
   const agent = within(card).getByRole("region", { name: "Texto do agente, não verificado" });
   expect(agent.textContent).toContain("Por que não decido");
   expect(within(card).getByText("Abre a tela de Segredos, onde o PIN é pedido.")).toBeTruthy();

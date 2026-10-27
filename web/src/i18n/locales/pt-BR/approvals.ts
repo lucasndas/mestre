@@ -49,6 +49,9 @@ export default {
     exact: "O que será feito, exatamente",
     ifApprove: "Se você aprovar:",
     ifDeny: "Se negar:",
+    yesMany: "Vale para os {{count}} pedidos listados abaixo, cada um com a sua ação.",
+    noMany: "Nenhum dos {{count}} pedidos listados é aprovado.",
+    chain: "Por que chegou a você",
     more: "Mais opções",
     lessOptions: "Menos opções",
     otherAnswers: "Outras respostas",
@@ -131,10 +134,10 @@ export default {
       no: "O Grão-Mestre não faz isso e espera a sua orientação.",
     },
     entrada_na_guilda: {
-      title: "Alguém quer entrar na Guilda",
-      why: "Só o Senhor da Guilda ou um Administrador deixa uma pessoa nova entrar.",
-      yes: "A pessoa entra na Guilda com o nível combinado.",
-      no: "A pessoa não entra na Guilda.",
+      title: "Uma máquina quer entrar na Guilda",
+      why: "Uma máquina que entra na Guilda passa a guardar o estado e pode virar a Cidadela. Só o Senhor da Guilda decide; confira o código com a tela do instalador.",
+      yes: "A máquina passa a fazer parte da Guilda.",
+      no: "A máquina não entra na Guilda.",
     },
   },
   types: {
@@ -220,7 +223,7 @@ export default {
     evidence: "Evidência",
     noEvidence: "sem evidência verificada",
     unblock: "Para destravar",
-    owner: "Senhor da Guilda: {{name}}",
+    owner: "Quem resolve: {{name}}",
     vault: "Cadastrar no cofre",
     vaultHint: "Abre a tela de Segredos, onde o PIN é pedido.",
     motives: {

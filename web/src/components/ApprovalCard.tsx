@@ -331,12 +331,21 @@ function Answers({
 
 /** The lines of the question that say exactly what will be done: the tool, the command, the URL, the paths. */
 const EXACT = /^(Ferramenta|Comando exato|URL|Caminhos|Ação|Sobre|Missão): /;
+const CHAIN = /^Por que chegou a este nível: /;
+
+/** Who asked, in full (class, table, machine), from the line of the engine; "" for a request of the engine. */
+export function requesterLine(text: string): string {
+  const line = text.split("\n").find((l) => l.startsWith("Quem pediu: ")) ?? "";
+  const who = line.slice("Quem pediu: ".length);
+  return who.startsWith("ninguém") ? "" : who;
+}
 export function exactLines(text: string): string[] {
   return text.split("\n").filter((l) => EXACT.test(l));
 }
 
 const RISK_TONE: Record<string, string> = {
   alto: "bg-danger-wash text-danger",
+  fixo: "bg-danger-wash text-danger",
   medio: "bg-accent-wash text-ink",
 };
 
@@ -370,6 +379,8 @@ export function ApprovalCard({
       : t("item.placeNoTable", { workspace: item.workspace })
     : t("item.system");
   const exact = known ? exactLines(item.text) : [];
+  const chain = known ? (item.text.split("\n").find((l) => CHAIN.test(l)) ?? "") : "";
+  const many = item.members.length > 1;
   return (
     <article
       id={`request-${item.id}`}
@@ -383,6 +394,7 @@ export function ApprovalCard({
           {t(`riskBand.${item.risk}`, { defaultValue: item.risk })}
         </span>
         <span className="text-muted">{place}</span>
+        <span className="text-muted">{t("item.asked", { time: fmt(item.created_at) })}</span>
         {item.deadline && open ? (
           <span className="text-muted">{t("item.expires", { time: fmt(item.deadline) })}</span>
         ) : null}
@@ -400,8 +412,10 @@ export function ApprovalCard({
           <>
             <dt className="font-semibold text-muted">{t("card.exact")}</dt>
             <dd className="m-0">
-              {exact.map((l) => (
-                <p key={l} className="m-0 font-mono text-base break-words">
+              {exact.map((l, i) => (
+                // the same line may come twice; its place is its identity
+                // biome-ignore lint/suspicious/noArrayIndexKey: see above
+                <p key={i} className="m-0 font-mono text-base break-words">
                   {l}
                 </p>
               ))}
@@ -415,15 +429,31 @@ export function ApprovalCard({
           </>
         ) : null}
         <dt className="font-semibold text-muted">{t("card.requester")}</dt>
-        <dd className="m-0">{item.requester || t("card.engine")}</dd>
+        <dd className="m-0 break-words">
+          {known && requesterLine(item.text)
+            ? requesterLine(item.text)
+            : item.requester || t("card.engine")}
+        </dd>
+        {chain ? (
+          <>
+            <dt className="font-semibold text-muted">{t("card.chain")}</dt>
+            <dd className="m-0 break-words">{chain.slice(chain.indexOf(": ") + 2)}</dd>
+          </>
+        ) : null}
       </dl>
       {known ? (
         <div className="flex flex-col gap-2">
           <p className="m-0 rounded-field bg-accent-wash px-3 py-2">
-            <strong>{t("card.ifApprove")}</strong> {t(`readable.${item.type}.yes`)}
+            <strong>{t("card.ifApprove")}</strong>{" "}
+            {many
+              ? t("card.yesMany", { count: item.members.length })
+              : t(`readable.${item.type}.yes`)}
           </p>
           <p className="m-0 rounded-field bg-paper px-3 py-2">
-            <strong>{t("card.ifDeny")}</strong> {t(`readable.${item.type}.no`)}
+            <strong>{t("card.ifDeny")}</strong>{" "}
+            {many
+              ? t("card.noMany", { count: item.members.length })
+              : t(`readable.${item.type}.no`)}
           </p>
         </div>
       ) : (

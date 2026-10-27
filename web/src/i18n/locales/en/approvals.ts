@@ -49,6 +49,9 @@ const approvals: Widen<typeof pt> = {
     exact: "What will be done, exactly",
     ifApprove: "If you approve:",
     ifDeny: "If you deny:",
+    yesMany: "It applies to the {{count}} requests listed below, each with its own action.",
+    noMany: "None of the {{count}} requests listed is approved.",
+    chain: "Why it reached you",
     more: "More options",
     lessOptions: "Fewer options",
     otherAnswers: "Other answers",
@@ -131,10 +134,10 @@ const approvals: Widen<typeof pt> = {
       no: "The Grand Master does not do it and waits for your guidance.",
     },
     entrada_na_guilda: {
-      title: "Someone wants to join the Guild",
-      why: "Only the Guildmaster or an Administrator lets a new person in.",
-      yes: "The person joins the Guild at the agreed level.",
-      no: "The person does not join the Guild.",
+      title: "A machine wants to join the Guild",
+      why: "A machine that joins the Guild keeps the state and can become the Citadel. Only the Guildmaster decides; check the code against the installer screen.",
+      yes: "The machine becomes part of the Guild.",
+      no: "The machine does not join the Guild.",
     },
   },
   types: {
@@ -221,7 +224,7 @@ const approvals: Widen<typeof pt> = {
     evidence: "Evidence",
     noEvidence: "no verified evidence",
     unblock: "To unblock",
-    owner: "Guildmaster: {{name}}",
+    owner: "Who resolves it: {{name}}",
     vault: "Register in the vault",
     vaultHint: "Opens the Secrets screen, where the PIN is asked.",
     motives: {
