@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { tableState } from "./fixtures";
 import { addArrow, draftEdges, emptyDraft, fromQuest, move, remove, toRequest } from "./mission";
-import { buildEdges, buildNodes, groupOf, layoutItems } from "./model";
+import { buildEdges, buildNodes, focusCharacter, groupOf, initialView, layoutItems } from "./model";
 
 test("the nodes of the table are its characters and scrolls, in the places the layout keeps", () => {
   const nodes = buildNodes(tableState());
@@ -145,4 +145,19 @@ test("a draft mission of the table can be adjusted: it loads into the drawing", 
     ],
   });
   expect(draftEdges(d, st).map((e) => e.data?.kind)).toEqual(["step", "return"]);
+});
+
+test("the board opens on who works, else on the master of the table", () => {
+  const st = tableState();
+  expect(focusCharacter(st)).toBe("character:dev");
+  st.characters = st.characters.map((c) => ({ ...c, state: "idle" }));
+  expect(focusCharacter(st)).toBe("character:mm");
+});
+
+test("the board opens on the whole table when it fits the frame, else centered on the focus", () => {
+  const nodes = buildNodes(tableState());
+  const small = initialView(nodes, "character:dev", { width: 100000, height: 100000 });
+  expect(small.nodes).toBeUndefined();
+  const tight = initialView(nodes, "character:dev", { width: 800, height: 600 });
+  expect(tight.nodes).toEqual([{ id: "character:dev" }]);
 });

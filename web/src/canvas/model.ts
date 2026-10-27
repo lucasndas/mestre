@@ -276,3 +276,33 @@ export function groupOf(
   }));
   return [group, ...children];
 }
+
+/** The character the board opens on: who is working, else the master of the table, else the first. */
+export function focusCharacter(st: CanvasState): string {
+  const c =
+    st.characters.find((x) => x.state === "busy") ??
+    st.characters.find((x) => x.role === "table_master") ??
+    st.characters[0];
+  return c ? keyOf("character", c.id) : "";
+}
+
+/**
+ * What the board opens on, at zoom 100% (docs/painel/canvas.md#canvas-infinito): the whole
+ * table when it fits in the frame, else the focus character, whose node is centered.
+ */
+export function initialView(
+  nodes: CanvasNode[],
+  focus: string,
+  frame: { width: number; height: number },
+): { nodes?: { id: string }[] } {
+  const own = nodes.filter((n) => !n.parentId);
+  if (own.length === 0) return {};
+  const w = (n: CanvasNode) => n.width ?? 0;
+  const h = (n: CanvasNode) => n.height ?? 0;
+  const minX = Math.min(...own.map((n) => n.position.x));
+  const minY = Math.min(...own.map((n) => n.position.y));
+  const maxX = Math.max(...own.map((n) => n.position.x + w(n)));
+  const maxY = Math.max(...own.map((n) => n.position.y + h(n)));
+  const fits = maxX - minX <= frame.width && maxY - minY <= frame.height;
+  return fits || !own.some((n) => n.id === focus) ? {} : { nodes: [{ id: focus }] };
+}

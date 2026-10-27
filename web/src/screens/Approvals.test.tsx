@@ -52,6 +52,11 @@ function item(extra: Partial<ApprovalItem> = {}): ApprovalItem {
   };
 }
 
+/** "Mais opções": the answers beyond approve and deny wait behind that button. */
+async function openMore(user: ReturnType<typeof userEvent.setup>, card: HTMLElement) {
+  await user.click(within(card).getByRole("button", { name: "Mais opções" }));
+}
+
 const list = (
   requests: ApprovalItem[] = [],
   blocking: BlockingView[] = [],
@@ -84,13 +89,13 @@ test("the central shows the question, the block of the agent and the answers; th
   const agent = within(card).getByRole("region", { name: "Texto do agente, não verificado" });
   expect(agent.textContent).toContain("preciso do lodash");
   expect(within(agent).queryByText(/Comando exato/)).toBeNull();
-  for (const name of [
-    "Aprovar agora",
-    "Aprovar por um tempo",
-    "Aprovar o padrão",
-    "Negar agora",
-    "Negar com instrução",
-  ]) {
+  for (const name of ["Aprovar agora", "Negar agora"]) {
+    expect(within(card).getByRole("button", { name })).toBeTruthy();
+  }
+  // the other answers wait behind "Mais opções"
+  expect(within(card).queryByRole("button", { name: "Aprovar o padrão" })).toBeNull();
+  await openMore(user, card);
+  for (const name of ["Aprovar por um tempo", "Aprovar o padrão", "Negar com instrução"]) {
     expect(within(card).getByRole("button", { name })).toBeTruthy();
   }
   expect(within(card).queryByRole("button", { name: "Delegar" })).toBeNull();
@@ -121,6 +126,7 @@ test("an answer that needs data shows the field first and does not send it empty
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/aprovacoes");
   const card = await screen.findByRole("article", { name: "Pedido #7" });
+  await openMore(user, card);
   await user.click(within(card).getByRole("button", { name: "Aprovar por um tempo" }));
   await fill(user, within(card).getByLabelText("PIN"), "123456");
   await user.click(within(card).getByRole("button", { name: "Confirmar" }));
@@ -161,6 +167,7 @@ test("the delegation shows what it covers before the PIN is asked", async () => 
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/aprovacoes");
   const card = await screen.findByRole("article", { name: "Pedido #7" });
+  await openMore(user, card);
   await user.click(within(card).getByRole("button", { name: "Delegar" }));
   expect(
     within(card).getByText(/Ação destrutiva na campanha loja, mesa 42-login, por até 30 dias/i) ??
@@ -248,8 +255,8 @@ test("the filters go to the server and the empty state says what to do", async (
 test("nothing waiting is said with what to do", async () => {
   fakeServer(base([]));
   renderApp("/aprovacoes");
-  expect(await screen.findByText("Nada espera por você agora")).toBeTruthy();
-  expect(screen.getByText(/o contador no topo avisa/)).toBeTruthy();
+  expect(await screen.findByText("Nada esperando por você")).toBeTruthy();
+  expect(screen.getByText(/o pedido aparece aqui e o número no item Aprovações/)).toBeTruthy();
 });
 
 test("similar requests are one item with the list of their actions, and the quorum is shown", async () => {
@@ -295,11 +302,100 @@ test("Ver detalhes shows the whole question with the target and the diff of the 
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/aprovacoes");
   const card = await screen.findByRole("article", { name: "Pedido #7" });
-  await user.click(within(card).getByRole("button", { name: "Ver detalhes" }));
+  await user.click(within(card).getByRole("button", { name: "Ver detalhes técnicos" }));
   expect(await within(card).findByText(/Alvo exato/)).toBeTruthy();
   expect(within(card).getByText("a.go (+1 −1)")).toBeTruthy();
   expect(within(card).getByText("+new")).toBeTruthy();
-  expect(within(card).getByRole("button", { name: "Esconder detalhes" })).toBeTruthy();
+  expect(within(card).getByRole("button", { name: "Esconder detalhes técnicos" })).toBeTruthy();
+});
+
+// CA-CONV-11: a request of the engine in words; the raw codes only in the technical details.
+test("a custo_extra request of the engine reads in Portuguese and keeps the raw text in the technical details", async () => {
+  const raw =
+    "Pedido de aprovação #9 · tipo custo_extra · risco medio\nQuem pediu: ninguém (pedido do motor)\nRespostas deste nível (botões):\n- Aprovar agora";
+  fakeServer(
+    base([
+      item({
+        id: 9,
+        type: "custo_extra",
+        risk: "medio",
+        requester: "",
+        about: "continuar a mesa além do limite do mês",
+        text: raw,
+        agent: "",
+        answers: [
+          answer("approve"),
+          answer("approve_for", { field: "duration" }),
+          answer("deny"),
+          answer("ask_back", { field: "text" }),
+        ],
+      }),
+    ]),
+  );
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/aprovacoes");
+  const card = await screen.findByRole("article", { name: "Pedido #9" });
+  expect(within(card).getByRole("heading", { name: "Usar mais do limite de IA" })).toBeTruthy();
+  expect(within(card).getByText("Risco médio")).toBeTruthy();
+  expect(within(card).getByText(/Libera um gasto extra de IA/)).toBeTruthy();
+  expect(within(card).getByText(/A mesa espera o limite renovar/)).toBeTruthy();
+  expect(within(card).getByText("continuar a mesa além do limite do mês")).toBeTruthy();
+  // "Quem pediu" says the Master, never nobody
+  expect(within(card).getByText("o Mestre")).toBeTruthy();
+  for (const word of ["custo_extra", "risco medio", "Respostas deste nível", "ninguém"]) {
+    expect(card.textContent).not.toContain(word);
+  }
+  // beyond approve and deny, the answers are in "Mais opções"
+  expect(within(card).queryByRole("button", { name: "Perguntar de volta" })).toBeNull();
+  await openMore(user, card);
+  expect(within(card).getByRole("button", { name: "Aprovar por um tempo" })).toBeTruthy();
+  expect(within(card).getByRole("button", { name: "Perguntar de volta" })).toBeTruthy();
+  // the raw text is one click away
+  await user.click(within(card).getByRole("button", { name: "Ver detalhes técnicos" }));
+  expect(card.textContent).toContain("custo_extra");
+  expect(card.textContent).toContain("Respostas deste nível");
+});
+
+// CA-CONV-12: a type the catalog does not know still shows the about and the text of the server.
+test("a request of a type without text in the catalog shows the about and the text of the server", async () => {
+  fakeServer(
+    base([
+      item({
+        id: 11,
+        type: "tipo_novo",
+        about: "fazer algo que o painel ainda não conhece",
+        text: "Pedido de aprovação #11 · tipo tipo_novo\nSobre: fazer algo novo",
+      }),
+    ]),
+  );
+  renderApp("/aprovacoes");
+  const card = await screen.findByRole("article", { name: "Pedido #11" });
+  expect(within(card).getByText("fazer algo que o painel ainda não conhece")).toBeTruthy();
+  expect(within(card).getByText(/Sobre: fazer algo novo/)).toBeTruthy();
+  expect(within(card).getByRole("button", { name: "Aprovar agora" })).toBeTruthy();
+  expect(within(card).getByRole("button", { name: "Negar agora" })).toBeTruthy();
+});
+
+// the security review: a grouped request must not say "one action, once", and the card keeps
+// who asked in full and why it reached the user
+test("grouped requests say the answer applies to all of them and the card keeps who asked and why it arrived", async () => {
+  fakeServer(
+    base([
+      item({
+        text: "Pedido de aprovação #7 · tipo permissao_de_classe · risco alto\nComando exato: npm install a\nQuem pediu: Dev · classe Dev · mesa 42-login · máquina pc1\nPor que chegou a este nível: o Mestre da mesa não decide risco alto",
+        members: [
+          { id: 7, about: "npm install a" },
+          { id: 8, about: "npm install b" },
+        ],
+      }),
+    ]),
+  );
+  renderApp("/aprovacoes");
+  const card = await screen.findByRole("article", { name: "Pedido #7" });
+  expect(within(card).getByText(/Vale para os 2 pedidos listados abaixo/)).toBeTruthy();
+  expect(card.textContent).not.toContain("uma vez");
+  expect(within(card).getByText(/Dev · classe Dev · mesa 42-login · máquina pc1/)).toBeTruthy();
+  expect(within(card).getByText(/o Mestre da mesa não decide risco alto/)).toBeTruthy();
 });
 
 const blocking = (can: boolean): BlockingView => ({
@@ -331,7 +427,7 @@ test("a blocking notice shows the whole evidence and the text of the agent apart
   expect(card.textContent).toContain("checkout_test.go:10 → falhou");
   expect(card.textContent).not.toContain("ghp_");
   expect(within(card).getByText(/com \*\*\*/)).toBeTruthy();
-  expect(within(card).getByText("Dono: Lucas")).toBeTruthy();
+  expect(within(card).getByText("Quem resolve: Lucas")).toBeTruthy();
   const agent = within(card).getByRole("region", { name: "Texto do agente, não verificado" });
   expect(agent.textContent).toContain("Por que não decido");
   expect(within(card).getByText("Abre a tela de Segredos, onde o PIN é pedido.")).toBeTruthy();
@@ -494,4 +590,6 @@ test("the history lists what ended with the filters and loads more", async () =>
     expect(calls.some((c) => c.path === "/api/approvals/history?state=denied")).toBe(true),
   );
   expect(await screen.findByText("Nenhum pedido encerrado com esses filtros.")).toBeTruthy();
+  // an empty state says what to expect, not only that it is empty
+  expect(screen.getByText(/Quando um pedido for decidido, ele aparece aqui/)).toBeTruthy();
 });

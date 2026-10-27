@@ -87,7 +87,7 @@ function CharacterNodeView({ data, selected, id }: NodeProps<CanvasNode>) {
       <Handles />
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-paper px-3 py-2">
         <h3 className="m-0 text-lg">{c.name}</h3>
-        <span className="text-sm text-muted">
+        <span className="text-base text-muted">
           {isGM ? (
             <Term name="Grão-Mestre" />
           ) : c.role === "table_master" ? (
@@ -96,18 +96,18 @@ function CharacterNodeView({ data, selected, id }: NodeProps<CanvasNode>) {
             c.class || <Term name="Terminal simples" />
           )}
         </span>
-        <span className="rounded-field border border-line px-2 text-sm" title={c.machine}>
+        <span className="rounded-field border border-line px-2 text-base" title={c.machine}>
           {t("node.machine", { machine: c.machine_name })}
         </span>
         <span
-          className={`rounded-field px-2 text-sm ${grey ? "bg-line text-muted" : "bg-accent-wash"}`}
+          className={`rounded-field px-2 text-base ${grey ? "bg-line text-muted" : "bg-accent-wash"}`}
           role="status"
         >
           {label(c)}
         </span>
         <span className="flex-1" />
         {c.reduced ? (
-          <span className="text-sm text-danger" title={c.reduced}>
+          <span className="text-base text-danger" title={c.reduced}>
             {t("node.reduced")}
           </span>
         ) : null}
@@ -137,7 +137,7 @@ function CharacterNodeView({ data, selected, id }: NodeProps<CanvasNode>) {
             refreshInfo={() => term.refetch().then((r) => r.data ?? term.data)}
           />
         ) : (
-          <p className="m-0 text-sm text-muted">
+          <p className="m-0 text-base text-muted">
             {c.has_terminal ? t("node.loadingTerminal") : t("node.noTerminal")}
           </p>
         )}
@@ -207,7 +207,7 @@ function ScrollNodeView({ data, selected }: NodeProps<CanvasNode>) {
         ) : null}
       </header>
       {conflict ? (
-        <p role="alert" className="m-0 bg-danger-wash px-3 py-1 text-sm text-danger">
+        <p role="alert" className="m-0 bg-danger-wash px-3 py-1 text-base text-danger">
           {t("scroll.changed")}
         </p>
       ) : null}
@@ -242,7 +242,7 @@ function TomeNodeView({ data, selected }: NodeProps<CanvasNode>) {
       <h3 className="m-0 text-base">
         <Term name="Tomo" />: {d.tome.name}
       </h3>
-      <p className="m-0 text-sm text-muted">{t("node.tomeCount", { count: d.tome.scrolls })}</p>
+      <p className="m-0 text-base text-muted">{t("node.tomeCount", { count: d.tome.scrolls })}</p>
     </article>
   );
 }
@@ -259,7 +259,7 @@ function GroupNodeView({ data, selected }: NodeProps<CanvasNode>) {
       }`}
     >
       <NodeResizer isVisible={selected && d.canEdit} minWidth={160} minHeight={120} />
-      <p className="m-0 px-3 py-1 text-sm font-semibold text-muted">{d.label}</p>
+      <p className="m-0 px-3 py-1 text-base font-semibold text-muted">{d.label}</p>
     </section>
   );
 }
