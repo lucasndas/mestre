@@ -1,5 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { CanvasItem, TableBlock, ViewGrandMaster, WorkspaceView } from "../gen/panel";
+import { type Situation, situationOf } from "./situation";
 
 export const GM_KEY = "gm";
 export const tableKey = (id: string) => `table:${id}`;
@@ -17,7 +18,9 @@ export interface BlockData extends Record<string, unknown> {
   workspace: string;
   repo: string;
   canPause: boolean;
-  ended: boolean;
+  situation: Situation;
+  /** Unread notices of the bell about this table. */
+  newNotices: number;
 }
 export type ViewNode = Node<GmData, "gm"> | Node<BlockData, "table">;
 export type ViewEdge = Edge;
@@ -50,8 +53,19 @@ export function circle(ids: string[]): Map<string, { x: number; y: number }> {
   return out;
 }
 
+/** What the canvas needs besides the view: who decides, which tables the filters let through and the notices not read. */
+export interface BuildOptions {
+  canDecide?: boolean;
+  visible?: (b: TableBlock) => boolean;
+  newNotices?: ReadonlyMap<string, number>;
+}
+
 /** The nodes of the canvas: the Grand Master and the tables the filter lets through, each where it was saved or in the circle. */
-export function buildNodes(view: WorkspaceView, showEnded: boolean): ViewNode[] {
+export function buildNodes(
+  view: WorkspaceView,
+  showEnded: boolean,
+  opts: BuildOptions = {},
+): ViewNode[] {
   const saved = new Map(view.layout.map((it) => [it.key, it]));
   const around = circle(view.tables.map((t) => t.id));
   const nodes: ViewNode[] = [];
@@ -67,8 +81,8 @@ export function buildNodes(view: WorkspaceView, showEnded: boolean): ViewNode[] 
     data: { gm: view.grand_master ?? null, canType: view.can_type },
   });
   for (const b of view.tables) {
-    const ended = isEnded(b);
-    if (ended && !showEnded) continue;
+    if (isEnded(b) && !showEnded) continue;
+    if (opts.visible && !opts.visible(b)) continue;
     const at = saved.get(tableKey(b.id));
     const home = around.get(b.id) ?? { x: 0, y: 0 };
     nodes.push({
@@ -84,7 +98,8 @@ export function buildNodes(view: WorkspaceView, showEnded: boolean): ViewNode[] 
         workspace: view.workspace.slug,
         repo: view.workspace.repo,
         canPause: view.can_pause,
-        ended,
+        situation: situationOf(b, opts.canDecide ?? false),
+        newNotices: opts.newNotices?.get(b.id) ?? 0,
       },
     });
   }

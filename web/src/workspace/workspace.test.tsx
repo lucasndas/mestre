@@ -1,78 +1,13 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { TableBlock, WorkspaceRow, WorkspaceView } from "../gen/panel";
 import { emit, installFakeSocket, openSocket } from "../test-socket";
-import { fakeServer, ME, renderApp } from "../test-utils";
+import { fakeServer, renderApp } from "../test-utils";
 import { buildNodes, circle, layoutOf, quietParts } from "./model";
+import { as, base, block, row, table, view } from "./test-fixtures";
 
 beforeEach(() => installFakeSocket());
 afterEach(() => vi.unstubAllGlobals());
-
-const row = (o: Partial<WorkspaceRow> = {}): WorkspaceRow => ({
-  slug: "loja",
-  repo: "acme/loja",
-  default_branch: "main",
-  state: "active",
-  stages: [],
-  versioning: "local",
-  versioning_asked: true,
-  grand_master: "idle",
-  created_at: "2026-10-20T12:00:00Z",
-  can_act: true,
-  ...o,
-});
-
-const table = (o: Partial<TableBlock> = {}): TableBlock => ({
-  id: "42-login",
-  epic: 42,
-  epic_title: "Login com Google",
-  branch: "epico/42-login",
-  state: "working",
-  paused: false,
-  party: [],
-  party_size: 0,
-  waits: [],
-  last_delivery: "2026-10-26T14:00:00Z",
-  stalled: false,
-  quiet_seconds: 0,
-  pr: 0,
-  ...o,
-});
-
-const view = (tables: TableBlock[], o: Partial<WorkspaceView> = {}): WorkspaceView => ({
-  workspace: row(),
-  tables,
-  layout: [],
-  can_pause: true,
-  can_type: true,
-  ...o,
-});
-
-const as = (level: string, caps: string[], workspaces: string[] = []) => ({
-  "GET /api/me": () => ({
-    body: { ...ME, user: { ...ME.user, level, workspaces }, capabilities: caps },
-  }),
-});
-
-const base = (v: WorkspaceView | (() => WorkspaceView), extra: Record<string, unknown> = {}) => ({
-  "GET /api/status": () => ({ body: { setup_open: false } }),
-  "GET /api/transfer": () => ({ body: {} }),
-  "GET /api/notices": () => ({ body: { notices: [], unread: 0 } }),
-  "GET /api/chat": () => ({ body: { workspaces: [], unread: 0, limit: 1, max_files: 1 } }),
-  "GET /api/approvals/count": () => ({ body: { pending: 3 } }),
-  "GET /api/workspaces": () => ({
-    body: { workspaces: [row()], sheets: [], can_create: false },
-  }),
-  "GET /api/workspaces/loja/view": () => ({ body: typeof v === "function" ? v() : v }),
-  "PUT /api/me/workspace": () => ({ body: ME }),
-  ...as("approver", ["status", "pause_buttons", "decide_approvals"], ["loja"]),
-  ...extra,
-});
-
-// the canvas loads on demand (React Flow and xterm.js): the first block waits for that import
-const block = (name: string) =>
-  screen.findByRole("article", { name: `Mesa ${name}` }, { timeout: 8000 });
 
 // CA-VWS-01
 test("a workspace with three tables shows two blocks, and the ended one only with the filter", async () => {
@@ -102,17 +37,17 @@ test("a workspace with three tables shows two blocks, and the ended one only wit
   renderApp("/workspaces/loja");
   const a = await block("42-login");
   expect(a.textContent).toContain("Login com Google");
-  expect(a.textContent).toContain("em trabalho");
+  expect(a.textContent).toContain("Trabalhando");
   expect(a.textContent).toContain("epico/42-login");
   expect(within(a).getByRole("link", { name: "Issue #42 no GitHub" }).getAttribute("href")).toBe(
     "https://github.com/acme/loja/issues/42",
   );
   const b = await block("43-pay");
-  expect(b.textContent).toContain("em revisão");
+  expect(b.textContent).toContain("Em revisão");
   expect(within(b).getByRole("link", { name: "PR #7 no GitHub" })).toBeTruthy();
   expect(screen.queryByRole("article", { name: "Mesa 40-old" })).toBeNull();
   await user.click(screen.getByRole("checkbox", { name: "mostrar encerradas" }));
-  expect((await block("40-old")).textContent).toContain("encerrada");
+  expect((await block("40-old")).textContent).toContain("Encerrada");
 });
 
 // CA-VWS-02: the server sends only what the user may see; the selector lists exactly that
@@ -152,12 +87,12 @@ test("a table that moves to review changes its block without reloading the page"
   let state = "working";
   fakeServer(base(() => view([table({ state })])));
   renderApp("/workspaces/loja");
-  expect((await block("42-login")).textContent).toContain("em trabalho");
+  expect((await block("42-login")).textContent).toContain("Trabalhando");
   const sock = openSocket();
   expect(sock.subscribed()).toContain("workspaces:all");
   state = "in_review";
   act(() => emit(sock, "workspaces:all", "changed", {}));
-  await waitFor(async () => expect((await block("42-login")).textContent).toContain("em revisão"));
+  await waitFor(async () => expect((await block("42-login")).textContent).toContain("Em revisão"));
 });
 
 // CA-VWS-06
@@ -199,8 +134,8 @@ test("the criteria show how many have a proof and how many the engine verified",
   expect((await block("42-login")).textContent).toContain("Critérios 2 de 3 (1 verificado)");
 });
 
-// CA-VWS-08
-test("a working table without delivery shows the badge and Pausar mesa to an Approver, not to an Observer", async () => {
+// CA-VWS-08 and CA-VIDA-07: the pause asks a reason, written by the user, and sends it
+test("a working table without delivery is Travada and an Approver pauses it with a reason; an Observer cannot", async () => {
   const stalled = table({ stalled: true, quiet_seconds: 4 * 3600 });
   const { calls } = fakeServer(
     base(view([stalled]), {
@@ -210,17 +145,26 @@ test("a working table without delivery shows the badge and Pausar mesa to an App
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   const { unmount } = renderApp("/workspaces/loja");
   const a = await block("42-login");
-  expect(a.textContent).toContain("sem entrega há 4 h");
+  expect(a.textContent).toContain("Travada");
+  expect(a.textContent).toContain("nada foi entregue há 4 h");
   await user.click(within(a).getByRole("button", { name: "Pausar a mesa 42-login" }));
+  // no reason, no pause: the button stays off until something is written
+  const send = within(a).getByRole("button", { name: "Pausar mesa" });
+  expect((send as HTMLButtonElement).disabled).toBe(true);
+  await user.click(within(a).getByRole("textbox", { name: "Por que pausar esta mesa?" }));
+  await user.paste("refazendo a mesma tela");
+  await user.click(within(a).getByRole("button", { name: "Pausar mesa" }));
   await waitFor(() =>
-    expect(calls.some((c) => c.method === "POST" && c.path.endsWith("/pause"))).toBe(true),
+    expect(calls.find((c) => c.method === "POST" && c.path.endsWith("/pause"))?.body).toEqual({
+      reason: "refazendo a mesma tela",
+    }),
   );
   unmount();
 
   // an Observer: the server says it cannot pause, and the button is not there
   fakeServer(base(view([stalled], { can_pause: false }), as("observer", ["status"], ["loja"])));
   renderApp("/workspaces/loja");
-  expect((await block("42-login")).textContent).toContain("sem entrega há 4 h");
+  expect((await block("42-login")).textContent).toContain("Travada");
   expect(screen.queryByRole("button", { name: /Pausar/ })).toBeNull();
 });
 
@@ -232,13 +176,14 @@ test("a paused table shows the mark and no stall badge", async () => {
   );
   renderApp("/workspaces/loja");
   const a = await block("42-login");
-  expect(a.textContent).toContain("pausada");
-  expect(a.textContent).not.toContain("sem entrega");
+  expect(a.textContent).toContain("Esperando");
+  expect(a.textContent).toContain("Pausada pelo painel");
+  expect(a.textContent).not.toContain("nada foi entregue");
   expect(within(a).queryByRole("button", { name: /Pausar a mesa/ })).toBeNull();
 });
 
-// CA-VWS-09
-test("the same failure again shows the fingerprint and the file and line", async () => {
+// CA-VWS-09 and CA-VIDA-09: the fingerprint and the file and line are technical details, folded
+test("the same failure again says it in words and keeps the fingerprint and the file and line in the technical details", async () => {
   fakeServer(
     base(
       view([
@@ -257,9 +202,15 @@ test("the same failure again shows the fingerprint and the file and line", async
   );
   renderApp("/workspaces/loja");
   const a = await block("42-login");
-  expect(a.textContent).toContain("Mesma falha repetida");
-  expect(a.textContent).toContain("impressão ab12cd");
-  expect(within(a).getByText("pkg/login.go:42")).toBeTruthy();
+  expect(a.textContent).toContain("Travada");
+  expect(a.textContent).toContain("A mesma falha voltou");
+  const tech = a.querySelector("details") as HTMLDetailsElement;
+  expect(tech.open).toBe(false);
+  expect(tech.textContent).toContain("Detalhes técnicos");
+  expect(within(tech).getByText("ab12cd")).toBeTruthy();
+  expect(within(tech).getByText("pkg/login.go:42")).toBeTruthy();
+  // not in the body of the card
+  expect(a.textContent?.split("Detalhes técnicos")[0]).not.toContain("pkg/login.go:42");
 });
 
 test("a block shows the quest, the party, the usage and the warning of a table without issue", async () => {

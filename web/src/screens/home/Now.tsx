@@ -1,16 +1,15 @@
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { useFormatDateTime } from "../../app/session";
+import { useCan, useFormatDateTime } from "../../app/session";
 import { Alert } from "../../components/ui";
-import { Badge } from "../admin/kit";
+import { SituationChip } from "../../workspace/SituationChip";
+import { situationOf } from "../../workspace/situation";
 import type { HomeTable } from "./reads";
-
-type Say = (k: string, o?: object) => string;
 
 function Row({ item }: { item: HomeTable }) {
   const { t } = useTranslation("home");
-  const say = t as unknown as Say;
   const fmt = useFormatDateTime();
+  const canDecide = useCan("decide_approvals");
   const b = item.block;
   const title = b.epic_title || b.id;
   const machines = b.party.map((m) => m.machine_name).join(", ");
@@ -34,16 +33,7 @@ function Row({ item }: { item: HomeTable }) {
               : t("now.noDelivery")}
           </span>
         </span>
-        <span className="flex items-center gap-2">
-          {b.paused ? <Badge>{t("now.paused")}</Badge> : null}
-          <Badge tone={b.stalled ? "warn" : "plain"}>
-            {b.stalled
-              ? t("now.stalled", { minutes: Math.floor(b.quiet_seconds / 60) })
-              : say(`now.state.${b.state}`) === `now.state.${b.state}`
-                ? b.state
-                : say(`now.state.${b.state}`)}
-          </Badge>
-        </span>
+        <SituationChip s={situationOf(b, canDecide)} />
       </Link>
     </li>
   );

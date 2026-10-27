@@ -211,14 +211,20 @@ const workspaceRoute = createRoute({
 const approvalsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/aprovacoes",
-  validateSearch: (s: Record<string, unknown>): { pedido?: number; aviso?: number } => {
+  validateSearch: (
+    s: Record<string, unknown>,
+  ): { pedido?: number; aviso?: number; mesa?: string } => {
     const n = (v: unknown) =>
       Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : undefined;
-    return { pedido: n(s.pedido), aviso: n(s.aviso) };
+    return {
+      pedido: n(s.pedido),
+      aviso: n(s.aviso),
+      mesa: typeof s.mesa === "string" && s.mesa ? s.mesa : undefined,
+    };
   },
   component: function ApprovalsPage() {
-    const { pedido, aviso } = approvalsRoute.useSearch();
-    return <Approvals request={pedido} notice={aviso} />;
+    const { pedido, aviso, mesa } = approvalsRoute.useSearch();
+    return <Approvals request={pedido} notice={aviso} table={mesa} />;
   },
 });
 const approvalHistoryRoute = createRoute({

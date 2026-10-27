@@ -6,8 +6,10 @@ import { useCan, useFormatDateTime, useMe } from "../app/session";
 import type { ApprovalsSnapshot, NoticeView } from "../gen/panel";
 import { api } from "../lib/api";
 import { approvalCountQuery, noticesQuery } from "../lib/approvalQueries";
+import { formatTime } from "../lib/format";
 import { noticePath, useGoto } from "../lib/links";
 import { useLiveEvents } from "../lib/live";
+import { useTableNames } from "../workspace/names";
 import { Button } from "./ui";
 
 function Badge({ count }: { count: number }) {
@@ -36,28 +38,77 @@ export function useApprovalsCount(): number {
   return can ? (data?.pending ?? 0) : 0;
 }
 
-function NoticeRow({ n, onOpen }: { n: NoticeView; onOpen: (n: NoticeView) => void }) {
+type Kind = "request" | "notify" | "blocked" | "alert" | "system" | "stranger" | "github";
+
+/** What a notice is, for the label: an approval (the request link) or the kind the engine gave. */
+function kindOf(n: NoticeView): Kind {
+  if (n.link.kind === "request") return "request";
+  const known: Kind[] = ["notify", "blocked", "alert", "system", "stranger", "github"];
+  return known.find((k) => k === n.kind) ?? "notify";
+}
+
+const dayKey = (iso: string, tz: string) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(iso));
+
+/** "Hoje", "Ontem" or the date, in the Guild time zone. */
+function dayLabel(
+  iso: string,
+  now: Date,
+  tz: string,
+  language: string,
+  today: string,
+  yesterday: string,
+): string {
+  const key = dayKey(iso, tz);
+  if (key === dayKey(now.toISOString(), tz)) return today;
+  if (key === dayKey(new Date(now.getTime() - 24 * 3600 * 1000).toISOString(), tz))
+    return yesterday;
+  return new Intl.DateTimeFormat(language, { dateStyle: "medium", timeZone: tz }).format(
+    new Date(iso),
+  );
+}
+
+function NoticeRow({
+  n,
+  name,
+  onOpen,
+}: {
+  n: NoticeView;
+  name: string;
+  onOpen: (n: NoticeView) => void;
+}) {
   const { t } = useTranslation("approvals");
-  const fmt = useFormatDateTime();
+  const say = t as unknown as (k: string, o?: object) => string;
+  const { i18n } = useTranslation();
+  const { timezone } = useMe();
   const path = noticePath(n.workspace, n.link);
+  const kind = kindOf(n);
+  // the human name of the table, never its identifier (the identifier only when the name is not known)
   const place = n.workspace
     ? n.table
-      ? t("bell.place", { workspace: n.workspace, table: n.table })
+      ? t("bell.placeNamed", { workspace: n.workspace, table: name || n.table })
       : t("bell.placeNoTable", { workspace: n.workspace })
     : t("bell.system");
+  const time = formatTime(n.created_at, i18n.language, timezone);
+  const open =
+    n.link.kind === "request"
+      ? "bell.openRequest"
+      : n.link.kind === "table"
+        ? "bell.openTable"
+        : "bell.openNotice";
   return (
     <li
       className={`flex flex-col gap-1 border-b border-line p-3 last:border-b-0 ${n.read ? "" : "bg-accent-wash/50"}`}
     >
-      <p className="text-sm text-muted">
-        {place} · {fmt(n.created_at)}
+      <p className="m-0 text-sm text-muted">
+        <strong className="text-ink">{say(`bell.kind.${kind}`)}</strong> · {place} · {time}
         {n.read ? null : <span className="ml-2 font-semibold text-ink">{t("bell.unread")}</span>}
       </p>
       <p className="break-words whitespace-pre-line">{n.text}</p>
       {path ? (
         <div>
           <Button variant="quiet" onPress={() => onOpen(n)}>
-            {t("bell.openLink")}
+            {say(open)}
           </Button>
         </div>
       ) : null}
@@ -71,7 +122,9 @@ export function NoticesBell() {
   const me = useMe();
   const qc = useQueryClient();
   const goto = useGoto();
+  const { i18n } = useTranslation();
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"unread" | "all">("unread");
   const { data, isPending } = useQuery(noticesQuery);
   useLiveEvents("notices:", (_topic, event) => {
     if (event === "unread" || event === "snapshot")
@@ -82,7 +135,29 @@ export function NoticesBell() {
     onSuccess: () => qc.invalidateQueries({ queryKey: noticesQuery.queryKey }),
   });
   const unread = data?.unread ?? 0;
-  const list = data?.notices ?? [];
+  const all = data?.notices ?? [];
+  const list = tab === "unread" ? all.filter((n) => !n.read) : all;
+  // the name of a table is read only while the bell is open
+  const nameOf = useTableNames(
+    all.filter((n) => n.table).map((n) => n.workspace),
+    open,
+  );
+  const say = t as unknown as (k: string, o?: object) => string;
+  const now = new Date();
+  const groups: { label: string; items: NoticeView[] }[] = [];
+  for (const n of list) {
+    const label = dayLabel(
+      n.created_at,
+      now,
+      me.timezone,
+      i18n.language,
+      say("bell.today"),
+      say("bell.yesterday"),
+    );
+    const last = groups[groups.length - 1];
+    if (last?.label === label) last.items.push(n);
+    else groups.push({ label, items: [n] });
+  }
   return (
     <DialogTrigger isOpen={open} onOpenChange={setOpen}>
       <AriaButton
@@ -120,20 +195,53 @@ export function NoticesBell() {
             ) : null}
           </div>
           {isPending ? <p className="p-3 text-muted">{t("bell.loading")}</p> : null}
-          {data && list.length === 0 ? <p className="p-3 text-muted">{t("bell.empty")}</p> : null}
-          <ul>
-            {list.map((n) => (
-              <NoticeRow
-                key={n.id}
-                n={n}
-                onOpen={(x) => {
-                  if (!x.read) read.mutate([x.id]);
-                  setOpen(false);
-                  goto(noticePath(x.workspace, x.link));
-                }}
-              />
+          <fieldset className="m-0 flex gap-2 border-0 border-b border-line px-3 py-2">
+            <legend className="sr-only">{t("bell.tabs.label")}</legend>
+            {(["unread", "all"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={tab === k}
+                onClick={() => setTab(k)}
+                className={`inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-sm ${
+                  tab === k
+                    ? "border-ink bg-ink text-paper"
+                    : "border-line bg-surface hover:bg-accent-wash"
+                }`}
+              >
+                {t(`bell.tabs.${k}`)}{" "}
+                <span className="font-mono text-xs opacity-75">
+                  {k === "unread" ? unread : all.length}
+                </span>
+              </button>
             ))}
-          </ul>
+          </fieldset>
+          {data && list.length === 0 ? (
+            <p className="p-3 text-muted">
+              {tab === "unread" ? t("bell.emptyUnread") : t("bell.empty")}
+            </p>
+          ) : null}
+          {groups.map((g) => (
+            <section key={g.label} aria-label={g.label}>
+              <h3 className="px-3 pt-2 font-body text-xs tracking-wider text-muted uppercase">
+                {g.label}
+              </h3>
+              <ul>
+                {g.items.map((n) => (
+                  <NoticeRow
+                    key={n.id}
+                    n={n}
+                    name={nameOf(n.workspace, n.table)}
+                    onOpen={(x) => {
+                      if (!x.read) read.mutate([x.id]);
+                      setOpen(false);
+                      goto(noticePath(x.workspace, x.link));
+                    }}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))}
         </Dialog>
       </Popover>
     </DialogTrigger>

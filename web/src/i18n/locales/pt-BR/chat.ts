@@ -1,5 +1,5 @@
 export default {
-  toggle: "Grão-Mestre",
+  toggle: "Falar com o Grão-Mestre",
   toggleUnread: "Conversa com o Grão-Mestre, {{count}} novas",
   toggleOpen: "Abrir a conversa com o Grão-Mestre",
   title: "Conversa com o Grão-Mestre",

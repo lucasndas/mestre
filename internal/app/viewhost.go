@@ -260,7 +260,7 @@ func (h viewHost) SaveLayout(ctx context.Context, workspace string, items []pane
 // PauseTable implements panel.ViewSource: the supervision pauses the table
 // itself (nothing is interrupted, no PIN: it only restricts) and checks the
 // level of the user again.
-func (h viewHost) PauseTable(ctx context.Context, by users.User, workspace, table string) (bool, error) {
+func (h viewHost) PauseTable(ctx context.Context, by users.User, workspace, table, reason string) (bool, error) {
 	o, err := h.orc()
 	if err != nil {
 		return false, err
@@ -272,7 +272,7 @@ func (h viewHost) PauseTable(ctx context.Context, by users.User, workspace, tabl
 		return false, panel.ErrCanvasNotFound
 	}
 	changed, err := o.Supervisor.PauseStalled(ctx, chain.PauseRequest{Workspace: workspace, Table: table,
-		Reason: "pausada pelo painel por " + by.Name,
+		Reason: "pausada por " + by.Name + ": " + reason,
 		By:     chain.Actor{User: by.ID, UserLevel: characters.UserLevel(by.Level)}})
 	switch {
 	case errors.Is(err, chain.ErrLevelDenied):

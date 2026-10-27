@@ -61,6 +61,6 @@ func (f *fakeView) SaveLayout(_ context.Context, _ string, items []panel.CanvasI
 	return nil
 }
 
-func (f *fakeView) PauseTable(context.Context, users.User, string, string) (bool, error) {
+func (f *fakeView) PauseTable(context.Context, users.User, string, string, string) (bool, error) {
 	return true, nil
 }

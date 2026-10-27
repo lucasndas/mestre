@@ -15,9 +15,11 @@
   --color-accent-ink: #fff7ea;
   --color-accent-wash: #ecdcc4;
   --color-signal: #2f6b4f;
+  --color-signal-wash: #dfe9dc;
   --color-danger: #a3281c;
   --color-danger-wash: #f6ddd6;
   --color-warn: #f1b04c;
+  --color-warn-wash: #f8e8c4;
   --color-warn-ink: #2a1c00;
   --font-display: "Fraunces Variable", Georgia, serif;
   --font-body: "Newsreader Variable", Georgia, serif;

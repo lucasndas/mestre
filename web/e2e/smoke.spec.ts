@@ -160,7 +160,9 @@ test("the workspace view shows the Grand Master and a table block, and a click o
   const block = canvas.getByRole("article", { name: "Mesa mesa-e2e" });
   await expect(block).toBeVisible();
   await expect(block.getByText("Login com Google")).toBeVisible();
-  await expect(block.getByText("em trabalho")).toBeVisible();
+  await expect(block.getByText("Trabalhando")).toBeVisible();
+  // the criteria are a technical detail, folded
+  await block.getByText("Detalhes técnicos").click();
   await expect(block.getByText("Critérios 2 de 3 (1 verificado)")).toBeVisible();
   await block.getByText("epico/7-login").click();
   await expect(page).toHaveURL(/\/workspaces\/e2e\/mesas\/mesa-e2e$/);
