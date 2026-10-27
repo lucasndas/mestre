@@ -2,7 +2,7 @@
 
 > **Assunto:** vocabulário do Mestre e textos de ajuda da interface e do Telegram · **Componente:** Projeto · **Atualizado:** 2026-10-26
 
-Este glossário é a **fonte única** dos textos de ajuda (a versão em inglês, para o painel em inglês, vive em [glossario-en.md](glossario-en.md)): o "?" dos termos no painel ([canvas](../painel/canvas.md)) e a explicação entre parênteses na primeira vez que um termo aparece numa conversa do Telegram ([bot](../telegram/bot.md)). O `go generate ./internal/glossary` lê a tabela abaixo e gera os textos que o Mestre embute; a suíte rápida falha se o arquivo gerado estiver desatualizado ([código gerado](../desenvolvimento/convencoes.md#código-gerado)).
+Este glossário é a **fonte única** dos textos de ajuda (a versão em inglês, para o painel em inglês, vive em [glossario-en.md](glossario-en.md)): o balão que a própria palavra do termo abre no painel ([canvas](../painel/canvas.md)) e a explicação entre parênteses na primeira vez que um termo aparece numa conversa do Telegram ([bot](../telegram/bot.md)). O `go generate ./internal/glossary` lê a tabela abaixo e gera os textos que o Mestre embute; a suíte rápida falha se o arquivo gerado estiver desatualizado ([código gerado](../desenvolvimento/convencoes.md#código-gerado)).
 
 Vocabulário: na interface os rótulos ficam em português, com estes termos; os comandos da CLI ficam em inglês ([convenções da CLI](../cli/convencoes.md)). "O Mestre", sozinho, é sempre o sistema; os agentes orquestradores são sempre "Grão-Mestre" e "Mestre da mesa".
 
@@ -11,7 +11,7 @@ Vocabulário: na interface os rótulos ficam em português, com estes termos; os
 - A tabela tem exatamente quatro colunas: `Termo`, `Ajuda curta`, `No mundo real`, `Detalhes`. Uma linha por termo.
 - **Termo:** como aparece na interface, no singular, com maiúscula inicial.
 - **Ajuda curta:** uma frase em linguagem simples, até 120 caracteres, sem `|` e sem links. É o texto exibido ao usuário.
-- **No mundo real:** uma frase curta, até 80 caracteres, sem `|` e sem links, que diz o que a coisa é em palavras do dia a dia, sem RPG nem jargão. No painel aparece no balão do "?", sob o rótulo "No mundo real".
+- **No mundo real:** uma frase curta, até 80 caracteres, sem `|` e sem links, que diz o que a coisa é em palavras do dia a dia, sem RPG nem jargão. No painel aparece no balão do termo, sob o rótulo "No mundo real".
 - **Detalhes:** um link relativo para o documento dono do assunto (não é mostrado ao usuário final).
 - A [verificação de docs](../qualidade/verificacao-de-docs.md) confere o formato, o tamanho e o link.
 

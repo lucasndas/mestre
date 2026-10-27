@@ -88,7 +88,7 @@ Quando o canal `/ws/ui` cai, uma faixa âmbar "Reconectando à Cidadela…" fica
 
 ## Ajuda dos termos
 
-- Todo termo do vocabulário usado na tela vem do componente `Term`, com um "?" ao lado: passar o mouse ou focar mostra, tocar ou apertar fixa. O balão traz a **ajuda curta** e, embaixo, **"No mundo real"**, a frase em palavras do dia a dia para quem não conhece RPG.
+- Todo termo do vocabulário usado na tela vem do componente `Term`: a própria palavra, sublinhada com pontos, sem ícone ao lado (decidido pelo Senhor da Guilda em 2026-10-27). Passar o mouse mostra o balão; tocar, clicar ou apertar Enter com o foco nela fixa. O balão traz a **ajuda curta** e, embaixo, **"No mundo real"**, a frase em palavras do dia a dia para quem não conhece RPG.
 - Os textos vêm do [glossário](../produto/glossario.md) e do [glossário em inglês](../produto/glossario-en.md), embutidos no build (`web/src/gen/glossary.ts`); nenhum texto de ajuda é escrito no código do painel. Um termo sem linha no glossário não compila.
 - O termo aparece com o nome do idioma da tela (Cidadela / Citadel). Em textos corridos o termo não vem sozinho na primeira vez que importa: usa-se `Term`.
 

@@ -80,7 +80,7 @@ Depois de `mestre recruit --replace`, o nó do personagem novo fica na posição
 
 ### Ajuda nos termos
 
-- Todo termo do vocabulário (Companhia, Ficha, Classe, Grimório, Pergaminho, Ritual, Decreto etc.) tem um ícone "?" ao lado; passar o mouse ou tocar mostra a **Ajuda curta**.
+- Todo termo do vocabulário (Companhia, Ficha, Classe, Grimório, Pergaminho, Ritual, Decreto etc.) é a própria palavra sublinhada com pontos, sem ícone ao lado; passar o mouse, tocar ou apertar Enter com o foco nela mostra a **Ajuda curta**.
 - O texto vem do [glossário](../produto/glossario.md), lido no build e embutido no painel. Nenhum texto de ajuda é escrito no código do painel.
 - No build, um termo usado na interface sem linha no glossário faz o build falhar.
 
@@ -108,7 +108,7 @@ O [protótipo clicável](https://claude.ai/artifact/3EqrEGizKHmLPNT4oGkQiu) most
 ## Critérios de aceite
 
 - **CA-CANVAS-01** · *pesada* — **Dado** uma mesa com missão em andamento em duas máquinas, **quando** abro o canvas, **então** vejo personagens com selo da máquina, conexões, pergaminhos ao vivo, setas numeradas com a etapa atual destacada e linhas tracejadas de espera com motivo (MVP-11).
-- **CA-CANVAS-02** · *rápida* — **Dado** o glossário com o termo "Companhia", **quando** o build roda, **então** a ajuda do "?" de Companhia é exatamente a Ajuda curta da tabela; e um termo sem linha faz o build falhar.
+- **CA-CANVAS-02** · *rápida* — **Dado** o glossário com o termo "Companhia", **quando** o build roda, **então** a ajuda do termo Companhia é exatamente a Ajuda curta da tabela; e um termo sem linha faz o build falhar.
 - **CA-CANVAS-03** · *rápida* — **Dado** um Aprovador, **quando** envia entrada para um terminal pelo WebSocket, **então** o servidor recusa e nada chega ao PTY.
 - **CA-CANVAS-04** · *completa* — **Dado** um terminal com saída, **quando** o navegador reconecta, **então** a Cidadela pede à máquina o `terminal.replay` e o fluxo reenviado é, byte a byte, o do buffer da máquina (comparado em Go).
 - **CA-CANVAS-09** · *rápida* — **Dado** esse replay, **quando** o painel (Vitest, xterm.js sem navegador) o recebe, **então** o buffer de linhas renderizado é igual ao do emulador da máquina.
