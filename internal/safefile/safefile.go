@@ -71,12 +71,18 @@ var (
 	ErrIsFolder = errors.New("is a folder")
 	// ErrPath is a path that is not absolute.
 	ErrPath = errors.New("the path is not absolute")
+	// ErrUntrusted is a file under .mestre/ (or a folder on the way to it) that the
+	// engine did not make: it is not owned by the account of the engine or by root,
+	// or the group or the others can write it. The agents run in a group that writes
+	// the main clone, and a file they made in place of the real one is not the policy
+	// of the Guild (ReadTrusted).
+	ErrUntrusted = errors.New("not made by the engine, or writable by the group or the others")
 )
 
 // Refused reports whether err is one of the refusals of this package (a
 // file the engine will not touch), as opposed to an ordinary error.
 func Refused(err error) bool {
-	return errors.Is(err, ErrLink) || errors.Is(err, ErrNotRegular) || errors.Is(err, ErrNotFolder) || errors.Is(err, ErrIsFolder) || errors.Is(err, ErrTooLarge) || errors.Is(err, ErrPath)
+	return errors.Is(err, ErrLink) || errors.Is(err, ErrNotRegular) || errors.Is(err, ErrNotFolder) || errors.Is(err, ErrIsFolder) || errors.Is(err, ErrTooLarge) || errors.Is(err, ErrPath) || errors.Is(err, ErrUntrusted)
 }
 
 // Info is the state of a file at a moment.
@@ -112,14 +118,19 @@ func Open(path string) (*os.File, Info, error) {
 // Read reads the regular file at path, as Open, refusing a file over limit
 // bytes (limit <= 0 is DefaultLimit).
 func Read(path string, limit int64) ([]byte, Info, error) {
-	if limit <= 0 {
-		limit = DefaultLimit
-	}
 	f, info, err := Open(path)
 	if err != nil {
 		return nil, Info{}, err
 	}
 	defer f.Close()
+	return readOpen(path, f, info, limit)
+}
+
+// readOpen reads the file Open opened.
+func readOpen(path string, f *os.File, info Info, limit int64) ([]byte, Info, error) {
+	if limit <= 0 {
+		limit = DefaultLimit
+	}
 	if info.Size > limit {
 		return nil, Info{}, wrap(path, fmt.Errorf("%w: %d bytes, the limit is %d", ErrTooLarge, info.Size, limit))
 	}

@@ -300,7 +300,7 @@ func (f *PolicyFile) loadLocked(workspace string, told *error) *parsedPolicy {
 	read := f.Read
 	if read == nil {
 		read = func(p string) ([]byte, error) {
-			b, _, err := safefile.Read(p, MaxPolicyBytes)
+			b, _, err := safefile.ReadTrusted(p, MaxPolicyBytes)
 			return b, err
 		}
 	}

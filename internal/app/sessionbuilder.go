@@ -207,7 +207,7 @@ func (b *SessionBuilder) instructions(c characters.Character) (string, error) {
 		return "", fmt.Errorf("the workspace %q is not a folder name", c.Workspace)
 	}
 	file := filepath.Join(b.o.Layout.Principal(c.Workspace), sessionzero.MestreDir, "regras", "instrucoes", name)
-	data, _, err := safefile.Read(file, maxInstructions)
+	data, _, err := safefile.ReadTrusted(file, maxInstructions)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		return "", nil

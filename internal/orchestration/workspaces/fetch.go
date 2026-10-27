@@ -39,6 +39,7 @@ func (s *Service) entryLocked(w Workspace, now time.Time) *entry {
 	e, ok := s.sched[w.Slug]
 	if !ok {
 		e = &entry{next: now}
+		s.tightenRules(w.Slug) // the engine found this campaign: its rules files must not be writable by the agents
 		if !w.Fetch.LastAt.IsZero() && s.booted {
 			e.next = w.Fetch.LastAt.Add(s.o.FetchInterval)
 		}
@@ -256,6 +257,7 @@ func (s *Service) advance(ctx context.Context, w Workspace, now time.Time) {
 	switch _, err := wt.MergeFFOnly(ctx, target); {
 	case err == nil:
 		s.log.Info("workspace main clone advanced", "workspace", w.Slug, "to", tip.Short())
+		s.tightenRules(w.Slug) // the checkout rewrote the versioned files with the mode of the umask
 		s.caughtUp(ctx, w, now)
 	case errors.Is(err, gitx.ErrNotFastForward):
 		hold("o clone principal tem commits que origin/%s não tem: não é um avanço simples", w.DefaultBranch)
@@ -521,5 +523,14 @@ func (s *Service) Run(ctx context.Context) error {
 		case <-s.wake:
 			t.Stop()
 		}
+	}
+}
+
+// tightenRules takes the write of the group off the folders and files of .mestre/regras of
+// the main clone (docs/aprovacoes/arquivo-de-politica.md): the reading of the engine refuses
+// what the group can write.
+func (s *Service) tightenRules(slug string) {
+	if err := safefile.TightenRules(filepath.Join(s.layout.Principal(slug), ".mestre")); err != nil {
+		s.log.Warn("workspace: the rules files could not be made unwritable by the group", "workspace", slug, "err", err)
 	}
 }

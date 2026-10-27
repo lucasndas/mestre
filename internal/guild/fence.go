@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/mestre-ia/mestre/pkg/clock"
@@ -148,6 +149,9 @@ type Fence struct {
 	cfg   FenceConfig
 	kick  chan struct{}
 	flush chan struct{} // wakes the flusher
+
+	// admit is the gate of the handover (SetAdmit); nil admits everything.
+	admit atomic.Pointer[func() (func(), bool)]
 
 	mu     sync.Mutex
 	state  FenceState
@@ -404,6 +408,9 @@ func (f *Fence) TelegramNotice() string {
 	return ""
 }
 
+// SetAdmit gives the fence the gate of the handover of the period: Hold asks it.
+func (f *Fence) SetAdmit(admit func() (leave func(), ok bool)) { f.admit.Store(&admit) }
+
 // Gate is what the bot asks before each call to the Telegram.
 type Gate struct {
 	f    *Fence
@@ -412,6 +419,17 @@ type Gate struct {
 
 // Gate gives the gate of a kind of external action.
 func (f *Fence) Gate(kind External) Gate { return Gate{f, kind} }
+
+// Hold admits one change of the Guild made from outside (a command of the bot) the
+// way the gate of the handover admits a message: it returns the function that ends it, or
+// false while the Citadel drains for a planned switch, when what was said waits for
+// the Citadel that may act. Without a gate every change is admitted.
+func (g Gate) Hold(context.Context) (func(), bool) {
+	if a := g.f.admit.Load(); a != nil && *a != nil {
+		return (*a)()
+	}
+	return func() {}, true
+}
 
 // Allowed says whether a call of that kind may go now.
 func (g Gate) Allowed(context.Context) bool { return g.f.Allow(g.kind) == nil }

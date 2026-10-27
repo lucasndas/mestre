@@ -273,7 +273,7 @@ func (h workspaceHost) Verification(ctx context.Context, slug string) (panel.Ver
 	}
 	var v panel.VerificationView
 	unreadable := false
-	data, _, err := safefile.Read(h.file(orc, slug), maxVerificationFile)
+	data, _, err := safefile.ReadTrusted(h.file(orc, slug), maxVerificationFile)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
@@ -379,7 +379,7 @@ func (r *stdRun) checkOutsideEdits(ctx context.Context) {
 		if !w.MirrorReady() {
 			continue
 		}
-		data, _, err := safefile.Read(h.file(orc, w.Slug), maxVerificationFile)
+		data, _, err := safefile.ReadTrusted(h.file(orc, w.Slug), maxVerificationFile)
 		switch {
 		case errors.Is(err, fs.ErrNotExist):
 			continue // no file is no edit: the confirmed version holds

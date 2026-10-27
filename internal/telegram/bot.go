@@ -27,6 +27,22 @@ type Gate interface {
 	Allowed(ctx context.Context) bool
 }
 
+// Holder is the optional part of a Gate that holds the gate of the handover of the Citadel
+// while an update is handled: a change the bot makes (a decision, an exclusion, a
+// removal) must not land after the last lsn a planned switch reads. Hold returns false
+// while the Citadel drains; the update then waits for the Citadel that may act.
+type Holder interface {
+	Hold(ctx context.Context) (release func(), ok bool)
+}
+
+// admit admits one update; a Gate without Holder admits everything.
+func (b *Bot) admit(ctx context.Context) (func(), bool) {
+	if h, ok := b.o.Gate.(Holder); ok {
+		return h.Hold(ctx)
+	}
+	return func() {}, true
+}
+
 // Inbound is a message of an authorized user that goes to the Grão-Mestre.
 type Inbound struct {
 	User              users.User
@@ -368,8 +384,14 @@ func (b *Bot) PollOnce(ctx context.Context) error {
 		if !b.allowed(ctx) {
 			return nil // recorded, it waits for the Citadel that may act
 		}
+		release, held := b.admit(ctx)
+		if !held {
+			return nil // recorded, it waits for the Citadel that may act
+		}
 		b.handle(ctx, up)
-		if err := b.st.Done(ctx, up.UpdateID); err != nil {
+		err = b.st.Done(ctx, up.UpdateID) // marked while the gate is held: the new Citadel does not replay it
+		release()
+		if err != nil {
 			return err
 		}
 	}
@@ -429,9 +451,15 @@ func (b *Bot) processPending(ctx context.Context) error {
 			return nil // what is left waits for the Citadel that may act
 		}
 		var up Update
+		release := func() {}
 		if err := json.Unmarshal(p.Body, &up); err == nil {
 			switch {
 			case !up.Redacted:
+				rel, held := b.admit(ctx)
+				if !held {
+					return nil // what is left waits for the Citadel that may act
+				}
+				release = rel
 				b.handle(ctx, up)
 			case up.Secret != "":
 				// the text had a secret and was never handled: the message is
@@ -441,7 +469,9 @@ func (b *Bot) processPending(ctx context.Context) error {
 			// A copy kept without its text and without a secret (a captured
 			// answer) is not replayed: the user answers again.
 		}
-		if err := b.st.Done(ctx, p.ID); err != nil {
+		err := b.st.Done(ctx, p.ID) // marked while the gate is held: the new Citadel does not replay it
+		release()
+		if err != nil {
 			return err
 		}
 	}
