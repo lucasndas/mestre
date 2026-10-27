@@ -91,9 +91,11 @@ function PendingJoin({
   const [typed, setTyped] = useState("");
   const [excluded, setExcluded] = useState(false);
   const digits = typed.replace(DIGITS, "");
-  const match = Boolean(j.code) && digits === (j.code ?? "").replace(DIGITS, "");
+  const wanted = (j.code ?? "").replace(DIGITS, "");
+  const match = wanted.length === 6 && digits === wanted;
   const wrong = Boolean(j.code) && digits.length >= 6 && !match;
   const decide = async (pin: string, accept: boolean) => {
+    if (accept && !match) return; // the check is only here: never accept without it
     await api(
       "POST",
       `/api/guild/joins/${encodeURIComponent(j.id)}/decide`,

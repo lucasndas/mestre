@@ -82,7 +82,7 @@ const users: Widen<typeof pt> = {
       "They can go through any channel: they carry no code. They carry the rule to not install if the check code differs.",
     part2: "2. Certificate check code",
     part2Hint:
-      "Say it aloud, in person or on a call, or send it through a different channel from the instructions. If the address and this code traveled together, whoever altered the message could lead the person to a fake panel. This value was computed just now from {{path}}.",
+      "Say it aloud, in person or on a call, or send it through a different channel from the instructions. If the address and this code traveled together, whoever altered the message could lead the person to a fake panel. This value was computed just now from {{path}}. Check that it equals what the Citadel installer showed; if not, do not hand out the invite.",
     part3: "3. First-access code",
     part3Gate: "The person told me they checked the code and did the certificate step",
     part3Locked: "Tick above when the person confirms. The code only shows after that.",

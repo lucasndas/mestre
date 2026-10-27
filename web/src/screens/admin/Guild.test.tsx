@@ -427,3 +427,19 @@ test("a level that cannot manage machines does not see the entry in the nav and 
   // a level below the Guildmaster gets no timeline: the shell's band is all it sees
   expect(screen.queryByRole("region", { name: "Troca da Cidadela em andamento" })).toBeNull();
 });
+
+test("if the typed code stops matching while the PIN is open, the PIN field closes and nothing is sent", async () => {
+  const { calls } = fakeServer({
+    ...base,
+    "GET /api/guild": () => ({ body: joinView() }),
+    "POST /api/guild/joins/j1/decide": () => ({ status: 204 }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/guilda");
+  await typeCode(user, "482917");
+  await user.click(screen.getByRole("button", { name: "Aceitar" }));
+  await fill(user, screen.getByLabelText("PIN"), "123456");
+  await fill(user, screen.getByLabelText(/Código que a máquina nova/), "9");
+  await waitFor(() => expect(screen.queryByLabelText("PIN")).toBeNull());
+  expect(calls.some((c) => c.path.endsWith("/decide"))).toBe(false);
+});

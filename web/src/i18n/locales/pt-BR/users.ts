@@ -77,7 +77,7 @@ export default {
       "Pode ir por qualquer canal: não têm código nenhum. Trazem a regra de não instalar se o código de conferência for diferente.",
     part2: "2. Código de conferência do certificado",
     part2Hint:
-      "Diga em voz alta, pessoalmente ou numa ligação, ou envie por um canal diferente do das instruções. Se o endereço e este código viajassem juntos, quem alterasse a mensagem poderia levar a pessoa a um painel falso. Este valor foi calculado agora a partir de {{path}}.",
+      "Diga em voz alta, pessoalmente ou numa ligação, ou envie por um canal diferente do das instruções. Se o endereço e este código viajassem juntos, quem alterasse a mensagem poderia levar a pessoa a um painel falso. Este valor foi calculado agora a partir de {{path}}. Confira que é igual ao que o instalador da Cidadela mostrou; se não for, não entregue o convite.",
     part3: "3. Código de primeiro acesso",
     part3Gate: "A pessoa me disse que conferiu o código e fez o passo do certificado",
     part3Locked: "Marque acima quando a pessoa confirmar. O código só aparece depois.",
