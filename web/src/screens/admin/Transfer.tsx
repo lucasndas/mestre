@@ -52,7 +52,8 @@ export function Transfer() {
                   await api("POST", "/api/transfer/accept", undefined, { pin });
                   // the sessions of both end with the change: the panel starts over
                   qc.clear();
-                  await navigate({ to: "/login", search: {} });
+                  // the login says why, from the state of the router and never from the address
+                  await navigate({ to: "/login", search: {}, state: { postChanged: true } });
                 }}
               >
                 {t("accept.submit")}

@@ -60,25 +60,32 @@ const view = (o: Record<string, unknown>) => ({
 });
 const owner = { "GET /api/guild": () => ({ body: view({}) }) };
 
-// CA-ADM-08
-test("the Guild screen shows the band of the single-machine mode while the Citadel is alone, and the epoch", async () => {
+// CA-ADM-08, CA-CRESC-08
+test("with the Citadel alone the strip says one machine, and the card to add a second one marks the installer as coming soon", async () => {
   fakeServer({
     ...base,
     "GET /api/guild": () => ({ body: view({ single: true, machines: [machine({})] }) }),
   });
   renderApp("/guilda");
-  expect(await screen.findByRole("complementary", { name: "Modo máquina única" })).toBeTruthy();
+  expect(await screen.findByText("1 máquina, e é a Cidadela")).toBeTruthy();
   expect(screen.getByText("Época 4")).toBeTruthy();
   expect(screen.getByRole("link", { name: /Dev-1/ }).getAttribute("href")).toBe(
     "/workspaces/loja/mesas/login",
   );
+  const card = screen.getByRole("region", { name: "Adicionar uma segunda máquina" });
+  const step = within(card)
+    .getByText(/Instalar o Mestre na máquina nova/)
+    .closest("li");
+  expect(within(step as HTMLElement).getByText("em breve")).toBeTruthy();
+  expect(document.body.textContent).not.toMatch(/\bM7\b/);
 });
 
 test("with a Tower in the Guild the band is gone and the row shows the replica and the load", async () => {
   fakeServer({ ...base, ...owner });
   renderApp("/guilda");
   const row = await screen.findByRole("listitem", { name: "torre" });
-  expect(screen.queryByRole("complementary", { name: "Modo máquina única" })).toBeNull();
+  expect(screen.queryByText("1 máquina, e é a Cidadela")).toBeNull();
+  expect(screen.getByText(/2 máquinas; a Cidadela é casa/)).toBeTruthy();
   expect(within(row).getByText("Torre")).toBeTruthy();
   expect(within(row).getByText(/em dia/)).toBeTruthy();
   expect(within(row).getByText("protocolo 1")).toBeTruthy();
@@ -123,7 +130,7 @@ test("the Owner excludes a Tower with the PIN and the row follows the new view",
   expect(await screen.findByRole("button", { name: "Tirar a exclusão de torre" })).toBeTruthy();
   // an excluded machine is not offered the Citadel
   expect(
-    (screen.getByRole("button", { name: "Passar a Cidadela a torre" }) as HTMLButtonElement)
+    (screen.getByRole("button", { name: "Passar a Cidadela para torre" }) as HTMLButtonElement)
       .disabled,
   ).toBe(true);
   expect(screen.getByText("Máquina excluída não vira Cidadela.")).toBeTruthy();
@@ -143,9 +150,10 @@ test("passing the Citadel to a machine the server refuses shows the reason", asy
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/guilda");
-  await user.click(await screen.findByRole("button", { name: "Passar a Cidadela a torre" }));
+  await user.click(await screen.findByRole("button", { name: "Passar a Cidadela para torre" }));
+  await user.click(screen.getByRole("button", { name: "Passar a Cidadela para torre" }));
   await fill(user, screen.getByLabelText("PIN"), "123456");
-  await user.click(screen.getByRole("button", { name: "Passar a Cidadela a torre" }));
+  await user.click(screen.getByRole("button", { name: "Passar a Cidadela para torre" }));
   expect((await screen.findByRole("alert")).textContent).toContain("fora da rede local");
 });
 
@@ -182,31 +190,188 @@ test("removing a machine warns how many and which agents run there before the PI
   expect(post?.headers["X-Mestre-Pin"]).toBe("123456");
 });
 
-test("a request to enter shows the code to compare and is accepted with the PIN", async () => {
-  const { calls } = fakeServer({
+const joinView = (o: Record<string, unknown> = {}) =>
+  view({
+    pending: [{ id: "j1", name: "notebook", code: "482 917", created_at: "2026-10-26T12:00:00Z" }],
+    ...o,
+  });
+const typeCode = async (user: ReturnType<typeof userEvent.setup>, code: string) =>
+  fill(user, await screen.findByLabelText(/Código que a máquina nova/), code);
+
+// CA-CRESC-09
+test("a request without a code (the machine did not reveal it yet) has no accept button and says it waits", async () => {
+  fakeServer({
     ...base,
     "GET /api/guild": () => ({
       body: view({
-        pending: [
-          { id: "j1", name: "notebook", code: "483 920", created_at: "2026-10-26T12:00:00Z" },
-        ],
+        pending: [{ id: "j1", name: "notebook", created_at: "2026-10-26T12:00:00Z" }],
       }),
     }),
+  });
+  renderApp("/guilda");
+  expect(await screen.findByText(/Esperando a máquina mostrar o código/)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Aceitar" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Recusar" })).toBeTruthy();
+});
+
+// CA-CRESC-10
+test("the code of the request is never shown: a wrong typed code keeps Aceitar off, the right one turns it on, and both ways ask the PIN", async () => {
+  const { calls } = fakeServer({
+    ...base,
+    "GET /api/guild": () => ({ body: joinView() }),
     "POST /api/guild/joins/j1/decide": () => ({ status: 204 }),
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/guilda");
-  expect(await screen.findByText("483 920")).toBeTruthy();
+  await typeCode(user, "482 918");
+  expect(document.body.textContent).not.toContain("482 917");
+  expect(document.body.textContent).not.toContain("482917");
+  expect((screen.getByRole("button", { name: "Aceitar" }) as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+  expect((await screen.findByText(/Os códigos não batem/)).textContent).toContain("recuse");
+  await user.clear(screen.getByLabelText(/Código que a máquina nova/));
+  await fill(user, screen.getByLabelText(/Código que a máquina nova/), "482 917");
+  expect((screen.getByRole("button", { name: "Aceitar" }) as HTMLButtonElement).disabled).toBe(
+    false,
+  );
   await user.click(screen.getByRole("button", { name: "Aceitar" }));
   await fill(user, screen.getByLabelText("PIN"), "123456");
   await user.click(screen.getByRole("button", { name: "Aceitar" }));
-  await waitFor(() =>
-    expect(calls.some((c) => c.path === "/api/guild/joins/j1/decide")).toBe(true),
-  );
+  await waitFor(() => expect(calls.some((c) => c.path.endsWith("/decide"))).toBe(true));
+  const post = calls.find((c) => c.path.endsWith("/decide"));
+  expect(post?.body).toEqual({ accept: true, excluded: false });
+  expect(post?.headers["X-Mestre-Pin"]).toBe("123456");
+});
+
+// CA-CRESC-10 (refuse)
+test("refusing also asks the PIN, whether or not the codes match", async () => {
+  const { calls } = fakeServer({
+    ...base,
+    "GET /api/guild": () => ({ body: joinView() }),
+    "POST /api/guild/joins/j1/decide": () => ({ status: 204 }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/guilda");
+  await user.click(await screen.findByRole("button", { name: "Recusar" }));
+  expect(calls.some((c) => c.path.endsWith("/decide"))).toBe(false);
+  await fill(user, screen.getByLabelText("PIN"), "123456");
+  await user.click(screen.getByRole("button", { name: "Recusar" }));
+  await waitFor(() => expect(calls.some((c) => c.path.endsWith("/decide"))).toBe(true));
   expect(calls.find((c) => c.path.endsWith("/decide"))?.body).toEqual({
-    accept: true,
+    accept: false,
     excluded: false,
   });
+});
+
+// CA-CRESC-11
+test("the box 'Máquina que não deve guardar segredos' sends excluded, renames the button and warns about the database", async () => {
+  const { calls } = fakeServer({
+    ...base,
+    "GET /api/guild": () => ({ body: joinView() }),
+    "POST /api/guild/joins/j1/decide": () => ({ status: 204 }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/guilda");
+  await typeCode(user, "482917");
+  await user.click(screen.getByRole("checkbox", { name: /Máquina que não deve guardar segredos/ }));
+  expect(screen.getByText(/continua recebendo o banco e os arquivos/)).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Aceitar como excluída" }));
+  await fill(user, screen.getByLabelText("PIN"), "123456");
+  await user.click(screen.getByRole("button", { name: "Aceitar como excluída" }));
+  await waitFor(() => expect(calls.some((c) => c.path.endsWith("/decide"))).toBe(true));
+  expect(calls.find((c) => c.path.endsWith("/decide"))?.body).toEqual({
+    accept: true,
+    excluded: true,
+  });
+});
+
+// CA-CRESC-19
+test("two requests at once bring the notice to refuse them all", async () => {
+  fakeServer({
+    ...base,
+    "GET /api/guild": () => ({
+      body: view({
+        pending: [
+          { id: "j1", name: "notebook", code: "111 111", created_at: "2026-10-26T12:00:00Z" },
+          { id: "j2", name: "desktop", code: "222 222", created_at: "2026-10-26T12:01:00Z" },
+        ],
+      }),
+    }),
+  });
+  renderApp("/guilda");
+  expect((await screen.findByRole("alert")).textContent).toContain("recuse todos");
+});
+
+// CA-CRESC-12
+test("a Tower that just came in shows the AI accounts as 'não sei' with a link, never as done", async () => {
+  fakeServer({ ...base, ...owner });
+  renderApp("/guilda");
+  const check = await screen.findByRole("region", { name: "Conferir torre" });
+  expect(within(check).getByText(/Contas de IA: não sei/)).toBeTruthy();
+  expect(
+    within(check).getByRole("link", { name: "Conferir em Perfis de conta" }).getAttribute("href"),
+  ).toBe("/perfis");
+  expect(within(check).queryByText(/Contas de IA: (feito|prontas)/)).toBeNull();
+});
+
+// CA-CRESC-13
+test("Passar a Cidadela is off with the reason for an excluded, an outside and a silent Tower, and on a fit one it shows the summary before the PIN", async () => {
+  const bad = (id: string, o: Record<string, unknown>) =>
+    ({ ...tower, id, name: id, agents: [], ...o }) as Record<string, unknown>;
+  fakeServer({
+    ...base,
+    "GET /api/guild": () => ({
+      body: view({
+        machines: [
+          machine({}),
+          bad("excl", { excluded: true }),
+          bad("fora", { outside_network: true }),
+          bad("muda", { online: false }),
+          bad("apta", {}),
+        ],
+      }),
+    }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/guilda");
+  for (const [name, why] of [
+    ["excl", /Máquina excluída não vira Cidadela/],
+    ["fora", /Fora da rede local/],
+    ["muda", /Só uma máquina online recebe a Cidadela/],
+  ] as const) {
+    const row = await screen.findByRole("listitem", { name });
+    expect(
+      (
+        within(row).getByRole("button", {
+          name: `Passar a Cidadela para ${name}`,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    expect(within(row).getByText(why)).toBeTruthy();
+  }
+  const fit = await screen.findByRole("listitem", { name: "apta" });
+  await user.click(within(fit).getByRole("button", { name: "Passar a Cidadela para apta" }));
+  const summary = within(fit).getByRole("group", { name: "Passar a Cidadela para apta" });
+  expect(within(summary).getByText(/casa vira Torre/)).toBeTruthy();
+  expect(within(summary).getByText(/Os 1 agentes de casa ficam interrompidos/)).toBeTruthy();
+  expect(within(summary).getByText(/60 segundos/)).toBeTruthy();
+  expect(within(fit).queryByLabelText("PIN")).toBeNull(); // the summary comes before the PIN
+});
+
+// CA-CRESC-14
+test("with the Citadel suspended the timeline shows only what the snapshot says and promises no time", async () => {
+  fakeServer({
+    ...base,
+    "GET /api/guild": () => ({
+      body: view({ machines: [machine({ suspended: true }), tower] }),
+    }),
+  });
+  renderApp("/guilda");
+  const line = await screen.findByRole("region", { name: "Troca da Cidadela em andamento" });
+  expect(within(line).getByText("casa parou de agir.")).toBeTruthy();
+  expect(line.textContent).not.toMatch(/\d+\s*(s|seg|min)/i);
+  expect(line.textContent).not.toMatch(/prazo/i);
 });
 
 test("the Owner changes the priority and the time zone of the Guild with the PIN", async () => {
@@ -255,8 +420,10 @@ test("a level that cannot manage machines does not see the entry in the nav and 
     }),
   });
   renderApp("/guilda");
-  expect((await screen.findByRole("alert")).textContent).toBe(
+  expect((await screen.findByRole("alert")).textContent).toContain(
     "Esta ação exige o nível Senhor da Guilda; o seu é Administrador.",
   );
   expect(screen.queryByRole("link", { name: "Guilda" })).toBeNull();
+  // a level below the Guildmaster gets no timeline: the shell's band is all it sees
+  expect(screen.queryByRole("region", { name: "Troca da Cidadela em andamento" })).toBeNull();
 });

@@ -90,6 +90,11 @@ Este documento é lido por máquina, como o [glossário](glossario.md): cada lin
 | Delegação | Delegation | A person's authorization for the Grand Master to decide some requests above its limit, for up to 30 days. | a permission you give the boss to decide for you for a limited time |
 | Senhor da Guilda | Guildmaster | The highest level: the person who installed Mestre and decides what no one else can, like users, machines and the vault. | the general administrator of the system, who is in charge of everything |
 | Nível | Level | What a user can do in Mestre: Guildmaster, Administrator, Approver or Observer. | what each person is allowed to do in the system |
+| PIN | PIN | A number of 6 to 12 digits that confirms sensitive actions; it is not the password and never travels in a message. | the short code you type to confirm an important action |
+| Certificado do Mestre | Mestre certificate | The file that makes your device trust the Guild panel; without it the browser warns that the connection is not safe. | the Mestre's badge, which your device must recognise |
+| Código de conferência | Check code | A value computed from the certificate; if your file's differs from the one you were given, do not install. | a number showing the file is the same one the Guildmaster has |
+| Código de entrada | Entry code | Six digits the new machine shows; the Guildmaster types what they see there and accepts only if it matches. | a short code proving the request came from the right machine |
+| Código de primeiro acesso | First-access code | A single-use code, valid for 24 h, handed over by the Guildmaster so the person can create a login; never by Telegram. | the single-use key for opening the panel the first time |
 | Cofre | Vault | An encrypted place where secrets are kept; only the Citadel opens it, and agents never read it. | a protected digital safe where passwords are kept |
 | Impressão | Fingerprint | A code (hash) of a request, failure, problem, secret or the CA, used to tell whether it is the same or changed. | a code that identifies something and shows if it changed |
 | Em criação | Being created | This class's GitHub App has not been created and installed yet; actions go out under the Mestre App. | an assistant's account that is still being set up |

@@ -11,6 +11,7 @@ import { Now } from "./home/Now";
 import { useHomeTables } from "./home/reads";
 import { TalkButton } from "./home/TalkButton";
 import { Waiting } from "./home/Waiting";
+import { InviteRow, Welcome } from "./home/Welcome";
 import { WORKSPACES_TOPIC, workspacesQuery } from "./workspaces/queries";
 
 /** Início: what is happening now (docs/painel/primeira-jornada.md#início-no-dia-a-dia). Only composes. */
@@ -38,7 +39,8 @@ export function Overview() {
       <section className="max-w-3xl">
         <h1 className="text-3xl">{t("title")}</h1>
         <p className="mt-2 text-muted">{t("hello", { name: me.user.name })}</p>
-        {guildmaster ? <FirstSteps /> : null}
+        {guildmaster ? <FirstSteps /> : <Welcome />}
+        {guildmaster ? <InviteRow /> : null}
         <TalkButton />
         {none ? null : <Now tables={tables.open} failed={isError ? [] : tables.failed} />}
         <Waiting tables={tables.open} />

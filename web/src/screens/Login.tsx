@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AuthLayout } from "../app/AuthLayout";
@@ -14,10 +14,15 @@ export function Login({ next }: { next?: string }) {
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const { error, busy, submit } = useAuthForm(next);
+  // the notice of a changed post comes in the state of the router, never in the address
+  const postChanged = useLocation({
+    select: (l) => (l.state as { postChanged?: boolean }).postChanged === true,
+  });
   return (
     <AuthLayout title={t("login.title")} subtitle={t("login.subtitle")}>
+      {postChanged ? <Alert tone="ok">{t("login.postChanged")}</Alert> : null}
       <form
-        className="flex flex-col gap-4"
+        className="mt-4 flex flex-col gap-4"
         onSubmit={submit(
           () => (login && password ? null : localError("required")),
           () =>
