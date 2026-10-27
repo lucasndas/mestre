@@ -1,6 +1,6 @@
 # Entrar na Guilda
 
-> **Assunto:** passo a passo para uma máquina nova (Windows ou Ubuntu) entrar na Guilda: comparar o código de entrada, aceitar com PIN, conferir, excluir e remover uma máquina, máquina fora da rede local · **Componente:** Todos · **Atualizado:** 2026-10-19
+> **Assunto:** passo a passo para uma máquina nova (Windows ou Ubuntu) entrar na Guilda: comparar o código de entrada, aceitar com PIN, conferir, excluir e remover uma máquina, máquina fora da rede local · **Componente:** Todos · **Atualizado:** 2026-10-27
 
 Guia para quem usa. Só o Senhor da Guilda aceita e remove máquinas. Como a entrada funciona por dentro (código de comparação, certificados, prazo): [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda). Como a máquina acha a Guilda: [descoberta](../conectividade/descoberta.md).
 
@@ -10,16 +10,26 @@ Antes: a primeira máquina instalada (a Cidadela) e o [primeiro acesso](primeiro
 
 Rode o instalador normal ([instalar](instalar.md)). Ele procura a Guilda na rede local sozinho e mostra o que achou (nome da Cidadela e quantas máquinas). Se achar mais de uma Guilda, pergunta em qual entrar.
 
-No fim, o instalador mostra o **código de entrada**, com 6 dígitos (ex.: `123 456`), e fica esperando a resposta do Senhor da Guilda. Deixe a janela aberta.
+No fim, o instalador mostra o **código de entrada**, com 6 dígitos (ex.: `123 456`), e fica esperando a resposta do Senhor da Guilda. Deixe a janela aberta. Se quem instala não é o Senhor da Guilda, o código deve chegar a ele por alguém que ele reconhece (em voz alta ou numa ligação): ele só serve para comparar. Com mais de um pedido ao mesmo tempo, recuse todos. O que o instalador escreve está em [o que o instalador mostra](#o-que-o-instalador-mostra); o painel do Senhor da Guilda, em [crescer a Guilda](../painel/crescer-a-guilda.md#2-adicionar-uma-máquina).
 
 ## 2. Aceitar no Telegram ou no painel
 
 1. O Senhor da Guilda recebe no Telegram (e vê no painel, em **Guilda e saúde das máquinas**) a pergunta "Aceitar `<máquina>` (`<sistema>`) na Guilda? Código 123 456".
-2. **Compare o código** da mensagem com o da tela do instalador. Só aceite se forem iguais; diferentes indicam que alguém está no meio da conexão: recuse.
+2. **Compare o código** da mensagem com o da tela do instalador. Só aceite se forem iguais; diferentes indicam que alguém está no meio da conexão: recuse. No painel, digite os 6 dígitos que aparecem na máquina nova (o painel não mostra o do pedido antes): o botão **Aceitar** só liga quando forem iguais, e **Recusar** (também com PIN) fica sempre à mão.
 3. Toque em **Aceitar** e responda o seu PIN. A máquina recebe uma cópia de tudo, inclusive o cofre cifrado, e pode assumir se a Cidadela cair; para que ela nunca guarde segredos nem assuma, marque **Excluída** já na aceitação (padrão: não) ou depois (abaixo; [replicação](../guilda/replicacao.md)).
 4. O instalador termina sozinho: a máquina recebe a configuração, passa a confiar na CA da Guilda e conecta como Torre.
 
 O pedido **expira em 1 hora** sem resposta ([entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)): rode `mestre join <endereço da Cidadela>`, ou o instalador de novo, que numa máquina fora de qualquer Guilda procura outra vez. Ele não duplica nada: confere o que já existe e completa o que falta.
+
+### O que o instalador mostra
+
+Contrato do texto, para a implementação do instalador (M7); os passos e as conferências são os de cima:
+
+- **Achou uma Guilda:** o nome da Guilda, a Cidadela e quantas máquinas; depois o **código de entrada**, a instrução de mostrá-lo ao Senhor da Guilda e que ele só aceita se for **igual**, o prazo do pedido (1 hora, com o horário) e "Aguardando o Senhor da Guilda…".
+- **Achou mais de uma:** lista numerada (nome da Cidadela e quantas máquinas) e a pergunta em qual entrar.
+- **Aceito:** o que foi feito (certificados emitidos com as chaves só nesta máquina, confia na CA da Guilda, conectada como Torre) e o que falta: configurar as contas de IA em **Perfis de conta**.
+- **Recusado ou vencido:** "Entrada recusada ou expirada. Esta máquina não entrou na Guilda e não recebeu nada dela" e como tentar de novo (o instalador de novo, ou `mestre join <endereço da Cidadela>`).
+- **Não achou nenhuma:** o texto diz que vai **criar uma Guilda nova** e que, para entrar numa que já existe, o caminho é parar e informar o endereço (`--join`). Pedir uma confirmação antes de criar muda o comportamento do instalador e é decisão do Senhor da Guilda, não desta redação.
 
 ### Se a Guilda não for encontrada
 
