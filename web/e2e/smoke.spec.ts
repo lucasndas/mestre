@@ -136,7 +136,7 @@ test("the workspace view shows the Grand Master and a table block, and a click o
   // the selector of the top bar leads to the view of the workspace
   await page.getByLabel("Campanha", { exact: true }).selectOption("e2e");
   await expect(page.getByRole("heading", { name: "Campanha e2e", level: 1 })).toBeVisible();
-  const canvas = page.getByRole("region", { name: "Canvas do workspace e2e" });
+  const canvas = page.getByRole("region", { name: "Canvas da campanha e2e" });
   const gm = canvas.getByRole("article", { name: "Grão-Mestre Grão-Mestre" });
   await expect(gm).toBeVisible();
   await expect(gm.locator(".xterm")).toBeVisible();
