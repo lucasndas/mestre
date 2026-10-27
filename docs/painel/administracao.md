@@ -10,7 +10,7 @@ Reunir num só lugar as telas para configurar e acompanhar o Mestre. Cada tela �
 
 ### Telas
 
-Todas moram sob **Configurações** (Campanhas tem item próprio no menu): um índice de quatro grupos, cada entrada com a frase do que a tela faz, e migalha `Configurações › grupo › tela` em cada uma ([estrutura](design.md#estrutura-da-tela)). Conta: sessões, senha, GitHub pessoal. Pessoas e acesso: usuários, segredos, auditoria. Infraestrutura: Guilda e máquinas, perfis de conta (com a frase "as contas de IA de cada máquina"), Apps do GitHub, classes, bases e fichas. Regras e consumo: decretos, delegações, supervisão da cadeia, teto, política, instruções extras e consumo de uso. Os endereços atuais (`/usuarios`, `/decretos`…) continuam valendo, para links salvos e avisos. A tabela abaixo diz o que cada tela mostra.
+Todas moram sob **Configurações** (Campanhas tem item próprio no menu): um índice de quatro grupos, cada entrada com a frase do que a tela faz, e migalha `Configurações › grupo › tela` em cada uma ([estrutura](design.md#estrutura-da-tela)). Conta: sessões, senha, GitHub pessoal. Pessoas e acesso: usuários, segredos, auditoria. Infraestrutura: Guilda e máquinas, perfis de conta (com a frase "as contas de IA de cada máquina"), Apps do GitHub, classes, bases e fichas. Regras e consumo: decretos, delegações, supervisão da cadeia, teto, política, instruções extras e consumo de uso. Os endereços atuais (`/usuarios`, `/decretos`…) continuam valendo, para links salvos e avisos. Toda tela segue o mesmo [padrão de tela de administração](design.md#tela-de-administração) (para que serve em palavras simples, situação e próximo passo, vazio com saída e erro com tentar de novo), e o desenho de cada uma está em [telas de Configurações](administracao-telas.md). A tabela abaixo diz o que cada tela mostra.
 
 | Tela | O que mostra e permite | Dono das regras |
 |---|---|---|
@@ -64,17 +64,6 @@ Ações da tela: aceitar ou recusar uma máquina que pediu para entrar na Guilda
 
 O fuso da Guilda (padrão: o do sistema da máquina que criou a Guilda) fica no banco da Guilda e só o Senhor da Guilda o muda, nesta tela. Vale para o backup diário às 03:00 ([persistência](../arquitetura/persistencia.md#backup)), a virada do dia dos [limites de uso](../plataforma/limites-de-uso.md), as validades dos [decretos](../telegram/decretos.md) e, quando a campanha não tem um próprio, os [rituais](../orquestracao/rituais.md). Não muda numa troca de Cidadela.
 
-### Implementação: Guilda
-
-`internal/panel/routes_guild.go` (tipos em `types_guild.go`) e `internal/app/guildhost.go`, sobre o `guild.Citadel` que age; a tela é `web/src/screens/admin/Guild.tsx`. Tudo é do Senhor da Guilda (`manage_machines`, e `guild_settings` no fuso), com o PIN na própria requisição. O tópico `guild:main` do `/ws/ui` manda o snapshot e, a cada 3 s com alguém seguindo, a visão de novo se mudou. Máquina fora da rede local é a que não tem IP numa rede das interfaces da Cidadela (`guild.LocalNetworks`).
-
-| Rota | O que faz |
-|---|---|
-| `GET /api/guild`, `GET /api/guild/machines/{id}/removal` | a visão (época, fuso, `single`, máquinas, pedidos) e o aviso da remoção (quantos e quais agentes rodam lá) |
-| `POST /api/guild/joins/{id}/decide`, `…/machines/{id}/remove` (`confirm`), `…/exclusion`, `…/pass-citadel`, `PUT …/priority`, `PUT /api/guild/timezone` | aceitar ou recusar, remover, excluir, troca planejada (`Engine.Handover`, em segundo plano), prioridade, fuso; recusas são `refused` com `reason` (`excluded_machine`, `outside_local_network`, `citadel_protected`, `not_online`, `no_lock`, `not_revealed`, `handover_in_progress`…; uma troca planejada por vez) |
-
-Auditoria `panel.guild.*` (`entry_decided`, `machine_removed`, `exclusion`, `citadel_pass_started`, `citadel_pass_refused`, `priority`, `timezone`) com `user_id` e antes/depois, sem PIN. "GitHub fora" e "Telegram parado" vêm da cerca (`Fence`: `lock-down` e `TelegramStopped`).
-
 ### Operador do PC
 
 Tela só do **Senhor da Guilda** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)); comportamento em [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc).
@@ -91,38 +80,7 @@ Tela só do **Senhor da Guilda** ([níveis](../telegram/usuarios-e-niveis.md#ní
 
 - Bases e fichas: a tela exporta e importa; as regras de formato e de conflito de nomes são as de [exportar e importar](../orquestracao/bases-e-fichas.md#exportar-e-importar).
 
-As telas de decretos, delegações, supervisão da cadeia, teto, política e instruções extras estão em [regras e cadeia](administracao-regras.md).
-
-### Implementação: usuários, segredos e auditoria
-
-Código: `internal/panel/routes_users.go`, `routes_secrets.go` e `routes_audit.go` (tipos em `types_admin.go`, gerados em `web/src/gen/panel.ts`) e `web/src/screens/admin/`. O nível vem da [tabela](../telegram/usuarios-e-niveis.md#níveis-e-capacidades) (`forbidden_level` com `need` e `have`; o painel diz "exige o nível Senhor da Guilda; o seu é Administrador"); toda ação que muda algo pede o PIN na própria requisição.
-
-| Rota | Quem | O que faz |
-|---|---|---|
-| `GET /api/users` | Senhor da Guilda | usuários, campanhas e a passagem de posto que espera |
-| `POST /api/users`, `PATCH /api/users/{id}` | Senhor da Guilda, PIN | cadastra (devolve o código de primeiro acesso, uma vez) e edita nome, nível, campanhas e login do GitHub; campanha desconhecida é `invalid_workspace`, um segundo Senhor da Guilda é `owner_exists` |
-| `POST /api/users/{id}/suspend`, `/reactivate`, `/remove`, `/pairing-code`, `/access-code` | Senhor da Guilda, PIN | suspender (sessões acabam), reativar, remover, código do Telegram e códigos de primeiro acesso e de redefinição; o Senhor da Guilda não age sobre si (`self_action`) |
-| `GET`, `POST`, `DELETE /api/transfer` e `POST /api/transfer/accept` | Senhor da Guilda, PIN; quem aceita, com o PIN dele | passa o posto de Senhor da Guilda, cancela e aceita (as sessões dos dois acabam); é a tela `/transferencia` e a faixa no alto do painel |
-| `GET /api/me/github`, `POST /api/me/github/begin` e `/poll` | Aprovador ou acima | "Conectar GitHub": o device flow de `github.Personal`; conta diferente da cadastrada é `github_login_mismatch` (o motor já descartou o token) e as demais recusas têm código próprio (`github_denied`, `github_expired`, `github_no_login`, `github_flow_off`, `github_not_ready`) |
-| `GET /api/secrets` | Senhor da Guilda | nome, tipo, impressão, datas, metadados e o aviso de validade (`expiring`, `expired`, `stale`, com os dias), nunca valor |
-| `POST /api/secrets/site`, `PUT` e `DELETE /api/secrets/{name}` | Senhor da Guilda, PIN | cadastra credencial de site, substitui e apaga; o painel só mexe nos tipos `site_credential` e `provider_api_key` (os que o próprio Mestre guarda são `secret_managed`) |
-| `POST /api/recovery-key` | Senhor da Guilda, PIN | `{acknowledged: true}` (o aviso dos backups antigos, lido antes do PIN; sem ele `ack_required`) gera a chave, que só vem nessa resposta; `Vault.RewrapRecovery` reenvelopa a chave do cofre e troca a pública da Guilda de uma vez |
-| `GET /api/audit` | Administrador ou acima | `user`, `action` (início do nome), `from` e `to` (dia no fuso da Guilda), `workspace`, `cursor`, `limit`; o Senhor da Guilda vê tudo, os outros só as linhas das campanhas deles, e o que o Operador do PC fez só como fato |
-
-Auditoria desta área (`panel.user.*`, `panel.access_code.created`, `panel.pairing_code.created`, `panel.transfer.*`, `panel.secret.*`, `panel.recovery_key.renewed`, `panel.github.*`): `user_id` de quem fez, `target` ou `secret` e `before`/`after` com o que a tela mostra, sem valor, código nem PIN. O filtro "o quê" da tela escolhe entre estas famílias.
-
-### Implementação: classes, Apps, bases e fichas, perfis e consumo
-
-Código: `internal/panel/routes_{classes,apps,presets,profiles,usage}.go` (tipos em `types_manage.go`; o motor entra por `Panel.SetManage`, `internal/app/panelmanage.go`) e `web/src/screens/admin/`. Tudo com o nível conferido no servidor; mudança pede o PIN.
-
-| Rota | Quem | O que faz |
-|---|---|---|
-| `GET /api/classes` · `POST /api/classes/proposals/{id}/approve` | Administrador; PIN | classes global, da campanha e da mesa com o App e o estado dele; propostas do Grão-Mestre (`request`) e mudanças feitas por fora (`disk`), todas "não testada" até o M7; a faixa de 90 Apps vem em `apps`; "Aprovar" leva o hash visto e a `Library.Approve` confere nível, hash, problemas e teto (`proposal_stale`, `proposal_invalid`) |
-| `GET /api/github/apps` · `PUT /api/github/apps/others` · `POST /api/github/apps/{name}/link` | Administrador lê; Senhor da Guilda muda; PIN no link | "N de 100 Apps"; quem não é Senhor da Guilda vê só os Apps fixos e os instalados nos repositórios das suas campanhas; os pedidos de criação e o "novo link" são do Senhor da Guilda; o link sai nesta resposta, uma vez, porque só o hash do token fica guardado |
-| `GET /github/apps/novo/{token}` (e `/github/manifest/callback`, `/github/apps/instalado`) | Senhor da Guilda | páginas de `github.Web` montadas no painel; outro nível vê "exige Senhor da Guilda" e nenhum formulário (CA-GH-APPS-04) |
-| `GET /api/presets` · `PUT`/`DELETE /api/presets/{bases,sheets}/{name}` · `GET /api/presets/export` · `POST /api/presets/import[/plan]` | Senhor da Guilda; PIN ao mudar | cada base e ficha é editada como YAML (o formato da exportação); importar valida o arquivo inteiro, mostra os conflitos e aplica tudo ou nada (CA-ADM-05) |
-| `GET`/`POST /api/profiles` · `DELETE /api/profiles/{name}` · `POST …/default` · `POST …/advance` | Senhor da Guilda; PIN, menos `advance` | perfis desta máquina e o passo da configuração guiada; sem os passos da máquina (instalador, terminal de login, conformidade: M7) `advance` responde `unavailable` |
-| `GET /api/usage?days=` | qualquer nível; o servidor limita às campanhas do usuário | consumo por dia, campanha, mesa, missão, personagem e conta (só o Senhor da Guilda), com os limites, o que falta e o vazio quando o provedor não deu o dado |
+As rotas, os níveis e a auditoria das telas de Guilda, usuários, segredos, classes, Apps, bases e fichas, perfis e consumo estão em [rotas e implementação](administracao-rotas.md); as de decretos, delegações, supervisão da cadeia, teto, política e instruções extras, em [regras e cadeia](administracao-regras.md).
 
 ## Regras e erros
 
@@ -150,6 +108,15 @@ Código: `internal/panel/routes_{classes,apps,presets,profiles,usage}.go` (tipos
 - **CA-ADM-14** · *rápida* — **Dado** o catálogo MCP, **quando** um Administrador acrescenta um servidor comum, **então** é aceito e a impressão da lista de ferramentas é guardada; um servidor `control: true`, só o Senhor da Guilda; **dado** a lista de ferramentas mudada, **então** o servidor fica suspenso até a reaprovação (desde o M7).
 - **CA-ADM-16** · *rápida* — **Dado** o Senhor da Guilda, **quando** abre Configurações, **então** vê quatro grupos, cada entrada com uma frase de uso, toda tela da tabela acima alcançável em até dois cliques e marcada com a migalha `Configurações › grupo › tela`; **dado** um Aprovador, **então** os grupos e entradas que o nível dele não alcança não aparecem, e o endereço antigo de uma tela (`/decretos`) abre a mesma tela.
 - **CA-ADM-15** · *rápida* — **Dado** o `verificacao.yaml` proposto, **quando** um Administrador edita e confirma, **então** vale a versão confirmada e a edição fica na auditoria; um Aprovador não vê a ação.
+- **CA-ADM-17** · *rápida* — **Dado** qualquer tela de Configurações com os dados vazios (instalação nova), **quando** abre, **então** mostra um só `h1`, a frase de para que serve em palavras simples com os termos do vocabulário em `Term`, a faixa de situação dizendo o que falta e o próximo passo, e um vazio com a saída (botão ou link) que nasce do mesmo dado que a faixa lê, sem frase que contradiga outra parte da tela.
+- **CA-ADM-18** · *rápida* — **Dado** uma leitura que falha em qualquer dessas telas, **quando** ela abre, **então** mostra o que não carregou, o motivo no idioma do usuário e **Tentar de novo**, deixa o texto cru do servidor só em "Detalhes técnicos" (recolhido) e não mostra dado velho como atual.
+- **CA-ADM-19** · *rápida* — **Dado** um Senhor da Guilda sem perfil de conta, **quando** abre Perfis de conta, **então** vê um cartão por provedor (Claude, Codex, Antigravity) e cria o perfil com o PIN; sem a configuração guiada (`advance` responde `unavailable`) o cartão diz que o login é à mão; **dado** a configuração guiada disponível, **então** o mesmo cartão mostra as etapas, "Esperando: …" e **Continuar a configuração**.
+- **CA-ADM-20** · *rápida* — **Dado** a conta sem Apps, **quando** abre Apps do GitHub, **então** o vazio explica o que é um App e leva ao link de criação do App fixo (Senhor da Guilda, PIN, mostrado uma vez); **dado** um App em criação e outro com o link vencido, **então** cada linha diz o próximo passo (abrir o link, ou **Gerar novo link**) e o pedido de criação aparece na linha do App, não numa seção solta.
+- **CA-ADM-21** · *rápida* — **Dado** o cofre com a chave da Guilda e uma credencial de site, **quando** abre Segredos, **então** "Onde cada chave vai" diz onde guardar site, Apps do GitHub, contas de IA e Telegram (sem botão para o que não existe), os segredos do Mestre aparecem à parte, com nome legível e sem edição, e a resposta da API segue sem valor (CA-ADM-03).
+- **CA-ADM-22** · *rápida* — **Dado** uma classe aprovada com App em criação e uma proposta com problemas, **quando** um Administrador abre Classes, **então** a classe diz que sem o App ela não abre PRs e leva a Apps do GitHub, e a proposta lista os problemas sem o botão **Aprovar**; **dado** nenhuma classe, **então** o vazio explica o que é uma classe e como ela nasce.
+- **CA-ADM-23** · *rápida* — **Dado** uma Guilda com um pedido para entrar e uma Torre sem sinal, **quando** o Senhor da Guilda abre Guilda e máquinas, **então** o pedido vem antes das máquinas, cada máquina mostra o essencial com a ficha recolhida e as ações raras em "Mais…", todas com PIN; **dado** só o Senhor da Guilda em Usuários, **então** o vazio mostra a sequência de convidar alguém.
+- **CA-ADM-24** · *rápida* — **Dado** a tela de 390 px, **quando** qualquer tela de Configurações abre, **então** a página não rola na horizontal (tabelas rolam dentro do próprio contêiner), os alvos de toque têm 44 px ou mais e a faixa de situação e o próximo passo cabem sem cortar texto.
+- **CA-ADM-25** · *rápida* — **Dado** um Administrador, **quando** abre pelo endereço uma tela só do Senhor da Guilda, **então** vê "exige o nível Senhor da Guilda; o seu é Administrador" e nenhuma ação, e nas telas dele os botões que não pode usar mostram o nível exigido; o redesenho não muda rota, nível, PIN nem campo.
 
 ## Depende de
 

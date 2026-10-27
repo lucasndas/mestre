@@ -27,6 +27,20 @@ Escolhida pelo Senhor da Guilda em 2026-10-26, entre três propostas vistas em t
 - **Configurações** é um índice de quatro grupos, cada um com a frase do que a tela faz: **Conta** (sessões, senha, GitHub pessoal), **Pessoas e acesso** (usuários, segredos, auditoria), **Infraestrutura** (Guilda e máquinas, perfis de conta, Apps do GitHub, classes, bases e fichas) e **Regras e consumo** (decretos, delegações, cadeia de aprovação, teto da campanha, política de aprovação, instruções extras, consumo) ([administração](administracao.md#telas)). Os nomes do vocabulário ficam, com `Term` e a frase ao lado; as rotas antigas continuam valendo.
 - Um cabeçalho de página por tela, `h1` único; um link "Ir para o conteúdo" para quem navega por teclado.
 
+## Tela de administração
+
+Toda tela de Configurações segue a mesma ordem, de cima para baixo ([desenho de cada uma](administracao-telas.md); protótipo aprovado nesta rodada):
+
+1. **Migalha e título** (`h1` único).
+2. **Para que serve**, em uma ou duas frases de palavras do dia a dia, que dizem o que a pessoa ganha e o que acontece sem isso ("Sem uma conta entrada, nenhum agente roda."). Os termos do vocabulário vêm em `Term`, numa linha "Vocabulário" logo abaixo; nenhum texto de ajuda novo no código ([ajuda dos termos](#ajuda-dos-termos)).
+3. **Faixa de situação e próximo passo** (`role="status"`): uma frase com o estado de agora ("1 de 2 contas prontas"), uma linha de apoio e, à direita (embaixo no celular), o **botão principal** da tela, um só. O tom (neutro, âmbar "falta algo", verde "em dia", vermelho "falhou") vem junto com um símbolo e o texto, nunca só da cor. A frase nasce dos mesmos dados que a lista lê.
+4. **Conteúdo em cartões**, um por coisa, com o nome, os selos de estado e uma frase com o que fazer **naquele** item quando ele pede algo (ex.: "O link venceu. Gerar novo link"). Tabela só para comparar muitos valores iguais, dentro de um contêiner que rola. O que é técnico (texto cru do servidor, nome interno, ficha completa) fica em "Detalhes" recolhido.
+5. **Vazio:** quadro tracejado que diz o que a coisa é, por que importa e **o próximo passo** (botão ou lista curta de passos), com o termo do vocabulário e a ajuda. Nunca só "Nenhum X".
+6. **Erro de leitura:** o que não carregou, o motivo no idioma do usuário, **Tentar de novo** e "Detalhes técnicos" com o código do servidor; a faixa de situação some, porque não se sabe o estado.
+7. **Ações:** alvo de 44 px; a que exige PIN abre o campo no lugar ([PIN](login.md#pin-em-ações-sensíveis)); a que o nível do usuário não alcança aparece desligada com "Exige o nível X; o seu é Y" ([recusa](#recusa-e-desfazer)); a perigosa (revogar tudo, remover) fica em seção própria no fim, nunca como botão principal; o que só se mostra uma vez usa `ShownOnce`.
+
+No celular a faixa e os cartões empilham em uma coluna, sem rolagem horizontal da página.
+
 ## Estados
 
 - **Carregando:** texto curto no lugar do conteúdo, sem "spinner" sozinho; o que já se sabe continua na tela enquanto atualiza.
