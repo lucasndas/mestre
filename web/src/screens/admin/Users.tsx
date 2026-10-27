@@ -3,21 +3,36 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormatDateTime, useMe } from "../../app/session";
 import { SensitiveButton } from "../../components/PinField";
-import { Term } from "../../components/Term";
 import { Alert, Button, Field } from "../../components/ui";
 import type {
   AccessCodeResponse,
-  CreateUserRequest,
-  CreateUserResponse,
   EditUserRequest,
   PairingCodeResponse,
   UserRow,
 } from "../../gen/panel";
 import { api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
-import { Badge, ChoiceGroup, MultiChoice, PageHeader, ShownOnce, usersQuery } from "./kit";
+import { InviteDelivery, InviteForm } from "./Invite";
+import {
+  Badge,
+  ChoiceGroup,
+  EmptyState,
+  LoadError,
+  MultiChoice,
+  PageHeader,
+  ShownOnce,
+  StatusStrip,
+  usersQuery,
+  VocabLine,
+} from "./kit";
 
 type Say = (k: string, o?: object) => string;
+
+interface Delivery {
+  name: string;
+  code: string;
+  expires: string;
+}
 
 interface Shown {
   title: string;
@@ -29,30 +44,53 @@ const ASSIGNABLE = ["administrator", "approver", "observer"] as const;
 
 export function Users() {
   const { t } = useTranslation("users");
-  const { t: te } = useTranslation("errors");
   const say = t as unknown as Say;
   const me = useMe();
   const fmt = useFormatDateTime();
   const qc = useQueryClient();
-  const { data, error } = useQuery(usersQuery);
+  const { data, error, refetch } = useQuery(usersQuery);
   const [creating, setCreating] = useState(false);
   const [managing, setManaging] = useState<string | null>(null);
   const [shown, setShown] = useState<Shown | null>(null);
+  const [invite, setInvite] = useState<Delivery | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin"] });
   const showCode = (title: string, c: { code: string; expires_at: string }) =>
     setShown({ title, secret: c.code, detail: t("codes.expires", { when: fmt(c.expires_at) }) });
+  const people = data?.users ?? [];
+  const alone = people.length <= 1;
+  const waiting = people.filter((u) => u.level !== "owner" && !u.login).length;
+  const openButton =
+    creating || invite ? null : (
+      <Button onPress={() => setCreating(true)}>{t("create.open")}</Button>
+    );
 
   return (
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
-      <p className="mb-6 max-w-2xl text-sm text-muted">
-        <Term name="Nível" />
-      </p>
+      <VocabLine terms={["Nível", "PIN"]} />
+      {data ? (
+        <StatusStrip
+          tone={waiting > 0 ? "warn" : "neutral"}
+          title={alone ? t("stripAlone") : t("strip", { count: people.length })}
+          hint={
+            alone
+              ? t("stripAloneHint")
+              : waiting > 0
+                ? t("stripWaiting", { count: waiting })
+                : t("stripHint")
+          }
+        >
+          {openButton}
+        </StatusStrip>
+      ) : null}
+      {invite ? <InviteDelivery {...invite} onDone={() => setInvite(null)} /> : null}
       {shown ? <ShownOnce {...shown} onDone={() => setShown(null)} /> : null}
       <div className="flex max-w-3xl flex-col gap-4">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
-        {error ? <Alert>{errorText(te, error)}</Alert> : null}
+        {error ? (
+          <LoadError what={t("loadWhat")} error={error} onRetry={() => void refetch()} />
+        ) : null}
         {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
         {data?.transfer && !data.transfer.to_me ? (
           <div className="flex flex-col gap-3 rounded-field border border-line bg-surface p-4">
@@ -76,27 +114,29 @@ export function Users() {
             </div>
           </div>
         ) : null}
-        {data ? (
-          <div>
-            {creating ? (
-              <CreateUser
-                workspaces={data.workspaces}
-                onClose={() => setCreating(false)}
-                onCreated={async (r) => {
-                  setCreating(false);
-                  setNotice(null);
-                  showCode(t("create.codeTitle", { name: r.user.name }), r.code);
-                  await refresh();
-                }}
-              />
-            ) : (
-              <Button onPress={() => setCreating(true)}>{t("create.open")}</Button>
-            )}
-          </div>
+        {data && creating ? (
+          <InviteForm
+            workspaces={data.workspaces}
+            onClose={() => setCreating(false)}
+            onCreated={async (r) => {
+              setCreating(false);
+              setNotice(null);
+              setInvite({ name: r.user.name, code: r.code.code, expires: fmt(r.code.expires_at) });
+              await refresh();
+            }}
+          />
         ) : null}
-        {data && data.users.length <= 1 ? <p className="text-muted">{t("empty")}</p> : null}
+        {data && alone && !creating && !invite ? (
+          <EmptyState
+            title={t("emptyTitle")}
+            why={t("empty")}
+            steps={[t("emptyStep1"), t("emptyStep2"), t("emptyStep3")]}
+          >
+            {openButton}
+          </EmptyState>
+        ) : null}
         <ul className="flex flex-col gap-3">
-          {data?.users.map((u) => (
+          {people.map((u) => (
             <li key={u.id} className="rounded-field border border-line bg-surface p-4">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <div className="min-w-0 flex-1">
@@ -105,6 +145,9 @@ export function Users() {
                     <Badge>{say(`levels.${u.level}`)}</Badge>
                     {u.state === "suspended" ? (
                       <Badge tone="danger">{t("states.suspended")}</Badge>
+                    ) : null}
+                    {u.level !== "owner" && !u.login ? (
+                      <Badge tone="warn">{t("notEntered")}</Badge>
                     ) : null}
                     {u.id === me.user.id ? <Badge tone="ok">{t("you")}</Badge> : null}
                   </p>
@@ -131,8 +174,8 @@ export function Users() {
                   key={u.id}
                   u={u}
                   self={u.id === me.user.id}
-                  workspaces={data.workspaces}
-                  hasTransfer={Boolean(data.transfer)}
+                  workspaces={data?.workspaces ?? []}
+                  hasTransfer={Boolean(data?.transfer)}
                   onNotice={(s) => {
                     setShown(null);
                     setNotice(s);
@@ -159,72 +202,6 @@ function githubText(say: Say, u: UserRow, fmt: (iso: string) => string): string 
   if (g.state === "expired") return say("githubState.expired", { login: g.login });
   if (u.github_login) return say("githubState.none", { login: u.github_login });
   return say("githubState.noLogin");
-}
-
-function CreateUser({
-  workspaces,
-  onClose,
-  onCreated,
-}: {
-  workspaces: string[];
-  onClose: () => void;
-  onCreated: (r: CreateUserResponse) => Promise<void>;
-}) {
-  const { t } = useTranslation("users");
-  const say = t as unknown as Say;
-  const [name, setName] = useState("");
-  const [level, setLevel] = useState<string>("approver");
-  const [ws, setWs] = useState<string[]>([]);
-  const [gh, setGh] = useState("");
-  return (
-    <div className="flex flex-col gap-4 rounded-field border border-line bg-surface p-5">
-      <h2 className="text-xl">{t("create.title")}</h2>
-      <Field label={t("create.name")} value={name} onChange={setName} autoComplete="off" />
-      <ChoiceGroup
-        label={t("create.level")}
-        value={level}
-        onChange={setLevel}
-        options={ASSIGNABLE.map((l) => ({
-          value: l,
-          label: say(`levels.${l}`),
-          hint: say(`levelHints.${l}`),
-        }))}
-      />
-      <MultiChoice
-        label={t("create.workspaces")}
-        value={ws}
-        onChange={setWs}
-        options={workspaces}
-        empty={t("workspaceNone")}
-      />
-      <Field
-        label={t("create.githubLogin")}
-        description={t("create.githubLoginHint")}
-        value={gh}
-        onChange={setGh}
-        autoComplete="off"
-      />
-      <div className="flex flex-wrap items-start gap-3">
-        <SensitiveButton
-          isDisabled={name.trim() === ""}
-          onConfirm={async (pin) => {
-            const body: CreateUserRequest = {
-              name: name.trim(),
-              level,
-              workspaces: ws,
-              github_login: gh.trim(),
-            };
-            await onCreated(await api<CreateUserResponse>("POST", "/api/users", body, { pin }));
-          }}
-        >
-          {t("create.submit")}
-        </SensitiveButton>
-        <Button variant="quiet" onPress={onClose}>
-          {t("create.close")}
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 function ManageUser({
@@ -381,7 +358,11 @@ function ManageUser({
           {u.state === "active" && !hasTransfer ? (
             <>
               <h3 className="mt-2 text-lg">{t("transfer.title")}</h3>
-              <Action hint={u.has_pin ? t("transfer.startHint") : t("transfer.needsPin")}>
+              <Action
+                hint={
+                  u.has_pin ? t("transfer.startHint") : t("transfer.needsPin", { name: u.name })
+                }
+              >
                 <SensitiveButton
                   variant="danger"
                   isDisabled={!u.has_pin}

@@ -68,38 +68,38 @@ test("a level that may not use the screen is refused with the level that is requ
     }),
   });
   renderApp("/usuarios");
-  expect((await screen.findByRole("alert")).textContent).toBe(
+  expect((await screen.findByRole("alert")).textContent).toContain(
     "Esta ação exige o nível Senhor da Guilda; o seu é Administrador.",
   );
 });
 
-test("the Owner registers a user with the PIN and sees the code of first access once", async () => {
+// CA-CRESC-03
+test("the Owner invites a person with the PIN and the first-access code is never in the page after it is written down", async () => {
   const { calls } = fakeServer({
     ...base,
     "GET /api/users": () => ({ body: list }),
+    "GET /ca.crt": () => ({ body: { ca: "x" } }),
     "POST /api/users": () => ({
       status: 201,
       body: {
         user: row({ id: "u3", name: "Ana Lima", login: "" }),
-        code: { code: "ABCD2345", kind: "first", expires_at: "2026-10-26T12:30:00Z" },
+        code: { code: "ABCD2345", kind: "first", expires_at: "2026-10-27T12:30:00Z" },
       },
     }),
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
-  renderApp("/usuarios");
-  await user.click(await screen.findByRole("button", { name: "Cadastrar usuário" }));
-  const submit = screen.getByRole("button", { name: "Cadastrar usuário" });
+  const { queryClient } = renderApp("/usuarios");
+  await user.click(await screen.findByRole("button", { name: "Convidar pessoa" }));
+  const submit = screen.getByRole("button", { name: "Criar convite" });
   expect((submit as HTMLButtonElement).disabled).toBe(true); // no name yet
   await fill(user, screen.getByLabelText("Nome"), "Ana Lima");
   await user.click(screen.getByRole("radio", { name: /Observador/ }));
   await user.click(screen.getByRole("checkbox", { name: "loja" }));
-  await user.click(screen.getByRole("button", { name: "Cadastrar usuário" }));
-  // the PIN is asked after the button and goes in the very request
+  expect(screen.queryByLabelText("PIN")).toBeNull(); // the PIN field comes after the button
+  await user.click(screen.getByRole("button", { name: "Criar convite" }));
   await fill(user, screen.getByLabelText("PIN"), "123456");
-  await user.click(screen.getByRole("button", { name: "Cadastrar usuário" }));
-  expect(
-    await screen.findByRole("heading", { name: "Código de primeiro acesso de Ana Lima" }),
-  ).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Criar convite" }));
+  await user.click(await screen.findByRole("checkbox", { name: /conferiu o código/ }));
   expect(screen.getByTestId("shown-once").textContent).toBe("ABCD2345");
   const post = calls.find((c) => c.method === "POST" && c.path === "/api/users");
   expect(post?.headers["X-Mestre-Pin"]).toBe("123456");
@@ -109,8 +109,18 @@ test("the Owner registers a user with the PIN and sees the code of first access 
     workspaces: ["loja"],
     github_login: "",
   });
-  await user.click(screen.getByRole("button", { name: "Já anotei" }));
+  await user.click(screen.getByRole("button", { name: "Já enviei e anotei" }));
   expect(screen.queryByTestId("shown-once")).toBeNull();
+  // nothing keeps the code once it was written down
+  expect(document.body.textContent).not.toContain("ABCD2345");
+  expect(
+    JSON.stringify(
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .map((q) => q.state.data),
+    ),
+  ).not.toContain("ABCD2345");
 });
 
 test("a refusal of the server shows its text and changes nothing on the screen", async () => {
@@ -444,6 +454,7 @@ test("Conectar GitHub shows the error when another GitHub account authorized", a
   expect(screen.getByRole("button", { name: "Connect GitHub" })).toBeTruthy();
 });
 
+// CA-CRESC-16
 test("the user asked to take the post of Owner sees the banner and accepts with the PIN", async () => {
   const transfer = {
     transfer: {
@@ -492,6 +503,13 @@ test("the user asked to take the post of Owner sees the banner and accepts with 
   // the sessions end with the change: the panel goes to the login
   await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
   expect(within(document.body).queryByText(/quer passar o posto/)).toBeNull();
+  // the login says why, and the address does not carry it
+  expect(
+    (await screen.findByText(/Suas sessões terminaram porque o posto de Senhor da Guilda mudou/))
+      .textContent,
+  ).not.toMatch(/Maria|Bruno|Administrador/);
+  expect(router.state.location.search).toEqual({});
+  expect(router.state.location.href).toBe("/login");
 });
 
 // the status strip of the screen: the one status that opens with a tone symbol
