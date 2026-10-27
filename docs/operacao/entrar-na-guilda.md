@@ -25,7 +25,7 @@ O pedido **expira em 1 hora** sem resposta ([entrada na Guilda](../guilda/guilda
 
 Contrato do texto, para a implementação do instalador (M7); os passos e as conferências são os de cima:
 
-- **Achou uma Guilda:** o nome da Guilda, a Cidadela e quantas máquinas; depois o **código de entrada**, a instrução de mostrá-lo ao Senhor da Guilda e que ele só aceita se for **igual**, o prazo do pedido (1 hora, com o horário) e "Aguardando o Senhor da Guilda…".
+- **Achou uma Guilda:** o nome da Guilda, a Cidadela e quantas máquinas; depois o **código de entrada**, a instrução de mostrá-lo ao Senhor da Guilda e que ele só aceita se o número que vir no Telegram, ou digitar no painel, for **igual**, o prazo do pedido (1 hora, com o horário) e "Aguardando o Senhor da Guilda…".
 - **Achou mais de uma:** lista numerada (nome da Cidadela e quantas máquinas) e a pergunta em qual entrar.
 - **Aceito:** o que foi feito (certificados emitidos com as chaves só nesta máquina, confia na CA da Guilda, conectada como Torre) e o que falta: configurar as contas de IA em **Perfis de conta**.
 - **Recusado ou vencido:** "Entrada recusada ou expirada. Esta máquina não entrou na Guilda e não recebeu nada dela" e como tentar de novo (o instalador de novo, ou `mestre join <endereço da Cidadela>`).
