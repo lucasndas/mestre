@@ -30,7 +30,7 @@ Garantir que só usuários autorizados usem o painel, cada um com o seu nível e
 
 ### Primeiro acesso de cada usuário
 
-- O Senhor da Guilda cadastra o usuário ([administração](administracao.md)) e o painel gera um **código de primeiro acesso** de uso único, válido por 24 h (padrão). O Senhor da Guilda entrega o código pessoalmente ou por um canal que ele escolher; o Mestre nunca o envia pelo Telegram. A tela de entrega separa o código das instruções (endereço, impressão digital da CA) em dois botões de copiar, e o código nunca vai em link; o caminho inteiro, com o que a pessoa convidada vê, está em [crescer a Guilda](crescer-a-guilda.md#1-convidar-uma-pessoa).
+- O Senhor da Guilda cadastra o usuário ([administração](administracao.md)) e o painel gera um **código de primeiro acesso** de uso único, válido por 24 h (padrão). O Senhor da Guilda entrega o código pessoalmente ou por um canal que ele escolher; o Mestre nunca o envia pelo Telegram. A tela de entrega tem três partes com botões de copiar separados (instruções com o endereço, assinatura do certificado, código), para que endereço e assinatura não viajem juntos nem com o código; o código só vai depois de a pessoa dizer que confiou no certificado e nunca vai em link; o caminho inteiro, com o que a pessoa convidada vê, está em [crescer a Guilda](crescer-a-guilda.md#1-convidar-uma-pessoa).
 - Na tela de login, "primeiro acesso" pede o código, o nome de login, a senha e o PIN.
 - O mesmo mecanismo serve para **redefinir a senha** de alguém: o Senhor da Guilda gera um código novo; a senha antiga deixa de valer e as sessões do usuário acabam.
 
