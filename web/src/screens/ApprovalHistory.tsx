@@ -101,7 +101,12 @@ export function ApprovalHistoryScreen() {
       <div className="flex max-w-4xl flex-col gap-3">
         {q.error ? <Alert>{errorText(te, q.error)}</Alert> : null}
         {!q.data && !q.error ? <p className="text-muted">{t("loading")}</p> : null}
-        {q.data && items.length === 0 ? <p className="text-muted">{t("history.empty")}</p> : null}
+        {q.data && items.length === 0 ? (
+          <div className="rounded-field border border-dashed border-line p-6">
+            <p className="font-semibold">{t("history.empty")}</p>
+            <p className="text-muted">{t("history.emptyHint")}</p>
+          </div>
+        ) : null}
         <ul className="flex flex-col gap-3">
           {items.map((i) => (
             <li key={i.id} className="rounded-field border border-line bg-surface p-4">

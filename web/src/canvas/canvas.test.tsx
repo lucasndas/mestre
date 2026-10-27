@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { afterEach, expect, test, vi } from "vitest";
@@ -303,4 +303,50 @@ test("a change event makes the canvas read the state again", async () => {
     ),
   );
   sock.stop();
+});
+
+// CA-CANVAS-11, the part of the screen: the board opens at zoom 100% and no text of a node
+// is below the 17 px of the panel; "Ajustar à tela" is a button, not the first state.
+test("the board opens at zoom 100%, its text is the size of the panel and Ajustar à tela is a button", async () => {
+  fakeServer({ [`GET ${path}`]: () => ({ body: tableState() }) });
+  const { Wrapper } = wrap();
+  const { container } = render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  await screen.findByRole("article", { name: "Personagem Dev-1" });
+  const viewport = container.querySelector(".react-flow__viewport") as HTMLElement;
+  expect(viewport.style.transform).toMatch(/scale\(1\)/);
+  expect(screen.getByRole("button", { name: "Ajustar à tela" })).toBeTruthy();
+  // text-sm and text-xs are below 17 px in this panel: none in the nodes of the board
+  for (const node of container.querySelectorAll(".react-flow__node")) {
+    expect(node.querySelector(".text-sm, .text-xs")).toBeNull();
+  }
+});
+
+test("'Em palavras simples' says in a sentence what each character does and waits for", async () => {
+  fakeServer({ [`GET ${path}`]: () => ({ body: tableState() }) });
+  const { Wrapper } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  const words = await screen.findByRole("complementary", { name: "Em palavras simples" });
+  expect(words.textContent).toContain("Dev-1 está trabalhando agora.");
+  expect(words.textContent).toContain("Revisor espera por Dev-1.");
+  expect(words.textContent).toContain("Mestre está parado e pronto para o próximo trabalho.");
+});
+
+test("on a phone the board is a list of characters joined by a line, dashed where one waits, each with Ver terminal", async () => {
+  const st = tableState();
+  st.characters = st.characters.map((c) => (c.id === "dev" ? { ...c, has_terminal: true } : c));
+  st.waits = [
+    { id: "w1", waiter: "rev", target: "dev", kind: "ask", reason: "Dev-1", deadlock: false },
+  ];
+  fakeServer({ [`GET ${path}`]: () => ({ body: st }) });
+  const { Wrapper } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  const list = await screen.findByRole("list", { name: "Personagens da mesa m1" });
+  const items = within(list).getAllByRole("listitem");
+  expect(items).toHaveLength(4);
+  expect(within(list).getByRole("button", { name: "Ver terminal de Dev-1" })).toBeTruthy();
+  // the line before the one that waits is dashed
+  const lines = within(list).getAllByTestId("board-link");
+  expect(lines).toHaveLength(3);
+  expect(lines[2]?.className).toContain("border-dashed");
+  expect(lines[0]?.className).not.toContain("border-dashed");
 });

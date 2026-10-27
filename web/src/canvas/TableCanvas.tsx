@@ -12,6 +12,8 @@ import {
   Panel,
   ReactFlow,
   ReactFlowProvider,
+  useNodesInitialized,
+  useReactFlow,
 } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Checkbox, Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
@@ -24,6 +26,7 @@ import { ApiError } from "../lib/api";
 import { errorText } from "../lib/errors";
 import { socketFeed } from "../terminal/feed";
 import { actions, canvasQuery, canvasTopic } from "./api";
+import { CharacterList, PlainWords } from "./BoardWords";
 import { CanvasEnvContext } from "./context";
 import { EdgeMarkers, edgeTypes } from "./edges";
 import { useGestures } from "./gestures";
@@ -33,7 +36,9 @@ import {
   buildNodes,
   type CanvasEdge,
   type CanvasNode,
+  focusCharacter,
   groupOf,
+  initialView,
   layoutItems,
 } from "./model";
 import { nodeTypes } from "./nodes";
@@ -85,6 +90,22 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
   const [tab, setTab] = useState("missions");
   const [grimoire, setGrimoire] = useState(false);
   const dragging = useRef(false);
+  const frame = useRef<HTMLElement>(null);
+  const flow = useReactFlow();
+  const ready = useNodesInitialized();
+  const opened = useRef(false);
+
+  // the board opens at zoom 100%: all of the table if it fits, else centered on who works
+  useEffect(() => {
+    if (!ready || !state || opened.current) return;
+    opened.current = true;
+    const box = frame.current?.getBoundingClientRect();
+    const view = initialView(nodes, focusCharacter(state), {
+      width: box?.width ?? 0,
+      height: box?.height ?? 0,
+    });
+    void flow.fitView({ ...view, minZoom: 1, maxZoom: 1, padding: 0.05 });
+  }, [ready, state, nodes, flow]);
 
   // live: the snapshot opens the state, and each "changed" reads it again
   useEffect(() => {
@@ -236,10 +257,11 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
 
   return (
     <CanvasEnvContext.Provider value={env}>
-      <div className="flex h-[calc(100dvh-12rem)] min-h-[28rem] w-full flex-col border border-line bg-paper md:flex-row">
+      <div className="flex md:h-[calc(100dvh-12rem)] md:min-h-[28rem] w-full flex-col border border-line bg-paper md:flex-row">
         <section
           aria-label={t("region", { table })}
-          className="relative min-h-[18rem] min-w-0 flex-1"
+          ref={frame}
+          className="relative hidden min-h-[18rem] min-w-0 flex-1 md:block"
         >
           <EdgeMarkers />
           <ReactFlow<CanvasNode, CanvasEdge>
@@ -261,8 +283,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
             isValidConnection={(c) => c.source !== c.target}
             minZoom={0.05}
             maxZoom={2}
-            fitView
-            fitViewOptions={{ maxZoom: 0.6 }}
+            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
             selectionOnDrag={false}
             deleteKeyCode={state.can_edit ? ["Backspace", "Delete"] : null}
             nodesConnectable={state.can_edit}
@@ -274,7 +295,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
             <MiniMap pannable zoomable ariaLabel={t("minimap")} className="!hidden md:!block" />
             <Panel
               position="top-left"
-              className="flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-2"
+              className="pointer-events-none flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-2 *:pointer-events-auto"
             >
               {state.can_edit ? (
                 <>
@@ -294,6 +315,12 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
                   </Button>
                 </>
               ) : null}
+              <Button
+                variant="secondary"
+                onPress={() => void flow.fitView({ padding: 0.12, minZoom: 0.05, maxZoom: 1 })}
+              >
+                {t("fit")}
+              </Button>
               <Button
                 variant="secondary"
                 onPress={() => {
@@ -333,6 +360,10 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
             ) : null}
           </div>
         </section>
+        <div className="min-h-0 flex-1 overflow-auto md:hidden">
+          <CharacterList state={state} />
+        </div>
+        <PlainWords state={state} />
         {side || draft ? (
           <SidePanel
             state={state}

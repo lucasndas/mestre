@@ -92,7 +92,7 @@ function DiffFile({ file }: { file: ApprovalDiffFile }) {
 }
 
 /** "Ver detalhes": the whole question with the exact target and the whole diff of a PR. */
-function Details({ id }: { id: number }) {
+function Details({ id, skipText }: { id: number; skipText?: string }) {
   const { t } = useTranslation("approvals");
   const { t: te } = useTranslation("errors");
   const { data, error } = useQuery(approvalDetailsQuery(id));
@@ -100,9 +100,11 @@ function Details({ id }: { id: number }) {
   if (!data) return <p className="text-muted">{t("details.loading")}</p>;
   return (
     <section aria-label={t("details.title", { id })} className="flex flex-col gap-3">
-      <pre className="rounded-field border border-line bg-paper p-3 text-[0.95em] break-words whitespace-pre-wrap">
-        {data.text}
-      </pre>
+      {data.text === skipText ? null : (
+        <pre className="rounded-field border border-line bg-paper p-3 text-[0.95em] break-words whitespace-pre-wrap">
+          {data.text}
+        </pre>
+      )}
       {data.diff_unavailable ? <Alert>{t("details.unavailable")}</Alert> : null}
       {data.files.length > 0 ? (
         <div className="flex flex-col gap-2">
@@ -146,6 +148,10 @@ function Answers({
   const [value, setValue] = useState("");
   const [pin, setPin] = useState("");
   const [emptyField, setEmptyField] = useState(false);
+  const [more, setMore] = useState(false);
+  // Approve and deny are the two buttons of a decision; the other answers wait in "Mais opções"
+  const main = item.answers.filter((a) => a.answer === "approve" || a.answer === "deny");
+  const others = item.answers.filter((a) => a.answer !== "approve" && a.answer !== "deny");
 
   const send = useMutation({
     mutationFn: (a: { answer: ApprovalAnswer; value: string; pin: string }) => {
@@ -217,23 +223,42 @@ function Answers({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-2">
-        {item.answers.map((a) => (
+        {main.map((a) => (
           <Button
             key={a.answer}
-            variant={
-              a.answer.startsWith("deny")
-                ? "secondary"
-                : a.answer === "approve"
-                  ? "primary"
-                  : "secondary"
-            }
+            variant={a.answer === "approve" ? "primary" : "secondary"}
             isDisabled={send.isPending}
             onPress={() => pick(a)}
           >
             {t(`answers.${a.answer}`)}
           </Button>
         ))}
+        {others.length > 0 ? (
+          <Button
+            variant="quiet"
+            aria-expanded={more}
+            aria-controls={`more-${item.id}`}
+            onPress={() => setMore(!more)}
+          >
+            {more ? t("card.lessOptions") : t("card.more")}
+          </Button>
+        ) : null}
       </div>
+      {more ? (
+        <fieldset id={`more-${item.id}`} className="m-0 flex flex-wrap gap-2 border-0 p-0">
+          <legend className="sr-only">{t("card.otherAnswers")}</legend>
+          {others.map((a) => (
+            <Button
+              key={a.answer}
+              variant="secondary"
+              isDisabled={send.isPending}
+              onPress={() => pick(a)}
+            >
+              {t(`answers.${a.answer}`)}
+            </Button>
+          ))}
+        </fieldset>
+      ) : null}
       {choice ? (
         <form
           aria-label={t("confirmNamed", { answer: t(`answers.${choice.answer}`) })}
@@ -304,7 +329,23 @@ function Answers({
   );
 }
 
-/** A request of the central: the question as the Telegram has it, and the answers. */
+/** The lines of the question that say exactly what will be done: the tool, the command, the URL, the paths. */
+const EXACT = /^(Ferramenta|Comando exato|URL|Caminhos|Ação|Sobre|Missão): /;
+export function exactLines(text: string): string[] {
+  return text.split("\n").filter((l) => EXACT.test(l));
+}
+
+const RISK_TONE: Record<string, string> = {
+  alto: "bg-danger-wash text-danger",
+  medio: "bg-accent-wash text-ink",
+};
+
+/**
+ * A request of the central in words (docs/painel/conversa-e-aprovacoes.md#cartão-legível):
+ * what they ask, why, who asked, what each answer does, and the answers; the text the
+ * Telegram has stays in "Ver detalhes técnicos". A type the catalog does not know shows
+ * the `about` and the text of the server as they are.
+ */
 export function ApprovalCard({
   item,
   highlighted,
@@ -315,41 +356,79 @@ export function ApprovalCard({
   onClosed?: (id: number, closed: ApprovalClosed) => void;
 }) {
   const { t: te } = useTranslation("errors");
+  const { i18n } = useTranslation();
   const [problem, setProblem] = useState<unknown>(null);
   const t = useDynamicT("approvals");
   const fmt = useFormatTime();
   const [details, setDetails] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
   const open = !item.closed;
+  const known = i18n.exists(`approvals:readable.${item.type}.title`);
   const place = item.workspace
     ? item.table
       ? t("item.place", { workspace: item.workspace, table: item.table })
       : t("item.placeNoTable", { workspace: item.workspace })
     : t("item.system");
+  const exact = known ? exactLines(item.text) : [];
   return (
     <article
       id={`request-${item.id}`}
       aria-label={t("item.title", { id: item.id })}
       className={`flex flex-col gap-3 rounded-field border bg-surface p-4 ${highlighted ? "border-accent ring-2 ring-accent/30" : "border-line"}`}
     >
-      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h3 className="text-xl">{t("item.title", { id: item.id })}</h3>
-        <span className="rounded-full bg-accent-wash px-2 py-0.5 text-sm font-semibold">
-          {t(`types.${item.type}`)}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base">
+        <span
+          className={`rounded-full px-2 py-0.5 font-semibold ${RISK_TONE[item.risk] ?? "bg-paper"}`}
+        >
+          {t(`riskBand.${item.risk}`, { defaultValue: item.risk })}
         </span>
-        <span className="text-sm text-muted">{t(`risk.${item.risk}`)}</span>
-        <span className="text-sm text-muted">{place}</span>
-        <span className="text-sm text-muted">
-          {t("item.asked", { time: fmt(item.created_at) })}
-        </span>
+        <span className="text-muted">{place}</span>
         {item.deadline && open ? (
-          <span className="text-sm text-muted">
-            {t("item.expires", { time: fmt(item.deadline) })}
-          </span>
+          <span className="text-muted">{t("item.expires", { time: fmt(item.deadline) })}</span>
         ) : null}
-      </header>
+      </div>
+      <h3 className="text-xl">
+        {known
+          ? t(`readable.${item.type}.title`)
+          : t(`types.${item.type}`, { defaultValue: item.type })}
+      </h3>
       {item.closed ? <ClosedBanner closed={item.closed} /> : null}
-      <pre className="font-body break-words whitespace-pre-wrap">{item.text}</pre>
+      <dl className="m-0 grid gap-x-4 gap-y-2 sm:grid-cols-[9rem_minmax(0,1fr)]">
+        <dt className="font-semibold text-muted">{t("card.asks")}</dt>
+        <dd className="m-0 break-words">{item.about}</dd>
+        {exact.length > 0 ? (
+          <>
+            <dt className="font-semibold text-muted">{t("card.exact")}</dt>
+            <dd className="m-0">
+              {exact.map((l) => (
+                <p key={l} className="m-0 font-mono text-base break-words">
+                  {l}
+                </p>
+              ))}
+            </dd>
+          </>
+        ) : null}
+        {known ? (
+          <>
+            <dt className="font-semibold text-muted">{t("card.why")}</dt>
+            <dd className="m-0">{t(`readable.${item.type}.why`)}</dd>
+          </>
+        ) : null}
+        <dt className="font-semibold text-muted">{t("card.requester")}</dt>
+        <dd className="m-0">{item.requester || t("card.engine")}</dd>
+      </dl>
+      {known ? (
+        <div className="flex flex-col gap-2">
+          <p className="m-0 rounded-field bg-accent-wash px-3 py-2">
+            <strong>{t("card.ifApprove")}</strong> {t(`readable.${item.type}.yes`)}
+          </p>
+          <p className="m-0 rounded-field bg-paper px-3 py-2">
+            <strong>{t("card.ifDeny")}</strong> {t(`readable.${item.type}.no`)}
+          </p>
+        </div>
+      ) : (
+        <pre className="font-body break-words whitespace-pre-wrap">{item.text}</pre>
+      )}
       <AgentBlock text={item.agent} />
       {item.members.length > 1 ? (
         <div>
@@ -361,7 +440,7 @@ export function ApprovalCard({
               </li>
             ))}
           </ul>
-          {open ? <p className="text-sm text-muted">{t("item.similarHint")}</p> : null}
+          {open ? <p className="text-base text-muted">{t("item.similarHint")}</p> : null}
         </div>
       ) : null}
       {item.approvals > 1 && open ? (
@@ -382,10 +461,22 @@ export function ApprovalCard({
       ) : null}
       <div>
         <Button variant="quiet" aria-expanded={details} onPress={() => setDetails(!details)}>
-          {details ? t("item.hideDetails") : t("item.details")}
+          {details ? t("card.technicalHide") : t("card.technical")}
         </Button>
       </div>
-      {details ? <Details id={item.id} /> : null}
+      {details ? (
+        <section className="flex flex-col gap-3">
+          <p className="m-0 font-mono text-base break-words text-muted">
+            {t("card.technicalLine", { id: item.id, type: item.type, risk: item.risk })}
+          </p>
+          {known ? (
+            <pre className="rounded-field border border-line bg-paper p-3 text-[0.95em] break-words whitespace-pre-wrap">
+              {item.text}
+            </pre>
+          ) : null}
+          <Details id={item.id} skipText={item.text} />
+        </section>
+      ) : null}
     </article>
   );
 }
