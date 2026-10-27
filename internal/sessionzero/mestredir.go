@@ -134,6 +134,10 @@ func EnsureStructure(root string) StructureReport {
 			rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: "não foi lido: " + err.Error()})
 		}
 	}
+	// verificacao.yaml is not born here, but an earlier version wrote it 0664
+	if err := safefile.Tighten(filepath.Join(base, "regras", "verificacao.yaml")); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		rep.Invalid = append(rep.Invalid, Problem{Path: path.Join(MestreDir, "regras/verificacao.yaml"), Reason: "o grupo do agente pode alterar o arquivo e a permissão não foi corrigida: " + err.Error()})
+	}
 	return rep
 }
 
