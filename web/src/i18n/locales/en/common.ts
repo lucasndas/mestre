@@ -8,5 +8,13 @@ const common: Widen<typeof pt> = {
   help: { open: "Help about {{term}}", real: "In the real world" },
   pin: { label: "PIN", hint: "Type your PIN to confirm." },
   actions: { back: "Back", cancel: "Cancel" },
+  admin: {
+    retry: "Try again",
+    technical: "Technical details",
+    vocabulary: "Vocabulary",
+    loadFailed: "Could not load {{what}}.",
+    needLevel: "Needs the level {{need}}; yours is {{have}}.",
+    tone: { neutral: "Status", warn: "Something is missing", ok: "Up to date", danger: "Failed" },
+  },
 };
 export default common;
