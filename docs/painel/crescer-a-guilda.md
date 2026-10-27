@@ -76,7 +76,7 @@ Fazer estas três jornadas formarem um caminho só, em vez de telas soltas: quem
 ## Critérios de aceite
 
 - **CA-CRESC-01** · *rápida* — **Dado** o Senhor da Guilda em Convidar pessoa, **quando** escolhe um nível, **então** a tela mostra o que a pessoa poderá e não poderá fazer, e o campo do PIN só aparece depois de **Criar convite**.
-- **CA-CRESC-02** · *rápida* — **Dado** um convite criado, **quando** a entrega abre, **então** há três partes com botões de copiar separados: as instruções não contêm a assinatura nem o código, e o código de conferência vem calculado de `/ca.crt`, nunca digitado.
+- **CA-CRESC-02** · *rápida* — **Dado** um convite criado, **quando** a entrega abre, **então** há três partes com botões de copiar separados: as instruções não contêm o código de conferência nem o de primeiro acesso, e o código de conferência vem calculado de `/ca.crt`, nunca digitado.
 - **CA-CRESC-03** · *rápida* — **Dado** o convite, **quando** o Senhor da Guilda diz que anotou, **então** o código some e não está no cache de consultas nem em nenhum link gerado; a rota de primeiro acesso não aceita mais o código na barra de endereço.
 - **CA-CRESC-04** · *rápida* — **Dado** o primeiro acesso com código vencido, senha de 11 caracteres, login repetido e excesso de tentativas, **quando** cada resposta chega, **então** cada erro aparece em palavras próprias, com a saída, em português e em inglês.
 - **CA-CRESC-05** · *rápida* — **Dado** a pessoa convidada na tela do certificado, **quando** a lê, **então** "SHA-256" e "CA" só aparecem em "Detalhes técnicos", e o passo de conferir o código manda não instalar se ele for diferente.
