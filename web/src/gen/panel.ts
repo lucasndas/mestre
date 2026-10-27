@@ -168,6 +168,11 @@ export interface TerminalInfo {
   machine: string;
   workspace: string;
   /**
+   * Table is the table the character sits at (empty for the Grand Master): the
+   * terminal screen asks for the canvas of that table to show the mission.
+   */
+  table?: string;
+  /**
    * State is the state of the character; Busy says it is working (typing
    * into it asks for a confirmation).
    */

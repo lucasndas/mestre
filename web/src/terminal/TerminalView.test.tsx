@@ -1,90 +1,12 @@
 import { act, fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { APIError, TerminalInfo } from "../gen/panel";
+import type { APIError } from "../gen/panel";
 import { renderWithI18n } from "../test-utils";
 import { WebglBudget } from "./budget";
-import type { LiveTerm, SnapshotTerm, TermFactory } from "./factory";
-import type { FeedHandlers, TerminalFeed } from "./feed";
+import { fakeFactory, fakeFeed, info } from "./fakes";
+import type { TerminalFeed } from "./feed";
 import { TerminalView } from "./TerminalView";
-
-const info = (over: Partial<TerminalInfo> = {}): TerminalInfo => ({
-  terminal_id: "T1",
-  frame_id: "F1",
-  character: "c1",
-  name: "Revisor",
-  machine: "torre-a",
-  workspace: "w",
-  state: "idle",
-  busy: false,
-  cols: 200,
-  rows: 50,
-  signal: true,
-  can_type: true,
-  ...over,
-});
-
-/** A feed that remembers who follows what, and lets a test push output and refusals. */
-function fakeFeed() {
-  const followers = new Map<string, FeedHandlers>();
-  const typed: string[] = [];
-  const ended: string[] = [];
-  const feed: TerminalFeed = {
-    follow(id, h) {
-      followers.set(id, h);
-      return () => followers.delete(id);
-    },
-    type: (_id, d) => typed.push(d),
-    endTyping: (id) => ended.push(id),
-  };
-  return { feed, followers, typed, ended };
-}
-
-/** Terminals that draw nothing: the live ones count, the snapshot ones keep the text. */
-function fakeFactory() {
-  const lives: Array<LiveTerm & { typingOn: boolean; send(d: string): void; disposed: boolean }> =
-    [];
-  const factory: TermFactory = {
-    live() {
-      let cb: (d: string) => void = () => {};
-      const t = {
-        typingOn: false,
-        disposed: false,
-        webgl: true,
-        write() {},
-        reset() {},
-        onData: (f: (d: string) => void) => {
-          cb = f;
-        },
-        setTyping(on: boolean) {
-          t.typingOn = on;
-        },
-        send: (d: string) => cb(d),
-        dispose() {
-          t.disposed = true;
-        },
-      };
-      lives.push(t);
-      return t;
-    },
-    snapshot() {
-      let text = "";
-      const s: SnapshotTerm = {
-        write: (d) => {
-          text += typeof d === "string" ? d : new TextDecoder().decode(d);
-        },
-        reset: () => {
-          text = "";
-        },
-        settle: async () => {},
-        rows: () => text.split("\r\n"),
-        dispose() {},
-      };
-      return s;
-    },
-  };
-  return { factory, lives };
-}
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -176,7 +98,7 @@ test("a terminal that is off screen or far gives its place to one that waits", (
   expect(modes()).toEqual(["snapshot", "webgl"]);
 });
 
-test("a terminal is read-only for a level that cannot type: no control, nothing typed reaches the server", () => {
+test("a terminal is read-only for a level that cannot type: Digitar is off, nothing typed reaches the server", () => {
   const { feed, typed } = fakeFeed();
   const { factory, lives } = fakeFactory();
   renderWithI18n(
@@ -190,7 +112,7 @@ test("a terminal is read-only for a level that cannot type: no control, nothing 
       factory={factory}
     />,
   );
-  expect(screen.queryByRole("button", { name: "Digitar" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Digitar" }).hasAttribute("disabled")).toBe(true);
   expect(screen.getByText(/Somente leitura/)).toBeTruthy();
   expect(lives[0]?.typingOn).toBe(false);
   lives[0]?.send("rm -rf /\r");
@@ -202,7 +124,7 @@ test("a terminal is read-only for a level that cannot type: no control, nothing 
   expect(el?.classList.contains("nopan")).toBe(true);
 });
 
-test("typing: the busy agent asks for a confirmation first, the keys go to the server, and releasing the keyboard ends the session", async () => {
+test("direct keyboard: a busy agent asks for a confirmation first (a strip, no dialog), the keys go to the server, and releasing the keyboard ends the session", async () => {
   vi.useRealTimers();
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   const { feed, typed, ended } = fakeFeed();
@@ -221,14 +143,18 @@ test("typing: the busy agent asks for a confirmation first, the keys go to the s
     />,
   );
   await user.click(screen.getByRole("button", { name: "Digitar" }));
-  // the state is read again at the click, and a busy agent asks first
+  // the state is read again at the click
   expect(refresh).toHaveBeenCalledOnce();
+  expect(lives[0]?.typingOn).toBe(false);
+  await user.click(await screen.findByRole("button", { name: "Teclado direto" }));
   expect(await screen.findByText("O agente está trabalhando")).toBeTruthy();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByRole("alertdialog")).toBeNull();
   expect(lives[0]?.typingOn).toBe(false);
   await user.click(screen.getByRole("button", { name: "Cancelar" }));
   expect(lives[0]?.typingOn).toBe(false);
 
-  await user.click(screen.getByRole("button", { name: "Digitar" }));
+  await user.click(await screen.findByRole("button", { name: "Teclado direto" }));
   await user.click(await screen.findByRole("button", { name: "Digitar mesmo assim" }));
   expect(lives[0]?.typingOn).toBe(true);
   lives[0]?.send("ls\r");
@@ -280,6 +206,7 @@ test("a refusal of the server is shown translated and a refused level releases t
     />,
   );
   await user.click(screen.getByRole("button", { name: "Digitar" }));
+  await user.click(await screen.findByRole("button", { name: "Teclado direto" }));
   expect(lives[0]?.typingOn).toBe(true);
   const refusal: APIError = { code: "forbidden_level", message: "x" };
   act(() => followers.get("T1")?.refused?.(refusal));

@@ -257,7 +257,7 @@ func newRelayWorld(t *testing.T, src *bufferSource) (*terminalRelay, *relayWorld
 	t.Helper()
 	clk := clock.NewFake(time.Date(2026, 10, 26, 9, 0, 0, 0, time.UTC))
 	w := &relayWorldFake{
-		char:      characters.Character{ID: "c1", Name: "Dev-1", Machine: "t1", Workspace: "loja", TerminalID: protocol.NewIDGen(clk).NewString(), State: characters.Idle},
+		char:      characters.Character{ID: "c1", Name: "Dev-1", Machine: "t1", Workspace: "loja", Table: "m1", TerminalID: protocol.NewIDGen(clk).NewString(), State: characters.Idle},
 		connected: true, server: newTerminalServer(src), clk: clk, ids: protocol.NewIDGen(clk),
 	}
 	r := newTerminalRelay(w)
@@ -480,7 +480,7 @@ func TestTypingAndTheScreenGoThroughTheMachineOfTheCharacter(t *testing.T) {
 	}
 	w.char.State = characters.Busy
 	info, _ := r.ByCharacter(t.Context(), "c1")
-	if !info.Busy || info.Machine != "t1" || info.Workspace != "loja" || !info.Signal {
+	if !info.Busy || info.Machine != "t1" || info.Workspace != "loja" || info.Table != "m1" || !info.Signal {
 		t.Fatalf("info = %+v", info)
 	}
 	w.char.Machine = "citadel"

@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "@fontsource-variable/fraunces";
 @import "@fontsource-variable/newsreader";
+@import "@fontsource-variable/jetbrains-mono";
 
 /* The visual tokens of the panel (docs/painel/design.md). Every color, font,
    radius and shadow of a screen comes from here, never from a literal. */
@@ -24,11 +25,30 @@
   --font-display: "Fraunces Variable", Georgia, serif;
   --font-body: "Newsreader Variable", Georgia, serif;
   /* the terminal: a dark screen on the paper, the colors xterm.js is given */
-  --font-mono: ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --font-mono:
+    "JetBrains Mono Variable", ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", Menlo, Consolas,
+    monospace;
   --color-term-bg: #1f1a14;
   --color-term-fg: #efe6d2;
   --color-term-cursor: #f1b04c;
   --color-term-selection: #5a4a36;
+  /* the 16 ANSI colors, warm and at least 4.5:1 on --color-term-bg (black is the background itself) */
+  --color-term-black: #3a3025;
+  --color-term-red: #e0735a;
+  --color-term-green: #8fbf7a;
+  --color-term-yellow: #e8c06a;
+  --color-term-blue: #7fa6d6;
+  --color-term-magenta: #c78fc4;
+  --color-term-cyan: #6fc2b8;
+  --color-term-white: #d9cfba;
+  --color-term-bright-black: #9a8d78;
+  --color-term-bright-red: #f08a70;
+  --color-term-bright-green: #a8d894;
+  --color-term-bright-yellow: #f5d58a;
+  --color-term-bright-blue: #9bbde8;
+  --color-term-bright-magenta: #dca8d8;
+  --color-term-bright-cyan: #8ad6cc;
+  --color-term-bright-white: #f7efdc;
   --radius-field: 3px;
   --shadow-card: 0 1px 0 var(--color-line), 0 12px 30px -18px rgb(90 61 26 / 0.35);
   --shadow-pop: 0 10px 28px -10px rgb(42 33 24 / 0.45);

@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { Button as AriaButton } from "react-aria-components";
 import { useTranslation } from "react-i18next";
-import { Alert, Button } from "../components/ui";
+import { useConnectionState } from "../app/socket";
+import { Alert } from "../components/ui";
 import type { APIError, TerminalInfo } from "../gen/panel";
 import { ApiError } from "../lib/api";
 import { errorText } from "../lib/errors";
@@ -9,11 +10,24 @@ import { formatTime } from "../lib/format";
 import { defaultBudget, type WebglBudget } from "./budget";
 import { type LiveTerm, type TermFactory, termColors, xtermFactory } from "./factory";
 import type { TerminalFeed } from "./feed";
+import { MessageComposer, useMessageQueue } from "./MessageComposer";
 import { isTerminalReply } from "./replies";
 import { OutputCursor } from "./stream";
+import { type Connection, TerminalBar } from "./TerminalBar";
+import { type Mode, TerminalStatus } from "./TerminalStatus";
+import type { TerminalContext } from "./useTerminalContext";
 
 /** How often the snapshot of a terminal that is not live is drawn again, in ms. */
 export const SNAPSHOT_EVERY = 2000;
+
+/** The sizes of the letters in px: the screen, the card of the canvas and a narrow window; and how far A− and A+ go. */
+export const FONT = { screen: 15, card: 13, phone: 12, min: 11, max: 22 } as const;
+/** A window this narrow (px) is a phone: the actions go to "Mais" and the 200 columns scroll sideways. */
+export const PHONE_MAX = 700;
+/** The width of a cell of the packaged font, in em. */
+const CELL_EM = 0.6;
+const LINE_HEIGHT = 1.4;
+const ENDED = new Set(["stopped", "stopping", "interrupted"]);
 
 export interface TerminalViewProps {
   terminalId: string;
@@ -37,14 +51,37 @@ export interface TerminalViewProps {
   readable?: boolean;
   /** Inside a node of the canvas: the node shows the machine and the state, and the screen fills the room. */
   compact?: boolean;
+  /** The Mestre layer: mission, step, approval, delivery and the actions of the bar (the screen sets it). */
+  context?: TerminalContext;
+  /** The user may decide approvals (for the word of the state when the canvas is not there). */
+  canDecide?: boolean;
+  /** Where "Decidir" and "Ver a mesa" lead. */
+  onDecide?: () => void;
+  onSeeTable?: () => void;
+  /** Forces the phone layout (or the wide one); by default the width of the window decides. */
+  phone?: boolean;
   className?: string;
 }
 
+/** The width of an element, kept by a ResizeObserver; 0 while unknown (and in jsdom). */
+function useWidth(ref: React.RefObject<HTMLElement | null>): number {
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setWidth(el.getBoundingClientRect().width));
+    ro.observe(el);
+    setWidth(el.getBoundingClientRect().width);
+    return () => ro.disconnect();
+  }, [ref]);
+  return width;
+}
+
 /**
- * The terminal of a character: the output of its PTY at the fixed size the machine
- * set, live with WebGL while the budget allows it and a text snapshot (every 2 s)
- * otherwise. Reusable: the standalone screen and the canvas both embed it.
- * docs/painel/canvas.md#terminais-no-canvas.
+ * The terminal of a character as a window: identity bar, the screen of its PTY at the fixed size the machine
+ * set (live with WebGL while the budget allows it and a text snapshot, every 2 s, otherwise) and a status line,
+ * with the box of messages and its queue under it. The standalone screen and the node of the canvas both embed
+ * it. docs/painel/terminal-no-painel.md and docs/painel/canvas.md#terminais-no-canvas.
  */
 export function TerminalView({
   terminalId,
@@ -60,28 +97,58 @@ export function TerminalView({
   snapshotEvery = SNAPSHOT_EVERY,
   readable = false,
   compact = false,
+  context,
+  canDecide = false,
+  onDecide,
+  onSeeTable,
+  phone,
   className = "",
 }: TerminalViewProps) {
   const { t, i18n } = useTranslation("terminal");
   const { t: te } = useTranslation("errors");
   const slot = useId();
+  const rootRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
   const liveRef = useRef<LiveTerm | null>(null);
   const [info, setInfo] = useState(initial);
   const [granted, setGranted] = useState(false);
   const [rows, setRows] = useState<string[]>([]);
-  const [typing, setTyping] = useState(false);
+  const [mode, setMode] = useState<Mode>("read");
   const [confirm, setConfirm] = useState(false);
   const [refusal, setRefusal] = useState<APIError | null>(null);
-  const typingRef = useRef(false);
-  typingRef.current = typing;
+  const [permission, setPermission] = useState(false);
+  const [userPx, setUserPx] = useState<number | null>(null);
+  const [wrap, setWrap] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [away, setAway] = useState(false);
+  const [behind, setBehind] = useState(0);
+  const [notice, setNotice] = useState<{ text: string; undo?: () => void } | null>(null);
+  const keys = mode === "keys";
+  const keysRef = useRef(false);
+  keysRef.current = keys;
   const tRef = useRef(t);
   tRef.current = t;
+  const cursorRow = useRef(0);
+  const following = useRef(true);
+
+  const connection = useConnectionState();
+  const reconnecting = connection === "reconnecting";
+  const width = useWidth(rootRef);
+  const narrow = !compact && (phone ?? (width > 0 && width <= PHONE_MAX));
+  const defaultPx = compact ? FONT.card : narrow ? FONT.phone : FONT.screen;
+  const px = userPx ?? defaultPx;
+  const pxRef = useRef(px);
+  pxRef.current = px;
 
   useEffect(() => setInfo(initial), [initial]);
+  // a new state of the character lifts the "decide in the approval" block that a refusal put up
+  const state = info.state;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the state is the trigger
+  useEffect(() => setPermission(false), [state]);
 
   const wantsLive = visible && near;
-  const mode = granted ? "live" : "snapshot";
+  const renderer = granted && !wrap ? "live" : "snapshot";
 
   // a place in the budget of WebGL terminals, only while the terminal is on screen and near
   useEffect(() => {
@@ -94,6 +161,30 @@ export function TerminalView({
     return () => budget.release(id);
   }, [wantsLive, budget, terminalId, slot]);
 
+  const send = useCallback((data: string) => feed.type(terminalId, data), [feed, terminalId]);
+  const noSignal = !info.signal;
+  const ended = ENDED.has(info.state);
+  const status = context?.status;
+  const needsDecision = Boolean(status && (status.key === "decision" || status.key === "approval"));
+  const decision = permission || needsDecision;
+  const blocked = noSignal || reconnecting || ended || decision;
+  const queue = useMessageQueue({
+    busy: info.busy,
+    active: mode === "message" && !blocked,
+    send,
+  });
+  const refusedQueue = queue.refused;
+  const refusedRef = useRef(refusedQueue);
+  refusedRef.current = refusedQueue;
+
+  // where the screen ends: the row of the cursor, so the window shows the end of the output
+  const followEnd = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el || !following.current) return;
+    const bottom = (cursorRow.current + 2) * pxRef.current * LINE_HEIGHT;
+    el.scrollTop = Math.max(0, bottom - el.clientHeight);
+  }, []);
+
   // the terminal itself: every change of mode makes a new one and follows the stream
   // again, which starts from offset 0, so the new screen is never behind
   const cols = info.cols;
@@ -104,14 +195,25 @@ export function TerminalView({
     let write: (d: Uint8Array | string) => void;
     let reset: () => void;
     let dispose: () => void;
-    if (mode === "live" && hostRef.current) {
-      const live = factory.live(hostRef.current, size, termColors(), { readable });
+    if (renderer === "live" && hostRef.current) {
+      const live = factory.live(hostRef.current, size, termColors(), {
+        readable,
+        fontSize: pxRef.current,
+      });
       liveRef.current = live;
       live.onData((d) => {
         // the answers of xterm.js to the program are not typing (see replies.ts)
-        if (typingRef.current && !isTerminalReply(d)) feed.type(terminalId, d);
+        if (keysRef.current && !isTerminalReply(d)) feed.type(terminalId, d);
       });
-      live.setTyping(typingRef.current);
+      live.onScrolled((a, n) => {
+        setBehind(n);
+        if (a) setAway(true);
+      });
+      live.onCursor((row) => {
+        cursorRow.current = row;
+        followEnd();
+      });
+      live.setTyping(keysRef.current);
       ({ write, reset } = live);
       dispose = () => {
         liveRef.current = null;
@@ -142,7 +244,9 @@ export function TerminalView({
         })),
       refused: (e) => {
         setRefusal(e);
-        if (e.code === "forbidden_level") setTyping(false);
+        if (e.code === "forbidden_level") setMode("read");
+        if (e.code === "permission_prompt") setPermission(true);
+        refusedRef.current();
       },
     });
     return () => {
@@ -150,32 +254,54 @@ export function TerminalView({
       if (timer) clearInterval(timer);
       dispose();
     };
-  }, [mode, feed, terminalId, factory, snapshotEvery, cols, rowsCount, readable]);
+  }, [renderer, feed, terminalId, factory, snapshotEvery, cols, rowsCount, readable, followEnd]);
 
   // the keyboard: on only for a live terminal and while the user asked for it
   useEffect(() => {
-    liveRef.current?.setTyping(typing && mode === "live");
-  }, [typing, mode]);
+    liveRef.current?.setTyping(keys && renderer === "live");
+  }, [keys, renderer]);
+  useEffect(() => {
+    liveRef.current?.setFontSize(px);
+    followEnd();
+  }, [px, followEnd]);
 
-  const stopTyping = () => {
-    setTyping(false);
+  const leave = useCallback(() => {
+    setMode("read");
+    setConfirm(false);
     feed.endTyping(terminalId);
-  };
-  const stopTypingRef = useRef(stopTyping);
-  stopTypingRef.current = stopTyping;
+  }, [feed, terminalId]);
+  const leaveRef = useRef(leave);
+  leaveRef.current = leave;
   // a terminal that stops being live, or leaves, releases the keyboard
   useEffect(() => {
-    if (typing && mode !== "live") stopTypingRef.current();
-  }, [typing, mode]);
+    if (keys && renderer !== "live") leaveRef.current();
+  }, [keys, renderer]);
+  // a block (no signal, reconnecting, ended, a decision) turns the typing off
+  useEffect(() => {
+    if (blocked && mode !== "read") leaveRef.current();
+  }, [blocked, mode]);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
   useEffect(
     () => () => {
-      if (typingRef.current) stopTypingRef.current();
+      if (modeRef.current !== "read") feed.endTyping(terminalId);
     },
-    [],
+    [feed, terminalId],
   );
 
   const start = async () => {
     setRefusal(null);
+    queue.clearSentBack();
+    if (refreshInfo) {
+      try {
+        setInfo(await refreshInfo());
+      } catch {
+        // the state we have is the best we know
+      }
+    }
+    setMode("message");
+  };
+  const keysAsked = async () => {
     let now = info;
     if (refreshInfo) {
       try {
@@ -186,37 +312,126 @@ export function TerminalView({
       }
     }
     if (now.busy) setConfirm(true);
-    else setTyping(true);
+    else setMode("keys");
   };
 
-  const noSignal = !info.signal;
+  const notify = useCallback((text: string, undo?: () => void) => setNotice({ text, undo }), []);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 8000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  const changeFont = (delta: number) =>
+    setUserPx((now) => Math.min(FONT.max, Math.max(FONT.min, (now ?? defaultPx) + delta)));
+  const fit = () => {
+    const have = Math.floor((scrollerRef.current?.clientWidth ?? width) - 16);
+    const target = Math.floor(have / (cols * CELL_EM));
+    if (target < FONT.min) {
+      setUserPx(FONT.min);
+      notify(
+        t("bar.fitNo", {
+          cols,
+          need: Math.ceil(cols * CELL_EM * FONT.min),
+          have: Math.max(have, 0),
+        }),
+      );
+      return;
+    }
+    const next = Math.min(FONT.max, target);
+    setUserPx(next);
+    notify(t("bar.fitOk", { px: next }));
+  };
+  const copy = async () => {
+    const text = liveRef.current ? liveRef.current.text() : rows.join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      notify(t("bar.copied"));
+    } catch {
+      notify(t("bar.copyFailed"));
+    }
+  };
+  const toEnd = () => {
+    following.current = true;
+    liveRef.current?.toEnd();
+    setAway(false);
+    setBehind(0);
+    followEnd();
+  };
+
   const since = info.no_signal_since;
   const label = t("region", { name: info.name });
+  const live = renderer === "live";
+  const locked = !canType;
+  const typeDisabled = locked || blocked;
+  const support = (() => {
+    if (locked) return t("support.lock");
+    if (ended) return t("support.ended");
+    if (noSignal) return t("support.noSignal");
+    if (reconnecting) return t("support.reconnecting");
+    if (decision) return t("support.decision");
+    if (keys) return t("support.typing");
+    return t("support.fixed", { cols, rows: rowsCount });
+  })();
+  const conn: Connection = reconnecting
+    ? "reconnecting"
+    : ended
+      ? "ended"
+      : noSignal
+        ? "noSignal"
+        : "live";
+  const tone = keys || mode === "message";
+  const dimmed = noSignal || reconnecting;
+  const dashedAt = cols * CELL_EM * px + 8;
+
   return (
-    <section aria-label={label} className={`flex min-w-0 flex-col gap-2 ${className}`}>
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        {compact ? null : (
-          <p className="text-sm text-muted">
-            {t("machine", { machine: info.machine })} · {t("state", { state: info.state })}
-          </p>
-        )}
-        <div className="flex-1" />
-        {canType ? (
-          typing ? (
-            <Button variant="secondary" onPress={stopTyping}>
-              {t("stopTyping")}
-            </Button>
-          ) : (
-            <Button
-              variant="primary"
-              onPress={() => void start()}
-              isDisabled={mode !== "live" || noSignal}
-            >
-              {t("type")}
-            </Button>
-          )
-        ) : null}
-      </header>
+    <section
+      ref={rootRef}
+      aria-label={label}
+      data-mode={mode}
+      data-phone={narrow ? "yes" : "no"}
+      onKeyDownCapture={(e) => {
+        // Ctrl+Alt+K lets go of the keyboard without sending anything to the agent
+        if (keys && e.ctrlKey && e.altKey && e.key.toLowerCase() === "k") {
+          e.preventDefault();
+          e.stopPropagation();
+          leave();
+        }
+      }}
+      className={`flex min-w-0 flex-col ${
+        focused ? "fixed inset-0 z-40 bg-paper" : ""
+      } ${compact ? "min-h-0 flex-1" : "overflow-hidden rounded-field border bg-surface"} ${
+        tone && !compact ? "border-accent ring-2 ring-accent" : "border-line"
+      } ${className}`}
+    >
+      {compact ? null : (
+        <TerminalBar
+          info={info}
+          ctx={context}
+          canDecide={canDecide}
+          connection={conn}
+          fontSize={px}
+          onFont={changeFont}
+          onFit={fit}
+          onCopy={() => void copy()}
+          focused={focused}
+          onFocus={() => setFocused(!focused)}
+          narrow={narrow}
+          notify={notify}
+        />
+      )}
+      {reconnecting ? (
+        <p className="m-0 border-b border-warn bg-warn-wash px-3 py-2 text-warn-ink">
+          {t("banner.reconnecting")}
+        </p>
+      ) : null}
+      {context?.paused ? (
+        <p className="m-0 border-b border-warn bg-warn-wash px-3 py-2 text-warn-ink">
+          {context.pausedReason
+            ? t("pause.banner", { reason: context.pausedReason })
+            : t("pause.bannerNoReason")}
+        </p>
+      ) : null}
       {noSignal ? (
         <Alert tone="ok">
           {since
@@ -224,10 +439,33 @@ export function TerminalView({
             : t("noSignalNoTime")}
         </Alert>
       ) : null}
-      {typing ? <p className="text-sm text-muted">{t("typingOn")}</p> : null}
-      {!canType ? <p className="text-sm text-muted">{t("readOnly")}</p> : null}
-      {canType && mode !== "live" && !typing ? (
-        <p className="text-sm text-muted">{t("typingNeedsLive")}</p>
+      {!compact && decision && !ended ? (
+        <div className="flex flex-wrap items-center gap-3 bg-accent px-3 py-2 text-accent-ink">
+          <span>
+            {t("banner.decision", {
+              name: info.name,
+            })}
+          </span>
+          <AriaButton
+            onPress={() => onDecide?.()}
+            className="min-h-11 rounded-field border border-accent-ink px-3 font-semibold text-accent-ink hover:bg-accent-strong"
+          >
+            {t("banner.decideIn")}
+          </AriaButton>
+        </div>
+      ) : null}
+      {!compact && ended ? (
+        <div className="flex flex-wrap items-center gap-3 border-b border-line bg-accent-wash px-3 py-2">
+          <span>{t("banner.ended", { name: info.name })}</span>
+          {onSeeTable ? (
+            <AriaButton
+              onPress={onSeeTable}
+              className="min-h-11 rounded-field border border-line px-3 font-semibold text-ink hover:bg-surface"
+            >
+              {t("banner.seeTable")}
+            </AriaButton>
+          ) : null}
+        </div>
       ) : null}
       {refusal ? (
         <Alert>
@@ -236,60 +474,155 @@ export function TerminalView({
           })}
         </Alert>
       ) : null}
-      {/* nodrag, nowheel and nopan: inside the canvas the mouse and the wheel go to the terminal */}
-      <div
-        className={`nodrag nowheel nopan overflow-auto rounded-field border border-line bg-term-bg ${
-          compact ? "min-h-0 flex-1" : ""
-        } ${noSignal ? "opacity-60 grayscale" : ""}`}
-        data-renderer={mode === "live" ? "webgl" : "snapshot"}
-        data-signal={noSignal ? "lost" : "ok"}
-        style={compact ? undefined : { maxHeight: "min(75dvh, 60rem)" }}
-      >
-        {mode === "live" ? (
-          <div ref={hostRef} />
-        ) : (
-          <section aria-label={t("snapshotLabel", { name: info.name })}>
-            <pre className="m-0 min-h-24 p-2 font-mono text-sm leading-[1.25] whitespace-pre text-term-fg">
-              {rows.length > 0 ? rows.join("\n") : " "}
-            </pre>
-          </section>
-        )}
-      </div>
-      {mode !== "live" && !compact ? (
-        <p className="text-sm text-muted">{t("snapshotHint")}</p>
+      {narrow ? (
+        <div className="flex flex-wrap items-center gap-2 border-b border-line bg-accent-wash px-3 py-1 text-sm whitespace-nowrap">
+          <span>{t("phone.strip")}</span>
+          <AriaButton
+            aria-pressed={wrap}
+            onPress={() => setWrap(!wrap)}
+            className="min-h-11 rounded-field border border-line bg-surface px-3 font-semibold text-ink"
+          >
+            {wrap ? t("phone.unwrap") : t("phone.wrap")}
+          </AriaButton>
+        </div>
       ) : null}
-      <ModalOverlay
-        isOpen={confirm}
-        onOpenChange={setConfirm}
-        isDismissable
-        className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4"
-      >
-        <Modal className="w-full max-w-md rounded-field border border-line bg-surface p-6 shadow-pop">
-          <Dialog role="alertdialog" className="outline-none">
-            {({ close }) => (
-              <>
-                <Heading slot="title" className="text-xl">
-                  {t("busy.title")}
-                </Heading>
-                <p className="mt-2">{t("busy.body", { name: info.name })}</p>
-                <div className="mt-5 flex flex-wrap justify-end gap-2">
-                  <Button variant="quiet" onPress={close}>
-                    {t("busy.cancel")}
-                  </Button>
-                  <Button
-                    onPress={() => {
-                      setTyping(true);
-                      close();
-                    }}
-                  >
-                    {t("busy.confirm")}
-                  </Button>
-                </div>
-              </>
-            )}
-          </Dialog>
-        </Modal>
-      </ModalOverlay>
+      {/* nodrag, nowheel and nopan: inside the canvas the mouse and the wheel go to the terminal */}
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollerRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            const end = Math.max(
+              0,
+              (cursorRow.current + 2) * pxRef.current * LINE_HEIGHT - el.clientHeight,
+            );
+            const atEnd = el.scrollTop >= end - 4;
+            following.current = atEnd;
+            setAway(!atEnd && !compact);
+          }}
+          className={`nodrag nowheel nopan overflow-auto bg-term-bg ${
+            compact ? "h-full min-h-0 rounded-field border border-line" : ""
+          } ${dimmed || ended ? "opacity-60" : ""} ${noSignal ? "grayscale" : ""}`}
+          data-renderer={live ? "webgl" : "snapshot"}
+          data-signal={noSignal ? "lost" : "ok"}
+          style={compact ? undefined : { maxHeight: narrow ? "60dvh" : "min(70dvh, 60rem)" }}
+        >
+          {live ? (
+            <div className="relative w-max p-2">
+              <div ref={hostRef} />
+              {narrow ? null : (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-y-0 border-l border-dashed border-term-fg/25"
+                  style={{ left: dashedAt }}
+                />
+              )}
+            </div>
+          ) : (
+            <section aria-label={t("snapshotLabel", { name: info.name })}>
+              <pre
+                className={`m-0 min-h-24 p-2 font-mono text-term-fg ${
+                  wrap ? "whitespace-pre-wrap" : "whitespace-pre"
+                }`}
+                style={{ fontSize: px, lineHeight: LINE_HEIGHT }}
+              >
+                {rows.length > 0 ? rows.join("\n") : " "}
+              </pre>
+            </section>
+          )}
+        </div>
+        {!live ? (
+          <span className="pointer-events-none absolute top-2 right-4 rounded-field bg-term-bg/90 px-2 text-sm text-term-fg">
+            {t("pictureLabel")}
+          </span>
+        ) : null}
+        {away && !compact ? (
+          <AriaButton
+            onPress={toEnd}
+            className="absolute right-4 bottom-3 min-h-11 rounded-field bg-accent px-3 font-semibold text-accent-ink shadow-pop hover:bg-accent-strong"
+          >
+            {behind > 0 ? t("toEndBehind", { count: behind }) : t("toEnd")}
+          </AriaButton>
+        ) : null}
+        {notice ? (
+          <div
+            role="status"
+            className="absolute right-3 bottom-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-3 rounded-field bg-ink px-3 py-2 text-paper shadow-pop"
+          >
+            <span>{notice.text}</span>
+            {notice.undo ? (
+              <AriaButton
+                onPress={() => {
+                  notice.undo?.();
+                  setNotice(null);
+                }}
+                className="min-h-11 rounded-field px-2 font-semibold text-warn underline"
+              >
+                {t("bar.undo")}
+              </AriaButton>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      {mode === "message" ? (
+        <MessageComposer
+          name={info.name}
+          busy={info.busy}
+          queue={queue.queue}
+          onSubmit={queue.submit}
+          onSendNow={queue.sendNow}
+          onRemove={queue.remove}
+          onKeys={() => void keysAsked()}
+          keysDisabled={!live}
+          sentBack={queue.sentBack}
+        />
+      ) : null}
+      {confirm ? (
+        <section
+          aria-label={t("banner.busyTitle")}
+          className="flex flex-wrap items-center gap-3 border-t border-warn bg-warn-wash px-3 py-2 text-warn-ink"
+        >
+          <span className="font-semibold">{t("busy.title")}</span>
+          <span className="min-w-0 flex-1 basis-60">{t("busy.body", { name: info.name })}</span>
+          <AriaButton
+            onPress={() => setConfirm(false)}
+            className="min-h-11 rounded-field border border-warn-ink px-3 font-semibold"
+          >
+            {t("busy.cancel")}
+          </AriaButton>
+          <AriaButton
+            onPress={() => {
+              setConfirm(false);
+              setMode("keys");
+            }}
+            className="min-h-11 rounded-field bg-warn-ink px-3 font-semibold text-warn-wash"
+          >
+            {t("busy.confirm")}
+          </AriaButton>
+        </section>
+      ) : (
+        <TerminalStatus
+          mode={mode}
+          locked={locked}
+          compact={compact}
+          ctx={context}
+          name={info.name}
+          support={compact ? "" : support}
+          typing={mode !== "read"}
+          showType={!compact}
+          typeDisabled={typeDisabled || (mode === "read" && !visible)}
+          onType={() => void start()}
+          onStopTyping={leave}
+          onDecide={() => onDecide?.()}
+          narrow={narrow}
+          timeZone={timeZone}
+        />
+      )}
+      {keys ? (
+        <p className="m-0 border-t border-line bg-surface px-3 py-1 text-sm text-muted">
+          {t("composer.keysOn")}
+        </p>
+      ) : null}
     </section>
   );
 }

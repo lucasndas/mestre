@@ -9,8 +9,8 @@ import { useGoto } from "../lib/links";
 import { terminalQuery } from "../lib/queries";
 import { useCanvasEnv } from "./context";
 import { keyOf } from "./model";
-import { StatusChip } from "./nodes";
 import { plainLines } from "./plain";
+import { StatusChip } from "./StatusChip";
 import { characterStatus, missionLine } from "./status";
 
 /** "Em palavras simples": a sentence for each character about what it does and waits for. */

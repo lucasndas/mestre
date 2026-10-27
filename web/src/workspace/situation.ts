@@ -159,7 +159,7 @@ export function situationOf(b: TableBlock, canDecide: boolean): Situation {
 }
 
 /** Who paused it and why, from the wait the engine gives ("" when it says nothing). */
-function pausedReason(b: TableBlock): string {
+export function pausedReason(b: TableBlock): string {
   return b.waits.find((w) => w.kind === "paused")?.reason ?? "";
 }
 

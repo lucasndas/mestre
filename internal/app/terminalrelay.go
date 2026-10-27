@@ -69,7 +69,7 @@ type relayStream struct {
 func (r *terminalRelay) info(c characters.Character) panel.TerminalInfo {
 	local := c.Machine == r.w.Local()
 	info := panel.TerminalInfo{
-		TerminalID: c.TerminalID, Character: c.ID, Name: c.Name, Machine: c.Machine, Workspace: c.Workspace,
+		TerminalID: c.TerminalID, Character: c.ID, Name: c.Name, Machine: c.Machine, Workspace: c.Workspace, Table: c.Table,
 		State: string(c.State), Busy: busy(c), Signal: true,
 	}
 	if !local && !r.w.Connected(c.Machine) {

@@ -43,6 +43,9 @@ type TerminalInfo struct {
 	Name      string `json:"name"`
 	Machine   string `json:"machine"`
 	Workspace string `json:"workspace"`
+	// Table is the table the character sits at (empty for the Grand Master): the
+	// terminal screen asks for the canvas of that table to show the mission.
+	Table string `json:"table,omitempty"`
 	// State is the state of the character; Busy says it is working (typing
 	// into it asks for a confirmation).
 	State string `json:"state"`
