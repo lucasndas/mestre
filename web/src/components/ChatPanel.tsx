@@ -582,9 +582,11 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
   const current = useCurrentWorkspace();
   const list = overview?.workspaces ?? [];
   // the conversation is about the current campaign (the one of the trail, else the last opened); one the user cannot talk in falls to the first that works
-  const workspace = list.some((w) => w.slug === current.slug)
-    ? current.slug
-    : (list[0]?.slug ?? "");
+  const known = list.some((w) => w.slug === current.slug);
+  // a campaign that is known but has no conversation (paused, say) is said so, never swapped for another one
+  const noTalk = !known && current.slug !== "" && current.list.some((w) => w.slug === current.slug);
+  const workspace = noTalk ? "" : known ? current.slug : (list[0]?.slug ?? "");
+  const named = noTalk ? current.slug : workspace;
   return (
     <aside aria-label={t("title")} className="flex h-dvh min-h-0 flex-col bg-surface">
       <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
@@ -605,18 +607,23 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
       {list.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-x-3 border-b border-line px-4 py-1 text-sm text-muted">
           <p>
-            {t("workspace")}: <span className="font-semibold text-ink">{workspace}</span> ·{" "}
+            {t("workspace")}: <span className="font-semibold text-ink">{named}</span> ·{" "}
             {t("privacy")}
           </p>
           <Link
             to="/workspaces/$workspace"
-            params={{ workspace }}
+            params={{ workspace: named }}
             onClick={onClose}
             className="inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-4"
           >
             {t("openWorkspace")}
           </Link>
         </div>
+      ) : null}
+      {noTalk ? (
+        <p role="status" className="p-4 text-muted">
+          {t("noTalk", { workspace: current.slug })}
+        </p>
       ) : null}
       {workspace ? (
         <Conversation key={workspace} workspace={workspace} onNavigate={onClose} />

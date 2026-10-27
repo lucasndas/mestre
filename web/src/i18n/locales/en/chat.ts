@@ -9,6 +9,7 @@ const chat: Widen<typeof pt> = {
   close: "Close the chat",
   openWorkspace: "Open campaign",
   workspace: "Campaign",
+  noTalk: "The campaign {{workspace}} has no conversation now: only active campaigns talk.",
   loading: "Loading the conversation…",
   loadError: "I could not load the conversation.",
   noWorkspace: "You do not act in any campaign yet. Ask the Guildmaster to add you to one.",

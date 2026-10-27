@@ -213,7 +213,7 @@ function Workspace({ w }: { w: WorkspaceRow }) {
       ) : null}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Open w={w} />
-        {w.state !== "preparing" ? <Talk slug={w.slug} /> : null}
+        {w.state === "active" ? <Talk slug={w.slug} /> : null}
         {w.state !== "preparing" && canPause ? <PauseButton w={w} /> : null}
         {w.state !== "preparing" ? (
           <Button

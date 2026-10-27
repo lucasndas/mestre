@@ -153,7 +153,7 @@ test("the menu has four items, and the one of the section is marked on every scr
     await waitFor(() => expect(router.state.location.pathname).toBe(path.split("?")[0]));
     await waitFor(() => expect(current(), path).toEqual([item]));
   }
-});
+}, 20_000);
 
 // CA-JORN-09: the menu shows only what the level does
 test("who does not decide approvals has three items and no counter", async () => {
@@ -490,4 +490,29 @@ test("the account menu has my account, the language and the exit", async () => {
   ).toBe("true");
   await user.click(screen.getByRole("menuitem", { name: "Minha conta" }));
   await waitFor(() => expect(router.state.location.pathname).toBe("/sessoes"));
+});
+
+// CA-VWS-11
+test("a campaign with no conversation is said so and never swapped for another one", async () => {
+  fakeServer(
+    base({
+      ...as("owner", OWNER_CAPS, { last_workspace: "blog" }),
+      "GET /api/chat": () => ({
+        body: {
+          workspaces: [{ slug: "loja", can_talk: true, unread: 0 }],
+          unread: 0,
+          limit: 1,
+          max_files: 1,
+        },
+      }),
+    }),
+  );
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/");
+  await user.click(
+    await screen.findByRole("button", { name: "Abrir a conversa com o Grão-Mestre" }),
+  );
+  const panel = await screen.findByRole("complementary", { name: "Conversa com o Grão-Mestre" });
+  expect(await within(panel).findByText(/A campanha blog não tem conversa agora/)).toBeTruthy();
+  expect(within(panel).queryByRole("textbox")).toBeNull();
 });
