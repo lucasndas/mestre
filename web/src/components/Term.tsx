@@ -10,7 +10,20 @@ import type { Language } from "../i18n";
  * glossary, never from this code: `name` must be a row of
  * docs/produto/glossario.md, or tsc fails.
  */
-export function Term({ name }: { name: TermKey }) {
+export function Term({
+  name,
+  onAct,
+  border = "border-muted",
+}: {
+  name: TermKey;
+  /**
+   * The word is itself a button that does something (the "Teclado direto" of the terminal): the help
+   * shows on hover or focus only and never pins, so a press stays the action.
+   */
+  onAct?: () => void;
+  /** The color of the dotted line (a class), for a dark ground. */
+  border?: string;
+}) {
   const { t, i18n } = useTranslation("common");
   const text = glossary[name][i18n.language as Language] ?? glossary[name]["pt-BR"];
   const ref = useRef<HTMLButtonElement>(null);
@@ -20,17 +33,23 @@ export function Term({ name }: { name: TermKey }) {
     <span className="whitespace-nowrap">
       <Button
         ref={ref}
-        aria-label={t("help.open", { term: text.name })}
+        aria-label={onAct ? undefined : t("help.open", { term: text.name })}
         aria-expanded={open}
         onHoverStart={() => setOpen(true)}
         onHoverEnd={() => {
           if (!pinned.current) setOpen(false);
         }}
+        onFocus={onAct ? () => setOpen(true) : undefined}
+        onBlur={onAct ? () => setOpen(false) : undefined}
         onPress={() => {
+          if (onAct) {
+            onAct();
+            return;
+          }
           pinned.current = !pinned.current || !open;
           setOpen(pinned.current);
         }}
-        className="cursor-help border-b border-dotted border-muted text-inherit hover:border-ink"
+        className={`${onAct ? "cursor-pointer" : "cursor-help"} border-b border-dotted ${border} text-inherit hover:border-ink`}
       >
         {text.name}
       </Button>

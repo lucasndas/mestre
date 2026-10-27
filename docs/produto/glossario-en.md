@@ -92,3 +92,6 @@ Este documento é lido por máquina, como o [glossário](glossario.md): cada lin
 | Cofre | Vault | An encrypted place where secrets are kept; only the Citadel opens it, and agents never read it. | a protected digital safe where passwords are kept |
 | Impressão | Fingerprint | A code (hash) of a request, failure, problem, secret or the CA, used to tell whether it is the same or changed. | a code that identifies something and shows if it changed |
 | Em criação | Being created | This class's GitHub App has not been created and installed yet; actions go out under the Mestre App. | an assistant's account that is still being set up |
+| Leitura | Reading | The mode where you only watch the terminal: nothing you do reaches the agent. | looking at someone's screen without touching their keyboard |
+| Mensagem | Message | The mode of typing in a box: the text goes to the agent when it is free, or waits in the queue. | writing a note the assistant reads when it can |
+| Teclado direto | Direct keyboard | The mode where every key goes to the agent at once, for provider menus and questions. | using the assistant's keyboard as if you were sitting at it |

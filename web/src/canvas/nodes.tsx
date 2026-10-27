@@ -9,11 +9,12 @@ import type { CanvasCharacter } from "../gen/panel";
 import { useGoto } from "../lib/links";
 import { terminalQuery } from "../lib/queries";
 import { TerminalView } from "../terminal/TerminalView";
-import { ToneChip } from "../workspace/SituationChip";
 import { useCanvasEnv, useNodeView } from "./context";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { MissionLine } from "./MissionLine";
 import type { CanvasNode, CharacterData, GroupData, ScrollData, TomeData } from "./model";
-import { type CharacterStatus, characterStatus, missionLine } from "./status";
+import { StatusChip } from "./StatusChip";
+import { characterStatus, missionLine } from "./status";
 
 /** The pin of a pinned character: a drawing, not an emoji, so it looks the same on every machine. */
 function PinIcon({ filled }: { filled: boolean }) {
@@ -58,37 +59,6 @@ export function useStateLabel() {
     if (c.state === "waiting" && reason) return t("state.waiting_for", { reason });
     return t(`state.${c.state}`, { defaultValue: c.state });
   };
-}
-
-/** The word of a character's state (the vocabulary of the design) with its sign, and who it waits for. */
-export function StatusChip({ status }: { status: CharacterStatus }) {
-  const { t } = useTranslation("canvas");
-  const say = t as unknown as (k: string, o?: object) => string;
-  return (
-    <ToneChip tone={status.tone} icon={status.icon} large>
-      {say(`status.${status.key}`, { reason: status.reason })}
-    </ToneChip>
-  );
-}
-
-/** "Missão entrega · Etapa 1 de 2", with one bar per step: done, now, to do. */
-function MissionLine({ line }: { line: NonNullable<ReturnType<typeof missionLine>> }) {
-  const { t } = useTranslation("canvas");
-  return (
-    <p className="m-0 flex items-center gap-2 text-base">
-      <span aria-hidden="true" className="inline-flex gap-1">
-        {line.bars.map((b, i) => (
-          <span
-            // the steps of one mission, in order
-            // biome-ignore lint/suspicious/noArrayIndexKey: the bars follow the steps by position
-            key={i}
-            className={`h-1.5 w-4 rounded-full ${b === "done" ? "bg-signal" : b === "current" ? "bg-accent" : "bg-line"}`}
-          />
-        ))}
-      </span>
-      <span>{t("node.mission", { name: line.quest, step: line.step, total: line.total })}</span>
-    </p>
-  );
 }
 
 function CharacterNodeView({ data, selected, id }: NodeProps<CanvasNode>) {

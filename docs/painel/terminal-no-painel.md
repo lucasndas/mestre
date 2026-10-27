@@ -19,7 +19,7 @@ O terminal da mesa tem de parecer um terminal e ser mais que um: a tela do agent
 - Superfície escura (`--color-term-bg`), fonte monoespaçada **empacotada** (JetBrains Mono, OFL, por `@fontsource`, como as demais; a do sistema só de reserva), sem ligaduras, altura de linha 1,4. Tamanho da letra: 15 px na tela cheia, 13 px no cartão, 12 px no celular. O xterm só abre depois de a fonte carregar.
 - **Cores:** as 16 cores ANSI saem de tokens `--color-term-*` no `@theme` (tons quentes do Pergaminho, texto claro sobre o fundo escuro com contraste de pelo menos 4,5:1); o valor mora no arquivo de tokens, não aqui. Diferenças (adicionado, removido) usam também o sinal `+` e `-`, nunca só a cor.
 - **Cursor:** sem o teclado liberado, um bloco **oco** (como o de um terminal sem foco; troca a regra antiga de cursor oculto, [design](design.md#terminal)); com o teclado, bloco cheio âmbar que pisca (parado com `prefers-reduced-motion`).
-- **Tamanho:** 200 × 50 fixo, com rolagem nos dois eixos e uma linha tracejada na coluna 200. A letra muda só por zoom no navegador: **A−** e **A+** (11 a 22 px) e **Ajustar à largura** (no mínimo 9 px); nada disso redimensiona o PTY.
+- **Tamanho:** 200 × 50 fixo, com rolagem nos dois eixos e uma linha tracejada na coluna 200. A letra muda só por zoom no navegador: **A−** e **A+** (11 a 22 px) e **Ajustar à largura** (no mínimo 11 px); nada disso redimensiona o PTY.
 - **Rolagem:** 2.000 linhas de histórico no navegador. Ao rolar para cima a tela para de seguir e mostra **Ir ao fim (+N)**; "trecho perdido" continua marcado na tela.
 - **Moldura:** borda fina; com o teclado liberado, a borda e um anel passam a `--color-accent`, junto do modo **DIGITANDO**.
 
@@ -31,7 +31,7 @@ O terminal da mesa tem de parecer um terminal e ser mais que um: a tela do agent
 
 ### Linha de status
 
-- À esquerda, o **modo**: **LEITURA** (cadeado quando o nível não deixa digitar), **MENSAGEM** ou **TECLADO**, cada um uma palavra de termo (`Term`): sublinhada com pontos, abre o balão com "No mundo real:" ao passar o mouse e o fixa ao tocar, clicar ou apertar Enter; sem "?" ao lado. Os termos Leitura, Mensagem e Teclado direto entram no glossário, em pt-BR e en.
+- À esquerda, o **modo**: **LEITURA** (cadeado quando o nível não deixa digitar), **MENSAGEM** ou **TECLADO DIRETO**, cada um uma palavra de termo (`Term`): sublinhada com pontos, abre o balão com "No mundo real:" ao passar o mouse e o fixa ao tocar, clicar ou apertar Enter; sem "?" ao lado. Os termos Leitura, Mensagem e Teclado direto entram no glossário, em pt-BR e en.
 - Depois, na tela cheia, a **missão** e a **etapa atual** (a mesma linha que o cartão da 4F mostra, num componente só) ("Etapa 2 de 4: Implementar login", com uma barrinha por etapa: feita, atual, a fazer), as **aprovações pendentes** deste personagem como botão **Decidir** (leva à [aprovação](conversa-e-aprovacoes.md)) e a **última entrega** da mesa. Sem missão, a parte some.
 - À direita, o botão **Digitar** (ou **Parar de digitar**) e uma frase de apoio: o que digita vai ao agente, o motivo de o botão estar desligado, ou "200 × 50 fixo".
 
@@ -39,7 +39,7 @@ O terminal da mesa tem de parecer um terminal e ser mais que um: a tela do agent
 
 - Valem as regras do [canvas](canvas.md#digitar-no-terminal): só Administrador ou acima, servidor confere a cada entrada, auditoria da sessão, respostas automáticas do xterm não são digitação.
 - **Caixa de mensagem (padrão), como no Claude Code:** **Digitar** abre uma caixa sob a tela. Com o personagem **livre**, **Enviar** manda o texto na hora; com ele **ocupado**, o botão vira **Pôr na fila** e a mensagem entra numa **fila** visível acima da caixa ("Na fila (2): vai para Dev-1 quando ele terminar"). Cada item tem **Enviar agora** (chega direto ao terminal e pode atrapalhar o trabalho; o aviso fica no próprio botão) e **Tirar**. Quando o estado do personagem volta a `idle`, a fila sai sozinha, uma mensagem por vez, na ordem.
-- **Como a fila funciona (só no navegador):** o texto fica na página e sai pela digitação de hoje (`terminal.input`, modo `keys`: o texto e Enter), com o mesmo nível, a mesma auditoria e as mesmas recusas; se a página fechar, a fila some, e a faixa da fila diz isso. Uma fila que sobreviva ao navegador seria a [caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md) do servidor (trabalho novo, fora desta unidade). Verificar na implementação que o texto com várias linhas chega inteiro nos três provedores.
+- **Como a fila funciona (só no navegador):** o texto fica na página e sai pela digitação de hoje (`terminal.input`, modo `keys`: o texto e Enter), com o mesmo nível, a mesma auditoria e as mesmas recusas; se a página fechar, a fila some, e a faixa da fila diz isso. Uma fila que sobreviva ao navegador seria a [caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md) do servidor (trabalho novo, fora desta unidade). Um texto de várias linhas sai como uma colagem só (`ESC[200~ … ESC[201~` e Enter), para nenhuma linha enviar antes da hora; conferir nos três provedores quando o M7 ligar os terminais de produção.
 - **Teclado direto** (botão de ação: o balão do termo aparece ao passar o mouse ou focar, sem fixar, para o clique continuar sendo a ação): um segundo modo, para telas que pedem teclas (menus e perguntas do provedor): cada tecla vai ao agente, como hoje. Num personagem ocupado pede antes a confirmação "está trabalhando", numa faixa âmbar no lugar da linha de status (sem janela), com **Cancelar** e **Digitar mesmo assim**.
 - **Soltar o teclado:** no teclado direto, além do botão, **Ctrl+Alt+K** solta o teclado sem enviar nada ao agente; assim quem usa só o teclado nunca fica preso na tela. Antes de fixar a tecla, conferir que nenhum dos três provedores a usa.
 - **Digitar fica desligado**, com a frase do motivo, quando: o nível não deixa; a máquina está sem sinal; o painel está reconectando; o personagem espera a sua decisão (`permission_prompt`); o terminal terminou.
@@ -59,7 +59,7 @@ O terminal da mesa tem de parecer um terminal e ser mais que um: a tela do agent
 
 ### Cartão do canvas
 
-- O **cartão do personagem é da 4F** ([canvas](canvas.md)): cabeçalho, linha de missão, etapa e aprovação, **Abrir terminal** e **Fixar/Desafixar**. Esta unidade desenha só o **terminal dentro do cartão**: a tela mostrando o **fim** do PTY e seguindo a saída, os avisos de estado sobre ela e uma faixa fina com o modo (LEITURA, MENSAGEM, TECLADO) e o botão **Digitar**.
+- O **cartão do personagem é da 4F** ([canvas](canvas.md)): cabeçalho, linha de missão, etapa e aprovação, **Abrir terminal** e **Fixar/Desafixar**. Esta unidade desenha só o **terminal dentro do cartão**: a tela mostrando o **fim** do PTY e seguindo a saída, os avisos de estado sobre ela e uma faixa fina com o modo (LEITURA). **Digitar** não está no cartão: só na tela do terminal ([canvas](canvas.md)).
 - Longe no zoom a tela vira retrato, com o rótulo. Redimensionar o cartão nunca muda o PTY ([canvas](canvas.md#terminais-no-canvas)). Personagem sem terminal mostra "Sem terminal aberto" (do cartão).
 
 ### Celular
@@ -79,7 +79,7 @@ O terminal da mesa tem de parecer um terminal e ser mais que um: a tela do agent
 | aprovações pendentes do personagem | lista e eventos de aprovações |
 | zoom, Ajustar, Copiar tela, Ir ao fim, Focar, soltar teclado | só o navegador |
 
-- **Mudança pequena no servidor (aditiva):** a tela própria só recebe `TerminalInfo`, que não traz a classe, o nome da máquina nem a mesa. `class`, `machine_name` e `table` entram na mesma resposta de `GET /api/characters/{id}/terminal` (campos novos, nada muda); com eles a tela pede o canvas da mesa e segue os eventos dele. Sem isso a tela própria mostra só o que `TerminalInfo` diz.
+- **Mudança pequena no servidor (aditiva):** a tela própria só recebe `TerminalInfo`, que não traz a mesa. `table` entra na mesma resposta de `GET /api/characters/{id}/terminal` (campo novo, nada muda); com ele a tela pede o canvas da mesa (que traz a classe e o nome da máquina do personagem) e segue os eventos dele. Sem isso a tela própria mostra só o que `TerminalInfo` diz.
 - **Fora desta unidade** (não existe, não está no [escopo do MVP](../produto/escopo-mvp.md)): pausar um personagem sozinho, código de saída, tempo gasto na etapa, atalhos de teclas para o agente.
 
 ## Regras e erros
@@ -99,11 +99,11 @@ O terminal da mesa tem de parecer um terminal e ser mais que um: a tela do agent
 - **CA-TUI-07** · *rápida* — **Dado** um personagem `stopped` ou `interrupted`, **quando** o terminal abre, **então** a saída continua legível, não há cursor, Digitar está desligado e a faixa oferece **Ver a mesa**.
 - **CA-TUI-08** · *rápida* — **Dado** um personagem bloqueado por permissão, **quando** o terminal abre, **então** a faixa em destaque tem **Decidir em Aprovações**, que leva ao pedido, e Digitar está desligado.
 - **CA-TUI-09** · *rápida* — **Dado** uma missão na etapa 2 de 4 e uma aprovação pendente, **quando** a linha de status é desenhada, **então** mostra "Etapa 2 de 4", a barrinha e o botão da aprovação; e para um personagem sem missão essa parte não aparece.
-- **CA-TUI-10** · *rápida* — **Dado** o terminal dentro do cartão do canvas, **quando** a mesa abre, **então** mostra só o fim da tela seguindo a saída, o modo e **Digitar** (o cabeçalho e a linha de etapa são do cartão da 4F), e longe no zoom a tela vira retrato com o rótulo.
+- **CA-TUI-10** · *rápida* — **Dado** o terminal dentro do cartão do canvas, **quando** a mesa abre, **então** mostra só o fim da tela seguindo a saída e o modo LEITURA, sem **Digitar** (o cabeçalho, a linha de etapa e os botões são do cartão da 4F), e longe no zoom a tela vira retrato com o rótulo.
 - **CA-TUI-11** · *rápida* — **Dado** uma janela de 390 px, **quando** o terminal abre, **então** a letra é de 12 px, a página não rola de lado, a tira "200 colunas: role para o lado" aparece com **Quebrar linhas** (que quebra as linhas sem mudar 200 × 50), as ações secundárias estão em **Mais** e Digitar tem 48 px de altura; **Ajustar à largura** nunca passa de 11 px e diz quando não cabe.
 - **CA-TUI-12** · *rápida* — **Dado** um Aprovador e um Observador, **quando** abrem o terminal, **então** só o Aprovador vê **Pausar mesa**, que só habilita com o motivo escrito, chama a rota existente com ele e mostra a faixa com o motivo, e **Fixar** só aparece a quem edita o canvas.
 - **CA-TUI-13** · *rápida* — **Dado** o zoom **A+** e **Ajustar à largura**, **quando** a pessoa os usa, **então** a letra muda, o terminal continua 200 × 50 e nada de redimensionar sai ao servidor.
-- **CA-TUI-15** · *rápida* — **Dado** a barra do terminal, **quando** a pessoa passa o mouse na palavra LEITURA, MENSAGEM ou TECLADO (sublinhada com pontos, sem "?"), **então** o balão acessível mostra o texto do glossário e "No mundo real:", nos dois idiomas; tocar, clicar ou Enter o fixa, Esc o fecha, e em **Teclado direto** (botão de ação) ele aparece só ao passar o mouse ou focar.
+- **CA-TUI-15** · *rápida* — **Dado** a barra do terminal, **quando** a pessoa passa o mouse na palavra LEITURA, MENSAGEM ou TECLADO DIRETO (sublinhada com pontos, sem "?"), **então** o balão acessível mostra o texto do glossário e "No mundo real:", nos dois idiomas; tocar, clicar ou Enter o fixa, Esc o fecha, e em **Teclado direto** (botão de ação) ele aparece só ao passar o mouse ou focar.
 - **CA-TUI-14** · *rápida* — **Dado** a tela cheia, **quando** é varrida por acessibilidade, **então** a região tem nome, a tela existe também como texto para leitor de tela, as cores ANSI passam em 4,5:1 sobre o fundo e `prefers-reduced-motion` desliga o piscar e o pulso.
 
 ## Depende de

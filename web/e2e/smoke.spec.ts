@@ -74,7 +74,10 @@ test("the Owner creates the Guild, signs out and signs in again", async ({ page 
   const screen = page.getByRole("region", { name: "Terminal de Dev-1" });
   await expect(screen.locator(".xterm-accessibility-tree")).toContainText("Claude Code (fake)");
   // the Owner may type: the keyboard is released by a button, and refused until then
-  await expect(page.getByRole("button", { name: "Digitar" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Digitar" })).toBeEnabled();
+  // the window of the terminal: the identity bar and the mode in the status line
+  await expect(page.getByRole("toolbar")).toContainText("Dev-1");
+  await expect(page.getByRole("button", { name: "Ajuda sobre Leitura" })).toBeVisible();
 });
 
 // The administration step of the smoke: the Owner registers a user (with the PIN, as
