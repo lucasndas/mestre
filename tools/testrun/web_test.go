@@ -197,10 +197,10 @@ func (c *checkGateClock) Now() time.Time {
 // CA-TESTES-15
 func TestWebSideHasItsOwnBudgetAndTheGoOnesStay(t *testing.T) {
 	t.Parallel()
-	if WebBudget != 30*time.Second || Suites["fast"].Budget != 36*time.Second || Suites["full"].Budget != 216*time.Second {
+	if WebBudget != 30*time.Second || WebBudgetWindows != 45*time.Second || Suites["fast"].Budget != 36*time.Second || Suites["full"].Budget != 216*time.Second {
 		t.Fatalf("budgets: web %v, fast %v, full %v", WebBudget, Suites["fast"].Budget, Suites["full"].Budget)
 	}
-	run := func(wall time.Duration, execMs int) (int, string) {
+	runOn := func(goos string, wall time.Duration, execMs int) (int, string) {
 		fake := clock.NewFake(today)
 		clk := newCheckGateClock(fake)
 		ex := webExec(fake, wall, func() string { return vitestReportSpan(execMs, "a:passed:300", "b:passed:20") })
@@ -214,7 +214,17 @@ func TestWebSideHasItsOwnBudgetAndTheGoOnesStay(t *testing.T) {
 			return inner(c, out)
 		}
 		r, out := newRunner(webFS(nil), clk, ex)
+		r.GOOS = goos
 		return r.RunSuite(context.Background(), Suites["fast"]), out.String()
+	}
+	run := func(wall time.Duration, execMs int) (int, string) { return runOn("linux", wall, execMs) }
+	// Windows has 45 s: 31 s pass there and print the budget that applies,
+	// 46 s fail.
+	if code, text := runOn("windows", 32*time.Second, 31000); code != 0 || !strings.Contains(text, "PASS fast web: 2 tests in 31s (budget 45s)") {
+		t.Fatalf("windows 31 s: exit %d:\n%s", code, text)
+	}
+	if code, text := runOn("windows", 47*time.Second, 46000); code != 1 || !strings.Contains(text, "FAIL web side of fast took 46s, budget 45s.") {
+		t.Fatalf("windows 46 s: exit %d:\n%s", code, text)
 	}
 	// Go takes 20 s (under its 36 s) and the tests 29 s (under 30 s).
 	if code, text := run(30*time.Second, 29000); code != 0 || !strings.Contains(text, "PASS fast web") || !strings.Contains(text, "slow: 1 web test(s)") {
