@@ -309,7 +309,7 @@ func checkDelegation(p Proposal, u users.User, now time.Time) (string, *Refusal)
 	switch {
 	case t == string(classes.RequestOperator):
 		if err := users.Require(u.Level, users.OperatorActivation); err != nil {
-			return "", refuse(CodeLevel, "a delegação da ativação do Operador é só do Dono: %s", err.Error())
+			return "", refuse(CodeLevel, "a delegação da ativação do Operador é só do Senhor da Guilda: %s", err.Error())
 		}
 		if !strings.HasPrefix(p.Scope, "missao:") && !strings.HasPrefix(p.Scope, "classe:") || strings.HasSuffix(p.Scope, ":") {
 			return "", refuse(CodeDelegation, "a delegação da ativação do Operador precisa de escopo: `missao:<nome>` ou `classe:<nome>`")
