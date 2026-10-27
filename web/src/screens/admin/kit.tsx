@@ -2,9 +2,13 @@ import { queryOptions } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { Checkbox, CheckboxGroup, Label, Radio, RadioGroup } from "react-aria-components";
 import { useTranslation } from "react-i18next";
+import { useMe } from "../../app/session";
+import { Term } from "../../components/Term";
 import { Button } from "../../components/ui";
+import type { TermKey } from "../../gen/glossary";
 import type { AuditPage, GitHubMe, SecretList, TransferState, UserList } from "../../gen/panel";
-import { api } from "../../lib/api";
+import { ApiError, api } from "../../lib/api";
+import { errorText } from "../../lib/errors";
 
 // What the administration screens ask the server; the keys are what a mutation
 // invalidates after it.
@@ -62,6 +66,175 @@ export function PageHeader({ title, intro }: { title: string; intro: ReactNode }
       <h1 className="text-3xl">{title}</h1>
       <p className="mt-1 mb-6 max-w-2xl text-muted">{intro}</p>
     </>
+  );
+}
+
+export type Tone = "neutral" | "warn" | "ok" | "danger";
+
+// The tone is told by a symbol and a word as well as by the color (the pattern of the
+// administration screens, docs/painel/design.md#tela-de-administração).
+const toneStyle: Record<Tone, { box: string; symbol: string }> = {
+  neutral: { box: "border-line bg-surface", symbol: "○" },
+  warn: { box: "border-warn-ink/40 bg-warn text-warn-ink", symbol: "▲" },
+  ok: { box: "border-signal bg-surface", symbol: "✓" },
+  danger: { box: "border-danger/40 bg-danger-wash text-danger", symbol: "✕" },
+};
+
+/**
+ * What is true now on a screen and the one thing to do next: a sentence made of the same data
+ * the list reads, a line of support and, on the right (below on a phone), the main action.
+ */
+export function StatusStrip({
+  tone = "neutral",
+  title,
+  hint,
+  children,
+}: {
+  tone?: Tone;
+  title: string;
+  hint?: ReactNode;
+  /** The main action of the screen, one. */
+  children?: ReactNode;
+}) {
+  const { t } = useTranslation("common");
+  const st = toneStyle[tone];
+  return (
+    <div
+      role="status"
+      className={`mb-6 flex max-w-4xl flex-col gap-3 rounded-field border p-4 sm:flex-row sm:items-center sm:justify-between ${st.box}`}
+    >
+      <div className="min-w-0">
+        <p className="flex items-baseline gap-2 text-lg font-semibold">
+          <span aria-hidden="true">{st.symbol}</span>
+          <span className="sr-only">{t(`admin.tone.${tone}`)}: </span>
+          <span>{title}</span>
+        </p>
+        {hint ? <p className="mt-1 text-sm">{hint}</p> : null}
+      </div>
+      {children ? <div className="flex flex-wrap items-center gap-2">{children}</div> : null}
+    </div>
+  );
+}
+
+/** A thing that does not exist yet: what it is, why it matters and the next step, never only "none". */
+export function EmptyState({
+  title,
+  why,
+  steps,
+  children,
+}: {
+  title: string;
+  why: ReactNode;
+  steps?: string[];
+  /** The way out: a button or a link. */
+  children?: ReactNode;
+}) {
+  return (
+    <section className="flex max-w-3xl flex-col gap-3 rounded-field border border-dashed border-muted p-5">
+      <h2 className="text-xl">{title}</h2>
+      <p>{why}</p>
+      {steps && steps.length > 0 ? (
+        <ol className="ml-5 list-decimal text-sm">
+          {steps.map((s) => (
+            <li key={s}>{s}</li>
+          ))}
+        </ol>
+      ) : null}
+      {children ? <div className="flex flex-wrap gap-2">{children}</div> : null}
+    </section>
+  );
+}
+
+/**
+ * A read that failed: what did not load, why in the language of the user, a way to try again and
+ * the raw answer of the server folded away. The screen shows this in place of the data, never
+ * with the old data beside it as if it were current.
+ */
+export function LoadError({
+  what,
+  error,
+  onRetry,
+}: {
+  what: string;
+  error: unknown;
+  onRetry: () => void;
+}) {
+  const { t } = useTranslation("common");
+  const { t: te } = useTranslation("errors");
+  const raw =
+    error instanceof ApiError ? [error.code, error.message].filter(Boolean).join(": ") : "";
+  return (
+    <div
+      role="alert"
+      className="flex max-w-3xl flex-col gap-3 rounded-field border border-danger/40 bg-danger-wash p-4 text-danger"
+    >
+      <p className="font-semibold">{t("admin.loadFailed", { what })}</p>
+      <p>{errorText(te, error)}</p>
+      <div>
+        <Button variant="secondary" onPress={onRetry}>
+          {t("admin.retry")}
+        </Button>
+      </div>
+      {raw ? (
+        <details className="text-sm">
+          <summary className="min-h-11 cursor-pointer py-2">{t("admin.technical")}</summary>
+          <p className="font-mono break-all">{raw}</p>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+/** The line under the intro with the words of the screen, each one a `Term`. */
+export function VocabLine({ terms, extra }: { terms: TermKey[]; extra?: ReactNode }) {
+  const { t } = useTranslation("common");
+  return (
+    <p className="-mt-4 mb-6 flex max-w-2xl flex-wrap items-baseline gap-x-3 gap-y-1 text-sm text-muted">
+      <span>{t("admin.vocabulary")}:</span>
+      {terms.map((name) => (
+        <Term key={name} name={name} />
+      ))}
+      {extra}
+    </p>
+  );
+}
+
+const LEVELS = ["observer", "approver", "administrator", "owner"] as const;
+export type Level = (typeof LEVELS)[number];
+
+/** Whether the level of the user reaches `need` (the server still decides every request). */
+export function useReaches(need: Level): boolean {
+  const { level } = useMe().user;
+  return LEVELS.indexOf(level as Level) >= LEVELS.indexOf(need);
+}
+
+/**
+ * An action that needs a level: for who reaches it, the children; for who does not, the same
+ * button off and the level it needs and the user's own, instead of nothing.
+ */
+export function LevelGate({
+  need,
+  label,
+  children,
+}: {
+  need: Level;
+  label: string;
+  children: ReactNode;
+}) {
+  const { t } = useTranslation("common");
+  const { t: te } = useTranslation("errors");
+  const { level } = useMe().user;
+  const reaches = useReaches(need);
+  if (reaches) return <>{children}</>;
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <Button variant="secondary" isDisabled>
+        {label}
+      </Button>
+      <span className="text-sm text-muted">
+        {t("admin.needLevel", { need: te(`level_${need}`), have: te(`level_${level}` as never) })}
+      </span>
+    </span>
   );
 }
 
