@@ -528,7 +528,7 @@ test("a read that fails shows what, why, Tentar de novo and the raw answer folde
   const details = within(alert).getByText("Detalhes técnicos").closest("details");
   expect(details?.open).toBe(false);
   expect(details?.textContent).toContain("internal: boom: db locked");
-  expect(statusText()).not.toContain("em vigor"); // no strip: the state is not known
+  expect(screen.queryByText(/em vigor/)).toBeNull(); // no strip: the state is not known
   ok = true;
   await user.click(within(alert).getByRole("button", { name: "Tentar de novo" }));
   expect(await screen.findByText(/mestre-revisor · pronto/)).toBeTruthy();
