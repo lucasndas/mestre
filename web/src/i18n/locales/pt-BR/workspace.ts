@@ -1,9 +1,8 @@
 export default {
-  selector: {
-    label: "Campanha",
-    create: "Criar campanha…",
-    none: "Nenhuma campanha",
-    placeholder: "Escolha uma campanha",
+  switch: {
+    label: "Campanha {{workspace}}: trocar de campanha",
+    title: "Trocar de campanha",
+    all: "Ver todas",
   },
   title: "Campanha {{workspace}}",
   region: "Canvas da campanha {{workspace}}",

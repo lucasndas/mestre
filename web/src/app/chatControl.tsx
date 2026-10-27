@@ -4,9 +4,15 @@ import { createContext, useContext } from "react";
 export interface ChatControl {
   open: boolean;
   toggle: () => void;
+  /** Opens the panel (the shortcuts that talk about a campaign never close it). */
+  show: () => void;
 }
 
-export const ChatControlContext = createContext<ChatControl>({ open: false, toggle: () => {} });
+export const ChatControlContext = createContext<ChatControl>({
+  open: false,
+  toggle: () => {},
+  show: () => {},
+});
 
 export function useChatControl(): ChatControl {
   return useContext(ChatControlContext);

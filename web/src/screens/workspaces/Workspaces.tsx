@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useChatControl } from "../../app/chatControl";
 import { useCan } from "../../app/session";
 import { Term } from "../../components/Term";
 import { Alert, Button, Field } from "../../components/ui";
@@ -12,6 +14,7 @@ import type {
 } from "../../gen/panel";
 import { api } from "../../lib/api";
 import { useLive, useLiveEvents } from "../../lib/live";
+import { useRememberCampaign } from "../../workspace/current";
 import { Badge, ChoiceGroup, NativeSelect, PageHeader } from "../admin/kit";
 import { WORKSPACES_TOPIC, workspacesQuery } from "./queries";
 import { refusalText } from "./refusal";
@@ -22,7 +25,7 @@ type Say = (k: string, o?: object) => string;
 const enc = encodeURIComponent;
 
 /** The workspaces (docs/painel/administracao.md): the list, the session zero and what it asks. */
-export function Workspaces() {
+export function Workspaces({ create = false }: { create?: boolean }) {
   const { t } = useTranslation("workspaces");
   const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
@@ -43,8 +46,13 @@ export function Workspaces() {
       <div className="flex max-w-3xl flex-col gap-4">
         {error ? <Alert>{refusalText(t, te, error)}</Alert> : null}
         {!data && !error ? <p className="text-muted">…</p> : null}
-        {data?.can_create ? <Create sheets={data.sheets} /> : null}
-        {data && data.workspaces.length === 0 ? <p className="text-muted">{t("empty")}</p> : null}
+        {data?.can_create ? <Create sheets={data.sheets} startOpen={create} /> : null}
+        {data && data.workspaces.length === 0 ? (
+          <div className="rounded-field border border-dashed border-line p-5">
+            <p className="font-semibold">{t("empty.title")}</p>
+            <p className="text-muted">{data.can_create ? t("empty.create") : t("empty.ask")}</p>
+          </div>
+        ) : null}
         <ul className="flex flex-col gap-4">
           {data?.workspaces.map((w) => (
             <li key={w.slug}>
@@ -57,11 +65,11 @@ export function Workspaces() {
   );
 }
 
-function Create({ sheets }: { sheets: SheetOption[] }) {
+function Create({ sheets, startOpen }: { sheets: SheetOption[]; startOpen: boolean }) {
   const { t } = useTranslation("workspaces");
   const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [repo, setRepo] = useState("");
   const [slug, setSlug] = useState("");
   const [sheet, setSheet] = useState("");
@@ -204,6 +212,8 @@ function Workspace({ w }: { w: WorkspaceRow }) {
         <p className="mt-3 text-sm text-muted">{say(`versioning.answered.${w.versioning}`)}</p>
       ) : null}
       <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Open w={w} />
+        {w.state === "active" ? <Talk slug={w.slug} /> : null}
         {w.state !== "preparing" && canPause ? <PauseButton w={w} /> : null}
         {w.state !== "preparing" ? (
           <Button
@@ -222,6 +232,66 @@ function Workspace({ w }: { w: WorkspaceRow }) {
         </div>
       ) : null}
     </article>
+  );
+}
+
+/** Opens the view of the campaign; while it is prepared the button is off and says which stage runs. */
+function Open({ w }: { w: WorkspaceRow }) {
+  const { t } = useTranslation("workspaces");
+  const say = t as unknown as Say;
+  if (w.state === "preparing") {
+    const stage = w.stages.find((s) => s.state !== "done");
+    return (
+      <>
+        <Button variant="secondary" isDisabled aria-describedby={`stage-${w.slug}`}>
+          {t("open")}
+        </Button>
+        <span id={`stage-${w.slug}`} className="text-sm text-muted">
+          {stage
+            ? t("openWaiting", { stage: say(`stages.names.${stage.key}`) })
+            : t("openPreparing")}
+        </span>
+      </>
+    );
+  }
+  return (
+    <Link
+      to="/workspaces/$workspace"
+      params={{ workspace: w.slug }}
+      aria-label={t("openNamed", { slug: w.slug })}
+      className="inline-flex min-h-11 items-center justify-center rounded-field bg-accent px-4 font-semibold text-accent-ink transition-colors hover:bg-accent-strong"
+    >
+      {t("open")}
+    </Link>
+  );
+}
+
+/** Makes the campaign the current one and opens the conversation with its Grão-Mestre. */
+function Talk({ slug }: { slug: string }) {
+  const { t } = useTranslation("workspaces");
+  const { t: te } = useTranslation("errors");
+  const chat = useChatControl();
+  const remember = useRememberCampaign();
+  const [error, setError] = useState<unknown>(null);
+  return (
+    <>
+      <Button
+        variant="secondary"
+        aria-label={t("talkNamed", { slug })}
+        onPress={async () => {
+          setError(null);
+          try {
+            await remember(slug);
+            chat.show();
+          } catch (err) {
+            setError(err);
+          }
+        }}
+      >
+        {t("talk")}
+      </Button>
+      {error ? <Alert>{refusalText(t, te, error)}</Alert> : null}
+    </>
   );
 }
 

@@ -1,7 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { useMe } from "../app/session";
-import type { WorkspaceRow } from "../gen/panel";
+import type { Me, WorkspaceRow } from "../gen/panel";
+import { api } from "../lib/api";
+import { meQuery } from "../lib/queries";
 import { workspacesQuery } from "../screens/workspaces/queries";
 
 /** The slug in the address of the screen (/workspaces/<slug>…), "" on the others. */
@@ -37,4 +39,13 @@ export function useCurrentWorkspace(): CurrentWorkspace {
       ? me.user.last_workspace
       : (list[0]?.slug ?? "");
   return { list, slug, canCreate: data?.can_create ?? false, ready: data !== undefined };
+}
+
+/** Makes a campaign the last one opened, kept on the Citadel; rejects when the server refuses, and nothing changes. */
+export function useRememberCampaign(): (slug: string) => Promise<void> {
+  const qc = useQueryClient();
+  return async (slug) => {
+    const next = await api<Me>("PUT", "/api/me/workspace", { workspace: slug });
+    qc.setQueryData(meQuery.queryKey, next);
+  };
 }

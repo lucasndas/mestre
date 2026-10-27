@@ -21,9 +21,7 @@ export function TalkButton() {
         className="min-h-14 px-6 font-display text-xl"
         isDisabled={off}
         aria-describedby="home-talk-about"
-        onPress={() => {
-          if (!chat.open) chat.toggle();
-        }}
+        onPress={chat.show}
       >
         {t("talk.button")}
       </Button>

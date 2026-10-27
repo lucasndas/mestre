@@ -155,7 +155,7 @@ export function Approvals({ request, notice }: { request?: number; notice?: numb
         {empty ? (
           <div className="rounded-field border border-dashed border-line p-6">
             <p className="font-semibold">{filtered ? t("empty.filtered") : t("empty.title")}</p>
-            {filtered ? null : <p className="text-muted">{t("empty.body")}</p>}
+            <p className="text-muted">{filtered ? t("empty.filteredHint") : t("empty.body")}</p>
           </div>
         ) : null}
         {onlyNotices

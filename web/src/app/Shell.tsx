@@ -1,21 +1,21 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Outlet, useNavigate } from "@tanstack/react-router";
+import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Button as AriaButton, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
+import { Button as AriaButton } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { ChatPanel } from "../components/ChatPanel";
-import { ApprovalsCounter, NoticesBell } from "../components/TopBarSlots";
+import { NoticesBell } from "../components/TopBarSlots";
 import type { ChatConversation, ChatStatusEvent } from "../gen/panel";
-import { api } from "../lib/api";
 import { chatOverviewQuery, chatQuery } from "../lib/chatQueries";
 import { type Live, LiveContext, useLiveEvents } from "../lib/live";
 import { type SocketState, UiSocket } from "../lib/ws";
 import { TransferBanner } from "../screens/admin/Transfer";
-import { WorkspaceSelector } from "../workspace/WorkspaceSelector";
+import { AccountMenu } from "./AccountMenu";
 import { Brand } from "./AuthLayout";
+import { Breadcrumbs } from "./Breadcrumbs";
 import { ChatControlContext } from "./chatControl";
-import { LanguageSwitcher } from "./LanguageSwitcher";
-import { useCan, useMe } from "./session";
+import { Nav } from "./Nav";
+import { useMe } from "./session";
 import { ConnectionContext, SocketContext } from "./socket";
 
 /** The band that tells the Citadel is out of reach; the state is reloaded when it is back. */
@@ -58,88 +58,6 @@ export function ReconnectingBand({ state }: { state: SocketState }) {
   );
 }
 
-function NavLink({
-  to,
-  children,
-}: {
-  to:
-    | "/aprovacoes"
-    | "/"
-    | "/sessoes"
-    | "/senha"
-    | "/usuarios"
-    | "/segredos"
-    | "/auditoria"
-    | "/github"
-    | "/decretos"
-    | "/delegacoes"
-    | "/cadeia"
-    | "/teto"
-    | "/politica"
-    | "/instrucoes"
-    | "/classes"
-    | "/apps"
-    | "/bases-e-fichas"
-    | "/perfis"
-    | "/consumo"
-    | "/guilda"
-    | "/workspaces";
-  children: string;
-}) {
-  return (
-    <Link
-      to={to}
-      search={to === "/sessoes" ? { todas: false } : to === "/aprovacoes" ? {} : undefined}
-      activeOptions={{ exact: to !== "/aprovacoes", includeSearch: false }}
-      className="block min-h-11 rounded-field px-3 py-2.5 whitespace-nowrap text-muted transition-colors hover:bg-accent-wash [&.active]:bg-accent-wash [&.active]:font-semibold [&.active]:text-ink"
-    >
-      {children}
-    </Link>
-  );
-}
-
-function Nav() {
-  const { t } = useTranslation("shell");
-  const canDecide = useCan("decide_approvals");
-  const canGitHub = useCan("connect_own_github");
-  const canUsers = useCan("manage_users");
-  const canSecrets = useCan("bases_vault_policy");
-  const canAudit = useCan("activate_classes");
-  const canRules = useCan("status");
-  const canInstructions = useCan("configure_workspace");
-  const canClasses = useCan("approve_workspace_cls");
-  const canProfiles = useCan("account_profiles");
-  const canGuild = useCan("manage_machines");
-  return (
-    <nav
-      aria-label={t("nav.main")}
-      className="flex gap-1 overflow-x-auto border-b border-line bg-surface p-2 md:flex-col md:border-r md:border-b-0 md:p-3"
-    >
-      <NavLink to="/">{t("nav.overview")}</NavLink>
-      <NavLink to="/workspaces">{t("nav.workspaces")}</NavLink>
-      {canDecide ? <NavLink to="/aprovacoes">{t("nav.approvals")}</NavLink> : null}
-      <NavLink to="/sessoes">{t("nav.sessions")}</NavLink>
-      <NavLink to="/senha">{t("nav.password")}</NavLink>
-      {canGitHub ? <NavLink to="/github">{t("nav.github")}</NavLink> : null}
-      {canUsers ? <NavLink to="/usuarios">{t("nav.users")}</NavLink> : null}
-      {canGuild ? <NavLink to="/guilda">{t("nav.guild")}</NavLink> : null}
-      {canSecrets ? <NavLink to="/segredos">{t("nav.secrets")}</NavLink> : null}
-      {canClasses ? <NavLink to="/classes">{t("nav.classes")}</NavLink> : null}
-      {canClasses ? <NavLink to="/apps">{t("nav.apps")}</NavLink> : null}
-      {canSecrets ? <NavLink to="/bases-e-fichas">{t("nav.presets")}</NavLink> : null}
-      {canProfiles ? <NavLink to="/perfis">{t("nav.profiles")}</NavLink> : null}
-      <NavLink to="/consumo">{t("nav.usage")}</NavLink>
-      {canAudit ? <NavLink to="/auditoria">{t("nav.audit")}</NavLink> : null}
-      {canRules ? <NavLink to="/decretos">{t("nav.decrees")}</NavLink> : null}
-      {canRules ? <NavLink to="/delegacoes">{t("nav.delegations")}</NavLink> : null}
-      {canRules ? <NavLink to="/cadeia">{t("nav.chain")}</NavLink> : null}
-      {canRules ? <NavLink to="/teto">{t("nav.ceiling")}</NavLink> : null}
-      {canSecrets ? <NavLink to="/politica">{t("nav.policy")}</NavLink> : null}
-      {canInstructions ? <NavLink to="/instrucoes">{t("nav.instructions")}</NavLink> : null}
-    </nav>
-  );
-}
-
 /** What the conversation tells the screens: a change reads it again, the state of the Grão-Mestre is put in place. */
 function ChatLive() {
   const qc = useQueryClient();
@@ -156,7 +74,7 @@ function ChatLive() {
   return null;
 }
 
-/** The button of the side panel, with the answers that wait for the user. */
+/** The button of the side panel, with the answers that wait for the user; only the icon on the phone. */
 function ChatToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const { t } = useTranslation("chat");
   const { data } = useQuery(chatOverviewQuery);
@@ -166,13 +84,28 @@ function ChatToggle({ open, onToggle }: { open: boolean; onToggle: () => void })
       aria-label={n > 0 ? t("toggleUnread", { count: n }) : t("toggleOpen")}
       aria-expanded={open}
       onPress={onToggle}
-      className="relative grid min-h-11 min-w-11 place-items-center rounded-full px-3 text-sm font-semibold hover:bg-accent-wash"
+      className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full bg-accent px-3 text-sm font-semibold text-accent-ink hover:bg-accent-strong"
     >
-      <span aria-hidden="true">{t("toggle")}</span>
+      <svg
+        viewBox="0 0 24 24"
+        width="22"
+        height="22"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M4 5h16v11H9l-5 4z" />
+      </svg>
+      <span aria-hidden="true" className="hidden md:inline">
+        {t("toggle")}
+      </span>
       {n > 0 ? (
         <span
           aria-hidden="true"
-          className="absolute -top-1 -right-1 grid min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-semibold text-accent-ink"
+          className="absolute -top-1 -right-1 grid min-w-5 place-items-center rounded-full border-2 border-surface bg-ink px-1 text-xs font-semibold text-surface"
         >
           {n > 99 ? "99+" : n}
         </span>
@@ -181,54 +114,23 @@ function ChatToggle({ open, onToggle }: { open: boolean; onToggle: () => void })
   );
 }
 
+/** The bar on top, in one line at any width: the brand, the bell, the Grão-Mestre and the account. */
 function TopBar({ chatOpen, onChat }: { chatOpen: boolean; onChat: () => void }) {
   const { t } = useTranslation("shell");
-  const me = useMe();
-  const qc = useQueryClient();
-  const navigate = useNavigate();
-  const logout = async () => {
-    try {
-      await api("POST", "/api/logout");
-    } finally {
-      qc.clear();
-      void navigate({ to: "/login", search: {} });
-    }
-  };
   return (
-    <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-surface px-4 py-2">
-      <Brand />
-      {/* The workspace selector, the counter of pending approvals and the bell of the
-          notices (docs/painel/design.md#a-barra-de-cima). */}
-      <div data-slot="workspace-selector" className="flex items-center">
-        <WorkspaceSelector />
-      </div>
-      <div className="flex-1" />
-      <div data-slot="approvals-counter" className="flex items-center">
-        <ApprovalsCounter />
-      </div>
+    <header className="flex items-center gap-1 border-b border-line bg-surface px-2 py-1.5 md:gap-2 md:px-4">
+      <Link
+        to="/"
+        aria-label={t("top.home")}
+        className="mr-auto flex min-h-11 min-w-0 items-center rounded-field"
+      >
+        <Brand />
+      </Link>
       <div data-slot="notices-bell" className="flex items-center">
         <NoticesBell />
       </div>
       <ChatToggle open={chatOpen} onToggle={onChat} />
-      <LanguageSwitcher />
-      <MenuTrigger>
-        <AriaButton
-          aria-label={t("top.menu")}
-          className="grid size-11 place-items-center rounded-full bg-accent-wash text-sm font-semibold hover:bg-line"
-        >
-          {me.user.name.slice(0, 2).toUpperCase()}
-        </AriaButton>
-        <Popover className="min-w-40 rounded-field border border-line bg-surface p-1 shadow-pop">
-          <Menu className="outline-none" onAction={(k) => k === "logout" && void logout()}>
-            <MenuItem
-              id="logout"
-              className="cursor-pointer rounded-field px-3 py-2 outline-none data-[focused]:bg-accent-wash"
-            >
-              {t("top.logout")}
-            </MenuItem>
-          </Menu>
-        </Popover>
-      </MenuTrigger>
+      <AccountMenu />
     </header>
   );
 }
@@ -238,9 +140,14 @@ export function Shell() {
   const { i18n } = useTranslation();
   const me = useMe();
   const { state, socket } = useConnection();
+  const path = useRouterState({ select: (s) => s.location.pathname });
   const [chatOpen, setChatOpen] = useState(false);
   const chatControl = useMemo(
-    () => ({ open: chatOpen, toggle: () => setChatOpen((o) => !o) }),
+    () => ({
+      open: chatOpen,
+      toggle: () => setChatOpen((o) => !o),
+      show: () => setChatOpen(true),
+    }),
     [chatOpen],
   );
   // the events of the channel for the screens (the counter, the bell, the central), and the
@@ -275,7 +182,7 @@ export function Shell() {
         <ChatLive />
         <ChatControlContext.Provider value={chatControl}>
           <div
-            className={`grid min-h-dvh grid-rows-[auto_auto_1fr] md:grid-rows-[auto_1fr] ${chatOpen ? "md:grid-cols-[14rem_1fr_26rem]" : "md:grid-cols-[14rem_1fr]"}`}
+            className={`grid min-h-dvh grid-rows-[auto_1fr] ${chatOpen ? "md:grid-cols-[14rem_1fr_26rem]" : "md:grid-cols-[14rem_1fr]"}`}
           >
             <a
               href="#content"
@@ -288,9 +195,10 @@ export function Shell() {
               <ReconnectingBand state={state} />
               <TransferBanner />
             </div>
-            <Nav />
-            <main id="content" className="min-w-0 px-5 py-8 md:px-10">
+            <Nav path={path} />
+            <main id="content" className="min-w-0 px-5 pt-5 pb-24 md:px-10 md:pt-6 md:pb-8">
               <SocketContext.Provider value={socket}>
+                <Breadcrumbs path={path} />
                 <Outlet />
               </SocketContext.Provider>
             </main>

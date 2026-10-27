@@ -1,4 +1,14 @@
+import type { Page } from "@playwright/test";
 import { expect, setupCode, test } from "./support";
+
+// A screen of Configurações takes two clicks: the item of the menu and the entry of the index.
+async function openSetting(page: Page, name: RegExp) {
+  await page
+    .getByRole("navigation", { name: "Navegação principal" })
+    .getByRole("link", { name: "Configurações" })
+    .click();
+  await page.getByRole("main").getByRole("link", { name }).click();
+}
 
 // The smoke of the e2e job (docs/qualidade/testes.md#smoke-do-painel): the real
 // engine with the embedded panel, a browser, and the three steps a person takes
@@ -74,7 +84,7 @@ test("the Owner registers a user and sees the code of first access", async ({ pa
   await page.getByLabel("Nome de login").fill("maria");
   await page.getByLabel("Senha").fill("uma senha bem longa");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await page.getByRole("link", { name: "Usuários" }).click();
+  await openSetting(page, /^Usuários/);
   await expect(page.getByRole("heading", { name: "Usuários", level: 1 })).toBeVisible();
   await page.getByRole("button", { name: "Cadastrar usuário" }).click();
   await page.getByLabel("Nome", { exact: true }).fill("Ana Lima");
@@ -133,8 +143,15 @@ test("the workspace view shows the Grand Master and a table block, and a click o
   await page.getByLabel("Senha").fill("uma senha bem longa");
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByRole("heading", { name: "Início" })).toBeVisible();
-  // the selector of the top bar leads to the view of the workspace
-  await page.getByLabel("Campanha", { exact: true }).selectOption("e2e");
+  // Campanhas, then Abrir on the card, leads to the view of the workspace
+  await page
+    .getByRole("navigation", { name: "Navegação principal" })
+    .getByRole("link", { name: "Campanhas" })
+    .click();
+  await page
+    .getByRole("article", { name: "e2e" })
+    .getByRole("link", { name: "Abrir a campanha e2e" })
+    .click();
   await expect(page.getByRole("heading", { name: "Campanha e2e", level: 1 })).toBeVisible();
   const canvas = page.getByRole("region", { name: "Canvas da campanha e2e" });
   const gm = canvas.getByRole("article", { name: "Grão-Mestre Grão-Mestre" });
@@ -157,9 +174,9 @@ test("the Owner makes a decree and revokes it", async ({ page }) => {
   await page.getByLabel("Nome de login").fill("maria");
   await page.getByLabel("Senha").fill("uma senha bem longa");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await page.getByRole("link", { name: "Decretos" }).click();
+  await openSetting(page, /^Decretos/);
   await expect(page.getByRole("heading", { name: "Decretos", level: 1 })).toBeVisible();
-  await expect(page.getByText("Nenhum decreto em vigor nesta campanha.")).toBeVisible();
+  await expect(page.getByText("Nenhum decreto em vigor nesta campanha.").first()).toBeVisible();
 
   await page.getByRole("button", { name: "Novo decreto" }).click();
   await page.getByLabel("Nome", { exact: true }).fill("dev");
@@ -181,7 +198,7 @@ test("the Owner makes a decree and revokes it", async ({ page }) => {
   await card.getByRole("button", { name: "Revogar" }).click();
   await card.getByRole("button", { name: "Sim, revogar" }).click();
   await expect(page.getByText("Decreto 1 revogado.")).toBeVisible();
-  await expect(page.getByText("Nenhum decreto em vigor nesta campanha.")).toBeVisible();
+  await expect(page.getByText("Nenhum decreto em vigor nesta campanha.").first()).toBeVisible();
 });
 
 // The classes and presets step of the smoke: the approved class of the throwaway Guild is
@@ -191,11 +208,11 @@ test("the Owner sees the classes and exports and imports a sheet", async ({ page
   await page.getByLabel("Nome de login").fill("maria");
   await page.getByLabel("Senha").fill("uma senha bem longa");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await page.getByRole("link", { name: "Classes", exact: true }).click();
+  await openSetting(page, /^Classes/);
   await expect(page.getByRole("heading", { name: "Classes", level: 1 })).toBeVisible();
   await expect(page.getByRole("rowheader", { name: "revisor" })).toBeVisible();
 
-  await page.getByRole("link", { name: "Bases e fichas" }).click();
+  await openSetting(page, /^Bases e fichas/);
   await expect(page.getByRole("heading", { name: "Bases e fichas", level: 1 })).toBeVisible();
   // the checkbox is drawn by its label: the click goes to the label
   await page.getByRole("group", { name: "Fichas a exportar" }).getByText("Dev Claude").click();
@@ -220,7 +237,7 @@ test("the Guild screen shows the single-machine band and the Citadel", async ({ 
   await page.getByLabel("Nome de login").fill("maria");
   await page.getByLabel("Senha").fill("uma senha bem longa");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await page.getByRole("link", { name: "Guilda", exact: true }).click();
+  await openSetting(page, /^Guilda/);
   await expect(page.getByRole("heading", { name: "Guilda e máquinas", level: 1 })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Modo máquina única" })).toBeVisible();
   await expect(page.getByText(/^Época \d+$/)).toBeVisible();
@@ -240,7 +257,10 @@ test("the workspaces list shows a workspace and the Owner confirms its verificat
   await page.getByLabel("Nome de login").fill("maria");
   await page.getByLabel("Senha").fill("uma senha bem longa");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await page.getByRole("link", { name: "Campanhas", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "Navegação principal" })
+    .getByRole("link", { name: "Campanhas" })
+    .click();
   await expect(page.getByRole("heading", { name: "Campanhas", level: 1 })).toBeVisible();
   const card = page.getByRole("article", { name: "e2e" });
   await expect(card.getByText("acme/e2e")).toBeVisible();

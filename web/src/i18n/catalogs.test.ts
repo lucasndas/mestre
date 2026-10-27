@@ -46,7 +46,7 @@ test("no text shown in Portuguese names a campaign, the highest level or the par
   }
   expect(ptBR.shell.nav.workspaces).toBe("Campanhas");
   expect(ptBR.errors.level_owner).toBe("Senhor da Guilda");
-  expect(ptBR.shell.nav.ceiling).toBe("Teto da campanha");
+  expect(ptBR.shell.settings.entries.ceiling.name).toBe("Teto da campanha");
   expect(ptBR.workspace.block.party).toBe("Companhia");
 });
 
@@ -61,6 +61,6 @@ test("the English panel says Guildmaster and Campaign, and keeps Party", () => {
   }
   expect(en.errors.level_owner).toBe("Guildmaster");
   expect(en.shell.nav.workspaces).toBe("Campaigns");
-  expect(en.shell.nav.ceiling).toBe("Campaign ceiling");
+  expect(en.shell.settings.entries.ceiling.name).toBe("Campaign ceiling");
   expect(en.workspace.block.party).toBe("Party");
 });

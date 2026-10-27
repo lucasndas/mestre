@@ -252,7 +252,7 @@ export function FirstSteps() {
             workspaceWait ? (
               off("workspace", label("workspace"))
             ) : (
-              <Link to="/workspaces" hash="criar" className={cls("workspace")}>
+              <Link to="/workspaces" search={{ criar: true }} className={cls("workspace")}>
                 {label("workspace")}
               </Link>
             )
@@ -269,12 +269,7 @@ export function FirstSteps() {
             requestWait ? (
               off("request", label("request"))
             ) : (
-              <Button
-                variant={current === "request" ? "primary" : "secondary"}
-                onPress={() => {
-                  if (!chat.open) chat.toggle();
-                }}
-              >
+              <Button variant={current === "request" ? "primary" : "secondary"} onPress={chat.show}>
                 {label("request")}
               </Button>
             )

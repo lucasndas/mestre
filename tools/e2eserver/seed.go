@@ -33,6 +33,12 @@ func seedRequest(ctx context.Context, guildDB, workspacesDir string) error {
 		VALUES ('loja', 'lucas/loja', 'lucas/loja', 'https://example.test/loja.git', 'main', 'active', '', ?, ?)`, now.UnixMilli(), now.UnixMilli()); err != nil {
 		return fmt.Errorf("the workspace: %w", err)
 	}
+	// the campaign of the workspaces double (workspaces.go) has its row too: the conversation of the
+	// panel is about the current campaign, and the chat lists the rows of the database
+	if _, err := db.Writer().ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+		VALUES (?, 'acme/e2e', 'acme/e2e', 'https://example.test/e2e.git', 'main', 'active', '', ?, ?)`, fakeWorkspace, now.UnixMilli(), now.UnixMilli()); err != nil {
+		return fmt.Errorf("the campaign of the double: %w", err)
+	}
 	if err := seedManage(ctx, db, workspacesDir, now); err != nil {
 		return err
 	}

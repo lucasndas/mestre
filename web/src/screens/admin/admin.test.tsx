@@ -71,8 +71,6 @@ test("a level that may not use the screen is refused with the level that is requ
   expect((await screen.findByRole("alert")).textContent).toBe(
     "Esta ação exige o nível Senhor da Guilda; o seu é Administrador.",
   );
-  expect(screen.queryByRole("link", { name: "Usuários" })).toBeNull();
-  expect(screen.getByRole("link", { name: "Auditoria" })).toBeTruthy();
 });
 
 test("the Owner registers a user with the PIN and sees the code of first access once", async () => {

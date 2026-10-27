@@ -54,7 +54,7 @@ test("wrong credentials show the text of the code, in the language of the panel"
   expect((await screen.findByRole("alert")).textContent).toBe("Invalid user or password.");
 });
 
-test("the nav of the shell hides what the level cannot do and the language switch is saved", async () => {
+test("the language of the account menu is saved", async () => {
   const { calls } = fakeServer({
     ...closed,
     "GET /api/me": () => ({ body: { ...ME, capabilities: ["status"] } }),
@@ -68,7 +68,8 @@ test("the nav of the shell hides what the level cannot do and the language switc
   expect(await screen.findByRole("heading", { name: "Minhas sessões" })).toBeTruthy();
   // not the Owner: no switch between mine and everyone's
   expect(screen.queryByRole("link", { name: "De todos" })).toBeNull();
-  await user.click(screen.getByRole("radio", { name: "English" }));
+  await user.click(screen.getByRole("button", { name: "Menu da conta" }));
+  await user.click(await screen.findByRole("menuitemradio", { name: "English" }));
   expect(await screen.findByRole("heading", { name: "My sessions" })).toBeTruthy();
   await waitFor(() =>
     expect(calls.some((c) => c.method === "PUT" && c.path === "/api/me/language")).toBe(true),

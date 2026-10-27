@@ -2,7 +2,17 @@ export default {
   title: "Campanhas",
   intro:
     "Os projetos que o Mestre cuida. Criar uma campanha abre a sessão zero: o Mestre prepara o repositório e o Grão-Mestre analisa o projeto.",
-  empty: "Nenhuma campanha sua ainda.",
+  empty: {
+    title: "Você ainda não tem campanhas.",
+    create: "Crie a primeira para poder falar com o Grão-Mestre.",
+    ask: "Peça ao Senhor da Guilda para dar acesso a uma campanha.",
+  },
+  open: "Abrir",
+  openNamed: "Abrir a campanha {{slug}}",
+  openWaiting: "Disponível quando a preparação terminar (agora: {{stage}}).",
+  openPreparing: "Disponível quando a preparação terminar.",
+  talk: "Conversar",
+  talkNamed: "Conversar com o Grão-Mestre de {{slug}}",
   state: { preparing: "em preparação", active: "ativo", paused: "pausado" },
   grandMasterState: {
     none: "sem Grão-Mestre ainda",

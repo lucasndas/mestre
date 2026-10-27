@@ -116,7 +116,7 @@ test("a workspace with three tables shows two blocks, and the ended one only wit
 });
 
 // CA-VWS-02: the server sends only what the user may see; the selector lists exactly that
-test("the selector lists only the workspaces the user may see, and creating leads to the session zero", async () => {
+test("the switch of the trail lists only the campaigns the user may see", async () => {
   fakeServer(
     base(view([]), {
       ...as("administrator", ["status", "create_workspace"], ["loja"]),
@@ -126,9 +126,10 @@ test("the selector lists only the workspaces the user may see, and creating lead
     }),
   );
   renderApp("/workspaces/loja");
-  const select = (await screen.findByLabelText("Campanha")) as HTMLSelectElement;
-  expect([...select.options].map((o) => o.textContent)).toEqual(["loja", "Criar campanha…"]);
-  expect(select.value).toBe("loja");
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  await user.click(await screen.findByRole("button", { name: /Campanha loja: trocar/ }));
+  const items = await screen.findAllByRole("menuitem");
+  expect(items.map((o) => o.textContent)).toEqual(["loja✓", "Ver todas"]);
 });
 
 // CA-VWS-03

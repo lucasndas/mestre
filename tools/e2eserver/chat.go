@@ -85,7 +85,7 @@ func startFakeChat(ctx context.Context, guildDB, filesDir string, mask func(stri
 			return it, nil
 		},
 		GrandMaster: func(_ context.Context, ws string) (characters.Character, bool, error) {
-			return gm, ws == chatWorkspace, nil
+			return gm, ws == chatWorkspace || ws == fakeWorkspace, nil
 		},
 		Character: func(context.Context, string) (characters.Character, error) { return gm, nil },
 		Pending:   func(context.Context, string) (int, error) { return 0, nil },

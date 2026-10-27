@@ -72,7 +72,7 @@ export function CanvasEdgeView(props: EdgeProps<CanvasEdge>) {
             data-deadlock={data?.deadlock ? "true" : undefined}
             title={title}
             style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)` }}
-            className={`pointer-events-none absolute rounded-field border px-2 py-0.5 text-sm font-semibold ${
+            className={`pointer-events-none absolute rounded-field border px-2 py-0.5 text-base font-semibold ${
               data?.deadlock
                 ? "border-danger bg-danger-wash text-danger"
                 : data?.current

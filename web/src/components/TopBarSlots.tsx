@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button as AriaButton, Dialog, DialogTrigger, Popover } from "react-aria-components";
 import { useTranslation } from "react-i18next";
@@ -23,10 +22,8 @@ function Badge({ count }: { count: number }) {
   );
 }
 
-/** The counter of the approvals that wait for the user, on every screen. */
-export function ApprovalsCounter() {
-  const { t } = useTranslation("approvals");
-  const { t: ts } = useTranslation("shell");
+/** The number of approvals that wait for the user, kept by the events of the channel; 0 for who does not decide. */
+export function useApprovalsCount(): number {
   const can = useCan("decide_approvals");
   const qc = useQueryClient();
   const { data } = useQuery({ ...approvalCountQuery, enabled: can });
@@ -36,19 +33,7 @@ export function ApprovalsCounter() {
         pending: (payload as ApprovalsSnapshot).pending,
       });
   });
-  if (!can) return null;
-  const n = data?.pending ?? 0;
-  return (
-    <Link
-      to="/aprovacoes"
-      search={{}}
-      aria-label={n > 0 ? t("counter.label", { count: n }) : t("counter.none")}
-      className="relative grid size-11 place-items-center rounded-full text-sm font-semibold hover:bg-accent-wash"
-    >
-      <span aria-hidden="true">{ts("top.approvals")}</span>
-      <Badge count={n} />
-    </Link>
-  );
+  return can ? (data?.pending ?? 0) : 0;
 }
 
 function NoticeRow({ n, onOpen }: { n: NoticeView; onOpen: (n: NoticeView) => void }) {
@@ -83,7 +68,6 @@ function NoticeRow({ n, onOpen }: { n: NoticeView; onOpen: (n: NoticeView) => vo
 /** The bell: what the Telegram would say, with where it is and a link, read per user. */
 export function NoticesBell() {
   const { t } = useTranslation("approvals");
-  const { t: ts } = useTranslation("shell");
   const me = useMe();
   const qc = useQueryClient();
   const goto = useGoto();
@@ -106,7 +90,20 @@ export function NoticesBell() {
         data-user={me.user.id}
         className="relative grid size-11 place-items-center rounded-full text-sm font-semibold hover:bg-accent-wash"
       >
-        <span aria-hidden="true">{ts("top.notices")}</span>
+        <svg
+          viewBox="0 0 24 24"
+          width="22"
+          height="22"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" />
+          <path d="M10 21h4" />
+        </svg>
         <Badge count={unread} />
       </AriaButton>
       <Popover
