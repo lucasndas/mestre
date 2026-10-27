@@ -132,6 +132,16 @@ func sweepOnce(target LUID, keep []uint32, only func(uint32) bool, terminate fun
 		if err != nil {
 			continue // exited meanwhile, or not ours to open
 		}
+		// A process that already ended stays in the snapshot, and its handle opens,
+		// for as long as anyone holds a handle to it (its parent, until it waits for
+		// it). It is not a process to end: counting it again in the next round would
+		// count one process twice, and a process nobody reaps would never let the
+		// rounds find nothing. A process that is only ending is not signalled yet, and
+		// is still waited for below.
+		if ev, err := windows.WaitForSingleObject(h, 0); err == nil && ev == windows.WAIT_OBJECT_0 {
+			_ = windows.CloseHandle(h)
+			continue
+		}
 		var t windows.Token
 		if err := windows.OpenProcessToken(h, windows.TOKEN_QUERY, &t); err != nil {
 			_ = windows.CloseHandle(h)

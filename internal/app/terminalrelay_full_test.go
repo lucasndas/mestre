@@ -48,15 +48,25 @@ func TestTheReplayTheCitadelRelaysIsTheBufferOfTheMachineByteForByte(t *testing.
 	}
 	say(1)
 
-	// equal waits for the browser to hold the whole buffer of the Tower and compares
+	// equal waits for the browser to hold the whole buffer of the Tower and compares.
+	// The terminal may still print (a redraw after the turn) while it waits, so the
+	// buffer of the machine is read after the bytes of the browser: they can only be
+	// a prefix of it, never ahead, and the same bytes repeated or out of order are
+	// not a prefix.
 	equal := func(name string, b *collector) {
 		t.Helper()
-		want := []byte(x.towerOutput(t, c.ID))
-		b.until(t, func() bool { return len(b.data) >= len(want) })
-		b.mu.Lock()
-		defer b.mu.Unlock()
-		if !bytes.Equal(b.data, want) || b.first != 0 || b.jumps != 0 {
-			t.Fatalf("%s: the browser got %d bytes from %d with %d jumps; the buffer of the machine has %d", name, len(b.data), b.first, b.jumps, len(want))
+		for {
+			b.mu.Lock()
+			got, first, jumps := append([]byte(nil), b.data...), b.first, b.jumps
+			b.mu.Unlock()
+			want := []byte(x.towerOutput(t, c.ID))
+			if bytes.Equal(got, want) && first == 0 && jumps == 0 {
+				return
+			}
+			if len(got) >= len(want) || !bytes.HasPrefix(want, got) || first != 0 || jumps != 0 {
+				t.Fatalf("%s: the browser got %d bytes from %d with %d jumps; the buffer of the machine has %d", name, len(got), first, jumps, len(want))
+			}
+			b.until(t, func() bool { return len(b.data) > len(got) })
 		}
 	}
 
