@@ -36,12 +36,19 @@ func seedRequest(ctx context.Context, guildDB, workspacesDir string) error {
 	if err := seedManage(ctx, db, workspacesDir, now); err != nil {
 		return err
 	}
+	return insertCostRequest(ctx, db, now)
+}
+
+// insertCostRequest leaves a request of extra cost waiting for the people the way the chain does
+// (the request, and the question that asks the PIN). The conversation double also raises one when
+// the user asks for it (chat.go), so the journey test has a request of its own to approve.
+func insertCostRequest(ctx context.Context, db *store.DB, now time.Time) error {
 	r := chain.Request{
 		Workspace: "loja", Type: classes.RequestExtraCost, State: chain.Open, Level: chain.Level{Kind: chain.LevelPeople},
 		About: "mais US$ 20 de uso este mês", Risk: classes.RiskResult{Risk: classes.RiskMedium, Rule: "custo extra", TableVersion: 1},
 		CreatedAt: now, Deadline: now.Add(24 * time.Hour),
 	}
-	r, err = (&chain.Store{DB: db}).Insert(ctx, r)
+	r, err := (&chain.Store{DB: db}).Insert(ctx, r)
 	if err != nil {
 		return err
 	}

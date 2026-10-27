@@ -13,6 +13,12 @@ export default defineConfig({
   reporter: [["list"], ["./e2e/budget-reporter.ts"]],
   // The Guild CA is not in any trust store of the machine.
   use: { browserName: "chromium", ignoreHTTPSErrors: true, locale: "pt-BR" },
+  // One Guild serves the whole run and only its first test can found it (the setup code is used
+  // once): the journey walks the Guild the smoke left, so it runs after the smoke.
+  projects: [
+    { name: "smoke", testMatch: "smoke.spec.ts" },
+    { name: "journey", testMatch: "journey.spec.ts", dependencies: ["smoke"] },
+  ],
   webServer: {
     command: "go run ./tools/e2eserver",
     cwd: "..",

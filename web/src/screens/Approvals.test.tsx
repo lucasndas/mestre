@@ -363,9 +363,13 @@ test("the counter of the top bar shows what waits and follows the events; an Obs
 test("an Observer has no counter, no link and no central", async () => {
   fakeServer({ ...base([]), "GET /api/me": () => ({ body: OBSERVER }) });
   renderApp("/");
-  await screen.findByRole("heading", { name: "Sua Guilda está pronta" });
+  await screen.findByRole("heading", { name: "Início" });
   expect(screen.queryByRole("link", { name: /Aprovações/ })).toBeNull();
-  expect(openSocket().subscribed()).toEqual(["notices:u1", "chat:u1"]);
+  expect(
+    openSocket()
+      .subscribed()
+      .filter((t) => t.startsWith("approvals:")),
+  ).toEqual([]);
 });
 
 const notice = (id: number, extra: Partial<NoticeView> = {}): NoticeView => ({

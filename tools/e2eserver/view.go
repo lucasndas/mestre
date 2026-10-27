@@ -39,6 +39,10 @@ func (f *fakeView) View(_ context.Context, ws string) (panel.ViewData, error) {
 			Waits:        []panel.ViewWait{},
 			Criteria:     &panel.ViewCriteria{Total: 3, Proven: 2, Verified: 1},
 			LastDelivery: &delivered,
+		}, {
+			// a table closed with its PR merged: the "Entregas recentes" of the Home
+			ID: "mesa-entregue", Epic: 5, EpicTitle: "Página de contato", Branch: "epico/5-contato", State: "closed",
+			Party: []panel.ViewMachine{}, Waits: []panel.ViewWait{}, LastDelivery: &delivered, PR: 10,
 		}},
 		Layout: []panel.CanvasItem{},
 	}

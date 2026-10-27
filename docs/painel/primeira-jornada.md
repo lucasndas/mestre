@@ -31,6 +31,7 @@ Fazer o painel contar uma história só: quem acaba de instalar sabe o que fazer
   3. **Criar a primeira campanha:** ao menos uma campanha (`GET /api/workspaces`); leva a Campanhas, com o formulário aberto. Desligado até o passo 1.
   4. **Fazer o primeiro pedido:** ao menos uma mensagem do usuário na conversa de uma campanha (`GET /api/chat/{workspace}`); abre a conversa. Desligado até os passos 2 e 3.
   5. **Parear o Telegram (opcional):** o próprio usuário com `telegram` verdadeiro (`GET /api/users`); gera o código de pareamento ([parear o Telegram](../operacao/parear-telegram.md)). Não conta para o fim do cartão: depois dos quatro, o cartão vira uma linha com "Agora não", que guarda a escolha **só neste navegador**.
+- Como o painel decide cada coisa: o cartão aparece para quem tem as capacidades `github_apps`, `account_profiles` e `manage_users` (hoje só o Senhor da Guilda; o servidor recusa as leituras dos outros de qualquer forma) e só depois que as quatro leituras responderam, para não piscar em quem já terminou. "Apps criados" são os dois Apps fixos (`grand_master` e `mestre`) no estado `pronto`; o passo 4 olha a conversa de cada campanha por uma mensagem `from: user`. O botão do passo 3 leva a Campanhas com `#criar` e o do passo 5 leva a Usuários, onde o código de pareamento é gerado com o PIN.
 - Um passo desligado diz o motivo ("Faça antes o passo 1"), nunca fica mudo. O passo atual é o primeiro pendente e leva o botão principal.
 
 ### Início no dia a dia
@@ -47,7 +48,7 @@ Da esquerda para a direita e de cima para baixo, sempre nesta ordem; uma parte s
 ### O que o servidor ainda não dá (nenhuma rota nova nesta rodada)
 
 - **Mesas de todas as campanhas:** não há uma lista só; o Início lê o `/view` de cada campanha que o usuário vê. É o suficiente para poucas campanhas; um agregador só entra se isso pesar, e aí é decisão do Senhor da Guilda (escopo do MVP).
-- **Entregas recentes:** vêm das mesas `closed` que o `/view` já devolve (o filtro "mostrar encerradas"); não há histórico além delas.
+- **Entregas recentes:** (só as `closed` com `pr` maior que zero, as cinco mais novas) vêm das mesas `closed` que o `/view` já devolve (o filtro "mostrar encerradas"); não há histórico além delas.
 - **Texto legível das aprovações:** o servidor devolve o texto do Telegram; o painel monta o cartão pelo `type`, pelo `risk` e pelo `about` e deixa o texto cru em "Ver detalhes técnicos" ([conversa e aprovações](conversa-e-aprovacoes.md#central-de-aprovações)).
 
 ## Regras e erros
