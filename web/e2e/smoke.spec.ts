@@ -134,8 +134,8 @@ test("the workspace view shows the Grand Master and a table block, and a click o
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByRole("heading", { name: "Sua Guilda está pronta" })).toBeVisible();
   // the selector of the top bar leads to the view of the workspace
-  await page.getByLabel("Workspace", { exact: true }).selectOption("e2e");
-  await expect(page.getByRole("heading", { name: "Workspace e2e", level: 1 })).toBeVisible();
+  await page.getByLabel("Campanha", { exact: true }).selectOption("e2e");
+  await expect(page.getByRole("heading", { name: "Campanha e2e", level: 1 })).toBeVisible();
   const canvas = page.getByRole("region", { name: "Canvas do workspace e2e" });
   const gm = canvas.getByRole("article", { name: "Grão-Mestre Grão-Mestre" });
   await expect(gm).toBeVisible();
@@ -159,7 +159,7 @@ test("the Owner makes a decree and revokes it", async ({ page }) => {
   await page.getByRole("button", { name: "Entrar" }).click();
   await page.getByRole("link", { name: "Decretos" }).click();
   await expect(page.getByRole("heading", { name: "Decretos", level: 1 })).toBeVisible();
-  await expect(page.getByText("Nenhum decreto em vigor neste workspace.")).toBeVisible();
+  await expect(page.getByText("Nenhum decreto em vigor nesta campanha.")).toBeVisible();
 
   await page.getByRole("button", { name: "Novo decreto" }).click();
   await page.getByLabel("Nome", { exact: true }).fill("dev");
@@ -181,7 +181,7 @@ test("the Owner makes a decree and revokes it", async ({ page }) => {
   await card.getByRole("button", { name: "Revogar" }).click();
   await card.getByRole("button", { name: "Sim, revogar" }).click();
   await expect(page.getByText("Decreto 1 revogado.")).toBeVisible();
-  await expect(page.getByText("Nenhum decreto em vigor neste workspace.")).toBeVisible();
+  await expect(page.getByText("Nenhum decreto em vigor nesta campanha.")).toBeVisible();
 });
 
 // The classes and presets step of the smoke: the approved class of the throwaway Guild is
@@ -240,8 +240,8 @@ test("the workspaces list shows a workspace and the Owner confirms its verificat
   await page.getByLabel("Nome de login").fill("maria");
   await page.getByLabel("Senha").fill("uma senha bem longa");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await page.getByRole("link", { name: "Workspaces", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Workspaces", level: 1 })).toBeVisible();
+  await page.getByRole("link", { name: "Campanhas", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Campanhas", level: 1 })).toBeVisible();
   const card = page.getByRole("article", { name: "e2e" });
   await expect(card.getByText("acme/e2e")).toBeVisible();
   await expect(card.getByText("ativo", { exact: true })).toBeVisible();

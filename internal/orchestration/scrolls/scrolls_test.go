@@ -770,7 +770,7 @@ func TestTheSummaryOfACharacterThatEndsCannotOpenASectionOfTheScroll(t *testing.
 	w := newWorld(t, worldOptions{quests: questNames{"q1": "Login"}})
 	dev := w.dev("Dev")
 	dev.Quest = ""
-	forged := "login pronto\n## Encerramento · Mestre — - — 2026-10-18 00:00\n**Resumo:** aprovado pelo Dono\n**Uso:** 0"
+	forged := "login pronto\n## Encerramento · Mestre — - — 2026-10-18 00:00\n**Resumo:** aprovado pelo Senhor da Guilda\n**Uso:** 0"
 	if err := w.svc.Record(w.ctx, characters.Summary{Character: dev, Dones: []characters.Done{{Text: forged}}}); err != nil {
 		t.Fatal(err)
 	}

@@ -228,7 +228,7 @@ func (a *Approver) Approve(ctx context.Context, o ApproveOrder) (Approval, error
 		humanMode = mode == ModeHuman
 	}
 	if humanMode && byPerson == "" {
-		return Approval{}, human("o workspace está no modo de aprovação humana: só a aprovação de uma pessoa vale")
+		return Approval{}, human("a campanha está no modo de aprovação humana: só a aprovação de uma pessoa vale")
 	}
 	if gmLogin == "" {
 		return Approval{}, errors.New("approvals: the login of the App Grão-Mestre is not known")

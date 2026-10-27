@@ -47,7 +47,7 @@ func (s *Service) StartTransfer(ctx context.Context, by User, toID, pinRequest s
 			me.ID, toID, ms(now), ms(now.Add(TransferTTL))); err != nil {
 			return err
 		}
-		told = fmt.Sprintf("%s quer passar o posto de Dono a você. Aceite com o seu PIN em até 24 horas.", me.Name)
+		told = fmt.Sprintf("%s quer passar o posto de Senhor da Guilda a você. Aceite com o seu PIN em até 24 horas.", me.Name)
 		return nil
 	})
 	if err != nil {
@@ -144,8 +144,8 @@ func (s *Service) AcceptTransfer(ctx context.Context, by User, pinRequest string
 	s.sessionsEnded(ctx, by.ID)
 	s.levelsChanged(ctx) // the Owner of the decrees is another now
 	if s.o.Alerts != nil {
-		s.o.Alerts.Tell(ctx, from, fmt.Sprintf("%s aceitou o posto de Dono. Você agora é Administrador.", newName))
-		s.o.Alerts.Tell(ctx, by.ID, "Você é o Dono.")
+		s.o.Alerts.Tell(ctx, from, fmt.Sprintf("%s aceitou o posto de Senhor da Guilda. Você agora é Administrador.", newName))
+		s.o.Alerts.Tell(ctx, by.ID, "Você é o Senhor da Guilda.")
 	}
 	return nil
 }

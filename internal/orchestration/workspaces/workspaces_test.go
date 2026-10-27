@@ -80,7 +80,7 @@ func TestSlugComesFromTheRepositoryAndTheSameRepositoryIsRefused(t *testing.T) {
 		{Repo: "Lucas/meu_app"},
 	} {
 		_, err := r.svc.Create(r.ctx, req)
-		if !errors.Is(err, workspaces.ErrRepoTaken) || err.Error() != "repositório já é o workspace meu-app" {
+		if !errors.Is(err, workspaces.ErrRepoTaken) || err.Error() != "repositório já é a campanha meu-app" {
 			t.Fatalf("Create(%+v) = %v; want the repository already is the workspace meu-app", req, err)
 		}
 	}
@@ -164,7 +164,7 @@ func TestStagesRunInOrderAndOnlyThenTheWorkspaceIsActive(t *testing.T) {
 	if got := log.list(); !slices.Equal(got, []workspaces.Stage{workspaces.StageApps, workspaces.StageFiles, workspaces.StageAnalysis, workspaces.StageApprovalTest}) {
 		t.Fatalf("stages other than the mirror ran as %v", got)
 	}
-	if want := []string{"preparing", "files", "workspace meu-app não está ativo: está em preparação, etapa files"}; !slices.Equal(seenAtStage, want) {
+	if want := []string{"preparing", "files", "campanha meu-app não está ativa: está em preparação, etapa files"}; !slices.Equal(seenAtStage, want) {
 		t.Fatalf("at the files stage: %q; want %q", seenAtStage, want)
 	}
 	w = r.get(w.Slug)

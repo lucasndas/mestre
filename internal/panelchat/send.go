@@ -216,7 +216,7 @@ func (s *Service) begin(ctx context.Context, u users.User, in panel.ChatDraftInp
 		return nil, err
 	}
 	if !ok {
-		return nil, panel.Err(panel.CodeChatNoGrandMaster, "o workspace não tem Grão-Mestre agora", nil)
+		return nil, panel.Err(panel.CodeChatNoGrandMaster, "a campanha não tem Grão-Mestre agora", nil)
 	}
 	var table string
 	if in.Quote != "" {
@@ -361,7 +361,7 @@ func (d *draft) Send(ctx context.Context) (panel.ChatSent, error) {
 	it, err := d.s.enqueue(ctx, n)
 	switch {
 	case errors.Is(err, ErrNoGrandMaster):
-		return panel.ChatSent{}, panel.Err(panel.CodeChatNoGrandMaster, "o workspace não tem Grão-Mestre agora", nil)
+		return panel.ChatSent{}, panel.Err(panel.CodeChatNoGrandMaster, "a campanha não tem Grão-Mestre agora", nil)
 	case err != nil:
 		return panel.ChatSent{}, err
 	}

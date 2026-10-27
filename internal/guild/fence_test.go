@@ -452,7 +452,7 @@ func TestOnlyTheAnswerOfTheExactQuestionPromotes(t *testing.T) {
 // Part of CA-CIDADELA-05 (fecha no M7; falta: o diagnóstico e os botões do
 // Telegram reduzido).
 // The Owner hears of the Citadel away after 15 min and every hour after, and
-// not again once it is back (docs/guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono).
+// not again once it is back (docs/guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-senhor-da-guilda).
 func TestTheOwnerIsWarnedOfTheCitadelAwayAfterFifteenMinutesAndEveryHour(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {

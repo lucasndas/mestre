@@ -424,7 +424,7 @@ test("the usage shows the tables with the gaps as no data, and the limit that is
   const chars = screen.getByRole("table", { name: "Consumo por personagem" });
   expect(within(chars).getAllByText("sem dado").length).toBe(2);
   expect(screen.queryByRole("heading", { name: "Por conta" })).toBeNull();
-  const bar = screen.getByRole("progressbar", { name: "Workspace loja" });
+  const bar = screen.getByRole("progressbar", { name: "Campanha loja" });
   expect(bar.getAttribute("value")).toBe("25");
   await waitFor(() => expect(screen.getByText(/Falta: US\$\s?7,50/)).toBeTruthy());
 });

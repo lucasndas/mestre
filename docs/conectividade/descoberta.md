@@ -79,7 +79,7 @@ Uma instalação nova acha a Guilda sozinha na rede local para pedir a entrada (
 
 - A máquina usa o endereço configurado à mão (`guild.endereco`, nome ou IP e porta), informado no instalador (`mestre install --join <endereço>`) ou na configuração.
 - Broadcast e mDNS não atravessam redes; valem só o endereço configurado, o cache e os endereços de `guild.config`. Depois de uma troca de Cidadela, a máquina tenta os endereços das máquinas recebidos em `guild.config`.
-- A checagem de identidade é a mesma. Para o navegador abrir o painel por um nome nesse caminho, o Dono o configura como nome extra da Guilda (sob `home.arpa` ou `.internal`), que vai só no certificado da Cidadela em exercício, junto de `mestre.local` ([nomes dos certificados](../arquitetura/seguranca.md#nomes-dos-certificados)); pelo IP privado, nada a configurar.
+- A checagem de identidade é a mesma. Para o navegador abrir o painel por um nome nesse caminho, o Senhor da Guilda o configura como nome extra da Guilda (sob `home.arpa` ou `.internal`), que vai só no certificado da Cidadela em exercício, junto de `mestre.local` ([nomes dos certificados](../arquitetura/seguranca.md#nomes-dos-certificados)); pelo IP privado, nada a configurar.
 - Uma máquina fora da rede local não é alcançada por nenhuma outra, então **não pode ser promovida** a Cidadela ([promoção](../guilda/cidadela-e-torres.md#promoção)).
 - Nenhuma porta é exposta diretamente na internet: o caminho até a Cidadela é responsabilidade da rede do usuário.
 

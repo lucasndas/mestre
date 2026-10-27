@@ -607,7 +607,7 @@ func get(h http.Handler, target string) *httptest.ResponseRecorder {
 }
 
 // Part of CA-GH-APPS-04 (the login of the Administrator is the panel's, M6): who
-// is not the Owner gets "exige Dono" and no form is built.
+// is not the Owner gets "exige Senhor da Guilda" and no form is built.
 func TestTheLinkPageRefusesWhoIsNotTheOwnerAndBuildsNoForm(t *testing.T) {
 	t.Parallel()
 	r := newCreation(t)
@@ -616,7 +616,7 @@ func TestTheLinkPageRefusesWhoIsNotTheOwnerAndBuildsNoForm(t *testing.T) {
 	path := strings.TrimPrefix(link.URL, "https://mestre.local:8443")
 	admin := users.User{ID: "adm", Level: users.Administrator, State: users.Active}
 	rec := get(r.web(admin, true), path)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "Exige Dono") || strings.Contains(rec.Body.String(), "<form") {
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "Exige Senhor da Guilda") || strings.Contains(rec.Body.String(), "<form") {
 		t.Errorf("administrator: %d %q", rec.Code, rec.Body.String())
 	}
 	if rec := get(r.web(users.User{}, false), path); rec.Code != http.StatusUnauthorized || strings.Contains(rec.Body.String(), "<form") {

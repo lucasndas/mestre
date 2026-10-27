@@ -4,7 +4,7 @@ import type pt from "../pt-BR/secrets";
 const secrets: Widen<typeof pt> = {
   title: "Secrets",
   intro:
-    "What the vault keeps: name, type, short fingerprint, dates and metadata. No value is ever shown again, not even to the Owner: you can only replace or delete, with your PIN.",
+    "What the vault keeps: name, type, short fingerprint, dates and metadata. No value is ever shown again, not even to the Guildmaster: you can only replace or delete, with your PIN.",
   loading: "Loading the secrets…",
   empty: "The vault has no secrets yet.",
   types: {

@@ -38,7 +38,7 @@ export function Workspaces() {
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
       <p className="mb-6 max-w-2xl text-sm text-muted">
-        <Term name="Workspace" />
+        <Term name="Campanha" />
       </p>
       <div className="flex max-w-3xl flex-col gap-4">
         {error ? <Alert>{refusalText(t, te, error)}</Alert> : null}

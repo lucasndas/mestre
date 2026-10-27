@@ -243,7 +243,7 @@ func (s *Service) chooseSlug(ctx context.Context, repo Repo, given string) (stri
 		return "", &SlugError{Slug: slug, Reason: "fora do formato (2 a 32 caracteres de a-z, 0-9 e -, sem - no começo nem no fim)", Suggestion: SuggestSlug(Slugify(slug), taken), kind: ErrInvalidSlug}
 	}
 	if taken(slug) {
-		return "", &SlugError{Slug: slug, Reason: "já é de outro workspace", Suggestion: SuggestSlug(slug, taken), kind: ErrSlugTaken}
+		return "", &SlugError{Slug: slug, Reason: "já é de outra campanha", Suggestion: SuggestSlug(slug, taken), kind: ErrSlugTaken}
 	}
 	return slug, nil
 }

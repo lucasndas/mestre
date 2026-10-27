@@ -34,8 +34,8 @@ func (c *LockChannel) Bind(bot *Bot) {
 // while locked, since it is how it ends.
 func (c *LockChannel) Commands() []Command {
 	return []Command{
-		{Name: "travar", Description: "trava o Mestre: nada é executado até o Dono destravar", Capability: users.Lock, Run: c.lock},
-		{Name: "destravar", Description: "destrava o Mestre (só o Dono, com o PIN)", Capability: users.Unlock, Query: true, Run: c.unlock},
+		{Name: "travar", Description: "trava o Mestre: nada é executado até o Senhor da Guilda destravar", Capability: users.Lock, Run: c.lock},
+		{Name: "destravar", Description: "destrava o Mestre (só o Senhor da Guilda, com o PIN)", Capability: users.Unlock, Query: true, Run: c.unlock},
 	}
 }
 
@@ -47,7 +47,7 @@ func (c *LockChannel) lock(ctx context.Context, call Call) (string, error) {
 		return "O Mestre já está travado.", nil
 	}
 	_, err := c.bot.Send(ctx, Out{ChatID: call.ChatID, UserID: call.User.ID, Origin: "motor",
-		Text:    "Travar o Mestre? Os decretos ficam suspensos, toda ferramenta é negada, a caixa de entrada para de entregar, nada é feito no GitHub e missões, rituais e recrutamentos pausam. Os terminais continuam abertos. Só o Dono destrava, com o PIN.",
+		Text:    "Travar o Mestre? Os decretos ficam suspensos, toda ferramenta é negada, a caixa de entrada para de entregar, nada é feito no GitHub e missões, rituais e recrutamentos pausam. Os terminais continuam abertos. Só o Senhor da Guilda destrava, com o PIN.",
 		Buttons: [][]Button{{{Text: "Confirmar travamento", Action: LockAction, Capability: users.Lock}}}})
 	return "", err
 }

@@ -4,11 +4,11 @@
 export default {
   title: "Aprovações",
   intro:
-    "Os pedidos que esperam por uma decisão sua, de todos os workspaces em que você atua. Quem responde primeiro decide.",
+    "Os pedidos que esperam por uma decisão sua, de todas as campanhas em que você atua. Quem responde primeiro decide.",
   tabs: { label: "Seções de aprovações", pending: "Pendentes", history: "Histórico" },
   filters: {
     label: "Filtros",
-    workspace: "Workspace",
+    workspace: "Campanha",
     table: "Mesa",
     type: "Tipo",
     all: "Todos",
@@ -47,7 +47,7 @@ export default {
     ponto_de_missao: "Ponto de missão",
     custo_extra: "Custo extra",
     configuracao_repositorio: "Configuração do repositório",
-    classe_workspace: "Classe do workspace",
+    classe_workspace: "Classe da campanha",
     acao_destrutiva: "Ação destrutiva",
     proposta_agents_md: "Proposta de AGENTS.md",
     ativacao_operador: "Ativação do Operador",
@@ -80,7 +80,7 @@ export default {
     questionHint: "O pedido espera a resposta, e o prazo final das pessoas continua correndo.",
     scope: "O que a delegação cobre",
     scopeText:
-      "Pedidos do tipo {{type}} no workspace {{workspace}}, mesa {{table}}, por até {{days}} dias. Quem decide passa a ser o Grão-Mestre; você pode revogar quando quiser.",
+      "Pedidos do tipo {{type}} na campanha {{workspace}}, mesa {{table}}, por até {{days}} dias. Quem decide passa a ser o Grão-Mestre; você pode revogar quando quiser.",
     scopeNoTable: "sem mesa",
   },
   confirm: "Confirmar",

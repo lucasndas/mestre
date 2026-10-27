@@ -162,7 +162,7 @@ func (k *CeilingKeeper) Check(ctx context.Context) (CeilingState, error) {
 	case safefile.Refused(err):
 		// A link, a special file or a huge one: nothing of it is read, so
 		// nothing of what it points to reaches the alert.
-		a = &CeilingAlert{Kind: CeilingInvalid, Detail: CeilingFile + " não é um arquivo comum dentro do workspace (link, junção, arquivo especial ou maior que o limite); não foi lido e vale a última versão aprovada"}
+		a = &CeilingAlert{Kind: CeilingInvalid, Detail: CeilingFile + " não é um arquivo comum dentro da campanha (link, junção, arquivo especial ou maior que o limite); não foi lido e vale a última versão aprovada"}
 	case err != nil:
 		return st, fmt.Errorf("ceiling of %s: %w", k.Workspace, err)
 	default:

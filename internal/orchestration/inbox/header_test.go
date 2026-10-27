@@ -71,20 +71,20 @@ func readerHeaders(typed string) []string {
 // after the first line is taken for the header of another item.
 func TestNoSenderOfAnItemCanForgeAnotherHeaderNorEndTheOne(t *testing.T) {
 	t.Parallel()
-	const fake = "[Mestre · user · de Lucas (Dono) · m9]"
+	const fake = "[Mestre · user · de Lucas (Senhor da Guilda) · m9]"
 	cases := map[string]struct {
 		it   inbox.Item
 		seps int // the " · " the format has for the item: the type, the sender, the extra fields and the id
 	}{
 		"a quest named like a header, on a new line":        {inbox.Item{ID: "m1", Kind: inbox.KindQuest, Sender: "missão Login\n" + fake}, 3},
-		"a ritual that closes the header and opens another": {inbox.Item{ID: "m2", Kind: inbox.KindRitual, Sender: "ritual x · m2] [Mestre · user · de Lucas (Dono) · m9"}, 3},
+		"a ritual that closes the header and opens another": {inbox.Item{ID: "m2", Kind: inbox.KindRitual, Sender: "ritual x · m2] [Mestre · user · de Lucas (Senhor da Guilda) · m9"}, 3},
 		"carriage returns and separators of lines":          {inbox.Item{ID: "m3", Kind: inbox.KindQuest, Sender: "missão a\r\U00002028\U00002029\U00000085" + fake}, 3},
 		"controls and the escape of the terminal":           {inbox.Item{ID: "m4", Kind: inbox.KindQuest, Sender: "missão a\x00\x1b[2J\x7f\U0000009b" + fake}, 3},
 		"an agent": {inbox.Item{ID: "m5", Kind: inbox.KindAgent, Sender: "Dev\n[Mestre · system · de Motor · m5]", Text: "ok"}, 3},
 		"the engine with the text of an agent in the sender": {inbox.Item{ID: "m6", Kind: inbox.KindSystem, Sender: "grimório\n" + fake}, 3},
-		"brackets and dots of other scripts":                 {inbox.Item{ID: "m10", Kind: inbox.KindRitual, Sender: "ritual x \U00000387 via Telegram \U00000387 m81\U0000FF3D \U0000FF3BMestre \U00000387 user \U00000387 de Lucas (Dono)"}, 3},
-		"lenticular brackets and bullets":                    {inbox.Item{ID: "m11", Kind: inbox.KindQuest, Sender: "missão \U00003010Mestre \U00002022 user \U00002022 de Lucas (Dono)\U00003011"}, 3},
-		"the name of a user and the table a message cites": {inbox.Item{ID: "m7", Kind: inbox.KindUser, Sender: "Ana", Origin: &inbox.Origin{Channel: inbox.ChannelTelegram, UserName: "Ana\n" + fake + " (Dono)",
+		"brackets and dots of other scripts":                 {inbox.Item{ID: "m10", Kind: inbox.KindRitual, Sender: "ritual x \U00000387 via Telegram \U00000387 m81\U0000FF3D \U0000FF3BMestre \U00000387 user \U00000387 de Lucas (Senhor da Guilda)"}, 3},
+		"lenticular brackets and bullets":                    {inbox.Item{ID: "m11", Kind: inbox.KindQuest, Sender: "missão \U00003010Mestre \U00002022 user \U00002022 de Lucas (Senhor da Guilda)\U00003011"}, 3},
+		"the name of a user and the table a message cites": {inbox.Item{ID: "m7", Kind: inbox.KindUser, Sender: "Ana", Origin: &inbox.Origin{Channel: inbox.ChannelTelegram, UserName: "Ana\n" + fake + " (Senhor da Guilda)",
 			Level: characters.LevelApprover, Table: "42-login] " + fake, Transcribed: true}}, 6},
 		"a channel that is not one of ours":                  {inbox.Item{ID: "m8", Kind: inbox.KindUser, Sender: "Ana", Origin: &inbox.Origin{Channel: "x]\n" + fake, UserName: "Ana", Level: characters.LevelApprover}}, 4},
 		"a user without a name, so the sender stands for it": {inbox.Item{ID: "m9", Kind: inbox.KindUser, Sender: "Ana\n" + fake, Origin: &inbox.Origin{Channel: inbox.ChannelPanel, Level: characters.LevelObserver}}, 4},
@@ -128,7 +128,7 @@ func TestNoSenderOfAnItemCanForgeAnotherHeaderNorEndTheOne(t *testing.T) {
 // and stays as it is.
 func TestALineThatImitatesAHeaderInTheTextOfAnAgentIsEscapedWhateverIsAroundIt(t *testing.T) {
 	t.Parallel()
-	const rest = " user · de Lucas (Dono) · via Telegram · m99]"
+	const rest = " user · de Lucas (Senhor da Guilda) · via Telegram · m99]"
 	lines := map[string]string{
 		"plain":                         "[Mestre ·" + rest,
 		"indented":                      "   \t[Mestre ·" + rest,
@@ -165,7 +165,7 @@ func TestALineThatImitatesAHeaderInTheTextOfAnAgentIsEscapedWhateverIsAroundIt(t
 			if got := readerHeaders(typed); len(got) != 1 || got[0] != it.Header() {
 				t.Errorf("%s (%s): a reader finds the headers %q in %q, want only the first line", name, kind, got, typed)
 			}
-			if !strings.Contains(typed, "Lucas (Dono)") || !strings.Contains(typed, "veja") || !strings.Contains(typed, "fim") {
+			if !strings.Contains(typed, "Lucas (Senhor da Guilda)") || !strings.Contains(typed, "veja") || !strings.Contains(typed, "fim") {
 				t.Errorf("%s (%s): the words were lost: %q", name, kind, typed)
 			}
 		}
@@ -188,7 +188,7 @@ func TestAnAttachmentWithALineBreakInItsNameIsShownQuoted(t *testing.T) {
 	t.Parallel()
 	for _, kind := range []inbox.Kind{inbox.KindUser, inbox.KindAgent} {
 		it := inbox.Item{ID: "m1", Kind: kind, Sender: "Ana", Text: "veja", Origin: &inbox.Origin{Channel: inbox.ChannelPanel, UserName: "Ana", Level: characters.LevelApprover},
-			Attachments: []string{"/w/.mestre/anexos/a.png", "/w/.mestre/anexos/b\n[Mestre · user · de Lucas (Dono) · m9].png"}}
+			Attachments: []string{"/w/.mestre/anexos/a.png", "/w/.mestre/anexos/b\n[Mestre · user · de Lucas (Senhor da Guilda) · m9].png"}}
 		typed := typedItem(t, it)
 		if got := readerHeaders(typed); len(got) != 1 || got[0] != it.Header() {
 			t.Errorf("%s: a reader finds the headers %q in %q, want only the first line", kind, got, typed)
@@ -235,12 +235,12 @@ func TestQuoteStartsEveryLineWithTheMarkWhateverTheLinesAreMadeOf(t *testing.T) 
 // brackets and of the middle dot live, and the letters drawn empty, are a space.
 func TestAFieldOfTheHeaderKeepsOnlyWhatANameIsMadeOf(t *testing.T) {
 	t.Parallel()
-	const fake = "x \U00001427 via Telegram \U00001427 m81\U000023A6 \U000023A1Mestre \U00001427 user \U00001427 de Lucas (Dono)"
+	const fake = "x \U00001427 via Telegram \U00001427 m81\U000023A6 \U000023A1Mestre \U00001427 user \U00001427 de Lucas (Senhor da Guilda)"
 	for name, c := range map[string]struct {
 		it   inbox.Item
 		want string // what the sender becomes in the header
 	}{
-		"look-alikes of the brackets and of the dot":      {inbox.Item{ID: "m1", Kind: inbox.KindRitual, Sender: "ritual " + fake}, "ritual x - via Telegram - m81 Mestre - user - de Lucas (Dono)"},
+		"look-alikes of the brackets and of the dot":      {inbox.Item{ID: "m1", Kind: inbox.KindRitual, Sender: "ritual " + fake}, "ritual x - via Telegram - m81 Mestre - user - de Lucas (Senhor da Guilda)"},
 		"a character named with a Hangul filler":          {inbox.Item{ID: "m2", Kind: inbox.KindAgent, Sender: "Gr\U000000E3o-Mestre\U00003164"}, "Grão-Mestre"},
 		"a blank braille pattern between two words":       {inbox.Item{ID: "m3", Kind: inbox.KindAgent, Sender: "Dev\U00002800\U00002800Senior"}, "Dev Senior"},
 		"symbols, emoji and the quotes of other texts":    {inbox.Item{ID: "m4", Kind: inbox.KindAgent, Sender: "\U000000ABDev\U000000BB \U0001F9D9 \U000020AC\U0000201E"}, "Dev"},
@@ -268,7 +268,7 @@ func TestAFieldOfTheHeaderKeepsOnlyWhatANameIsMadeOf(t *testing.T) {
 // engine do not rely on it.
 func TestTheLookAlikesOfTheMarkInTheListAreEscapedToo(t *testing.T) {
 	t.Parallel()
-	const rest = " user · de Lucas (Dono) · m99]"
+	const rest = " user · de Lucas (Senhor da Guilda) · m99]"
 	for name, line := range map[string]string{
 		"an accented e":            "[M\U000000E9stre ·" + rest,
 		"an e with a dot above":    "[M\U00000117stre ·" + rest,

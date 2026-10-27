@@ -124,9 +124,9 @@ type NotActiveError struct {
 
 func (e *NotActiveError) Error() string {
 	if e.State == StatePreparing {
-		return fmt.Sprintf("workspace %s não está ativo: está em preparação, etapa %s", e.Slug, e.Stage)
+		return fmt.Sprintf("campanha %s não está ativa: está em preparação, etapa %s", e.Slug, e.Stage)
 	}
-	return fmt.Sprintf("workspace %s não está ativo: estado %s", e.Slug, e.State)
+	return fmt.Sprintf("campanha %s não está ativa: estado %s", e.Slug, e.State)
 }
 
 // Is makes errors.Is(err, ErrNotActive) true.

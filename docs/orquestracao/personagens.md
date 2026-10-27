@@ -14,7 +14,7 @@ Todo personagem nasce de uma **ficha** (agente) e todo terminal simples de uma *
 
 | Quem | Pode criar | Onde |
 |---|---|---|
-| Motor | Grão-Mestre (na criação do workspace), Mestre da mesa (dentro do `table open` do Grão-Mestre, que fica como "criado por"), personagens de etapas de missão | conforme o caso |
+| Motor | Grão-Mestre (na criação da campanha), Mestre da mesa (dentro do `table open` do Grão-Mestre, que fica como "criado por"), personagens de etapas de missão | conforme o caso |
 | Grão-Mestre | só Mestres de mesa (pelo `table open` e na troca de ficha de um Mestre de mesa) e o Operador do PC (por pedido de ativação) ([grao-mestre.md](grao-mestre.md#regras-e-erros)) | numa mesa |
 | Mestre da mesa | personagens e terminais simples | só na própria mesa |
 | Usuário Administrador ou acima | personagens e terminais simples, pelo canvas | qualquer mesa permitida |
@@ -31,7 +31,7 @@ Personagens rodam em qualquer máquina da Guilda, inclusive na Cidadela. Quem es
 2. Com `--machine`, só essa máquina é considerada.
 3. Ordem de preferência entre as que atendem e têm vaga: máquina preferida da ficha → máquina onde a mesa já tem worktree → máquina com menos personagens ativos → ordem alfabética do id. A Cidadela não tem preferência própria.
 4. **Atendem, mas todas estão cheias:** o pedido espera vaga (`waiting_slot`, abaixo em [limites](#limites)).
-5. **Nenhuma atende aos requisitos:** a criação não roda em outra máquina; falha com `no_capable_machine` e uma explicação que lista cada máquina e o primeiro requisito não atendido (ex.: "windows-pc: perfil de conta `claude-trabalho` não existe"), e o Dono é avisado pelo Telegram e pelo painel.
+5. **Nenhuma atende aos requisitos:** a criação não roda em outra máquina; falha com `no_capable_machine` e uma explicação que lista cada máquina e o primeiro requisito não atendido (ex.: "windows-pc: perfil de conta `claude-trabalho` não existe"), e o Senhor da Guilda é avisado pelo Telegram e pelo painel.
 
 Antes de iniciar numa máquina nova para a mesa, o motor cria lá o worktree ([sincronização](mesas.md#worktree-por-máquina-e-sincronização)).
 
@@ -41,10 +41,10 @@ Antes de iniciar numa máquina nova para a mesa, o motor cria lá o worktree ([s
 |---|---|
 | Personagens simultâneos por máquina | 8 |
 | Por mesa | 6 |
-| Por workspace | 16 |
+| Por campanha | 16 |
 | Cópias simultâneas da mesma ficha | definido na ficha (padrão 3) |
 
-Grão-Mestre e Mestres de mesa não contam nem são barrados. Terminais simples contam. Ao atingir um limite (o da mesa, o do workspace, o da ficha, ou o por máquina em todas as que atendem), o pedido **espera vaga**: o motor registra uma espera `waiting_slot` ("aguardando vaga") com tempo limite ([esperas](esperas-e-caixa-de-entrada.md#esperas)), seja uma etapa de missão, seja um `recruit`/`spawn` direto (que responde na hora com "pendente", e o personagem criado chega depois pela caixa de entrada; [coordenação](../cli/coordenacao.md)). Abrindo vaga, a criação segue na ordem de chegada, e quem pediu (um `recruit`, `spawn` ou `--replace` pendente) recebe um item `system` com o nome, o id e a máquina do personagem criado e deixa de estar em `waiting`; estourado o tempo limite, o pedido falha com aviso a quem pediu, dizendo qual limite e quem ocupa. Nunca se derruba quem está trabalhando para abrir vaga.
+Grão-Mestre e Mestres de mesa não contam nem são barrados. Terminais simples contam. Ao atingir um limite (o da mesa, o da campanha, o da ficha, ou o por máquina em todas as que atendem), o pedido **espera vaga**: o motor registra uma espera `waiting_slot` ("aguardando vaga") com tempo limite ([esperas](esperas-e-caixa-de-entrada.md#esperas)), seja uma etapa de missão, seja um `recruit`/`spawn` direto (que responde na hora com "pendente", e o personagem criado chega depois pela caixa de entrada; [coordenação](../cli/coordenacao.md)). Abrindo vaga, a criação segue na ordem de chegada, e quem pediu (um `recruit`, `spawn` ou `--replace` pendente) recebe um item `system` com o nome, o id e a máquina do personagem criado e deixa de estar em `waiting`; estourado o tempo limite, o pedido falha com aviso a quem pediu, dizendo qual limite e quem ocupa. Nunca se derruba quem está trabalhando para abrir vaga.
 
 ### Ciclo de vida (definido na ficha)
 
@@ -112,7 +112,7 @@ stateDiagram-v2
 
 ### Registro de terminais
 
-Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no banco de máquina de cada uma, inclusive a Cidadela, ver [persistência](../arquitetura/persistencia.md)). `mestre-pty`, tamanho, buffer e log de cada terminal: [terminal](../arquitetura/terminal.md). Campos: `id` (ULID), nome, tipo (`character`|`terminal`), workspace, mesa, máquina, ficha, base, classe, perfil de conta, PID do `mestre-pty` com o horário de início, versão do `mestre-pty`, pasta, estado, motivo, fixado, ciclo (`ephemeral`|`persistent`), criado por (de onde sai o superior na [cadeia de aprovação](cadeia-de-aprovacao.md#superior)), missão e etapa de origem, id da sessão do provedor (para retomar), iniciado em, último sinal em, encerrado em. O histórico de saída do terminal vai para logs com rotação, não para o banco.
+Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no banco de máquina de cada uma, inclusive a Cidadela, ver [persistência](../arquitetura/persistencia.md)). `mestre-pty`, tamanho, buffer e log de cada terminal: [terminal](../arquitetura/terminal.md). Campos: `id` (ULID), nome, tipo (`character`|`terminal`), campanha, mesa, máquina, ficha, base, classe, perfil de conta, PID do `mestre-pty` com o horário de início, versão do `mestre-pty`, pasta, estado, motivo, fixado, ciclo (`ephemeral`|`persistent`), criado por (de onde sai o superior na [cadeia de aprovação](cadeia-de-aprovacao.md#superior)), missão e etapa de origem, id da sessão do provedor (para retomar), iniciado em, último sinal em, encerrado em. O histórico de saída do terminal vai para logs com rotação, não para o banco.
 
 ### Retomada após reinício
 
@@ -133,7 +133,7 @@ Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no
 
 ## Critérios de aceite
 
-- **CA-PERS-01** · *rápida* — **Dado** uma máquina Linux sem GPU e uma Windows com GPU na ficha da máquina, **quando** se recruta com ficha que exige GPU, **então** vai para a Windows; **quando** a Windows está desconectada, **então** a criação falha listando o motivo de cada máquina, nada roda na Linux e o Dono recebe o aviso.
+- **CA-PERS-01** · *rápida* — **Dado** uma máquina Linux sem GPU e uma Windows com GPU na ficha da máquina, **quando** se recruta com ficha que exige GPU, **então** vai para a Windows; **quando** a Windows está desconectada, **então** a criação falha listando o motivo de cada máquina, nada roda na Linux e o Senhor da Guilda recebe o aviso.
 - **CA-PERS-02** · *rápida* — **Dado** limite por mesa 2 atingido e relógio falso, **quando** uma etapa pede personagem e um `recruit` direto é feito, **então** os dois ficam em `waiting_slot` (o `recruit` responde "pendente"); **quando** uma vaga abre, **então** o primeiro a chegar é criado e, se foi um `recruit`, quem pediu recebe o item `system` com nome, id e máquina; **quando** o tempo limite do outro estoura, **então** ele falha com aviso dizendo o limite e quem ocupa; em nenhum caso alguém é encerrado.
 - **CA-PERS-03** · *rápida* — **Dado** um personagem `busy`, **quando** recebe `dismiss`, **então** a CLI responde "pendente" (`scheduled`), o encerramento fica agendado e só ocorre após `done` e `idle`, com resumo gravado no pergaminho da missão.
 - **CA-PERS-04** · *rápida* — **Dado** relógio falso e persistente com ociosidade 120 min, **quando** fica 119 min `idle` e 30 min `waiting`, **então** não é encerrado; **quando** completa 120 min `idle` contínuos, **então** é.
@@ -146,5 +146,5 @@ Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no
 - **CA-PERS-11** · *rápida* — **Dado** os nomes `Motor`, `sistema`, `Grão-Mestre` seguido do preenchimento do hangul e `Mestre` seguido dele, **quando** se tenta criar um personagem com cada um, **então** todos são recusados com `invalid_name`; `Motoristas` e `Sistema Novo` são aceitos.
 
 ## Depende de
-- [Bases e fichas](bases-e-fichas.md) · [Workspaces](workspaces.md) · [Sessão zero do personagem](../sessao-zero/personagem.md) · [Adaptador de provedores](../provedores/adaptador.md)
+- [Bases e fichas](bases-e-fichas.md) · [Campanhas](workspaces.md) · [Sessão zero do personagem](../sessao-zero/personagem.md) · [Adaptador de provedores](../provedores/adaptador.md)
 - [Terminal](../arquitetura/terminal.md) · [Persistência](../arquitetura/persistencia.md) · [Protocolo](../conectividade/protocolo.md) · [Ficha da máquina](../guilda/ficha-da-maquina.md)

@@ -49,17 +49,17 @@ Os nomes das ações ficam em inglês, como no protocolo ([protocolo](../conecti
 | `logs` | últimas N linhas dos logs do motor e do Guardião (padrão 500, máximo 5.000), já mascaradas ([segurança](../arquitetura/seguranca.md)) | não |
 | `restart` | reinicia o serviço do motor (ou, com alvo `launcher`, o do `mestre-launcher`) | não |
 | `rollback` | volta o motor para a versão anterior guardada, sem tocar no banco | não |
-| `rollback` com restauração do banco | volta a versão e restaura o banco de antes da atualização ([abaixo](#rollback-com-restauração-do-banco)) | **sim**, Dono ou Administrador, com PIN |
+| `rollback` com restauração do banco | volta a versão e restaura o banco de antes da atualização ([abaixo](#rollback-com-restauração-do-banco)) | **sim**, Senhor da Guilda ou Administrador, com PIN |
 | `checklist` | roda o [checklist](../plataforma/checklist.md) e devolve o resultado; correções seguem as regras de lá | não |
 | `cleanup` | apaga temporários do Mestre e logs fora dos limites de rotação e retenção de [persistência](../arquitetura/persistencia.md#logs), só dentro das pastas do Mestre; nunca banco, backups, pergaminhos, anexos ou worktrees | não |
 | `diagnose` | inicia o agente de diagnóstico; o script que ele propõe pede aprovação | não para iniciar |
 | `run_script` | executa uma vez o script de diagnóstico aprovado, conferindo o hash | **sim**, já aprovado ([diagnóstico com IA](diagnostico-com-ia.md)) |
-| `recover` | começa ou retoma o runbook do zero (a ação **Recuperar a Cidadela** da [página reserva](pagina-reserva.md)); só da Torre condutora ou, em máquina única, do próprio Guardião | **sim**, Dono ou Administrador |
-| `citadel.promote` | a Torre condutora manda ao Guardião da máquina escolhida a ordem de promoção ([mensagens](../conectividade/mensagens.md)) | **sim**, só o Dono, com PIN ([promoção](../guilda/cidadela-e-torres.md#promoção)) |
+| `recover` | começa ou retoma o runbook do zero (a ação **Recuperar a Cidadela** da [página reserva](pagina-reserva.md)); só da Torre condutora ou, em máquina única, do próprio Guardião | **sim**, Senhor da Guilda ou Administrador |
+| `citadel.promote` | a Torre condutora manda ao Guardião da máquina escolhida a ordem de promoção ([mensagens](../conectividade/mensagens.md)) | **sim**, só o Senhor da Guilda, com PIN ([promoção](../guilda/cidadela-e-torres.md#promoção)) |
 
 - Não existe shell livre, envio de arquivo, troca de configuração nem qualquer ação fora da tabela.
 - Os pedidos da Cidadela às Torres não usam a trava de condução (a Cidadela conduz); só o Guardião da Torre condutora pede a trava, e só ele manda `recover` à Cidadela ou `citadel.promote` à máquina escolhida.
-- Ações que apagam dados do produto ou mexem em rede, firewall ou serviços do sistema nunca são automáticas: pedem aprovação de Dono ou Administrador ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)).
+- Ações que apagam dados do produto ou mexem em rede, firewall ou serviços do sistema nunca são automáticas: pedem aprovação de Senhor da Guilda ou Administrador ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)).
 
 ### Quem pode pedir
 
@@ -68,7 +68,7 @@ Os nomes das ações ficam em inglês, como no protocolo ([protocolo](../conecti
 | O próprio Guardião (camada 2 e, no modo máquina única, o incidente inteiro) | o local | — |
 | Motor da Cidadela | Guardião de uma Torre | conexão WSS própria do Guardião da Torre |
 | Guardião da Torre condutora | Guardião da Cidadela | TLS na porta do Guardião da Cidadela (certificado próprio do Guardião da Cidadela), com certificado de máquina |
-| Usuário logado (Dono ou Administrador) | o da máquina, ou o da Cidadela por ele | painel (pela Cidadela), [página reserva](pagina-reserva.md) ou [Telegram em modo reduzido](telegram-modo-reduzido.md) |
+| Usuário logado (Senhor da Guilda ou Administrador) | o da máquina, ou o da Cidadela por ele | painel (pela Cidadela), [página reserva](pagina-reserva.md) ou [Telegram em modo reduzido](telegram-modo-reduzido.md) |
 
 ### Como é alcançado
 
@@ -107,7 +107,7 @@ Socket Unix ou named pipe da própria máquina ([canais locais](../arquitetura/c
 
 ### Rollback com restauração do banco
 
-Ação **rara e nunca automática**: só existe quando uma atualização migrou o banco e a versão anterior não funciona com ele. Exige um Dono ou Administrador, com PIN ([PIN pessoal](../telegram/usuarios-e-niveis.md#pin-pessoal)), pelo painel, pela [página reserva](pagina-reserva.md) ou pelo [Telegram em modo reduzido](telegram-modo-reduzido.md). O Guardião volta o binário anterior e restaura o banco guardado logo antes da atualização ([autoatualização](../plataforma/autoatualizacao.md)); **tudo o que aconteceu entre a atualização e a volta se perde** (mensagens, decisões, estados de missão gravados nesse intervalo), e o pedido mostra esse intervalo antes da confirmação. Sem aprovação, nada é feito; o `rollback` comum, sem restauração, continua disponível.
+Ação **rara e nunca automática**: só existe quando uma atualização migrou o banco e a versão anterior não funciona com ele. Exige um Senhor da Guilda ou Administrador, com PIN ([PIN pessoal](../telegram/usuarios-e-niveis.md#pin-pessoal)), pelo painel, pela [página reserva](pagina-reserva.md) ou pelo [Telegram em modo reduzido](telegram-modo-reduzido.md). O Guardião volta o binário anterior e restaura o banco guardado logo antes da atualização ([autoatualização](../plataforma/autoatualizacao.md)); **tudo o que aconteceu entre a atualização e a volta se perde** (mensagens, decisões, estados de missão gravados nesse intervalo), e o pedido mostra esse intervalo antes da confirmação. Sem aprovação, nada é feito; o `rollback` comum, sem restauração, continua disponível.
 
 ### Proteções
 
@@ -118,7 +118,7 @@ Ação **rara e nunca automática**: só existe quando uma atualização migrou 
 ## Regras e erros
 
 - Ação desconhecida → `unknown_action`, auditada.
-- Quem pede sem credencial válida → conexão recusada e alerta ao Dono.
+- Quem pede sem credencial válida → conexão recusada e alerta ao Senhor da Guilda.
 - Sem conexão com a Cidadela → continua a camada 2 sozinho e acumula a auditoria local.
 - Guardião fora → o motor segue funcionando; o SO o reinicia e o checklist acusa.
 
@@ -131,10 +131,10 @@ Ação **rara e nunca automática**: só existe quando uma atualização migrou 
 - **CA-GUARD-05** · *rápida* — **Dado** um `restart` em curso, **quando** chega outro pedido, **então** ele recebe `busy`.
 - **CA-GUARD-06** · *completa* — **Dado** o motor da máquina parado, **quando** a Cidadela pede `status` e `logs`, **então** o Guardião da máquina responde pela conexão própria.
 - **CA-GUARD-07** · *completa* — **Dado** o motor da Cidadela parado, **quando** uma máquina com certificado válido chama o Guardião da Cidadela, **então** recebe `status`; sem certificado de máquina, a conexão TLS é recusada.
-- **CA-GUARD-08** · *rápida* — **Dado** um `rollback` com restauração do banco sem aprovação, **quando** é pedido, **então** fica esperando aprovação de Dono ou Administrador com PIN, o pedido mostra o intervalo que será perdido e nada é feito; nenhuma camada da autocura o pede sozinha.
+- **CA-GUARD-08** · *rápida* — **Dado** um `rollback` com restauração do banco sem aprovação, **quando** é pedido, **então** fica esperando aprovação de Senhor da Guilda ou Administrador com PIN, o pedido mostra o intervalo que será perdido e nada é feito; nenhuma camada da autocura o pede sozinha.
 - **CA-GUARD-09** · *rápida* — **Dado** o motor da máquina vivo mas sem responder `health` por 3 ciclos no relógio falso, **quando** o Guardião avalia, **então** marca o motor como travado; **dado** uma mensagem do canal local com `v` = 2, **então** é recusada e registrada.
 - **CA-GUARD-10** · *rápida* — **Dado** o Guardião da Cidadela com concessão do motor e o relógio falso, **quando** o motor para de renovar, **então** em até 60 s o anúncio de `mestre.local` some, mas os pedidos de trava da eleição seguem sendo atendidos; **quando** o motor manda `lease` com `suspended`, **então** os pedidos de trava passam a ser recusados; **dado** o GitHub falso fora e o motor no comando, **então** a concessão continua; **dado** uma Torre que reconecta e fecha com `4007` e uma certidão de época mais nova e válida, **então** ele se retira na hora; com certidão de assinatura inválida, nada muda e a tentativa é registrada.
-- **CA-GUARD-11** · *rápida* — **Dado** o Guardião da Cidadela, **quando** um Observador pede `recover`, **então** é recusado; **quando** a Torre condutora o pede e um Administrador aprovou, **então** o runbook recomeça com o backoff zerado; **dado** `citadel.promote` sem o PIN do Dono, **então** nada é feito.
+- **CA-GUARD-11** · *rápida* — **Dado** o Guardião da Cidadela, **quando** um Observador pede `recover`, **então** é recusado; **quando** a Torre condutora o pede e um Administrador aprovou, **então** o runbook recomeça com o backoff zerado; **dado** `citadel.promote` sem o PIN do Senhor da Guilda, **então** nada é feito.
 
 ## Depende de
 

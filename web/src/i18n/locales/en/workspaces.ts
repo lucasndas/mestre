@@ -1,8 +1,8 @@
 export default {
-  title: "Workspaces",
+  title: "Campaigns",
   intro:
-    "The projects Mestre looks after. Creating a workspace starts the session zero: Mestre prepares the repository and the Grand Master analyses the project.",
-  empty: "None of your workspaces yet.",
+    "The projects Mestre looks after. Creating a campaign starts the session zero: Mestre prepares the repository and the Grand Master analyses the project.",
+  empty: "None of your campaigns yet.",
   state: { preparing: "preparing", active: "active", paused: "paused" },
   grandMasterState: {
     none: "no Grand Master yet",
@@ -14,24 +14,24 @@ export default {
   grandMaster: { sheet: "Grand Master sheet: {{sheet}}", state: "Grand Master {{state}}" },
   fetchError: "The mirror cannot fetch the repository: {{error}}",
   sessionZeroPR: "Session zero pull request:",
-  pause: "Pause workspace",
-  resume: "Resume workspace",
+  pause: "Pause campaign",
+  resume: "Resume campaign",
   create: {
-    open: "Create workspace",
-    title: "New workspace",
+    open: "Create campaign",
+    title: "New campaign",
     intro:
       "Give the repository and the sheet of the Grand Master. Mestre does the rest in the session zero.",
     repo: "Repository",
     repoHint: "As owner/name, like in github.com/owner/name.",
     slug: "Nickname (optional)",
     slugHint:
-      "A short name for the workspace. It does not change later; empty uses the name of the repository.",
+      "A short name for the campaign. It does not change later; empty uses the name of the repository.",
     sheet: "Grand Master sheet",
-    sheetHint: "The sheet is for this workspace and is only changed later in the sheets screen.",
+    sheetHint: "The sheet is for this campaign and is only changed later in the sheets screen.",
     noSheets: "There is no agent sheet yet. Create one in the sheets screen.",
-    submit: "Create workspace",
+    submit: "Create campaign",
     cancel: "Cancel",
-    done: "Workspace {{slug}} created. The session zero has started.",
+    done: "Campaign {{slug}} created. The session zero has started.",
   },
   stages: {
     title: "Session zero",
@@ -94,15 +94,15 @@ export default {
     unknown_sheet: "That sheet does not exist or does not run an agent. Nothing was created.",
     bad_grand_master_sheet:
       "That sheet cannot be the Grand Master: use an agent that is not the PC Operator and runs on every machine that is not excluded.",
-    repo_taken: "That repository is already the workspace {{slug}}.",
+    repo_taken: "That repository is already the campaign {{slug}}.",
     invalid_repo: "The repository must be as owner/name.",
     invalid_slug: "The nickname does not hold. Suggestion: {{suggestion}}.",
     creation_failed:
-      "The workspace could not be created: GitHub or Mestre refused. Nothing was created.",
-    not_preparing: "The workspace is past the session zero.",
-    preparing: "A workspace that is preparing cannot be paused.",
-    bad_state: "The state of the workspace does not allow that now.",
-    not_ready: "The main clone of the workspace does not exist yet. Wait for the mirror stage.",
+      "The campaign could not be created: GitHub or Mestre refused. Nothing was created.",
+    not_preparing: "The campaign is past the session zero.",
+    preparing: "A campaign that is preparing cannot be paused.",
+    bad_state: "The state of the campaign does not allow that now.",
+    not_ready: "The main clone of the campaign does not exist yet. Wait for the mirror stage.",
     invalid_document:
       "The verification file does not hold: check the format, the commands and the time. Nothing was confirmed.",
   },

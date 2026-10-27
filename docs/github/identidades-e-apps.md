@@ -12,12 +12,12 @@ Fazer o histórico do GitHub mostrar quem fez cada coisa: todo commit, comentár
 
 | App | Quem usa | Para quê |
 |---|---|---|
-| **Grão-Mestre** | o Grão-Mestre de todos os workspaces | criar épicos, revisar, aprovar, fazer merge, configurações do repositório aprovadas (`configuracao_repositorio`), clonar e atualizar o espelho |
+| **Grão-Mestre** | o Grão-Mestre de todas as campanhas | criar épicos, revisar, aprovar, fazer merge, configurações do repositório aprovadas (`configuracao_repositorio`), clonar e atualizar o espelho |
 | **Mestre** | os Mestres de mesa | abrir e atualizar o PR da mesa, organizar as issues do épico. É separado do "Grão-Mestre" porque o GitHub não deixa ninguém aprovar o próprio PR |
 | **um por classe** (ex.: Dev, QA, Revisor) | os personagens da classe | commits, comentários, atualizações de issue e revisões pedidas pelo personagem |
 
-- Os fixos nascem no primeiro acesso ([ADR 0007](../decisoes/0007-apps-fixos-grao-mestre-e-mestre.md)); os de classe, quando surge uma classe que pede App próprio. Todos são preparados pelo Grão-Mestre e criados pelo Dono com um clique, por link ([criação de Apps](criacao-de-apps.md)).
-- O App de uma classe é **o mesmo em todos os workspaces** e é instalado em cada repositório onde for usado.
+- Os fixos nascem no primeiro acesso ([ADR 0007](../decisoes/0007-apps-fixos-grao-mestre-e-mestre.md)); os de classe, quando surge uma classe que pede App próprio. Todos são preparados pelo Grão-Mestre e criados pelo Senhor da Guilda com um clique, por link ([criação de Apps](criacao-de-apps.md)).
+- O App de uma classe é **o mesmo em todas as campanhas** e é instalado em cada repositório onde for usado.
 - Como uma classe escolhe o App (`--app novo|herdar:<classe>|<nome>`) e quando o Grão-Mestre nega um App próprio a uma variação: [classes](../classes/classes.md).
 - Trocar o App de uma classe só vale para as ações novas; o histórico continua com o App que fez.
 
@@ -30,8 +30,8 @@ Fazer o histórico do GitHub mostrar quem fez cada coisa: todo commit, comentár
 ### Limite de 100 Apps
 
 - Uma conta pode registrar até **100 Apps**. O banco guarda os Apps do Mestre (tabela `github_apps`, [persistência](../arquitetura/persistencia.md): nome, slug, `app_id`, `client_id`, `bot_user_id`, estado).
-- Contagem = Apps do Mestre + outros Apps da conta. Os outros o Dono informa no painel ([administração](../painel/administracao.md#contagem-de-apps)); o Mestre não lê a página de Apps da conta pelo navegador.
-- Com 90 ou mais, o painel e o Dono recebem aviso ([administração](../painel/administracao.md)). Com 100, a criação é recusada e o Grão-Mestre vincula a classe nova a um App existente.
+- Contagem = Apps do Mestre + outros Apps da conta. Os outros o Senhor da Guilda informa no painel ([administração](../painel/administracao.md#contagem-de-apps)); o Mestre não lê a página de Apps da conta pelo navegador.
+- Com 90 ou mais, o painel e o Senhor da Guilda recebem aviso ([administração](../painel/administracao.md)). Com 100, a criação é recusada e o Grão-Mestre vincula a classe nova a um App existente.
 
 ### Permissões mínimas
 
@@ -56,7 +56,7 @@ O GitHub não tem permissão separada de merge: merge exige Contents escrita, qu
 
 - O motor assina um JWT com a chave privada do App (no [cofre](../plataforma/cofre.md)) e pede um token de instalação (`POST /app/installations/{id}/access_tokens`) **restrito ao repositório da ação** e às permissões que ela usa.
 - O token dura 1 hora; o motor guarda em memória e renova 5 minutos antes. Nunca vai para disco, log ou ambiente de agente.
-- Cada instalação tem a própria cota (5.000 requisições por hora no mínimo), então cada App tem orçamento separado; a do App "Grão-Mestre" é uma só para todos os workspaces da conta e a trava ([orçamento](eventos.md#orçamento-de-cota)).
+- Cada instalação tem a própria cota (5.000 requisições por hora no mínimo), então cada App tem orçamento separado; a do App "Grão-Mestre" é uma só para todas as campanhas da conta e a trava ([orçamento](eventos.md#orçamento-de-cota)).
 
 ### Repositório da trava
 
@@ -89,15 +89,15 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
   - `ask` ou `allow`: o App é criado **com** a permissão. Como a chave do App nunca chega ao agente, a permissão é só a capacidade técnica; quem decide se ela é usada é o motor, pela regra da classe (`ask` = só depois do "Aprovar" de um usuário, no hash aprovado).
 - O Grão-Mestre e o "Mestre" não têm a permissão. Uma classe que **herda** o App de outra (`herdar:<classe>`) só pode ter `git.workflows` igual ou menor que a da classe de origem; se precisar de mais, recebe App próprio ([classes](../classes/classes.md)).
 - Antes de enviar, o motor confere os arquivos alterados. Mudança em `.github/workflows/` com classe `never`: o motor não envia, explica o motivo ao Grão-Mestre, que pergunta aos usuários se querem mudar a classe ou passar a tarefa a uma classe que pode.
-- **Implementação:** o envio passa por `github.Workflows` (`internal/app/prsend.go`). A política é o `git.workflows` das regras efetivas de quem pede (a classe limitada pelo teto, `chain.Service.WorkflowsPolicy`). Com `ask`, o primeiro envio abre um pedido `envio_workflows` (`chain.Service.Workflows`, risco `alto`) preso ao repositório do workspace (`chain.Options.Repos`, nunca um que o chamador diga), à branch e à cabeça que iria; repetir o comando com o pedido aberto é o mesmo pedido. A aprovação vale só para essa cabeça (um commit novo a invalida e nasce outro pedido) e dentro do prazo das pessoas depois da decisão; não é gasta, então o reenvio de um envio que falhou depois do push não pergunta de novo. Na aprovação das pessoas o motor relê a cabeça da branch no espelho (`Orchestration.WorkflowsTarget`). Com `never`, o `mestre pr` recusa com `workflow_not_allowed` e põe um item `system` na caixa do Grão-Mestre. O token do envio (`contents` em escrita, e `workflows` só quando a branch muda o CI e o App tem a permissão; senão `workflow_permission`) é o do App de quem pede. O motor olha o diff líquido e os arquivos de cada commit enviado; só `.github/workflows/` conta (uma action local em `.github/actions/` não é protegida, nem pelo motor nem pelo GitHub).
-- Mudar uma classe de `never` para `ask`/`allow` acrescenta a permissão ao App já instalado: o Grão-Mestre manda ao Dono o link da página de permissões do App e o do aceite na instalação ([criação de Apps](criacao-de-apps.md#repositórios-novos-e-permissões-novas)). Até o aceite, o envio sai com erro `workflow_permission` ([coordenação no GitHub](../cli/coordenacao-github.md)).
+- **Implementação:** o envio passa por `github.Workflows` (`internal/app/prsend.go`). A política é o `git.workflows` das regras efetivas de quem pede (a classe limitada pelo teto, `chain.Service.WorkflowsPolicy`). Com `ask`, o primeiro envio abre um pedido `envio_workflows` (`chain.Service.Workflows`, risco `alto`) preso ao repositório da campanha (`chain.Options.Repos`, nunca um que o chamador diga), à branch e à cabeça que iria; repetir o comando com o pedido aberto é o mesmo pedido. A aprovação vale só para essa cabeça (um commit novo a invalida e nasce outro pedido) e dentro do prazo das pessoas depois da decisão; não é gasta, então o reenvio de um envio que falhou depois do push não pergunta de novo. Na aprovação das pessoas o motor relê a cabeça da branch no espelho (`Orchestration.WorkflowsTarget`). Com `never`, o `mestre pr` recusa com `workflow_not_allowed` e põe um item `system` na caixa do Grão-Mestre. O token do envio (`contents` em escrita, e `workflows` só quando a branch muda o CI e o App tem a permissão; senão `workflow_permission`) é o do App de quem pede. O motor olha o diff líquido e os arquivos de cada commit enviado; só `.github/workflows/` conta (uma action local em `.github/actions/` não é protegida, nem pelo motor nem pelo GitHub).
+- Mudar uma classe de `never` para `ask`/`allow` acrescenta a permissão ao App já instalado: o Grão-Mestre manda ao Senhor da Guilda o link da página de permissões do App e o do aceite na instalação ([criação de Apps](criacao-de-apps.md#repositórios-novos-e-permissões-novas)). Até o aceite, o envio sai com erro `workflow_permission` ([coordenação no GitHub](../cli/coordenacao-github.md)).
 
 ## Regras e erros
 
 - Nenhum agente recebe chave, token, `gh` ou credencial. Só o motor usa o cofre ([segurança](../arquitetura/seguranca.md)).
-- App sem instalação no repositório da ação: o pedido falha com "App `<nome>` não instalado em `<repo>`"; o motor acrescenta o repositório à instalação ou o Dono recebe o link para isso ([criação de Apps](criacao-de-apps.md#repositórios-novos-e-permissões-novas)).
+- App sem instalação no repositório da ação: o pedido falha com "App `<nome>` não instalado em `<repo>`"; o motor acrescenta o repositório à instalação ou o Senhor da Guilda recebe o link para isso ([criação de Apps](criacao-de-apps.md#repositórios-novos-e-permissões-novas)).
 - Falha ao ler `bot_user_id` de um App de classe: os personagens usam a identidade temporária do App "Mestre" (seção acima), o motor tenta de novo a cada início de personagem e o [checklist](../plataforma/checklist.md) (desde o M7) registra o alerta.
-- Token recusado (chave revogada ou App apagado): o App vai para o estado "com erro" e o Grão-Mestre avisa o Dono.
+- Token recusado (chave revogada ou App apagado): o App vai para o estado "com erro" e o Grão-Mestre avisa o Senhor da Guilda.
 - **Implementação:** `internal/github` (nomes, `Registry` dos Apps e das instalações no banco da Guilda, `Identities`, `Tokens`, `CheckPush` e `Lair`). O `Registry` é também o `classes.AppDirectory` das classes. A chave de cada App é lida do cofre só para assinar o JWT (`github_app_key:<nome>`); o `Token` não se imprime nem entra em log. O repositório da trava usa o final do `guild_id` (a parte aleatória do ULID) como "curto" e precisa ser privado; o token pede sempre a lista de permissões e só sai para um App `pronto`. O comando `mestre pr update` e o `Builder` da sessão zero do personagem, que usa a `Identity`, são das etapas 3 e 4.
 
 ## Critérios de aceite
@@ -111,22 +111,22 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
 - **CA-GH-ID-07** · *rápida* — **Dado** um pedido de token para uma ação no repositório X, **quando** o motor pede o token de instalação ao GitHub falso, **então** o pedido lista só o repositório X.
 - **CA-GH-ID-08** · *pesada* — **Dado** uma mesa com personagens Dev e QA, **quando** eles fazem commits e comentam, **então** no GitHub (dublê) cada commit e comentário fica registrado com o App da classe de quem fez (MVP-5).
 - **CA-GH-ID-09** · *rápida* — **Dado** uma classe nova com `git.workflows: allow` e `app: herdar:qa` (App QA sem a permissão Workflows), **quando** o motor valida a classe, **então** recusa e explica que ela precisa de App próprio.
-- **CA-GH-ID-10** · *rápida* — **Dado** o App "Grão-Mestre" recém-instalado e o GitHub falso, **quando** a configuração do GitHub termina, **então** o motor cria `mestre-guilda-<guild_id curto>` privado e com `auto_init`, e grava o nome; **dado** o GitHub falso recusando a criação com `403`, **então** o Dono recebe o link para criar o repositório pelo navegador e nenhuma promoção é possível até o motor confirmar o acesso.
+- **CA-GH-ID-10** · *rápida* — **Dado** o App "Grão-Mestre" recém-instalado e o GitHub falso, **quando** a configuração do GitHub termina, **então** o motor cria `mestre-guilda-<guild_id curto>` privado e com `auto_init`, e grava o nome; **dado** o GitHub falso recusando a criação com `403`, **então** o Senhor da Guilda recebe o link para criar o repositório pelo navegador e nenhuma promoção é possível até o motor confirmar o acesso.
 
 ## Depende de
 
 - [Cofre](../plataforma/cofre.md)
 - [Persistência](../arquitetura/persistencia.md)
-- [Workspaces](../orquestracao/workspaces.md)
+- [Campanhas](../orquestracao/workspaces.md)
 - [Classes](../classes/classes.md)
 - [Personagem na sessão zero](../sessao-zero/personagem.md)
 
 ## Verificar na implementação
 
 - **Verificar na implementação:** o e-mail `<bot_user_id>+<slug>[bot]@users.noreply.github.com` liga o commit ao bot (formato não documentado oficialmente). **Padrão:** o formato acima. **Se falhar:** os commits continuam válidos, com o nome do bot mas sem a ligação ao perfil dele no GitHub; o checklist alerta, e a autoria por papel continua visível no nome do autor e nos trailers ([ADR 0014](../decisoes/0014-commits-sem-assinatura.md)). **Onde:** no primeiro envio real (o PR `mestre/sessao-zero` ou o primeiro PR de mesa), conferindo `author.login` em `GET /repos/{o}/{r}/commits/{sha}`.
-- **Verificar na implementação:** ao ganhar a permissão Workflows, o App instalado passa a ter a permissão depois do aceite do dono na instalação. **Padrão:** os dois links acima; o motor confere `permissions.workflows` em `GET /app/installations/{id}` antes de liberar os envios. **Se falhar:** se o pedido de aceite não aparece para um App da própria conta, o Grão-Mestre manda ao Dono o link para desinstalar e instalar de novo o App naquele repositório. **Onde:** à mão, na primeira classe de teste mudada de `never` para `ask`.
+- **Verificar na implementação:** ao ganhar a permissão Workflows, o App instalado passa a ter a permissão depois do aceite do dono na instalação. **Padrão:** os dois links acima; o motor confere `permissions.workflows` em `GET /app/installations/{id}` antes de liberar os envios. **Se falhar:** se o pedido de aceite não aparece para um App da própria conta, o Grão-Mestre manda ao Senhor da Guilda o link para desinstalar e instalar de novo o App naquele repositório. **Onde:** à mão, na primeira classe de teste mudada de `never` para `ask`.
 
-- **Verificar na implementação:** o token de instalação do App "Grão-Mestre" com **Repository creation: write** cria o repositório privado na conta pessoal (`POST /user/repos`), e o App ganha acesso a ele. A documentação oficial lista o endpoint para esse token; discussões antigas da comunidade dizem que não funciona, e um relato recente diz que funciona. **Padrão:** funciona. **Se falhar:** o Mestre manda ao Dono, pelo Telegram e pelo painel, o link para criar o repositório privado pelo navegador, com o nome já preenchido, e o da instalação do App "Grão-Mestre" só nele, como no fluxo dos Apps ([criação de Apps](criacao-de-apps.md)); o motor confere o acesso e segue. **Onde:** na sandbox `lucasndas/mestre-sandbox`, no primeiro acesso de teste.
+- **Verificar na implementação:** o token de instalação do App "Grão-Mestre" com **Repository creation: write** cria o repositório privado na conta pessoal (`POST /user/repos`), e o App ganha acesso a ele. A documentação oficial lista o endpoint para esse token; discussões antigas da comunidade dizem que não funciona, e um relato recente diz que funciona. **Padrão:** funciona. **Se falhar:** o Mestre manda ao Senhor da Guilda, pelo Telegram e pelo painel, o link para criar o repositório privado pelo navegador, com o nome já preenchido, e o da instalação do App "Grão-Mestre" só nele, como no fluxo dos Apps ([criação de Apps](criacao-de-apps.md)); o motor confere o acesso e segue. **Onde:** na sandbox `lucasndas/mestre-sandbox`, no primeiro acesso de teste.
 
 ## Fontes
 

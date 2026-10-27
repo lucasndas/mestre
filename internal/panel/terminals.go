@@ -467,7 +467,7 @@ func (a *terminalArea) input(ctx context.Context, s Socket, env UIEnvelope) {
 		return
 	case !u.Acts(ts.info.Workspace) && ts.info.Workspace != "":
 		ts.endTyping()
-		s.Fail(env.ID, Err(CodeForbiddenLevel, "ação não permitida neste workspace", map[string]any{"workspace": ts.info.Workspace}))
+		s.Fail(env.ID, Err(CodeForbiddenLevel, "ação não permitida nesta campanha", map[string]any{"workspace": ts.info.Workspace}))
 		return
 	}
 	ts.beginTyping(ctx)

@@ -28,8 +28,8 @@ Uma release por versão, com tag única `vX.Y.Z` (a versão do motor), traz os b
 
 ### Aprovação
 
-1. Release verificada → o motor cria um pedido `atualizacao_mestre` no [fluxo de aprovação](../aprovacoes/fluxo.md): escopo "Sistema" (não pertence a um workspace), alvo = `tag` + SHA-256 do manifesto, destino Dono e Administradores, quórum 1, expira em 7 dias, sem PIN (padrões). Conteúdo: notas da release resumidas, com link, e a ordem prevista das máquinas.
-2. A mensagem sai pelo [bot](../telegram/bot.md) marcada "Sistema" e aparece na central do painel. O Grão-Mestre de cada workspace recebe um evento informativo, para responder dúvidas; ele **nunca aprova** esse tipo.
+1. Release verificada → o motor cria um pedido `atualizacao_mestre` no [fluxo de aprovação](../aprovacoes/fluxo.md): escopo "Sistema" (não pertence a uma campanha), alvo = `tag` + SHA-256 do manifesto, destino Senhor da Guilda e Administradores, quórum 1, expira em 7 dias, sem PIN (padrões). Conteúdo: notas da release resumidas, com link, e a ordem prevista das máquinas.
+2. A mensagem sai pelo [bot](../telegram/bot.md) marcada "Sistema" e aparece na central do painel. O Grão-Mestre de cada campanha recebe um evento informativo, para responder dúvidas; ele **nunca aprova** esse tipo.
 3. Saiu versão mais nova antes da decisão → o pedido vira `cancelado` e nasce outro para a nova, com as notas das duas.
 4. Aprovado → nada mais é perguntado: o Mestre aplica e reinicia sozinho, passo a passo.
 
@@ -38,7 +38,7 @@ Uma release por versão, com tag única `vX.Y.Z` (a versão do motor), traz os b
 - **Um passo por vez na Guilda inteira:** uma **trava de atualização** na Cidadela. Duas máquinas nunca atualizam juntas (em especial, nunca a Cidadela e a Torre condutora); motor e Guardião também não.
 - **Sequência:** primeiro as Torres, uma por vez, da menor para a maior prioridade da [eleição](../autocura/camadas.md#eleição-da-torre-condutora) (motor da Torre → Guardião da Torre), de modo que a Torre condutora termina antes e está saudável e na versão nova quando chega a vez da Cidadela; por último, motor da Cidadela → Guardião da Cidadela. O passo do Guardião é pulado se a versão dele no manifesto for igual à instalada. Torre desligada é atualizada quando reconectar.
 - **Máquina única** (Guilda só com a Cidadela): a sequência é só motor da Cidadela → Guardião da Cidadela.
-- **Convivência:** cada binário aceita a versão atual e a anterior do protocolo ([protocolo](../conectividade/protocolo.md)), então Torres novas conversam com a Cidadela ainda antiga. Antes de começar, a Cidadela confere se todas as máquinas da Guilda entram na faixa nova; se alguma não entrar, não começa e o Dono recebe a explicação.
+- **Convivência:** cada binário aceita a versão atual e a anterior do protocolo ([protocolo](../conectividade/protocolo.md)), então Torres novas conversam com a Cidadela ainda antiga. Antes de começar, a Cidadela confere se todas as máquinas da Guilda entram na faixa nova; se alguma não entrar, não começa e o Senhor da Guilda recebe a explicação.
 - **Nunca os dois fora:** quem vigia a troca do motor é o Guardião; quem troca e vigia o Guardião é o motor **saudável** da mesma máquina. O passo do Guardião só começa depois que o motor novo passou na confirmação; com o motor degradado, o Guardião não é atualizado.
 
 ```mermaid
@@ -110,13 +110,13 @@ Cada passo (auditado): `pendente` → `preparando` → `aplicando` → `confirma
 
 - Nada começa sem aprovação, nem com incidente de autocura aberto em qualquer máquina. Incidente no meio → pausa depois do passo em curso.
 - **Passo revertido:** a release vira `revertida`, os passos seguintes não rodam, o que já foi atualizado fica (o protocolo convive), os usuários recebem alerta "Sistema" com os logs mascarados, e aquela versão só é tentada de novo com aprovação nova.
-- Assinatura, tag, hash ou versão inválidos em qualquer ponto → `release_rejected`, alerta ao Dono, nada é trocado.
-- **Migrações do banco** são só aditivas dentro de uma versão maior, para o `rollback` funcionar sem restaurar o banco. O `rollback` com restauração do banco (backup do passo 3) é raro e nunca automático: exige Dono ou Administrador com PIN e perde tudo o que aconteceu entre a atualização e a volta ([Guardião](../autocura/guardiao.md#rollback-com-restauração-do-banco)).
+- Assinatura, tag, hash ou versão inválidos em qualquer ponto → `release_rejected`, alerta ao Senhor da Guilda, nada é trocado.
+- **Migrações do banco** são só aditivas dentro de uma versão maior, para o `rollback` funcionar sem restaurar o banco. O `rollback` com restauração do banco (backup do passo 3) é raro e nunca automático: exige Senhor da Guilda ou Administrador com PIN e perde tudo o que aconteceu entre a atualização e a volta ([Guardião](../autocura/guardiao.md#rollback-com-restauração-do-banco)).
 - Torre fora da faixa de protocolo (desligada por muito tempo) → recebe `4003` e precisa de atualização manual.
 
 ## Critérios de aceite
 
-- **CA-AUTO-01** · *rápida* — **Dado** um manifesto assinado por chave desconhecida, **quando** a Cidadela verifica, **então** a release vira `recusada`, nenhum binário é baixado e o Dono é alertado.
+- **CA-AUTO-01** · *rápida* — **Dado** um manifesto assinado por chave desconhecida, **quando** a Cidadela verifica, **então** a release vira `recusada`, nenhum binário é baixado e o Senhor da Guilda é alertado.
 - **CA-AUTO-02** · *rápida* — **Dado** um manifesto válido e um binário com SHA-256 diferente, **quando** a máquina verifica a transferência, **então** responde `release_rejected` e mantém a versão atual.
 - **CA-AUTO-03** · *rápida* — **Dado** uma release assinada com versão menor que a instalada, **quando** chega, **então** é ignorada.
 - **CA-AUTO-04** · *rápida* — **Dado** um pedido `atualizacao_mestre`, **quando** o Grão-Mestre tenta aprovar, **então** o motor recusa; com o "Aprovar" de um Administrador, a atualização começa.
@@ -130,9 +130,9 @@ Cada passo (auditado): `pendente` → `preparando` → `aplicando` → `confirma
 - **CA-AUTO-12** · *rápida* — **Dado** um incidente aberto, **quando** a release é aprovada, **então** fica `pausada` até o incidente fechar.
 - **CA-AUTO-13** · *rápida* — **Dado** o motor da Cidadela em janela de confirmação, **quando** um Guardião de Torre pede a trava de condução, **então** recebe `updating` e não conduz cura.
 - **CA-AUTO-14** · *rápida* — **Dado** uma Guilda só com a Cidadela (Linux e Windows; dublês, relógio falso), **quando** a atualização roda, **então** a ordem auditada é: troca do binário com reinício do `mestre`, confirmação, e só então o Guardião.
-- **CA-AUTO-15** · *rápida* — **Dado** uma atualização revertida com migração do banco, **quando** o Guardião volta a versão, **então** faz só o `rollback` comum e o pedido de restauração do banco fica esperando Dono ou Administrador com PIN, mostrando o intervalo que será perdido.
+- **CA-AUTO-15** · *rápida* — **Dado** uma atualização revertida com migração do banco, **quando** o Guardião volta a versão, **então** faz só o `rollback` comum e o pedido de restauração do banco fica esperando Senhor da Guilda ou Administrador com PIN, mostrando o intervalo que será perdido.
 - **CA-AUTO-16** · *completa* — **Dado** o ajudante de troca instalado em cada sistema, **quando** a conta do motor e depois outra conta (inclusive `mestre-agente`) tentam iniciá-lo, **então** só a do motor consegue.
-- **CA-AUTO-17** · *rápida* — **Dado** uma Torre cuja faixa de protocolo não entra na nova versão (dublê), **quando** a release é aprovada, **então** a atualização não começa e o Dono recebe a explicação; **dado** o pedido `aguardando_aprovacao` e uma release mais nova, **então** o pedido vira `cancelado` e nasce outro com as notas das duas.
+- **CA-AUTO-17** · *rápida* — **Dado** uma Torre cuja faixa de protocolo não entra na nova versão (dublê), **quando** a release é aprovada, **então** a atualização não começa e o Senhor da Guilda recebe a explicação; **dado** o pedido `aguardando_aprovacao` e uma release mais nova, **então** o pedido vira `cancelado` e nasce outro com as notas das duas.
 
 ## Depende de
 

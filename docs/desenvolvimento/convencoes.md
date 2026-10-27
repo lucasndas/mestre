@@ -73,10 +73,10 @@ Nomes dos termos do produto no código (use sempre estes; entre parênteses, ond
 
 | Termo | Código | Termo | Código |
 |---|---|---|---|
-| Workspace | `Workspace` | Pergaminho / Tomo | `Note` / `Tome` (`scrolls.Note` e `scrolls.Tome`; `grimoires.Scroll` e `connections.ScrollView`/`ScrollRef` são o mesmo pergaminho visto de dentro de um grimório e de uma conexão) |
+| Campanha | `Workspace` | Pergaminho / Tomo | `Note` / `Tome` (`scrolls.Note` e `scrolls.Tome`; `grimoires.Scroll` e `connections.ScrollView`/`ScrollRef` são o mesmo pergaminho visto de dentro de um grimório e de uma conexão) |
 | Mesa | `Table` | Grimório | `Grimoire` (pacote `grimoires`, documento `grimoires.Document`) |
 | Personagem | `Character` | Ritual | `Ritual` |
-| Party | `Party` (ainda sem tipo; o conceito vive no pacote `connections`) | Missão / Etapa | `Quest` / `Step` |
+| Companhia | `Party` (ainda sem tipo; o conceito vive no pacote `connections`) | Missão / Etapa | `Quest` / `Step` |
 | Base / Ficha | `Base` / `Sheet` | Decreto | `Decree` |
 | Classe | `Class` | Caixa de entrada / Espera | `Inbox` / `Wait` |
 | Grão-Mestre | `GrandMaster` | Guardião | `Guardian` (ainda sem tipo nem pacote: é do M7, em `guardian/`) |

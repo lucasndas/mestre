@@ -160,7 +160,7 @@ func TestSayTellsTheUsersOfTheWorkspaceTheTextOfTheGrandMasterAsTheTextOfAnAgent
 				t.Errorf("the message lacks %q:\n%s", want, text)
 			}
 		}
-		if strings.Contains(text, "ghp_") || strings.Contains(text, "](") || strings.Contains(text, "<b>Dono") || strings.Contains(text, "**") {
+		if strings.Contains(text, "ghp_") || strings.Contains(text, "](") || strings.Contains(text, "<b>Senhor da Guilda") || strings.Contains(text, "**") {
 			t.Errorf("the message shows a secret, a link or a mark of the agent:\n%s", text)
 		}
 	}

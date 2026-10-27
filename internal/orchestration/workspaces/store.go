@@ -135,7 +135,7 @@ func (s Store) Insert(ctx context.Context, w Workspace) error {
 			return tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM workspaces WHERE slug = ?`, slug).Scan(&n) != nil || n > 0
 		}
 		if taken(w.Slug) {
-			return &SlugError{Slug: w.Slug, Reason: "já é de outro workspace", Suggestion: SuggestSlug(w.Slug, taken), kind: ErrSlugTaken}
+			return &SlugError{Slug: w.Slug, Reason: "já é de outra campanha", Suggestion: SuggestSlug(w.Slug, taken), kind: ErrSlugTaken}
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,

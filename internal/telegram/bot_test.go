@@ -178,7 +178,7 @@ func TestATermIsExplainedOnlyTheFirstTime(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, rigOpts{terms: true})
 	u, tg := w.user("Ana", users.Approver)
-	for _, text := range []string{"A Party da mesa está pronta.", "Outra Party chegou."} {
+	for _, text := range []string{"A Companhia da mesa está pronta.", "Outra Companhia chegou."} {
 		if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: text}); err != nil {
 			t.Fatal(err)
 		}
@@ -186,7 +186,7 @@ func TestATermIsExplainedOnlyTheFirstTime(t *testing.T) {
 		w.clk.Advance(time.Second)
 	}
 	got := w.sent("sendMessage")
-	if len(got) != 2 || !strings.Contains(got[0].Text, "Party (O time de personagens") || strings.Contains(got[1].Text, "Party (") {
+	if len(got) != 2 || !strings.Contains(got[0].Text, "Companhia (O time de personagens") || strings.Contains(got[1].Text, "Companhia (") {
 		t.Fatalf("messages = %+v", got)
 	}
 }

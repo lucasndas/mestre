@@ -31,7 +31,7 @@ Dar aos usuários um lugar para ver o estado das máquinas, aprovar curas, aprov
 | Cidadela | motor da Cidadela (com ou sem sinal, desde quando) e Guardião da Cidadela (respondendo ou não) | WSS própria e sondagem da porta do Guardião da Cidadela |
 | Outras Torres | último estado conhecido, com horário; com a Cidadela fora, o resultado da sondagem entre Guardiões | cache e [eleição](camadas.md#eleição-da-torre-condutora) |
 | Incidente | camada atual, passos feitos e resultados, quem é a Torre condutora | auditoria do incidente |
-| Pedido de promoção | Torre proposta e desde quando a Cidadela está fora, com **Promover** e **Esperar** só para o Dono, **Promover** com PIN ([fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda)) | Guardião da Torre condutora |
+| Pedido de promoção | Torre proposta e desde quando a Cidadela está fora, com **Promover** e **Esperar** só para o Senhor da Guilda, **Promover** com PIN ([fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda)) | Guardião da Torre condutora |
 | Aprovações de cura pendentes | scripts de diagnóstico e `rollback` com restauração do banco, este com o intervalo que será perdido | [diagnóstico com IA](diagnostico-com-ia.md), [Guardião](guardiao.md#rollback-com-restauração-do-banco) |
 
 Com a Cidadela no ar, a página mostra um aviso "use o painel", com o link, e continua só para leitura de estado e aprovações de cura.
@@ -41,10 +41,10 @@ Com a Cidadela no ar, a página mostra um aviso "use o painel", com o link, e co
 | Ação | Quem | O que acontece |
 |---|---|---|
 | Ver estado | qualquer nível | — |
-| Aprovar ou negar cura | Dono ou Administrador, com PIN | aprovação presa ao hash do script ([diagnóstico com IA](diagnostico-com-ia.md#proposta-e-aprovação)) ou, no `rollback` com restauração do banco, à versão e ao backup indicados |
-| **Recuperar a Cidadela** | Dono ou Administrador | se esta Torre é a condutora, ou consegue a trava, começa ou retoma o runbook do zero (zera o backoff e as tentativas do incidente). Se outra Torre é a condutora, mostra qual é e o link da página reserva dela. No modo máquina única, o Guardião da Cidadela recomeça o runbook sobre o próprio motor |
-| Promover ou esperar | só o Dono; **Promover** com PIN | **Promover** manda `citadel.promote` ([Guardião](guardiao.md#lista-fechada-de-ações)) e a promoção segue [Cidadela e Torres](../guilda/cidadela-e-torres.md#promoção). **Esperar** é o de [fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda). Em outra Torre, a página leva à da condutora |
-| Pedir diagnóstico com IA | Dono ou Administrador | `diagnose` no Guardião da Cidadela, dentro do limite por incidente |
+| Aprovar ou negar cura | Senhor da Guilda ou Administrador, com PIN | aprovação presa ao hash do script ([diagnóstico com IA](diagnostico-com-ia.md#proposta-e-aprovação)) ou, no `rollback` com restauração do banco, à versão e ao backup indicados |
+| **Recuperar a Cidadela** | Senhor da Guilda ou Administrador | se esta Torre é a condutora, ou consegue a trava, começa ou retoma o runbook do zero (zera o backoff e as tentativas do incidente). Se outra Torre é a condutora, mostra qual é e o link da página reserva dela. No modo máquina única, o Guardião da Cidadela recomeça o runbook sobre o próprio motor |
+| Promover ou esperar | só o Senhor da Guilda; **Promover** com PIN | **Promover** manda `citadel.promote` ([Guardião](guardiao.md#lista-fechada-de-ações)) e a promoção segue [Cidadela e Torres](../guilda/cidadela-e-torres.md#promoção). **Esperar** é o de [fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda). Em outra Torre, a página leva à da condutora |
+| Pedir diagnóstico com IA | Senhor da Guilda ou Administrador | `diagnose` no Guardião da Cidadela, dentro do limite por incidente |
 
 - A promoção vive no Guardião: sai só pelo Telegram reduzido e por esta página, nunca pelo painel; a troca planejada (Cidadela no ar) é pelo painel ou pelo `/guilda` ([fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda)).
 - Níveis: tabela única em [usuários e níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades).
@@ -72,7 +72,7 @@ Com a Cidadela no ar, a página mostra um aviso "use o painel", com o link, e co
 - **CA-RESERVA-05** · *rápida* — **Dado** um usuário suspenso na Cidadela, **quando** a nova cópia chega ao Guardião, **então** a sessão dele na página reserva acaba e o login é recusado.
 - **CA-RESERVA-06** · *rápida* — **Dado** outra Torre com a trava de condução, **quando** um Administrador pede "Recuperar a Cidadela", **então** nada é executado e a página mostra a condutora.
 - **CA-RESERVA-07** · *completa* — **Dado** o modo máquina única com o motor da Cidadela parado, **quando** abro a página reserva da Cidadela e peço "Recuperar a Cidadela", **então** ela mostra o motor parado e o aviso de máquina única, e o Guardião da Cidadela recomeça o runbook.
-- **CA-RESERVA-08** · *rápida* — **Dado** o PIN do Dono errado 5 vezes em 15 min (relógio falso) na página reserva, **quando** chega o sexto, **então** é recusado sem conferir, o PIN fica bloqueado por 30 min também no modo reduzido, e o bloqueio sobe à Cidadela com a auditoria; **dado** um pedido de promoção, **quando** o Dono toca **Esperar**, **então** nada é decidido e o lembrete só volta em 1 h.
+- **CA-RESERVA-08** · *rápida* — **Dado** o PIN do Senhor da Guilda errado 5 vezes em 15 min (relógio falso) na página reserva, **quando** chega o sexto, **então** é recusado sem conferir, o PIN fica bloqueado por 30 min também no modo reduzido, e o bloqueio sobe à Cidadela com a auditoria; **dado** um pedido de promoção, **quando** o Senhor da Guilda toca **Esperar**, **então** nada é decidido e o lembrete só volta em 1 h.
 
 ## Depende de
 

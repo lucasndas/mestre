@@ -26,7 +26,7 @@ func TestTheDefaultCeilingDeniesTheReadingOfTheFilesOfSecrets(t *testing.T) {
 	r := defaultCeilingRules(t)
 	m := newMachine()
 	for _, secret := range []string{"config/service-account-prod.json", ".env.local"} {
-		want(t, decide(m.env(), r, m.file(providers.KindRead, m.in(secret))), classes.Deny, classes.LayerCeiling, "teto do workspace")
+		want(t, decide(m.env(), r, m.file(providers.KindRead, m.in(secret))), classes.Deny, classes.LayerCeiling, "teto da campanha")
 	}
 	want(t, decide(m.env(), r, m.file(providers.KindRead, m.in("config/settings.json"))), classes.Allow, "")
 	for _, glob := range []string{"**/service-account*.json", "**/.env*"} {
@@ -42,7 +42,7 @@ func TestTheDefaultCeilingDenyOfDotEnvTakesEveryVariantEvenTheExample(t *testing
 	r := defaultCeilingRules(t)
 	m := newMachine()
 	for _, secret := range []string{".env.production", ".env.development", ".env.example"} {
-		want(t, decide(m.env(), r, m.file(providers.KindRead, m.in(secret))), classes.Deny, classes.LayerCeiling, "teto do workspace")
+		want(t, decide(m.env(), r, m.file(providers.KindRead, m.in(secret))), classes.Deny, classes.LayerCeiling, "teto da campanha")
 	}
 	want(t, decide(m.env(), r, m.file(providers.KindRead, m.in("config/settings.json"))), classes.Allow, "")
 	if !slices.Contains(r.Files.Deny, "**/.env*") || r.Origin["files.deny:**/.env*"] != classes.LayerCeiling {

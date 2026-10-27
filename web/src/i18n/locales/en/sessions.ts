@@ -5,7 +5,7 @@ const sessions: Widen<typeof pt> = {
   title: "My sessions",
   titleAll: "Everyone's sessions",
   intro: "Each browser you signed in on is a session. End the ones you do not recognise.",
-  introAll: "As Owner, you see and end the sessions of every user.",
+  introAll: "As Guildmaster, you see and end the sessions of every user.",
   current: "This session",
   device: "Device",
   user: "User",

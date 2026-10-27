@@ -1,6 +1,6 @@
 # Lista de programas seguros
 
-> **Assunto:** a lista de programas e formas de argumento que a classificação de risco dá como `baixo` (o resto é `medio`): o que entra, o que fica fora, a leitura no Windows e como o Dono a estende · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** a lista de programas e formas de argumento que a classificação de risco dá como `baixo` (o resto é `medio`): o que entra, o que fica fora, a leitura no Windows e como o Senhor da Guilda a estende · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 Documento de referência da [classificação de risco](classificacao-de-risco.md), que é dona do comportamento e dos critérios de aceite. O código é `internal/classes` (`risksafe.go`, a lista como dado; `codeargs.go`, os comandos dentro de argumentos), com a versão em `RiskTableVersion` (8).
 
@@ -28,7 +28,7 @@ Documento de referência da [classificação de risco](classificacao-de-risco.md
 
 ## O que fica fora
 
-- **Formas que passam código** (opção da lista marcada como código, como `make --eval`, `find -exec`, `node -r`, `sort --compress-program`, `less +cmd`): nunca `baixo`, e valem como mínimo `medio` também por cima de um ajuste do Dono.
+- **Formas que passam código** (opção da lista marcada como código, como `make --eval`, `find -exec`, `node -r`, `sort --compress-program`, `less +cmd`): nunca `baixo`, e valem como mínimo `medio` também por cima de um ajuste do Senhor da Guilda.
 - **Tudo o que não está na lista** é `medio`: `flock`, `tmux`, `screen`, `expect`, `vim -c`, `emacs --eval`, `man -P`, `gdb -ex`, `tar` que cria, `zip`, `R -e`, `julia -e`, `tclsh`, `yarn exec`, `pnpm exec`, `git rebase`, `git cherry-pick`, `complete -C`, `bind -x`, `python -m` de outro módulo, `uniq a b`, `hostname x`, um programa novo qualquer.
 - **Comando dentro de argumento:** quando o comando é um literal que o motor lê, ele é analisado como a linha de comandos que é, na decisão e no risco, e uma regra fixa nele nega: `tmux new 'cmd'` e `send-keys`, `screen -dm cmd` e `-X stuff`, `expect -c 'spawn cmd'`, `vim -c '!cmd'` e `+!cmd`, `less +!cmd`, `emacs --eval '(shell-command "cmd")'`, `man -P cmd`, `gdb -ex 'shell cmd'` (também `python` e `call system("cmd")`), `lldb -o 'platform shell cmd'`, `tar -I`, `--to-command`, `--checkpoint-action=exec=`, `sort --compress-program`, `make --eval` (receitas e `$(shell …)`), `zip -TT`, `rsync -e`, `ssh -o ProxyCommand=`, `parallel ::: cmd`, `flock -c` e o `system("cmd")`, `os.system`, `subprocess.run([...])`, `execSync`, `` `cmd` `` e `do shell script` do código inline de um interpretador.
 - **git que roda um programa** (`git -c core.pager=…`, um alias na linha, `rebase -x`, `bisect run`, `difftool -x`, `grep -O`) é `alto`, não `medio` ([comandos de shell](classificacao-de-risco.md#comandos-de-shell)).
@@ -40,7 +40,7 @@ Documento de referência da [classificação de risco](classificacao-de-risco.md
 - A linha é lida como POSIX e como PowerShell e vale a maior; o que um shell POSIX recusa por erro de sintaxe (um `&`, `;` ou `|` onde começaria um comando, como `& .\x.ps1`) não roda nele: só o que vem antes daquela linha é lido como POSIX.
 - Na leitura do PowerShell, o here-document POSIX (`<<`) segue a regra POSIX do corpo (dado, não comandos); `NOME=valor cmd` é lido como a atribuição POSIX; um bloco em chaves que é argumento (`ForEach-Object { … } -x`, `find . -exec rm {} \;`) não corta o comando; um `.ps1` nunca é o programa de mesmo nome (`script`, `nice`); e um `find -exec` sem `;` ou `+` não roda nada.
 
-## Como o Dono estende
+## Como o Senhor da Guilda estende
 
-- Na seção `risco` do [arquivo de política](../aprovacoes/arquivo-de-politica.md), um ajuste `{comando: "mytool *", risco: baixo}` põe na lista o que a tabela dá como `medio` ([ajustes](classificacao-de-risco.md#ajustes-do-dono)).
+- Na seção `risco` do [arquivo de política](../aprovacoes/arquivo-de-politica.md), um ajuste `{comando: "mytool *", risco: baixo}` põe na lista o que a tabela dá como `medio` ([ajustes](classificacao-de-risco.md#ajustes-do-senhor-da-guilda)).
 - Descer a `baixo` continua restrito: nunca o que pode ser `alto` ou casa regra fixa, nunca um interpretador ou shell com código ou sem script, uma forma que passa código (`make --eval*`, `find . -exec *`) ou um comando dentro de argumento, nunca um invólucro ou runner com curinga (`flock *`, `nice *`, `uv run *`, `pnpm exec *`, `tmux new *`).

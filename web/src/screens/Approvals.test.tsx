@@ -163,7 +163,7 @@ test("the delegation shows what it covers before the PIN is asked", async () => 
   const card = await screen.findByRole("article", { name: "Pedido #7" });
   await user.click(within(card).getByRole("button", { name: "Delegar" }));
   expect(
-    within(card).getByText(/Ação destrutiva no workspace loja, mesa 42-login, por até 30 dias/i) ??
+    within(card).getByText(/Ação destrutiva na campanha loja, mesa 42-login, por até 30 dias/i) ??
       null,
   ).toBeTruthy();
   expect(within(card).getByLabelText("PIN")).toBeTruthy();
@@ -234,11 +234,11 @@ test("the filters go to the server and the empty state says what to do", async (
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/aprovacoes");
   await screen.findByRole("article", { name: "Pedido #7" });
-  await user.selectOptions(screen.getByLabelText("Workspace"), "loja");
+  await user.selectOptions(screen.getByLabelText("Campanha"), "loja");
   await waitFor(() =>
     expect(calls.some((c) => c.path === "/api/approvals?workspace=loja")).toBe(true),
   );
-  await user.selectOptions(screen.getByLabelText("Workspace"), "");
+  await user.selectOptions(screen.getByLabelText("Campanha"), "");
   await user.selectOptions(screen.getByLabelText("Tipo"), "permissao_de_classe");
   await waitFor(() =>
     expect(calls.some((c) => c.path === "/api/approvals?type=permissao_de_classe")).toBe(true),

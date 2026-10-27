@@ -229,7 +229,7 @@ func TestARequestThatStaysAtTheGrandMasterPastTwiceItsDeadlineWarnsTheAdministra
 	w.tick()
 	w.tick()
 	got := w.queueAlertsToPeople()
-	if len(got) != 1 || !strings.Contains(got[0], "Administradores e Dono") || !strings.Contains(got[0], "Grão-Mestre") || !strings.Contains(got[0], "21 min") {
+	if len(got) != 1 || !strings.Contains(got[0], "Administradores e Senhor da Guilda") || !strings.Contains(got[0], "Grão-Mestre") || !strings.Contains(got[0], "21 min") {
 		t.Fatalf("alerts to the people = %v", got)
 	}
 	if len(w.queueAlertsToGM()) != 0 {

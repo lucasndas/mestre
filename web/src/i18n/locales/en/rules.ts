@@ -3,11 +3,11 @@ import type pt from "../pt-BR/rules";
 
 const rules: Widen<typeof pt> = {
   loading: "Loading…",
-  noWorkspace: "There is no workspace yet. When you connect a repository, its rules show up here.",
-  workspace: "Workspace",
+  noWorkspace: "There is no campaign yet. When you connect a repository, its rules show up here.",
+  workspace: "Campaign",
   cancel: "Cancel",
   levels: {
-    owner: "Owner",
+    owner: "Guildmaster",
     admin: "Administrator",
     administrator: "Administrator",
     approver: "Approver",
@@ -18,7 +18,7 @@ const rules: Widen<typeof pt> = {
   types: {
     envio_workflows: "sending workflows",
     configuracao_repositorio: "repository settings",
-    classe_workspace: "workspace class",
+    classe_workspace: "campaign class",
     acao_destrutiva: "destructive action",
     proposta_agents_md: "AGENTS.md proposal",
     ativacao_operador: "Operator activation",
@@ -43,7 +43,7 @@ const rules: Widen<typeof pt> = {
     made: "Decree made.",
     new: "New decree",
     showEnded: "Also show the ones that are over",
-    empty: "No decree in force in this workspace.",
+    empty: "No decree in force in this campaign.",
     revoked: "Decree {{number}} revoked.",
     number: "Decree {{number}}",
     kinds: { rule: "Permanent rule", exception: "One-time exception" },
@@ -58,7 +58,7 @@ const rules: Widen<typeof pt> = {
     text: "Original order",
     author: "Author",
     scope: "Scope",
-    wholeWorkspace: "the whole workspace",
+    wholeWorkspace: "the whole campaign",
     validity: "Validity",
     once: "once",
     until: "until {{when}}",
@@ -88,7 +88,7 @@ const rules: Widen<typeof pt> = {
         class: "A class",
         character: "A character",
         table: "A table",
-        workspace: "The whole workspace",
+        workspace: "The whole campaign",
       },
       targetName: "Name",
       side: "Effect",
@@ -118,9 +118,9 @@ const rules: Widen<typeof pt> = {
     intro:
       "What the Grand Master and the Table Masters may decide in place of the people, and for how long. Revoking takes the permission away at once.",
     renewed: "Delegation renewed.",
-    revokeAllHint: "For an emergency: ends every delegation and temporary rule in every workspace.",
+    revokeAllHint: "For an emergency: ends every delegation and temporary rule in every campaign.",
     revokeAllWarning:
-      "This ends {{count}} delegation(s), subdelegation(s) and temporary rule(s) in every workspace, and cannot be undone.",
+      "This ends {{count}} delegation(s), subdelegation(s) and temporary rule(s) in every campaign, and cannot be undone.",
     revokeAllConfirm: "Yes, revoke all",
     revokeAll: "Revoke all delegations",
     revokedAll:
@@ -148,7 +148,7 @@ const rules: Widen<typeof pt> = {
     title: "Chain supervision",
     intro:
       "Per table: whether the autonomy of the Table Master is paused, who paused it and why, and how the queue of approvals is doing.",
-    noTables: "No open table in this workspace.",
+    noTables: "No open table in this campaign.",
     queues: "Approval queue",
     level: "Level",
     open: "Open",
@@ -177,10 +177,10 @@ const rules: Widen<typeof pt> = {
     resume: "Resume",
   },
   ceiling: {
-    title: "Workspace ceiling",
-    intro: "The most any class of the workspace may have. The ceiling is widened only by decree.",
+    title: "Campaign ceiling",
+    intro: "The most any class of the campaign may have. The ceiling is widened only by decree.",
     inForce: "The ceiling in force",
-    noFile: "This workspace has no ceiling file: only the fixed rules apply.",
+    noFile: "This campaign has no ceiling file: only the fixed rules apply.",
     invalid: "The ceiling file is not valid and Mestre refuses it: {{reason}}",
     fileLabel: "Ceiling file, read only",
     readOnly: "Here the ceiling is only read. To widen it, open a request for a decree.",
@@ -201,7 +201,7 @@ const rules: Widen<typeof pt> = {
       "The file that says what the Grand Master decides alone, what goes to the people and how soon. Mestre checks the whole file before saving.",
     saved: "Policy saved. It holds from the next request.",
     default:
-      "This workspace has no file of its own yet: the content below is the default and becomes the file when you save.",
+      "This campaign has no file of its own yet: the content below is the default and becomes the file when you save.",
     fileLabel: "politica-de-aprovacao.yaml",
     fileHint: "YAML. An invalid file saves nothing.",
     line: "Line {{line}}:",
@@ -212,13 +212,13 @@ const rules: Widen<typeof pt> = {
   instructions: {
     title: "Extra instructions",
     intro:
-      "Your text for the Grand Master and for the Table Masters of each workspace. It adds to the system instructions and never replaces them.",
+      "Your text for the Grand Master and for the Table Masters of each campaign. It adds to the system instructions and never replaces them.",
     adds: "It holds from the next turn. If something conflicts with the system instructions, the system ones win.",
     grandMaster: "Instructions for the Grand Master",
     tableMasters: "Instructions for the Table Masters",
     textLabel: "Text: {{who}}",
     grandMasterHint: "For example: prefer Codex for review in this repository.",
-    tableMastersHint: "Holds for every Table Master of this workspace.",
+    tableMastersHint: "Holds for every Table Master of this campaign.",
     size: "{{size}} of {{max}} bytes",
     saved: "Instructions saved.",
     save: "Save",

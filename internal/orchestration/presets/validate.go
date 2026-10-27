@@ -348,7 +348,7 @@ func ValidateSheet(s Sheet, c SheetContext) (warnings []string, err error) {
 		}
 	}
 	if s.Class != "" && c.Class == nil && c.ClassMissing && c.Base.Name != OperatorBase {
-		warnings = append(warnings, fmt.Sprintf("a classe `%s` não foi encontrada; cada workspace a resolve quando o personagem nasce", s.Class))
+		warnings = append(warnings, fmt.Sprintf("a classe `%s` não foi encontrada; cada campanha a resolve quando o personagem nasce", s.Class))
 	}
 	return warnings, p.err()
 }

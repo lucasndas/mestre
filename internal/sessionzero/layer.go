@@ -284,7 +284,7 @@ func instructionsText(in LayerInput) string {
 	if x == "" || in.Role == RoleCharacter {
 		return ""
 	}
-	title := "Instruções dos usuários para este workspace"
+	title := "Instruções dos usuários para esta campanha"
 	if in.Role == RoleTableMaster {
 		title = "Instruções dos usuários para os Mestres de mesa"
 	}

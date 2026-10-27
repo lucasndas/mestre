@@ -4,7 +4,7 @@ import type pt from "../pt-BR/classes";
 const classes: Widen<typeof pt> = {
   title: "Classes",
   intro:
-    "The classes of the Mestre: global, workspace and table ones, with the App of each, and the proposals waiting for your approval.",
+    "The classes of the Mestre: global, campaign and table ones, with the App of each, and the proposals waiting for your approval.",
   loading: "Loading the classes…",
   band: "{{total}} of {{limit}} Apps on the account. Close to the GitHub limit, creating more Apps may fail.",
   bandLink: "See the Apps",
@@ -34,9 +34,9 @@ const classes: Widen<typeof pt> = {
     app: "App",
     version: "Version",
     noApp: "no App",
-    everywhere: "all workspaces",
+    everywhere: "all campaigns",
   },
-  scopes: { global: "Global", workspace: "Workspace", table: "Table" },
+  scopes: { global: "Global", workspace: "Campaign", table: "Table" },
   states: {
     approved: "Approved",
     pending: "Change pending",

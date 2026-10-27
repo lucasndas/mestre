@@ -166,7 +166,7 @@ var (
 func levelName(l characters.UserLevel) string {
 	switch l {
 	case characters.LevelOwner:
-		return "Dono"
+		return "Senhor da Guilda"
 	case characters.LevelAdministrator:
 		return "Administrador"
 	case characters.LevelApprover:

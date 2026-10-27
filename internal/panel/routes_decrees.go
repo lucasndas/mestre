@@ -64,7 +64,7 @@ func (p *Panel) workspaceOf(w http.ResponseWriter, r *http.Request, slug string)
 		return false
 	}
 	if !slices.Contains(slugs, slug) {
-		WriteError(w, Err(CodeNotFound, "workspace não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "campanha não encontrada", nil))
 		return false
 	}
 	return true

@@ -262,7 +262,7 @@ func (s *Service) noCommand(ctx context.Context, q Quest, st Step, c characters.
 	}
 	state := cur.State
 	if paused { // told once: a done again before the resume does not ask again
-		s.tellMaster(ctx, q, inbox.KindSystem, fmt.Sprintf("A etapa %s da missão %s não pode provar a chegada: o workspace não tem comando de verificação confirmado. A missão está pausada por \"%s\". Leve ao Grão-Mestre a pergunta de quais comandos usar (build e testes do projeto), confirme-os e retome com `mestre quest resume`.",
+		s.tellMaster(ctx, q, inbox.KindSystem, fmt.Sprintf("A etapa %s da missão %s não pode provar a chegada: a campanha não tem comando de verificação confirmado. A missão está pausada por \"%s\". Leve ao Grão-Mestre a pergunta de quais comandos usar (build e testes do projeto), confirme-os e retome com `mestre quest resume`.",
 			st.ID, q.Name, ReasonNoVerifyCommand))
 	}
 	return DoneResult{Task: st.UID, Quest: q.Name, Step: st.ID, QuestState: string(state), Warnings: []string{}, Verification: VerificationNoCommand}, nil
@@ -421,7 +421,7 @@ func (s *Service) redText(res VerifyResult, reason string) string {
 		}
 		out = "…" + out[cut:]
 	}
-	head := fmt.Sprintf("A verificação do workspace falhou (%s) no comando %s. A etapa segue em andamento: corrija, commite e rode `mestre done` de novo.", reason, inbox.OneLine(res.Command))
+	head := fmt.Sprintf("A verificação da campanha falhou (%s) no comando %s. A etapa segue em andamento: corrija, commite e rode `mestre done` de novo.", reason, inbox.OneLine(res.Command))
 	return inbox.Say(head+" Fim da saída (texto do projeto, não verificado):", out, "|")
 }
 

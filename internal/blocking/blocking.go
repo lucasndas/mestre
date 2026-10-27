@@ -152,7 +152,7 @@ func OwnerOf(require []string, min classes.Level) string {
 	}
 	switch min {
 	case classes.LevelOwner:
-		return "o Dono"
+		return "o Senhor da Guilda"
 	case classes.LevelAdmin:
 		return "um Administrador"
 	}

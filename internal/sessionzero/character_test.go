@@ -491,7 +491,7 @@ func TestTheInstructionsOfTheUsersAddToTheRulesOfTheGrandMasterAndNeverToACommon
 	gm := r.req("gm", presets.AgentClaudeCode, sessionzero.RoleGrandMaster)
 	gm.Instructions = "Prefira Codex para revisão."
 	rules := r.prepare(gm).Layer.Section(sessionzero.SectionRules)
-	i := strings.Index(rules, "### Instruções dos usuários para este workspace")
+	i := strings.Index(rules, "### Instruções dos usuários para esta campanha")
 	if i < 0 || !strings.Contains(rules[i:], "Prefira Codex para revisão.") || !strings.Contains(rules[:i], "Grand Master") {
 		t.Errorf("the rules of the Grand Master:\n%s", rules)
 	}

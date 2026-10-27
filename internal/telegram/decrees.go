@@ -75,7 +75,7 @@ func (c *DecreeChannel) Bind(bot *Bot) {
 func (c *DecreeChannel) Commands() []Command {
 	return []Command{
 		{Name: "decretos", Description: "lista os decretos ativos e suspensos e as regras temporárias de mesa", Query: true, Capability: users.Status, Run: c.list},
-		{Name: "revogar_tudo", Description: "revoga todas as delegações e regras temporárias de mesa (só o Dono)", Capability: users.DelegateHigh, Query: true, Run: c.revokeAllAsk},
+		{Name: "revogar_tudo", Description: "revoga todas as delegações e regras temporárias de mesa (só o Senhor da Guilda)", Capability: users.DelegateHigh, Query: true, Run: c.revokeAllAsk},
 	}
 }
 
@@ -173,7 +173,7 @@ func (c *DecreeChannel) say(err error) error {
 	case errors.Is(err, decrees.ErrNoDecree):
 		return errors.New("não existe esse decreto")
 	case errors.Is(err, decrees.ErrLocked):
-		return errors.New("o Mestre está travado: só o Dono destrava")
+		return errors.New("o Mestre está travado: só o Senhor da Guilda destrava")
 	case errors.Is(err, decrees.ErrPINFailed):
 		return errors.New("PIN incorreto ou expirado")
 	}
@@ -186,7 +186,7 @@ func (c *DecreeChannel) confirmed(ctx context.Context, d decrees.Decree) string 
 		text += " Vale até " + c.Svc.Moment(ctx, d.Until) + "."
 	}
 	if d.State == decrees.Suspended {
-		text += " Ficou suspenso: ele se opõe a outro decreto do mesmo nível, e os dois autores e o Dono foram avisados."
+		text += " Ficou suspenso: ele se opõe a outro decreto do mesmo nível, e os dois autores e o Senhor da Guilda foram avisados."
 	}
 	return text
 }
@@ -290,7 +290,7 @@ func (c *DecreeChannel) revokeRule(ctx context.Context, k Click) (string, string
 			continue
 		}
 		if !k.User.Acts(r.Workspace) {
-			return "", "", errors.New("essa regra não é de um workspace seu")
+			return "", "", errors.New("essa regra não é de uma campanha sua")
 		}
 	}
 	err = c.Rules.Revoke(ctx, id, tablerules.Revoker{Administrator: users.Can(k.User.Level, users.RevokeTemporaryRules), ID: k.User.ID})

@@ -55,7 +55,7 @@ func check(p Proposal, u users.User, now time.Time) (string, *Refusal) {
 		return "", refuse(CodeInvalid, "a proposta precisa do texto original da ordem")
 	}
 	if p.Workspace == "" {
-		return "", refuse(CodeInvalid, "a proposta precisa do workspace")
+		return "", refuse(CodeInvalid, "a proposta precisa da campanha")
 	}
 	switch p.Kind {
 	case KindRule:
@@ -70,7 +70,7 @@ func check(p Proposal, u users.User, now time.Time) (string, *Refusal) {
 		return "", refuse(CodeInvalid, "o tipo do decreto é regra permanente ou exceção pontual")
 	}
 	if !u.Acts(p.Workspace) {
-		return "", refuse(CodeWorkspace, "o workspace %q não está entre os seus", p.Workspace)
+		return "", refuse(CodeWorkspace, "a campanha %q não está entre os seus", p.Workspace)
 	}
 	if err := checkTarget(p); err != nil {
 		return "", err
@@ -111,7 +111,7 @@ func check(p Proposal, u users.User, now time.Time) (string, *Refusal) {
 		if ref := invariant(p.Effect.Allow); ref != nil {
 			return "", ref
 		}
-		return "amplia o teto do workspace", nil
+		return "amplia o teto da campanha", nil
 	case EffectDelegation:
 		return checkDelegation(p, u, now)
 	}
@@ -122,13 +122,13 @@ func checkTarget(p Proposal) *Refusal {
 	switch p.Target.Kind {
 	case TargetClass, TargetCharacter, TargetWorkspace, TargetTable:
 	default:
-		return refuse(CodeInvalid, "o alvo é uma classe, um personagem, um workspace ou uma mesa")
+		return refuse(CodeInvalid, "o alvo é uma classe, um personagem, uma campanha ou uma mesa")
 	}
 	if strings.TrimSpace(p.Target.Name) == "" {
 		return refuse(CodeInvalid, "o alvo precisa de um nome")
 	}
 	if p.Target.Kind == TargetWorkspace && p.Target.Name != p.Workspace {
-		return refuse(CodeInvalid, "o alvo workspace %q não é o escopo %q", p.Target.Name, p.Workspace)
+		return refuse(CodeInvalid, "o alvo campanha %q não é o escopo %q", p.Target.Name, p.Workspace)
 	}
 	return nil
 }
@@ -279,7 +279,7 @@ func checkPolicy(p Proposal) *Refusal {
 		return refuse(CodeInvalid, "um decreto de política diz o tipo de pedido ou a condição que ajusta")
 	}
 	if p.Target.Kind == TargetCharacter {
-		return refuse(CodeInvalid, "um decreto de política vale para o workspace, a mesa ou a classe, não para um personagem")
+		return refuse(CodeInvalid, "um decreto de política vale para a campanha, a mesa ou a classe, não para um personagem")
 	}
 	if !e.Loosens {
 		// a decree of policy tightens any type, the high ones too ("*" is all of them)
@@ -292,7 +292,7 @@ func checkPolicy(p Proposal) *Refusal {
 		return refuse(CodeInvariant, "contornar a proteção do GitHub (%s) nem o motor pode: o decreto é recusado", e.Setting)
 	}
 	if highTypes[e.Setting] || fixedTypes[e.Setting] {
-		return refuse(CodePolicy, "um decreto de política não afrouxa o tipo %q (risco alto ou fixo); para o Grão-Mestre decidir um tipo alto, só um decreto `delegation` do Dono (docs/aprovacoes/delegacao.md)", e.Setting)
+		return refuse(CodePolicy, "um decreto de política não afrouxa o tipo %q (risco alto ou fixo); para o Grão-Mestre decidir um tipo alto, só um decreto `delegation` do Senhor da Guilda (docs/aprovacoes/delegacao.md)", e.Setting)
 	}
 	if !chain.LoosenablePolicySetting(e.Setting) {
 		return refuse(CodeInvalid, "afrouxar a política precisa de uma área sensível (como migracoes) ou de um tipo de risco medio; %q não é um (as áreas do motor e dos segredos nunca são abertas)", e.Setting)
@@ -357,7 +357,7 @@ func describeEffect(e Effect, t Target, kind Kind, a *classes.Action) string {
 	case TargetCharacter:
 		for_ = " para " + t.Name
 	case TargetWorkspace:
-		for_ = " no workspace " + t.Name
+		for_ = " na campanha " + t.Name
 	case TargetTable:
 		for_ = " na mesa " + t.Name
 	}

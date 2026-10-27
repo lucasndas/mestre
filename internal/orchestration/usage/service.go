@@ -194,9 +194,9 @@ func (s *Service) what(lim Limit, r Record) string {
 	case ScopeTable:
 		return "a mesa " + orElse(r.TableName, r.Table)
 	case ScopeWorkspace:
-		return "o workspace " + lim.Key
+		return "a campanha " + lim.Key
 	case ScopeDay:
-		return "o dia do workspace " + lim.Key
+		return "o dia da campanha " + lim.Key
 	}
 	return "o dia da instalação"
 }

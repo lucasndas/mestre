@@ -72,7 +72,7 @@ func TestTheAuthorConfirmsWithTheButtonAndThePINAndTheDecreeIsActive(t *testing.
 	if keys["Confirmar"] == "" || keys["Cancelar"] == "" {
 		t.Fatalf("no buttons: %v", keys)
 	}
-	if text := texts(w, anaTG.ID)[0]; !strings.Contains(text, "Entendi: permitir comandos npm install * para a classe dev, permanente (workspace loja). Confirma?") || !strings.Contains(text, "PIN") || !strings.Contains(text, "Sua ordem: ") {
+	if text := texts(w, anaTG.ID)[0]; !strings.Contains(text, "Entendi: permitir comandos npm install * para a classe dev, permanente (campanha loja). Confirma?") || !strings.Contains(text, "PIN") || !strings.Contains(text, "Sua ordem: ") {
 		t.Fatalf("the confirmation says %q", text)
 	}
 	// the click of another user is not the author's
@@ -260,7 +260,7 @@ func TestTwoOpposedDecreesTellTheAuthorsAndTheOwnerOverTheBot(t *testing.T) {
 	deny.Effect = decrees.Effect{Kind: decrees.EffectPermission, Deny: &classes.Grant{Commands: []string{"make x"}}}
 	w.confirmNow(bia, deny)
 	w.drain()
-	for name, tg := range map[string]faketelegram.User{"Ana": anaTG, "Bia": biaTG, "o Dono": owner} {
+	for name, tg := range map[string]faketelegram.User{"Ana": anaTG, "Bia": biaTG, "o Senhor da Guilda": owner} {
 		var told bool
 		for _, s := range texts(w, tg.ID) {
 			told = told || (strings.Contains(s, "se opõem") && strings.Contains(s, "suspensos"))

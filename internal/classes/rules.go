@@ -79,7 +79,7 @@ func (l Layer) label(class string) string {
 	case LayerException:
 		return "exceção pontual"
 	case LayerCeiling:
-		return "teto do workspace"
+		return "teto da campanha"
 	case LayerSheet:
 		return "ficha do personagem"
 	case LayerMachine:

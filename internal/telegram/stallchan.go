@@ -99,7 +99,7 @@ func (c *StallChannel) pause(ctx context.Context, k Click) (string, string, erro
 	}
 	u, err := c.Users.Get(ctx, k.User.ID) // the level and the workspaces as stored now
 	if err != nil || !u.Acts(ws) {
-		return "", "", errors.New("essa mesa não é de um workspace seu")
+		return "", "", errors.New("essa mesa não é de uma campanha sua")
 	}
 	changed, err := c.Pauser.PauseStalled(ctx, chain.PauseRequest{Workspace: ws, Table: table,
 		Reason: "a mesa trabalhava há horas sem entregar nada; pausada pelo botão do aviso",
@@ -158,7 +158,7 @@ func (c *StallChannel) pauseAutonomy(ctx context.Context, k Click) (string, stri
 	}
 	u, err := c.Users.Get(ctx, k.User.ID) // the level and the workspaces as stored now
 	if err != nil || !u.Acts(ws) {
-		return "", "", errors.New("essa mesa não é de um workspace seu")
+		return "", "", errors.New("essa mesa não é de uma campanha sua")
 	}
 	changed, err := c.Autonomy.PauseAutonomy(ctx, chain.PauseRequest{Workspace: ws, Table: table,
 		Reason: "a fila de aprovações da mesa acumulou; autonomia pausada pelo botão do aviso",

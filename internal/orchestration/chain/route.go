@@ -146,11 +146,11 @@ func (s *Service) can(ctx context.Context, h hop, r Request, st Settings) verdic
 			return yes()
 		case classes.RiskHigh:
 			if r.Risk.NoDelegation || s.o.Delegations == nil {
-				return no(false, "alto só com delegação do Dono")
+				return no(false, "alto só com delegação do Senhor da Guilda")
 			}
 			ok, err := s.o.Delegations.Covers(ctx, r)
 			if err != nil || !ok {
-				return no(false, "alto sem delegação do Dono para este tipo e escopo")
+				return no(false, "alto sem delegação do Senhor da Guilda para este tipo e escopo")
 			}
 			return yes()
 		}

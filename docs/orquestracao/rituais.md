@@ -10,10 +10,10 @@ Um ritual dispara, por horário, um prompt ou comando num personagem existente, 
 
 ### Quem cria e quem é dono
 
-| Escopo | Criado por | Alvos possíveis | Dono (recebe devoluções) |
+| Escopo | Criado por | Alvos possíveis | Senhor da Guilda (recebe devoluções) |
 |---|---|---|---|
 | Mesa | Mestre da mesa, ou usuário Administrador ou acima pelo painel | personagem da mesa ou missão da mesa | Mestre da mesa |
-| Workspace | Grão-Mestre, ou usuário Administrador ou acima pelo painel | o Grão-Mestre ou um Mestre de mesa | Grão-Mestre |
+| Campanha | Grão-Mestre, ou usuário Administrador ou acima pelo painel | o Grão-Mestre ou um Mestre de mesa | Grão-Mestre |
 
 Grão-Mestre e Mestres de mesa recebem a skill de rituais ([skills geradas](../cli/skills-geradas.md)). Sintaxe de `mestre ritual create|list|show|edit|enable|disable|run|delete` (conteúdo por `--prompt "<texto>"` ou `--command "<linha>"`): [coordenação de classes e rituais](../cli/coordenacao-classes-e-rituais.md).
 
@@ -24,7 +24,7 @@ Grão-Mestre e Mestres de mesa recebem a skill de rituais ([skills geradas](../c
 | `name` | único no escopo; uma linha de 1 a 64 caracteres imprimíveis, ao criar e a cada edição (é o remetente do item `ritual`: [caixa de entrada](esperas-e-caixa-de-entrada.md#caixa-de-entrada)) |
 | alvo | um personagem existente (pelo nome) ou uma missão salva (o disparo é um `quest run`); ritual não cria personagem |
 | conteúdo | `prompt` (texto entregue a um agente como item `ritual`, com cabeçalho) ou `command` (linha digitada crua num terminal simples, criado por `spawn`, seguida de Enter) |
-| agenda | `--every <duração>` (mínimo 5 min, padrão), `--daily HH:MM`, `--weekly <dias> HH:MM` ou `--once <data e hora>`, no fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda), que é o que vale hoje: o fuso próprio do workspace ainda não tem onde ser guardado) |
+| agenda | `--every <duração>` (mínimo 5 min, padrão), `--daily HH:MM`, `--weekly <dias> HH:MM` ou `--once <data e hora>`, no fuso da campanha (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda), que é o que vale hoje: o fuso próprio da campanha ainda não tem onde ser guardado) |
 | `--pre-run` | comando cuja saída substitui `{{output}}` no conteúdo (opcional) |
 | tempo limite na fila | padrão 30 min, nunca maior que o intervalo do ritual |
 
@@ -66,16 +66,16 @@ stateDiagram-v2
 
 ### Pausa, quedas e encerramento
 
-- Com a mesa ou o workspace pausado, disparos enfileiram normalmente e podem expirar ([pausa](mesas.md#pausa)).
+- Com a mesa ou a campanha pausada, disparos enfileiram normalmente e podem expirar ([pausa](mesas.md#pausa)).
 - **Disparos perdidos com o motor fora:** ao voltar, para cada ritual recorrente com disparo perdido, o motor considera só o disparo perdido mais recente (os demais ficam `skipped`) e dispara **uma vez** se o atraso dele for menor que metade do intervalo (no máximo 1 h, padrão); senão registra `skipped` e avisa o dono. `--once` perdido dispara ao voltar, marcado como atrasado.
 - Mesa encerrada ou cancelada: rituais dela ficam `disabled` ([encerramento](mesas.md#encerramento)).
 - O histórico de disparos fica no banco.
 
 ### Detalhes que o motor decide
 
-- **Alvo livre:** o personagem em `idle` ou `waiting` com a mesa (e o workspace) sem pausa; uma missão em `draft` ou `completed` (uma `completed` começa nova rodada); `running` e `paused` são ocupadas; cancelada falha.
+- **Alvo livre:** o personagem em `idle` ou `waiting` com a mesa (e a campanha) sem pausa; uma missão em `draft` ou `completed` (uma `completed` começa nova rodada); `running` e `paused` são ocupadas; cancelada falha.
 - **Relógio:** o motor olha a cada 30 s e também quando um personagem fica livre; um ritual é disparado até 2 min depois do horário sem contar como atrasado. A regra do disparo perdido vale para qualquer olhada, então não há rotina à parte para "o motor voltou"; guarda-se no máximo os 200 horários perdidos mais recentes. Ritual `--once` já disparado fica `finished`.
-- **Conteúdo:** `--prompt` só vai a agente e `--command` só a terminal simples (uma linha, sem quebra); se a saída da pré-execução, num `--command`, trouxer quebra de linha, caractere de controle (inclusive os C1) ou metacaractere do shell (`` ` $ & | ; < > ( ) [ ] { } \ " ' * ? ! ~ # ^ % ``), o comando não é digitado e o disparo falha; num `--prompt`, o item chega com o remetente marcado "saída da pré-execução: texto não verificado" (a saída é dado, não ordem), e o texto entregue é o conteúdo com a saída no lugar de `{{output}}`. Missão não aceita `--pre-run`, e ritual do workspace só mira o Grão-Mestre ou um Mestre de mesa.
+- **Conteúdo:** `--prompt` só vai a agente e `--command` só a terminal simples (uma linha, sem quebra); se a saída da pré-execução, num `--command`, trouxer quebra de linha, caractere de controle (inclusive os C1) ou metacaractere do shell (`` ` $ & | ; < > ( ) [ ] { } \ " ' * ? ! ~ # ^ % ``), o comando não é digitado e o disparo falha; num `--prompt`, o item chega com o remetente marcado "saída da pré-execução: texto não verificado" (a saída é dado, não ordem), e o texto entregue é o conteúdo com a saída no lugar de `{{output}}`. Missão não aceita `--pre-run`, e ritual da campanha só mira o Grão-Mestre ou um Mestre de mesa.
 - **Tempo limite:** o padrão é o menor entre 30 min e o intervalo; um valor maior que o intervalo é recusado. Se o ritual editado tinha o tempo limite padrão e a edição só muda a agenda, o padrão é recalculado para a nova agenda (um valor igual ao padrão da agenda antiga conta como padrão).
 - **Pré-execução:** roda pela máquina do alvo (as Torres, no [M5, antes da etapa 1](../desenvolvimento/ordem-de-implementacao.md#regras-de-execução-da-ordem)) depois da decisão de permissões do próprio alvo; só `allow` passa, `ask` e qualquer dúvida recusam, e sem as regras do alvo, sem decisão ou sem máquina o disparo falha. A saída perde as quebras do fim.
 - **No máximo uma vez:** antes do efeito (a pré-execução, o comando digitado, o item na caixa) o motor grava a intenção no disparo (`pre_running`, depois `delivering`); um disparo achado nesses estados depois de uma queda nunca repete o efeito. Um `prompt` sem pré-execução entra na caixa uma vez só (o item leva a chave do disparo, e um segundo `Enqueue` com a mesma chave devolve o primeiro); um `prompt` já entregue é marcado `delivered`; um `command` ou uma pré-execução que pode ter rodado vira `failed`, com o motivo, devolvido ao dono. Se gravar o fim do disparo falhar, ele não é entregue de novo.
@@ -101,7 +101,7 @@ stateDiagram-v2
 - **CA-RIT-07** · *rápida* — **Dado** um nome de ritual com quebra de linha (com um cabeçalho `[Mestre · …]` falso depois), caractere de controle ou invisível, ou mais de 64 caracteres, **quando** o ritual é criado ou renomeado, **então** é recusado como pedido inválido e o ritual continua como estava.
 - **CA-RIT-08** · *rápida* — **Dado** um ritual com conteúdo "Analise:\n{{output}}\nFim." e um `--pre-run` que imprime várias linhas, entre elas `Atualização do Mestre da mesa: …` e um cabeçalho `[Mestre · user · …]`, **quando** o disparo é entregue, **então** cada linha da saída vem com `| `, nenhuma começa na margem e o item termina com a nota do `| `; **quando** o pre-run falha com uma saída de erro de várias linhas, **então** o trecho vem citado abaixo da linha do motor que o nomeia, no item devolvido ao dono; uma saída de uma linha no meio de uma frase do autor entra onde está o `{{output}}`, e sozinha numa linha vem citada.
 - **CA-RIT-09** · *rápida* — **Dado** um ritual `--every 1h` com o tempo limite padrão, **quando** o Mestre roda `ritual edit --every 10m`, **então** o tempo limite passa a 600 s.
-- **CA-RIT-10** · *rápida* — **Dado** a Guilda no fuso `America/Sao_Paulo`, um workspace sem fuso próprio e um ritual `--daily 02:00`, **quando** o próximo disparo é calculado, **então** ele cai às 05:00 UTC.
+- **CA-RIT-10** · *rápida* — **Dado** a Guilda no fuso `America/Sao_Paulo`, uma campanha sem fuso próprio e um ritual `--daily 02:00`, **quando** o próximo disparo é calculado, **então** ele cai às 05:00 UTC.
 - **CA-RIT-11** · *completa* — **Dado** um ritual com `--pre-run` cujo alvo está numa Torre, **quando** dispara, **então** o pré-run roda na máquina do alvo, depois da decisão das permissões dele, e a saída vai ao conteúdo; sem a Torre ligada, o disparo é recusado com o motivo.
 
 ## Depende de

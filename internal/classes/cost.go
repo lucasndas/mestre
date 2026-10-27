@@ -146,12 +146,12 @@ func (g *CostGate) CheckApproval(ctx context.Context, r ExtraSpend, approver Lev
 	if min == LevelGrandMaster || (approver.rank() >= min.rank() && approver != LevelGrandMaster) {
 		return nil
 	}
-	why := fmt.Sprintf("o extra de %v %s passa o teto de custo do workspace (%v)", r.Extra, r.Unit, *c.Cap(r.Unit, r.Scope))
+	why := fmt.Sprintf("o extra de %v %s passa o teto de custo da campanha (%v)", r.Extra, r.Unit, *c.Cap(r.Unit, r.Scope))
 	if approver == LevelGrandMaster {
 		if err := g.Users.AskUsers(ctx, r, min, why); err != nil {
 			return fmt.Errorf("cost ceiling: %w", err)
 		}
 		return fmt.Errorf("%w: %s", ErrHumanRequired, why)
 	}
-	return fmt.Errorf("%w: %s; aprova um Administrador ou o Dono", ErrLevelTooLow, why)
+	return fmt.Errorf("%w: %s; aprova um Administrador ou o Senhor da Guilda", ErrLevelTooLow, why)
 }

@@ -459,7 +459,7 @@ func (cc Commands) requestApp(ctx context.Context, who Caller, k ClassKey) {
 	if cc.NotifyGrandMaster == nil {
 		return
 	}
-	text := fmt.Sprintf("Pedido de App: a classe %s (%s) nasceu com `app: novo`. Prepare o App com `mestre app create` (o link de criação vai ao Dono) ou vincule a classe a uma existente e explique o porquê. Pedido por %s.",
+	text := fmt.Sprintf("Pedido de App: a classe %s (%s) nasceu com `app: novo`. Prepare o App com `mestre app create` (o link de criação vai ao Senhor da Guilda) ou vincule a classe a uma existente e explique o porquê. Pedido por %s.",
 		k.Name, scopeLabel(k.Scope), orDash(who.Name))
 	_ = cc.NotifyGrandMaster(ctx, who.Workspace, text)
 }

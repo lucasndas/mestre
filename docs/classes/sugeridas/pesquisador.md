@@ -2,7 +2,7 @@
 
 > **Assunto:** classe sugerida Pesquisador: levanta o que existe antes de construir, sem escrever código · **Componente:** Motor · **Atualizado:** 2026-10-18
 
-Classe do pacote [sugerido](../classes-sugeridas.md): vem desligada, e um Administrador a ativa como classe do workspace. Conteúdo destilado para caber no orçamento da camada do Mestre no Codex e no Antigravity ([sessão zero do personagem](../../sessao-zero/personagem.md)).
+Classe do pacote [sugerido](../classes-sugeridas.md): vem desligada, e um Administrador a ativa como classe da campanha. Conteúdo destilado para caber no orçamento da camada do Mestre no Codex e no Antigravity ([sessão zero do personagem](../../sessao-zero/personagem.md)).
 
 ## Papel
 

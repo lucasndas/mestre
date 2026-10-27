@@ -2,7 +2,7 @@ export default {
   nav: {
     approvals: "Aprovações",
     overview: "Visão geral",
-    workspaces: "Workspaces",
+    workspaces: "Campanhas",
     sessions: "Minhas sessões",
     password: "Trocar a senha",
     users: "Usuários",
@@ -11,7 +11,7 @@ export default {
     decrees: "Decretos",
     delegations: "Delegações",
     chain: "Supervisão da cadeia",
-    ceiling: "Teto do workspace",
+    ceiling: "Teto da campanha",
     policy: "Política de aprovação",
     instructions: "Instruções extras",
     guild: "Guilda",
@@ -26,7 +26,7 @@ export default {
     main: "Navegação principal",
   },
   top: {
-    workspace: "Workspace",
+    workspace: "Campanha",
     approvals: "Aprovações",
     notices: "Avisos",
     menu: "Menu da conta",
@@ -38,7 +38,7 @@ export default {
   overview: {
     title: "Sua Guilda está pronta",
     welcome: "Olá, {{name}}. Seu nível é {{level}}.",
-    emptyTitle: "Ainda não há nenhum workspace",
+    emptyTitle: "Ainda não há nenhuma campanha",
     emptyBody: "Quando você conectar um repositório do GitHub, ele aparece aqui.",
     times: "Horários no fuso {{zone}}.",
   },

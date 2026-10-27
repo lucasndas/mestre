@@ -39,7 +39,7 @@ func rank(l Level) int {
 func (l Level) Name() string {
 	switch l {
 	case Owner:
-		return "Dono"
+		return "Senhor da Guilda"
 	case Administrator:
 		return "Administrador"
 	case Approver:

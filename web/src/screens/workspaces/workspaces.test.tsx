@@ -47,8 +47,8 @@ test("the list shows the workspaces and the nav links to it", async () => {
   const article = await screen.findByRole("article", { name: "loja" });
   expect(within(article).getByText("acme/loja")).toBeTruthy();
   expect(within(article).getByText("ativo")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Criar workspace" })).toBeNull();
-  expect(screen.getByRole("link", { name: "Workspaces" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Criar campanha" })).toBeNull();
+  expect(screen.getByRole("link", { name: "Campanhas" })).toBeTruthy();
 });
 
 test("an Administrator creates a workspace with the sheet of the Grand Master", async () => {
@@ -66,12 +66,12 @@ test("an Administrator creates a workspace with the sheet of the Grand Master", 
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/workspaces");
-  await user.click(await screen.findByRole("button", { name: "Criar workspace" }));
-  const submit = screen.getByRole("button", { name: "Criar workspace" });
+  await user.click(await screen.findByRole("button", { name: "Criar campanha" }));
+  const submit = screen.getByRole("button", { name: "Criar campanha" });
   expect((submit as HTMLButtonElement).disabled).toBe(true); // no repository yet
   await fill(user, screen.getByLabelText("Repositório"), "acme/novo");
-  await user.click(screen.getByRole("button", { name: "Criar workspace" }));
-  expect(await screen.findByText("Workspace novo criado. A sessão zero começou.")).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Criar campanha" }));
+  expect(await screen.findByText("Campanha novo criada. A sessão zero começou.")).toBeTruthy();
   const post = calls.find((c) => c.method === "POST" && c.path === "/api/workspaces");
   expect(post?.body).toEqual({ repo: "acme/novo", grand_master_sheet: "gm-claude" });
   expect(await screen.findByRole("article", { name: "novo" })).toBeTruthy();
@@ -91,11 +91,11 @@ test("a creation the engine refuses shows the reason in the words of the screen"
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/workspaces");
-  await user.click(await screen.findByRole("button", { name: "Criar workspace" }));
+  await user.click(await screen.findByRole("button", { name: "Criar campanha" }));
   await fill(user, screen.getByLabelText("Repositório"), "acme/loja");
-  await user.click(screen.getByRole("button", { name: "Criar workspace" }));
+  await user.click(screen.getByRole("button", { name: "Criar campanha" }));
   expect((await screen.findByRole("alert")).textContent).toBe(
-    "Esse repositório já é o workspace loja.",
+    "Esse repositório já é a campanha loja.",
   );
 });
 
@@ -168,9 +168,9 @@ test("pausing and resuming ask the server and show the refusal", async () => {
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/workspaces");
-  await user.click(await screen.findByRole("button", { name: "Pausar workspace" }));
+  await user.click(await screen.findByRole("button", { name: "Pausar campanha" }));
   expect((await screen.findByRole("alert")).textContent).toBe(
-    "O estado do workspace não permite isso agora.",
+    "O estado da campanha não permite isso agora.",
   );
   expect(calls.filter((c) => c.path === "/api/workspaces/loja/pause")).toHaveLength(1);
 });

@@ -344,7 +344,7 @@ func (s *Service) mayDismiss(ctx context.Context, by Creator, c Character) error
 		if by.Level == LevelOwner || by.Level == LevelAdministrator {
 			return nil
 		}
-		return fmt.Errorf("%w: só o Dono e os Administradores encerram personagens", ErrLevelDenied)
+		return fmt.Errorf("%w: só o Senhor da Guilda e os Administradores encerram personagens", ErrLevelDenied)
 	case CreatedByCharacter:
 		who, err := s.o.Registry.Get(ctx, by.ID)
 		if err != nil {
@@ -650,7 +650,7 @@ func (s *Service) Replace(ctx context.Context, rq ReplaceRequest) (CreateResult,
 		// the change of its sheet is, for the engine, the end of the old one by an
 		// Administrator (checked by Dismiss) and the birth of the new.
 		if rq.By.Kind != CreatedByEngine && rq.By.Kind != CreatedByUser {
-			return CreateResult{}, fmt.Errorf("%w: só o Dono e os Administradores trocam a ficha do Grão-Mestre", ErrLevelDenied)
+			return CreateResult{}, fmt.Errorf("%w: só o Senhor da Guilda e os Administradores trocam a ficha do Grão-Mestre", ErrLevelDenied)
 		}
 		req.Creator = Creator{Kind: CreatedByEngine}
 	}

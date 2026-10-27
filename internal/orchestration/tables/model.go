@@ -198,7 +198,7 @@ func (e *MissingError) Error() string {
 func (e *MissingError) Is(target error) bool { return target == ErrUnmergedChanges }
 
 // Settings are the settings of a workspace that matter here
-// (docs/orquestracao/workspaces.md#configuração-do-workspace). Whoever keeps
+// (docs/orquestracao/workspaces.md#configuração-da-campanha). Whoever keeps
 // the configuration (the panel, milestone 6) implements it; the defaults of
 // the documents are in DefaultSettings.
 type Settings interface {

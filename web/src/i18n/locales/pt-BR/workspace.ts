@@ -1,20 +1,20 @@
 export default {
   selector: {
-    label: "Workspace",
-    create: "Criar workspace…",
-    none: "Nenhum workspace",
-    placeholder: "Escolha um workspace",
+    label: "Campanha",
+    create: "Criar campanha…",
+    none: "Nenhuma campanha",
+    placeholder: "Escolha uma campanha",
   },
-  title: "Workspace {{workspace}}",
-  region: "Canvas do workspace {{workspace}}",
-  loading: "Abrindo o workspace…",
+  title: "Campanha {{workspace}}",
+  region: "Canvas da campanha {{workspace}}",
+  loading: "Abrindo a campanha…",
   state: {
     preparing: "preparando",
     active: "ativo",
     paused: "pausado",
   },
   shortcuts: {
-    label: "Atalhos do workspace",
+    label: "Atalhos da campanha",
     chat: "Conversar com o Grão-Mestre",
     approvals_one: "{{count}} aprovação pendente",
     approvals_other: "{{count}} aprovações pendentes",
@@ -24,12 +24,12 @@ export default {
     healthDown_other: "Saúde: {{count}} máquinas fora",
   },
   noAccess: {
-    title: "Sem acesso a este workspace",
-    body: "O workspace “{{workspace}}” não existe ou você não atua nele. Estes são os seus:",
-    none: "Você não atua em nenhum workspace ainda. Peça ao Dono para incluí-lo em um.",
+    title: "Sem acesso a esta campanha",
+    body: "A campanha “{{workspace}}” não existe ou você não atua nela. Estes são os seus:",
+    none: "Você não atua em nenhuma campanha ainda. Peça ao Senhor da Guilda para incluí-lo em uma.",
   },
   preparing: {
-    title: "Este workspace ainda está sendo preparado",
+    title: "Esta campanha ainda está sendo preparada",
     body: "As mesas aparecem aqui quando a preparação terminar. Estas são as etapas:",
   },
   empty: {
@@ -46,7 +46,7 @@ export default {
     machine: "Máquina {{machine}}",
     loadingTerminal: "Abrindo o terminal…",
     noTerminal: "Sem terminal aberto.",
-    none: "Este workspace não tem Grão-Mestre agora.",
+    none: "Esta campanha não tem Grão-Mestre agora.",
   },
   block: {
     label: "Mesa {{table}}",
@@ -69,7 +69,7 @@ export default {
     questIssue: "Issue #{{issue}} da missão",
     step: "etapa {{step}}",
     noQuest: "Nenhuma missão em andamento.",
-    party: "Party",
+    party: "Companhia",
     partySize_one: "{{count}} personagem",
     partySize_other: "{{count}} personagens",
     partyNone: "ninguém ainda",

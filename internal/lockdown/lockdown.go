@@ -171,7 +171,7 @@ func (s *Service) Lock(ctx context.Context, by users.User) error {
 		}
 	}
 	s.changed(true)
-	s.tellAll(ctx, fmt.Sprintf("Sistema: %s travou o Mestre às %s. Nada é executado até o Dono destravar.", cur.Name, now.In(s.o.Location).Format("15:04")))
+	s.tellAll(ctx, fmt.Sprintf("Sistema: %s travou o Mestre às %s. Nada é executado até o Senhor da Guilda destravar.", cur.Name, now.In(s.o.Location).Format("15:04")))
 	return nil
 }
 

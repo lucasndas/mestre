@@ -256,7 +256,7 @@ test("a level that cannot manage machines does not see the entry in the nav and 
   });
   renderApp("/guilda");
   expect((await screen.findByRole("alert")).textContent).toBe(
-    "Esta ação exige o nível Dono; o seu é Administrador.",
+    "Esta ação exige o nível Senhor da Guilda; o seu é Administrador.",
   );
   expect(screen.queryByRole("link", { name: "Guilda" })).toBeNull();
 });

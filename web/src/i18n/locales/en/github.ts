@@ -13,8 +13,8 @@ const github: Widen<typeof pt> = {
     expired: "The credential of the account {{login}} expired. Connect again.",
   },
   registered: "GitHub login registered for you: {{login}}. Only that account can authorize.",
-  noLogin: "No GitHub login was registered for you. Ask the Owner to register it.",
-  mayNot: "Your level or your workspaces do not allow a personal credential.",
+  noLogin: "No GitHub login was registered for you. Ask the Guildmaster to register it.",
+  mayNot: "Your level or your campaigns do not allow a personal credential.",
   connect: "Connect GitHub",
   reconnect: "Connect again",
   steps: {

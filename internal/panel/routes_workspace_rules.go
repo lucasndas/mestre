@@ -75,7 +75,7 @@ func (p *Panel) ruleDir(w http.ResponseWriter, r *http.Request) (string, bool) {
 	}
 	root := b.Principal(ws)
 	if root == "" || !filepath.IsAbs(root) {
-		WriteError(w, Err(CodeNoFolder, "o workspace ainda não tem a pasta principal", nil))
+		WriteError(w, Err(CodeNoFolder, "a campanha ainda não tem a pasta principal", nil))
 		return "", false
 	}
 	return filepath.Join(root, sessionzero.MestreDir, "regras"), true

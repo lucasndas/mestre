@@ -66,7 +66,7 @@ func mayPropose(scope ClassScope, by Author) bool {
 
 // ErrNeedsAdministrator: only an Administrator or above approves a class
 // of the workspace; the Grand Master never approves what he proposed.
-var ErrNeedsAdministrator = errors.New("forbidden: só um Administrador ou acima aprova uma classe do workspace; o Grão-Mestre nunca aprova a própria proposta")
+var ErrNeedsAdministrator = errors.New("forbidden: só um Administrador ou acima aprova uma classe da campanha; o Grão-Mestre nunca aprova a própria proposta")
 
 // Save creates or edits a class: it validates the package (the App link, the
 // structure, the permissions, the hooks), checks the ceiling, the name among

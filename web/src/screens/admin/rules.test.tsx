@@ -50,7 +50,7 @@ test("the decrees screen shows who ordered what, until when and what it freed", 
   expect(await screen.findByRole("heading", { name: "Decretos", level: 1 })).toBeTruthy();
   expect(await screen.findByText("libera comandos npm test* para a classe dev")).toBeTruthy();
   expect(screen.getByText(/dev pode rodar npm test sem perguntar/)).toBeTruthy();
-  expect(screen.getByText("Maria Souza · Dono")).toBeTruthy();
+  expect(screen.getByText("Maria Souza · Senhor da Guilda")).toBeTruthy();
   expect(screen.getByText(/até 20\/11\/2026/)).toBeTruthy();
   expect(screen.getByText(/dev-1 · npm test/)).toBeTruthy();
 });
@@ -77,7 +77,7 @@ test("revoking a decree asks again, then revokes and says so", async () => {
   const post = calls.find((c) => c.path === "/api/decrees/7/revoke");
   expect(post?.headers["X-Mestre-Pin"]).toBeUndefined();
   await waitFor(() =>
-    expect(screen.getByText("Nenhum decreto em vigor neste workspace.")).toBeTruthy(),
+    expect(screen.getByText("Nenhum decreto em vigor nesta campanha.")).toBeTruthy(),
   );
 });
 
@@ -481,7 +481,7 @@ test("the nav shows the rules screens by level and hides the policy from who is 
   });
   renderApp("/cadeia");
   await screen.findByRole("article", { name: "42-login" });
-  for (const n of ["Decretos", "Delegações", "Supervisão da cadeia", "Teto do workspace"]) {
+  for (const n of ["Decretos", "Delegações", "Supervisão da cadeia", "Teto da campanha"]) {
     expect(screen.getByRole("link", { name: n })).toBeTruthy();
   }
   expect(screen.queryByRole("link", { name: "Política de aprovação" })).toBeNull();

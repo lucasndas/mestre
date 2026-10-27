@@ -19,7 +19,7 @@ export function Ceiling() {
     <section>
       <PageHeader title={t("ceiling.title")} intro={t("ceiling.intro")} />
       <p className="mb-6 max-w-2xl text-sm text-muted">
-        <Term name="Teto do workspace" /> · <Term name="Decreto" />
+        <Term name="Teto da campanha" /> · <Term name="Decreto" />
       </p>
       <WorkspacePicker>
         {(ws, picker) => <CeilingOf key={ws} workspace={ws} picker={picker} />}

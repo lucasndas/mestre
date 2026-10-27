@@ -16,7 +16,7 @@ import (
 )
 
 // RiskAdjustments are the owner's adjustments of the risco section of the
-// approval policy file (docs/classes/classificacao-de-risco.md#ajustes-do-dono):
+// approval policy file (docs/classes/classificacao-de-risco.md#ajustes-do-senhor-da-guilda):
 // they hold before the default table, in the order of the file.
 type RiskAdjustments struct {
 	Items []RiskAdjustment

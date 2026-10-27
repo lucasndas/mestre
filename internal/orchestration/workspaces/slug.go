@@ -109,7 +109,7 @@ func SuggestSlug(base string, taken func(string) bool) string {
 // RepoTakenError says which workspace already has the repository.
 type RepoTakenError struct{ Repo, Slug string }
 
-func (e *RepoTakenError) Error() string { return "repositório já é o workspace " + e.Slug }
+func (e *RepoTakenError) Error() string { return "repositório já é a campanha " + e.Slug }
 
 // Is makes errors.Is(err, ErrRepoTaken) true.
 func (e *RepoTakenError) Is(target error) bool { return target == ErrRepoTaken }

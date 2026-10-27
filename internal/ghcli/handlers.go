@@ -171,7 +171,7 @@ func (h *Handlers) refused(ctx context.Context, c characters.Character, err erro
 	case errors.Is(err, github.ErrWorkflowNotAllowed):
 		h.Refused(ctx, c, "workflow_not_allowed", "a classe do personagem tem git.workflows: never e a branch muda .github/workflows; nada foi enviado")
 	case errors.Is(err, github.ErrWorkflowPermission), errors.Is(err, gitx.ErrPushWorkflow):
-		h.Refused(ctx, c, "workflow_permission", "o App não tem a permissão Workflows no GitHub; o Dono a aceita no GitHub")
+		h.Refused(ctx, c, "workflow_permission", "o App não tem a permissão Workflows no GitHub; o Senhor da Guilda a aceita no GitHub")
 	case errors.Is(err, gitx.ErrPushSignature):
 		h.Refused(ctx, c, "signature_required", "as regras do repositório pedem commits assinados, e os commits do Mestre não são")
 	}

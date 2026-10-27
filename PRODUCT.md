@@ -14,7 +14,7 @@ React 19, Vite 8, TypeScript 7, Tailwind CSS 4, react-aria-components, TanStack 
 
 ## Users
 
-O Dono da Guilda e as pessoas que ele convida (Administrador, Aprovador, Observador etc.), no navegador do computador ou do celular. Não são, em geral, pessoas técnicas: acompanham o que os agentes de IA fazem nos repositórios do GitHub, aprovam ações e conversam com o Grão-Mestre.
+O Senhor da Guilda e as pessoas que ele convida (Administrador, Aprovador, Observador etc.), no navegador do computador ou do celular. Não são, em geral, pessoas técnicas: acompanham o que os agentes de IA fazem nos repositórios do GitHub, aprovam ações e conversam com o Grão-Mestre.
 
 ## Product Purpose
 
@@ -37,4 +37,4 @@ Tarefas de operação e leitura (Operate/Read): login, aprovações, conversa, c
 
 ## Brand Commitments
 
-Direção escolhida pelo Dono em 2026-10-26: **Pergaminho** (papel quente, tinta escura, destaque vermelho-tijolo, títulos com serifa), tom de aventura e personalidade, sem perder a calma de uma ferramenta de trabalho. Detalhes em `docs/painel/design.md`.
+Direção escolhida pelo Senhor da Guilda em 2026-10-26: **Pergaminho** (papel quente, tinta escura, destaque vermelho-tijolo, títulos com serifa), tom de aventura e personalidade, sem perder a calma de uma ferramenta de trabalho. Detalhes em `docs/painel/design.md`.

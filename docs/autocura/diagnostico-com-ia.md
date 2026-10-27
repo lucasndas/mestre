@@ -4,19 +4,19 @@
 
 ## Objetivo
 
-Quando o runbook não resolve, usar um agente de IA na própria máquina com problema para entender o erro e propor uma correção, sem dar a ele poder de agir. Só um Dono ou Administrador transforma a proposta em ação, depois de ver o script inteiro.
+Quando o runbook não resolve, usar um agente de IA na própria máquina com problema para entender o erro e propor uma correção, sem dar a ele poder de agir. Só um Senhor da Guilda ou Administrador transforma a proposta em ação, depois de ver o script inteiro.
 
 ## Comportamento
 
 ### Quando roda
 
 - Automaticamente, quando a camada 3 esgota as tentativas ou, no [modo máquina única](camadas.md#modo-máquina-única), quando o runbook do próprio Guardião da Cidadela se esgota.
-- A pedido de um Dono ou Administrador (painel, [página reserva](pagina-reserva.md) ou [Telegram em modo reduzido](telegram-modo-reduzido.md)), em incidente aberto.
+- A pedido de um Senhor da Guilda ou Administrador (painel, [página reserva](pagina-reserva.md) ou [Telegram em modo reduzido](telegram-modo-reduzido.md)), em incidente aberto.
 - No máximo **2 execuções do agente por incidente** (padrão). Depois disso, só camada 5.
 
 ### Ficha de diagnóstico
 
-- O Dono escolhe no painel uma ficha de diagnóstico **por máquina** ([administração](../painel/administracao.md)), porque cada máquina tem os próprios provedores e logins ([bases e fichas](../orquestracao/bases-e-fichas.md)).
+- O Senhor da Guilda escolhe no painel uma ficha de diagnóstico **por máquina** ([administração](../painel/administracao.md)), porque cada máquina tem os próprios provedores e logins ([bases e fichas](../orquestracao/bases-e-fichas.md)).
 - A Cidadela envia a cada Guardião a ficha resolvida: provedor, comando por sistema, perfil de conta. Não é segredo; as credenciais do provedor ficam onde já estão (perfil da conta).
 - Sem ficha configurada, ou provedor não instalado/logado (checklist), a camada 4 é pulada e o incidente vai para a camada 5 com o motivo.
 
@@ -52,7 +52,7 @@ O agente não recebe segredos, não enxerga o sistema vivo (só cópias) e não 
 - Canais:
   - Cidadela no ar: [central de aprovações](../painel/conversa-e-aprovacoes.md) e Telegram pelo motor ([fluxo](../aprovacoes/fluxo.md));
   - Cidadela fora: [página reserva](pagina-reserva.md) e [Telegram em modo reduzido](telegram-modo-reduzido.md). No Telegram, script com mais de 3.500 caracteres vai como arquivo `.sh` ou `.ps1` anexado.
-- Só **Dono ou Administrador** aprova, sempre com **PIN** ([PIN](../telegram/usuarios-e-niveis.md#pin-pessoal)). O Grão-Mestre nunca aprova scripts de cura.
+- Só **Senhor da Guilda ou Administrador** aprova, sempre com **PIN** ([PIN](../telegram/usuarios-e-niveis.md#pin-pessoal)). O Grão-Mestre nunca aprova scripts de cura.
 - A aprovação vale para aquele hash e expira em 30 min (padrão). Negar ou expirar → camada 5 (ou nova proposta, se ainda couber no limite).
 
 ### Execução do script aprovado
@@ -70,14 +70,14 @@ Cada etapa gera registro: início do agente (ficha, provedor, versão), proposta
 ## Regras e erros
 
 - Aprovador de nível abaixo de Administrador → recusado, com o nível exigido.
-- Hash diferente do aprovado → não executa, alerta grave ao Dono (possível adulteração).
+- Hash diferente do aprovado → não executa, alerta grave ao Senhor da Guilda (possível adulteração).
 - Pedido de executar de novo um script já executado → `already_executed`. Repetir exige nova proposta e nova aprovação.
 - Provedor sem cota ou sem login → execução sem solução, com o motivo no incidente.
 - Ações da lista fechada do Guardião não passam por aqui.
 
 ## Critérios de aceite
 
-- **CA-DIAG-01** · *rápida* — **Dado** um script aprovado, **quando** o conteúdo guardado muda antes da execução, **então** o Guardião não executa e alerta o Dono.
+- **CA-DIAG-01** · *rápida* — **Dado** um script aprovado, **quando** o conteúdo guardado muda antes da execução, **então** o Guardião não executa e alerta o Senhor da Guilda.
 - **CA-DIAG-02** · *rápida* — **Dado** um Aprovador, **quando** tenta aprovar um script de cura, **então** é recusado com "exige Administrador".
 - **CA-DIAG-03** · *rápida* — **Dado** uma proposta pendente (relógio falso), **quando** passam 30 min, **então** a aprovação expira e o incidente vai para a camada 5.
 - **CA-DIAG-04** · *rápida* — **Dado** um script já executado, **quando** chega novo pedido de execução, **então** a resposta é `already_executed`.

@@ -24,10 +24,10 @@ func (s *Service) authorize(ctx context.Context, req CreateRequest) error {
 		return nil
 	case CreatedByUser:
 		if req.Role == RoleGrandMaster {
-			return deny("o Grão-Mestre nasce com o workspace")
+			return deny("o Grão-Mestre nasce com a campanha")
 		}
 		if req.Creator.Level != LevelOwner && req.Creator.Level != LevelAdministrator {
-			return deny("só o Dono e os Administradores criam personagens pelo canvas")
+			return deny("só o Senhor da Guilda e os Administradores criam personagens pelo canvas")
 		}
 		return nil
 	case CreatedByCharacter:
@@ -331,7 +331,7 @@ var _ = providers.Null
 // it again (docs/orquestracao/grao-mestre.md#regras-e-erros).
 func (s *Service) grandMasterNotStarted(ctx context.Context, c Character, cause error) error {
 	// the reason is what the users read: no path of the machine, no raw error
-	reason := "falha ao iniciar; o Dono foi avisado"
+	reason := "falha ao iniciar; o Senhor da Guilda foi avisado"
 	var blocked *sessionzero.BlockedError
 	if errors.As(cause, &blocked) {
 		paths := make([]string, 0, len(blocked.Problems))
@@ -369,7 +369,7 @@ func GrandMasterSheetProblem(ctx context.Context, p Presets, sheet string) error
 	case snap.Sheet.Agent == presets.AgentShell:
 		return bad("a ficha %s é um terminal simples, não um agente", sheet)
 	case snap.Base.Name == presets.OperatorBase:
-		return bad("a base %s é a do Operador do PC e só o Dono a ativa", presets.OperatorBase)
+		return bad("a base %s é a do Operador do PC e só o Senhor da Guilda a ativa", presets.OperatorBase)
 	}
 	machines, err := p.Machines(ctx)
 	if err != nil {

@@ -4,11 +4,12 @@ export default {
   toggleOpen: "Abrir a conversa com o Grão-Mestre",
   title: "Conversa com o Grão-Mestre",
   close: "Fechar a conversa",
-  workspace: "Workspace",
+  workspace: "Campanha",
   loading: "Carregando a conversa…",
   loadError: "Não consegui carregar a conversa.",
-  noWorkspace: "Você não atua em nenhum workspace ainda. Peça ao Dono para incluí-lo em um.",
-  empty: "Nada por aqui ainda. Escreva abaixo para falar com o Grão-Mestre deste workspace.",
+  noWorkspace:
+    "Você não atua em nenhuma campanha ainda. Peça ao Senhor da Guilda para incluí-lo em uma.",
+  empty: "Nada por aqui ainda. Escreva abaixo para falar com o Grão-Mestre desta campanha.",
   privacy: "Só você vê esta conversa.",
   log: "Mensagens da conversa",
   status: {
@@ -16,12 +17,12 @@ export default {
     busy: "Grão-Mestre ocupado",
     unavailable: "Grão-Mestre indisponível: {{reason}}",
     unavailableNoReason: "Grão-Mestre indisponível",
-    none: "Este workspace não tem Grão-Mestre agora.",
+    none: "Esta campanha não tem Grão-Mestre agora.",
     ahead: "Na fila: {{count}}",
     locked: "Sistema travado: o que você enviar fica guardado até destravar.",
   },
   progress: {
-    title: "Andamento do workspace",
+    title: "Andamento da campanha",
     updated: "Atualizado às {{time}}",
   },
   entry: {
@@ -68,7 +69,7 @@ export default {
       "O seu nível ({{level}}) não permite falar com o Grão-Mestre. Você vê a conversa, mas não escreve.",
     offline:
       "Sem conexão com a Cidadela. O que você escreveu fica aqui e não é enviado; envie quando a conexão voltar.",
-    noGrandMaster: "Este workspace não tem Grão-Mestre agora; não dá para enviar.",
+    noGrandMaster: "Esta campanha não tem Grão-Mestre agora; não dá para enviar.",
     sent: "Mensagem enviada.",
     sentHeld: "Mensagem guardada até destravar.",
     secretHeld:

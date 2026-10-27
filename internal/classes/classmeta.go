@@ -107,7 +107,7 @@ const AppOptions = "`novo`, `herdar:<classe>` ou `<nome-do-app>`"
 // ErrAppRequired is a class created or saved without the App link: every
 // class is born linked to an App.
 var ErrAppRequired = errors.New("app_required: toda classe nasce vinculada a um App; " +
-	"informe `novo` (o Grão-Mestre prepara o App e o Dono o cria e instala pelo link), " +
+	"informe `novo` (o Grão-Mestre prepara o App e o Senhor da Guilda o cria e instala pelo link), " +
 	"`herdar:<classe>` (usa o App da classe de origem) ou `<nome-do-app>` (um App que já existe)")
 
 // AppLink is a parsed `app` field.

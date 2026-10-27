@@ -86,7 +86,7 @@ func TestAMessageOfTheOwnerFromTelegramIsTypedWithTheHeaderAsTheFirstLine(t *tes
 	}
 	text := plain(t, typed[0])
 	first, rest, _ := strings.Cut(text, "\n")
-	if want := "[Mestre · user · de Lucas (Dono) · via Telegram · mesa 42-login · " + it.ID + "]"; first != want || rest != "como está o login?" {
+	if want := "[Mestre · user · de Lucas (Senhor da Guilda) · via Telegram · mesa 42-login · " + it.ID + "]"; first != want || rest != "como está o login?" {
 		t.Fatalf("typed %q, want the line %q and then the text", text, want)
 	}
 	if got := r.state(gm); got != characters.Busy {

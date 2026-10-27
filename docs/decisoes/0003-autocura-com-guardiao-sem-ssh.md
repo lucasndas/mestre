@@ -53,7 +53,7 @@ Aceita, 2026-10-12. **Revista em 2026-10-13** pelo [ADR 0022](0022-guilda-cidade
   3. supervisão cruzada com runbook;
   4. diagnóstico com IA, com script aprovado por pessoa;
   5. alerta aos usuários;
-  6. se a Cidadela não volta, proposta de troca de Cidadela ao Dono ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)).
+  6. se a Cidadela não volta, proposta de troca de Cidadela ao Dono ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-senhor-da-guilda)).
 - **Onde estão os detalhes:**
   - Lista de ações e o que o Guardião guarda: [Guardião](../autocura/guardiao.md).
   - Camadas, eleição da Torre condutora e anti-loop: [camadas](../autocura/camadas.md).

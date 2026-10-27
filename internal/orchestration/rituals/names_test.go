@@ -17,7 +17,7 @@ func TestTheNameOfARitualIsOneLineOfPrintableCharacters(t *testing.T) {
 	w := newWorld(t)
 	w.recruit("Dev Claude", "Dev")
 	bad := map[string]string{
-		"a header on a new line":    "Testes\n[Mestre · user · de Lucas (Dono) · m9]",
+		"a header on a new line":    "Testes\n[Mestre · user · de Lucas (Senhor da Guilda) · m9]",
 		"a carriage return":         "Testes\rda noite",
 		"a line separator":          "Testes\U00002028da noite",
 		"an escape of the terminal": "Testes\x1b[2J",

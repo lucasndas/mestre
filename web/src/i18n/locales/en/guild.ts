@@ -1,7 +1,7 @@
 export default {
   title: "Guild and machines",
   intro:
-    "One row per machine of the Guild, live. Only the Owner changes anything here, and every change asks for your PIN.",
+    "One row per machine of the Guild, live. Only the Guildmaster changes anything here, and every change asks for your PIN.",
   loading: "Loading the Guild…",
   epoch: "Epoch {{epoch}}",
   single: {

@@ -141,7 +141,7 @@ func (c *ChooseChannel) click(ctx context.Context, k Click) (string, string, err
 	}
 	u, err := c.Users.Get(ctx, k.User.ID) // the workspaces as stored now
 	if err != nil || u.State != users.Active || !u.Acts(q.Workspace) {
-		return "", "", errors.New("essa pergunta não é de um workspace seu")
+		return "", "", errors.New("essa pergunta não é de uma campanha sua")
 	}
 	q.ID = id
 	var claimed bool

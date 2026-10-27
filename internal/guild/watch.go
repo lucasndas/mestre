@@ -8,7 +8,7 @@ import (
 )
 
 // The notice to the Owner when the Citadel does not come back
-// (docs/guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono).
+// (docs/guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-senhor-da-guilda).
 const (
 	// CitadelDownNotice is how long the Citadel may be away before the Owner
 	// is warned (configurable by the Owner).

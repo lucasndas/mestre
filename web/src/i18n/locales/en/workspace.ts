@@ -3,21 +3,21 @@ import type ptBR from "../pt-BR/workspace";
 
 const workspace: Widen<typeof ptBR> = {
   selector: {
-    label: "Workspace",
-    create: "Create workspace…",
-    none: "No workspace",
-    placeholder: "Choose a workspace",
+    label: "Campaign",
+    create: "Create campaign…",
+    none: "No campaign",
+    placeholder: "Choose a campaign",
   },
-  title: "Workspace {{workspace}}",
-  region: "Canvas of workspace {{workspace}}",
-  loading: "Opening the workspace…",
+  title: "Campaign {{workspace}}",
+  region: "Canvas of campaign {{workspace}}",
+  loading: "Opening the campaign…",
   state: {
     preparing: "preparing",
     active: "active",
     paused: "paused",
   },
   shortcuts: {
-    label: "Workspace shortcuts",
+    label: "Campaign shortcuts",
     chat: "Talk to the Grand Master",
     approvals_one: "{{count}} approval pending",
     approvals_other: "{{count}} approvals pending",
@@ -27,12 +27,12 @@ const workspace: Widen<typeof ptBR> = {
     healthDown_other: "Health: {{count}} machines down",
   },
   noAccess: {
-    title: "No access to this workspace",
-    body: "The workspace “{{workspace}}” does not exist or you do not work in it. These are yours:",
-    none: "You do not work in any workspace yet. Ask the Owner to add you to one.",
+    title: "No access to this campaign",
+    body: "The campaign “{{workspace}}” does not exist or you do not work in it. These are yours:",
+    none: "You do not work in any campaign yet. Ask the Guildmaster to add you to one.",
   },
   preparing: {
-    title: "This workspace is still being prepared",
+    title: "This campaign is still being prepared",
     body: "The tables show up here when the preparation ends. These are the steps:",
   },
   empty: {
@@ -49,7 +49,7 @@ const workspace: Widen<typeof ptBR> = {
     machine: "Machine {{machine}}",
     loadingTerminal: "Opening the terminal…",
     noTerminal: "No terminal open.",
-    none: "This workspace has no Grand Master right now.",
+    none: "This campaign has no Grand Master right now.",
   },
   block: {
     label: "Table {{table}}",

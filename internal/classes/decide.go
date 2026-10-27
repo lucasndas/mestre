@@ -286,7 +286,7 @@ func decideCounting(ctx context.Context, env Env, rules *Rules, ev providers.Eve
 	case ev.AgentID != "" && rules.AgentID != ev.AgentID:
 		return deny("as regras efetivas são de outro personagem", LayerFixed)
 	case rules.Locked:
-		return deny("sistema travado: toda ferramenta está negada até o Dono destravar", LayerLocked)
+		return deny("sistema travado: toda ferramenta está negada até o Senhor da Guilda destravar", LayerLocked)
 	}
 	res := e.analyze(ev.Tool)
 	if res.fixed.v == Deny {

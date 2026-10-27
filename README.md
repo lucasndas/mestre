@@ -10,9 +10,9 @@ Repositório: https://github.com/mestre-ia/mestre
 
 ## Instalar em 3 passos
 
-1. **Primeira máquina (Ubuntu ou Windows):** rode o instalador. Sem outra Guilda na rede, ele cria a Guilda e esta máquina vira a Cidadela. Confie uma vez na CA do Mestre no navegador, abra o painel em `https://mestre.local:7443`, crie o usuário Dono e crie os Apps do GitHub pelos links que o painel mostra. Uma máquina só já funciona.
+1. **Primeira máquina (Ubuntu ou Windows):** rode o instalador. Sem outra Guilda na rede, ele cria a Guilda e esta máquina vira a Cidadela. Confie uma vez na CA do Mestre no navegador, abra o painel em `https://mestre.local:7443`, crie o usuário Senhor da Guilda e crie os Apps do GitHub pelos links que o painel mostra. Uma máquina só já funciona.
 2. **Outras máquinas (opcionais, Ubuntu ou Windows):** rode o mesmo instalador; ele encontra a Guilda sozinho na rede local e mostra um código. Confira o código na mensagem que chega ao painel (ou ao Telegram) e aprove com o seu PIN.
-3. **Telegram e primeiro workspace:** pareie o bot do Telegram pelo painel, informe um repositório do GitHub e a ficha do Grão-Mestre.
+3. **Telegram e primeira campanha:** pareie o bot do Telegram pelo painel, informe um repositório do GitHub e a ficha do Grão-Mestre.
 
 Detalhes em [docs/operacao](docs/operacao/INDEX.md).
 

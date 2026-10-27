@@ -126,8 +126,8 @@ test("the selector lists only the workspaces the user may see, and creating lead
     }),
   );
   renderApp("/workspaces/loja");
-  const select = (await screen.findByLabelText("Workspace")) as HTMLSelectElement;
-  expect([...select.options].map((o) => o.textContent)).toEqual(["loja", "Criar workspace…"]);
+  const select = (await screen.findByLabelText("Campanha")) as HTMLSelectElement;
+  expect([...select.options].map((o) => o.textContent)).toEqual(["loja", "Criar campanha…"]);
   expect(select.value).toBe("loja");
 });
 
@@ -185,7 +185,7 @@ test("a preparing workspace shows the steps, the failure with its reason and no 
     }),
   );
   renderApp("/workspaces/loja");
-  expect(await screen.findByText("Este workspace ainda está sendo preparado")).toBeTruthy();
+  expect(await screen.findByText("Esta campanha ainda está sendo preparada")).toBeTruthy();
   expect(screen.getByText(/sem rede/)).toBeTruthy();
   expect(screen.getByRole("button", { name: /Tentar de novo|tentar de novo/i })).toBeTruthy();
   expect(screen.queryByRole("article", { name: /^Mesa / })).toBeNull();
@@ -291,7 +291,7 @@ test("a workspace the user may not see shows 'sem acesso' with the allowed list"
     base(view([]), { "GET /api/workspaces/outro/view": () => ({ status: 404, body: {} }) }),
   );
   renderApp("/workspaces/outro");
-  expect(await screen.findByRole("heading", { name: "Sem acesso a este workspace" })).toBeTruthy();
+  expect(await screen.findByRole("heading", { name: "Sem acesso a esta campanha" })).toBeTruthy();
   expect(screen.getByRole("link", { name: "loja" }).getAttribute("href")).toBe("/workspaces/loja");
 });
 

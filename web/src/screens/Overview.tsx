@@ -13,7 +13,7 @@ export function Overview() {
       </p>
       <div className="mt-8 rounded-field border border-dashed border-line p-6">
         <h2 className="text-xl">
-          <Term name="Workspace" />
+          <Term name="Campanha" />
         </h2>
         <p className="mt-2 font-semibold">{t("overview.emptyTitle")}</p>
         <p className="text-muted">{t("overview.emptyBody")}</p>

@@ -1,7 +1,7 @@
 export default {
   title: "Apps do GitHub",
   intro:
-    "Os Apps fixos e os de cada classe, os workspaces em que estão instalados e quantos Apps a conta já tem.",
+    "Os Apps fixos e os de cada classe, as campanhas em que estão instalados e quantos Apps a conta já tem.",
   loading: "Carregando os Apps…",
   count: "{{total}} de {{limit}} Apps na conta",
   countDetail: "{{mine}} do Mestre e {{others}} de outros.",
@@ -21,7 +21,7 @@ export default {
     class: "Classe",
     state: "Estado",
     repos: "Instalado em",
-    noRepos: "nenhum workspace",
+    noRepos: "nenhuma campanha",
     request: "Pedido",
     actions: "Ação",
     fixed: "fixo",
@@ -51,5 +51,5 @@ export default {
   },
   unavailable:
     "A criação de Apps não está disponível neste período; os links voltam quando estiver.",
-  ownerOnly: "Só o Dono gera links de criação e informa o número de outros Apps.",
+  ownerOnly: "Só o Senhor da Guilda gera links de criação e informa o número de outros Apps.",
 } as const;

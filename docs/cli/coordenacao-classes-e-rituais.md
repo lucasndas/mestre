@@ -11,10 +11,10 @@ Referência de sintaxe dos comandos que gerenciam classes (pacotes de função d
 | Comando | Quem pode usar |
 |---|---|
 | `class list\|show\|check` | Mestre da mesa, Grão-Mestre; classes autorizadas |
-| `class test` (desde o M7) | Mestre da mesa (classes da mesa), Grão-Mestre (classes do workspace); nunca liberável por classe, porque gasta cota |
-| `class create\|edit\|assign` | Mestre da mesa (escopo da mesa), Grão-Mestre (escopo do workspace, só propõe) |
+| `class test` (desde o M7) | Mestre da mesa (classes da mesa), Grão-Mestre (classes da campanha); nunca liberável por classe, porque gasta cota |
+| `class create\|edit\|assign` | Mestre da mesa (escopo da mesa), Grão-Mestre (escopo da campanha, só propõe) |
 | `class delete` | Mestre da mesa, Grão-Mestre, sempre com pedido explícito de usuário |
-| `ritual …` | Grão-Mestre (rituais do workspace), Mestre da mesa (rituais da própria mesa) |
+| `ritual …` | Grão-Mestre (rituais da campanha), Mestre da mesa (rituais da própria mesa) |
 
 ### `mestre class`
 ```
@@ -31,8 +31,8 @@ mestre class delete "<classe>"
 - `show`: `CLASS.md`, resumo do `permissions.yaml`, hooks extras, skills extras e App. Com `--export`, copia o pacote da **versão aprovada** para `$MESTRE_TMP/classes/<classe>/` (sobrescreve) e devolve o caminho, para ser editado e enviado de volta com `edit --from`.
 - `create`: `--app` é **obrigatório** (sem ele → 2 `app_required`). `--from` aponta uma pasta com o pacote (`CLASS.md`, `permissions.yaml`, `hooks/`, lista de skills; estrutura em [classes](../classes/classes.md)); o motor valida, confere contra o teto e copia para o lugar do escopo. `--scope` padrão `table`.
   - escopo da mesa, dentro do teto: criada na hora (exit 0);
-  - escopo do workspace: vira proposta para um usuário Administrador ou acima (exit 9);
-  - `--app novo`: a classe já funciona com o App "Mestre" e a marca `[Classe]`; o pedido vai ao Grão-Mestre (`app_status: "solicitado"`), que prepara o App (`mestre app create`, com o link de criação enviado ao Dono) ou vincula a uma classe existente explicando o porquê ([identidades-e-apps](../github/identidades-e-apps.md)).
+  - escopo da campanha: vira proposta para um usuário Administrador ou acima (exit 9);
+  - `--app novo`: a classe já funciona com o App "Mestre" e a marca `[Classe]`; o pedido vai ao Grão-Mestre (`app_status: "solicitado"`), que prepara o App (`mestre app create`, com o link de criação enviado ao Senhor da Guilda) ou vincula a uma classe existente explicando o porquê ([identidades-e-apps](../github/identidades-e-apps.md)).
   - `--json` → `{name, scope, path, app, app_status}`.
 - `edit`: troca o pacote e/ou o App, com as mesmas validações e aprovações do escopo ([onde a classe é alterada](../classes/classes.md#onde-a-classe-é-alterada)). Trocar o App só vale para ações novas.
 - `--from` (em `create` e `edit`) só aceita uma pasta dentro de `$MESTRE_TMP` do próprio personagem; fora dela → 2 `from_outside_tmp`. Usuários pelo painel não usam a CLI.
@@ -55,7 +55,7 @@ mestre ritual run "<nome>"
 mestre ritual delete "<nome>"
 ```
 - O alvo é sempre um **personagem existente** (`--target`) ou uma **missão** (`--quest`), nunca uma ficha. `--prompt` é o texto entregue a um agente; `--command` é uma linha digitada num terminal de `spawn`, seguida de Enter; `--quest` dispara uma missão da mesa. `--table` indica a mesa quando o Grão-Mestre cria o ritual para um Mestre de mesa ou uma missão (sem isso → 2 `table_required`).
-- Agenda: `--every 30m`; `--daily 02:00`; `--weekly "mon,thu 09:00"` (dias `mon`…`sun`); `--once "2026-10-20T14:00"`. No fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); [rituais](../orquestracao/rituais.md)). Exatamente uma das quatro.
+- Agenda: `--every 30m`; `--daily 02:00`; `--weekly "mon,thu 09:00"` (dias `mon`…`sun`); `--once "2026-10-20T14:00"`. No fuso da campanha (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); [rituais](../orquestracao/rituais.md)). Exatamente uma das quatro.
 - `--pre-run`: comando rodado antes do disparo; a saída dele substitui `{{output}}` no `--prompt` ou no `--command` (onde roda e com que permissões: [rituais](../orquestracao/rituais.md)). `{{output}}` sem `--pre-run` → 2.
 - `--timeout`: quanto o disparo pode ficar na fila do alvo ocupado antes de ser cancelado e devolvido ao dono do ritual (padrão 30m).
 - `list`: nome, alvo, agenda, próximo disparo, ativo, último resultado. `show`: tudo, mais o `content` e os 10 últimos disparos. `--json` → `{name, state, target, quest, table, action: "prompt" | "command" | "quest", schedule, pre_run, timeout, enabled, next_run, last_result}`, com `timeout` em segundos (inteiro) e `schedule` como `every 3600s`, `daily 02:00`…
@@ -71,15 +71,15 @@ O estado do App das classes vem com o GitHub, no M5 ([criação de Apps](../gith
 - **`--from`:** a CLI, que roda como o agente, lê a pasta e manda os arquivos (só texto, sem links, até 512 KiB); o motor nunca abre o caminho. A pasta tem de estar em `$MESTRE_TMP` depois de resolvidos os links (`from_outside_tmp`, 2); sem `$MESTRE_TMP` no processo, também.
 - **`show --export`:** o motor grava em `$MESTRE_TMP/classes/<classe>/` só com `safefile` (um link no caminho recusa) e tira o que uma exportação anterior deixou e o pacote não tem. `--json` → `{name, scope, version, description, class_md, permissions, hooks, skills, app, text}` (e `path` com `--export`).
 - **`list`:** `--json` → `{classes: [{name, scope, table, state, app, inherited, app_state, provider}]}`; `state` é o da listagem do motor (`approved`, `pending`, `new`, `missing`, `unreadable`).
-- **`create`:** o Grão-Mestre sem `--scope` faz classe do workspace; o Mestre da mesa, da mesa. `--scope table` sem mesa (Grão-Mestre) → 2 `table_required`. Proposta (workspace pelo Grão-Mestre) sai com 9 `pending` e o número em `details.proposal`; só um Administrador ou acima aprova, nunca quem propôs. `--app novo` aplicado põe um item de sistema na caixa do Grão-Mestre pedindo o App.
+- **`create`:** o Grão-Mestre sem `--scope` faz classe da campanha; o Mestre da mesa, da mesa. `--scope table` sem mesa (Grão-Mestre) → 2 `table_required`. Proposta (campanha pelo Grão-Mestre) sai com 9 `pending` e o número em `details.proposal`; só um Administrador ou acima aprova, nunca quem propôs. `--app novo` aplicado põe um item de sistema na caixa do Grão-Mestre pedindo o App.
 - **`assign`:** grava a classe no registro e publica as regras efetivas na hora; o `CLASS.md` é lido pelo motor da máquina no início do turno. O Grão-Mestre não tem mesa → 2. Personagem fora da mesa → 4 `not_visible`. Alvo que não é personagem comum (o Mestre da mesa, e o próprio chamador) → 3 `forbidden`: as regras dos orquestradores vêm da classe `orquestrador`, e o Mestre não muda as próprias.
 - **`delete`:** confere o direito no escopo (3 `forbidden`), depois o uso (7 `in_use`, com os nomes), depois o pedido explícito do usuário; sem ele, 9 `approval_required` (o fluxo de aprovação é do M5).
-- **Ritual:** o escopo vem de quem chama (Mestre da mesa: a mesa; Grão-Mestre: o workspace). `--table` só existe em `create` e `edit` e, para o Grão-Mestre, nomeia a mesa do Mestre alvo (sem ele, alvo que não é ele mesmo → 2 `table_required`); `--quest` do Grão-Mestre → 2, porque missão é de mesa. `--timeout` do ritual é dado do ritual, não o limite da chamada. `delete` por personagem → 9 `approval_required` (o fluxo é do M5).
+- **Ritual:** o escopo vem de quem chama (Mestre da mesa: a mesa; Grão-Mestre: a campanha). `--table` só existe em `create` e `edit` e, para o Grão-Mestre, nomeia a mesa do Mestre alvo (sem ele, alvo que não é ele mesmo → 2 `table_required`); `--quest` do Grão-Mestre → 2, porque missão é de mesa. `--timeout` do ritual é dado do ritual, não o limite da chamada. `delete` por personagem → 9 `approval_required` (o fluxo é do M5).
 
 ## Regras e erros
 
 - O Mestre de uma mesa nunca libera numa classe algo que o teto proíbe; o motor recusa (3) mesmo que o pacote peça ([teto-do-workspace](../classes/teto-do-workspace.md)).
-- O Grão-Mestre pode propor classe do workspace, mas não aprova a própria proposta.
+- O Grão-Mestre pode propor classe da campanha, mas não aprova a própria proposta.
 
 ## Critérios de aceite
 

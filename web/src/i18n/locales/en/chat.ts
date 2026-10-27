@@ -7,11 +7,11 @@ const chat: Widen<typeof pt> = {
   toggleOpen: "Open the chat with the Grand Master",
   title: "Chat with the Grand Master",
   close: "Close the chat",
-  workspace: "Workspace",
+  workspace: "Campaign",
   loading: "Loading the conversation…",
   loadError: "I could not load the conversation.",
-  noWorkspace: "You do not act in any workspace yet. Ask the Owner to add you to one.",
-  empty: "Nothing here yet. Write below to talk to the Grand Master of this workspace.",
+  noWorkspace: "You do not act in any campaign yet. Ask the Guildmaster to add you to one.",
+  empty: "Nothing here yet. Write below to talk to the Grand Master of this campaign.",
   privacy: "Only you see this conversation.",
   log: "Messages of the conversation",
   status: {
@@ -19,12 +19,12 @@ const chat: Widen<typeof pt> = {
     busy: "Grand Master is busy",
     unavailable: "Grand Master is unavailable: {{reason}}",
     unavailableNoReason: "Grand Master is unavailable",
-    none: "This workspace has no Grand Master right now.",
+    none: "This campaign has no Grand Master right now.",
     ahead: "In the queue: {{count}}",
     locked: "System locked: what you send is kept until it is unlocked.",
   },
   progress: {
-    title: "Workspace progress",
+    title: "Campaign progress",
     updated: "Updated at {{time}}",
   },
   entry: {
@@ -71,7 +71,7 @@ const chat: Widen<typeof pt> = {
       "Your level ({{level}}) does not allow talking to the Grand Master. You see the conversation but cannot write.",
     offline:
       "No connection to the Citadel. What you wrote stays here and is not sent; send it when the connection is back.",
-    noGrandMaster: "This workspace has no Grand Master right now; nothing can be sent.",
+    noGrandMaster: "This campaign has no Grand Master right now; nothing can be sent.",
     sent: "Message sent.",
     sentHeld: "Message kept until the system is unlocked.",
     secretHeld:

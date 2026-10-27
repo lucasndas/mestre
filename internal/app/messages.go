@@ -31,7 +31,7 @@ func (m inboxMessages) item(ctx context.Context, workspace, id string) (inbox.It
 func (m inboxMessages) Message(ctx context.Context, workspace, id string) (tables.Message, error) {
 	it, err := m.item(ctx, workspace, id)
 	if err != nil {
-		return tables.Message{}, errors.New("a mensagem não é de um usuário deste workspace")
+		return tables.Message{}, errors.New("a mensagem não é de um usuário desta campanha")
 	}
 	return tables.Message{ID: it.ID, Text: it.Text, Origin: *it.Origin}, nil
 }

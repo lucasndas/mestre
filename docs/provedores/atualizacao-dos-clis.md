@@ -1,10 +1,10 @@
 # Atualização dos CLIs dos provedores
 
-> **Assunto:** os CLIs `claude`, `codex` e `agy` se atualizam sozinhos; o Mestre detecta a versão nova por máquina e por perfil, roda a conformidade logo depois, marca o provedor como não conforme se ela falhar e avisa o Dono · **Componente:** Todos · **Atualizado:** 2026-10-19
+> **Assunto:** os CLIs `claude`, `codex` e `agy` se atualizam sozinhos; o Mestre detecta a versão nova por máquina e por perfil, roda a conformidade logo depois, marca o provedor como não conforme se ela falhar e avisa o Senhor da Guilda · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
-Deixar cada CLI de provedor se atualizar pelo próprio mecanismo, sem o Mestre desligar nada, e ainda assim nunca entregar personagem novo a uma versão que quebra o Mestre: o motor percebe a mudança de versão, roda o [teste de conformidade](conformidade.md) em seguida e, se a versão nova falhar, para de usar aquele provedor naquela máquina e avisa o Dono. O Mestre não aprova, não instala e não volta versões dos CLIs. A atualização do próprio Mestre está em [autoatualização](../plataforma/autoatualizacao.md).
+Deixar cada CLI de provedor se atualizar pelo próprio mecanismo, sem o Mestre desligar nada, e ainda assim nunca entregar personagem novo a uma versão que quebra o Mestre: o motor percebe a mudança de versão, roda o [teste de conformidade](conformidade.md) em seguida e, se a versão nova falhar, para de usar aquele provedor naquela máquina e avisa o Senhor da Guilda. O Mestre não aprova, não instala e não volta versões dos CLIs. A atualização do próprio Mestre está em [autoatualização](../plataforma/autoatualizacao.md).
 
 ## Comportamento
 
@@ -30,7 +30,7 @@ O Mestre não desliga a autoatualização de nenhum CLI: nada de `DISABLE_AUTOUP
 
 - Enquanto o teste roda, o provedor fica "em verificação" naquela máquina e perfil: recrutamentos desse provedor ali esperam ou vão para outra máquina que atenda ([escolha da máquina](../orquestracao/personagens.md#escolha-da-máquina)).
 - **Passou:** a versão fica registrada como conforme e os personagens novos já nascem nela. Os resultados de [teste de classe](teste-de-classe.md#quando-um-cli-muda) daquele provedor passam a "testada em versão anterior".
-- **Falhou:** o provedor fica **não conforme** naquela máquina, pela regra da [conformidade](conformidade.md#regras-e-erros): não recebe personagens novos ali, e o Dono recebe o aviso pelo Telegram e no painel com o relatório do teste. Não há volta de versão: o caminho é a próxima versão do provedor, testada quando aparecer, ou a correção manual pelo Dono.
+- **Falhou:** o provedor fica **não conforme** naquela máquina, pela regra da [conformidade](conformidade.md#regras-e-erros): não recebe personagens novos ali, e o Senhor da Guilda recebe o aviso pelo Telegram e no painel com o relatório do teste. Não há volta de versão: o caminho é a próxima versão do provedor, testada quando aparecer, ou a correção manual pelo Senhor da Guilda.
 
 ### Personagens já rodando
 
@@ -52,7 +52,7 @@ Uma versão nova pode entrar entre duas tarefas sem teste prévio: o CLI se atua
 
 - **CA-CLIUPD-01** · *rápida* — **Dado** uma ficha de cada provedor, **quando** o adaptador monta o início, **então** o ambiente não tem `DISABLE_AUTOUPDATER`, `DISABLE_UPDATES` nem `AGY_CLI_DISABLE_AUTO_UPDATE`, e o `config.toml` do perfil Codex não tem `check_for_update_on_startup = false`.
 - **CA-CLIUPD-02** · *rápida* — **Dado** a versão do `claude` do perfil A que passou de 1 para 2 numa máquina, **quando** o checklist roda, **então** a mudança entra na auditoria com máquina, perfil e versões, e a conformidade roda só para o Claude Code com o perfil A naquela máquina.
-- **CA-CLIUPD-03** · *rápida* — **Dado** a conformidade reprovando a versão nova, **quando** o resultado chega, **então** o provedor fica não conforme na máquina, um recrutamento desse provedor vai para outra máquina que atenda ou falha com a explicação, o Dono recebe o aviso com o relatório, e nenhum personagem é reiniciado nem nada é desinstalado.
+- **CA-CLIUPD-03** · *rápida* — **Dado** a conformidade reprovando a versão nova, **quando** o resultado chega, **então** o provedor fica não conforme na máquina, um recrutamento desse provedor vai para outra máquina que atenda ou falha com a explicação, o Senhor da Guilda recebe o aviso com o relatório, e nenhum personagem é reiniciado nem nada é desinstalado.
 - **CA-CLIUPD-04** · *rápida* — **Dado** três personagens rodando na versão 1, **quando** a versão 2 aparece e passa na conformidade, **então** nenhum deles é reiniciado; o próximo personagem criado usa a 2 e o registro de terminais mostra a versão de cada um.
 - **CA-CLIUPD-05** · *rápida* — **Dado** uma conformidade em andamento para o Codex numa máquina, **quando** chega um recrutamento de ficha Codex, **então** ele espera ou vai para outra máquina que atenda.
 - **CA-CLIUPD-06** · *rápida* — **Dado** o agente falso do Codex mostrando a tela de atualização ao iniciar, **quando** o personagem começa, **então** o adaptador escolhe atualizar, o personagem chega a pronto e a versão nova é detectada.
@@ -71,7 +71,7 @@ Uma versão nova pode entrar entre duas tarefas sem teste prévio: o CLI se atua
 ## Verificar na implementação
 
 - **Verificar na implementação:** no Codex, escolher "Update now" na tela de início atualiza e deixa o personagem seguir. **Padrão:** o Codex atualiza e continua o início (ou sai, e o motor o inicia de novo uma vez, já na versão nova). **Se falhar:** se a tela atrapalhar o início (o Codex para, pede reinício manual ou trava), o adaptador escolhe "Skip" naquele início e o motor roda `codex update` como `mestre-agente` com o `CODEX_HOME` do perfil quando nenhum personagem Codex daquele perfil estiver rodando; a versão nova segue a detecção acima. **Onde:** no laboratório da [suíte pesada](../qualidade/testes.md#laboratório), na primeira versão nova do Codex depois da implementação.
-- **Verificar na implementação:** o atualizador próprio de cada CLI grava só no `HOME` do perfil, sem precisar de pasta do root nem de outra conta. **Padrão:** grava (o instalador nativo do Claude Code usa `$HOME/.local/share/claude`). **Se falhar:** aquele CLI deixa de se atualizar naquele perfil; o checklist mostra a versão parada e, abaixo da mínima, recusa a base (ALL-10), e o Dono atualiza à mão. **Onde:** no laboratório, com dois perfis do mesmo provedor numa VM de cada sistema.
+- **Verificar na implementação:** o atualizador próprio de cada CLI grava só no `HOME` do perfil, sem precisar de pasta do root nem de outra conta. **Padrão:** grava (o instalador nativo do Claude Code usa `$HOME/.local/share/claude`). **Se falhar:** aquele CLI deixa de se atualizar naquele perfil; o checklist mostra a versão parada e, abaixo da mínima, recusa a base (ALL-10), e o Senhor da Guilda atualiza à mão. **Onde:** no laboratório, com dois perfis do mesmo provedor numa VM de cada sistema.
 - **Verificar na implementação:** no Windows, a atualização própria de cada CLI com personagens do mesmo perfil rodando (arquivo em uso). **Padrão:** o atualizador do CLI lida com isso (o Claude Code guarda versões em pastas separadas). **Se falhar:** a atualização falha naquele momento e o CLI tenta de novo depois; nada muda para o Mestre além de a versão demorar a mudar. **Onde:** no laboratório, na VM Windows.
 
 ## Fontes

@@ -22,6 +22,6 @@ func createdText(t tables.Table, quest, dev string) string {
 }
 
 func noDevText(t tables.Table) string {
-	return fmt.Sprintf("A branch principal (%s) andou depois da abertura da mesa %s e nenhum personagem vivo da mesa fez a última etapa que mudou código. Escolha quem integra a base: crie a missão `sync` com uma etapa para esse personagem (`mestre quest create`) e rode-a; as instruções são integrar `origin/%s` na branch %s com merge (nunca rebase nem push forçado), resolver os conflitos, rodar a verificação do workspace e dar `mestre done`.",
+	return fmt.Sprintf("A branch principal (%s) andou depois da abertura da mesa %s e nenhum personagem vivo da mesa fez a última etapa que mudou código. Escolha quem integra a base: crie a missão `sync` com uma etapa para esse personagem (`mestre quest create`) e rode-a; as instruções são integrar `origin/%s` na branch %s com merge (nunca rebase nem push forçado), resolver os conflitos, rodar a verificação da campanha e dar `mestre done`.",
 		t.BaseBranch, t.ID, t.BaseBranch, t.Branch)
 }

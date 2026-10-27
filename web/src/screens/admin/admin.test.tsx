@@ -69,7 +69,7 @@ test("a level that may not use the screen is refused with the level that is requ
   });
   renderApp("/usuarios");
   expect((await screen.findByRole("alert")).textContent).toBe(
-    "Esta ação exige o nível Dono; o seu é Administrador.",
+    "Esta ação exige o nível Senhor da Guilda; o seu é Administrador.",
   );
   expect(screen.queryByRole("link", { name: "Usuários" })).toBeNull();
   expect(screen.getByRole("link", { name: "Auditoria" })).toBeTruthy();
@@ -367,7 +367,7 @@ test("the audit shows who did what and when, in the Guild time zone, and filters
   expect(screen.queryByRole("button", { name: "Carregar mais" })).toBeNull();
   await user.selectOptions(screen.getByLabelText("Quem"), "u2");
   await user.selectOptions(screen.getByLabelText("O quê"), "panel.user.");
-  await user.selectOptions(screen.getByLabelText("Workspace"), "loja");
+  await user.selectOptions(screen.getByLabelText("Campanha"), "loja");
   await user.click(screen.getByRole("button", { name: "Filtrar" }));
   expect(await screen.findByText("Nenhum registro com esses filtros.")).toBeTruthy();
   expect(calls.some((c) => c.path === "/api/audit?user=u2&action=panel.user.&workspace=loja")).toBe(
@@ -478,13 +478,15 @@ test("the user asked to take the post of Owner sees the banner and accepts with 
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   const { router } = renderApp("/");
-  expect(await screen.findByText(/Maria Souza quer passar o posto de Dono a você/)).toBeTruthy();
+  expect(
+    await screen.findByText(/Maria Souza quer passar o posto de Senhor da Guilda a você/),
+  ).toBeTruthy();
   await user.click(screen.getByRole("link", { name: "Ver o pedido" }));
-  const page = await screen.findByRole("heading", { name: "Posto de Dono" });
+  const page = await screen.findByRole("heading", { name: "Posto de Senhor da Guilda" });
   expect(page).toBeTruthy();
-  await user.click(screen.getByRole("button", { name: "Aceitar o posto de Dono" }));
+  await user.click(screen.getByRole("button", { name: "Aceitar o posto de Senhor da Guilda" }));
   await fill(user, screen.getByLabelText("PIN"), "654321");
-  await user.click(screen.getByRole("button", { name: "Aceitar o posto de Dono" }));
+  await user.click(screen.getByRole("button", { name: "Aceitar o posto de Senhor da Guilda" }));
   await waitFor(() => expect(calls.some((c) => c.path === "/api/transfer/accept")).toBe(true));
   expect(calls.find((c) => c.path === "/api/transfer/accept")?.headers["X-Mestre-Pin"]).toBe(
     "654321",

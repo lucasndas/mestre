@@ -4,11 +4,11 @@ import type pt from "../pt-BR/approvals";
 const approvals: Widen<typeof pt> = {
   title: "Approvals",
   intro:
-    "The requests that wait for a decision of yours, from every workspace you act in. Whoever answers first decides.",
+    "The requests that wait for a decision of yours, from every campaign you act in. Whoever answers first decides.",
   tabs: { label: "Approval sections", pending: "Pending", history: "History" },
   filters: {
     label: "Filters",
-    workspace: "Workspace",
+    workspace: "Campaign",
     table: "Table",
     type: "Type",
     all: "All",
@@ -47,7 +47,7 @@ const approvals: Widen<typeof pt> = {
     ponto_de_missao: "Mission point",
     custo_extra: "Extra cost",
     configuracao_repositorio: "Repository settings",
-    classe_workspace: "Workspace class",
+    classe_workspace: "Campaign class",
     acao_destrutiva: "Destructive action",
     proposta_agents_md: "AGENTS.md proposal",
     ativacao_operador: "Operator activation",
@@ -81,7 +81,7 @@ const approvals: Widen<typeof pt> = {
       "The request waits for the answer, and the final time of the people keeps running.",
     scope: "What the delegation covers",
     scopeText:
-      "Requests of type {{type}} in the workspace {{workspace}}, table {{table}}, for up to {{days}} days. The Grand Master becomes the one who decides; you can revoke it whenever you want.",
+      "Requests of type {{type}} in the campaign {{workspace}}, table {{table}}, for up to {{days}} days. The Grand Master becomes the one who decides; you can revoke it whenever you want.",
     scopeNoTable: "no table",
   },
   confirm: "Confirm",

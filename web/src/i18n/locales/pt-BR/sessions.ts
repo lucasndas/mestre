@@ -2,7 +2,7 @@ export default {
   title: "Minhas sessões",
   titleAll: "Sessões de todos",
   intro: "Cada navegador em que você entrou é uma sessão. Encerre as que não reconhece.",
-  introAll: "Como Dono, você vê e encerra as sessões de todos os usuários.",
+  introAll: "Como Senhor da Guilda, você vê e encerra as sessões de todos os usuários.",
   current: "Esta sessão",
   device: "Aparelho",
   user: "Usuário",

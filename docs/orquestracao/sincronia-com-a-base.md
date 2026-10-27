@@ -21,7 +21,7 @@ Nenhum dos três depende de a mesa ter conflito de texto: a base ter andado bast
 ### A etapa
 
 - É uma missão de uma etapa da mesa ([missões](missoes.md)), de risco `baixo`, entregue ao **Dev da mesa**: o personagem que fez a última etapa que mudou código; sem ele, o Mestre da mesa escolhe. Uma mesa aberta em `in_review` volta a `working` ([estados](mesas.md#estados)).
-- O motor monta a instrução: integrar a base no worktree da mesa (merge, nunca push forçado), resolver cada conflito mantendo a intenção dos dois lados, rodar a verificação do workspace (os [comandos confirmados](../sessao-zero/workspace.md#comandos-de-verificação), descobertos na análise do projeto) e só então dar `done`.
+- O motor monta a instrução: integrar a base no worktree da mesa (merge, nunca push forçado), resolver cada conflito mantendo a intenção dos dois lados, rodar a verificação da campanha (os [comandos confirmados](../sessao-zero/workspace.md#comandos-de-verificação), descobertos na análise do projeto) e só então dar `done`.
 - **Conflito é tarefa de build.** O Dev resolve; só chega a pessoa o que é decisão de intenção (dois lados do pedido que não cabem juntos), pelo caminho normal da pergunta ao Mestre da mesa e ao Grão-Mestre.
 - **Quem empurra** é o motor, pelo App da classe do Dev, no `mestre pr update` seguinte; o agente não faz `git push`.
 
@@ -48,11 +48,11 @@ O `done` da `sync` não encerra a etapa sozinho, qualquer que seja a classe do D
 - **CA-SYNC-02** · *completa* — **Dado** uma `sync` em que o Dev resolveu os marcadores mas a verificação falha, **quando** ele dá `done`, **então** o motor devolve a etapa ao Dev com a saída da verificação e conta uma volta; **dado** a verificação verde, **então** a etapa conclui e o `pr update` leva a mesa a `in_review`.
 - **CA-SYNC-03** · *rápida* — **Dado** `max_returns: 3` e uma `sync` cuja verificação falha 4 vezes com saídas diferentes em cada uma, **quando** a quarta falha chega, **então** as três primeiras voltam ao Dev, a missão fica `paused` com "limite de voltas", o Mestre da mesa recebe o `return_limit` e a mesa segue `working`; **dado** a mesma saída `src/a.go:7: x` três vezes com `same_failure: 3`, **então** a missão pausa na terceira com "mesma falha repetida".
 - **CA-SYNC-04** · *rápida* — **Dado** a mesa aberta e a ponta da base mudada por um `fetch` do espelho (sem nenhum evento do GitHub), **quando** o Mestre da mesa pede `mestre pr open`, **então** sai com 7 `conflict` e a `sync` é criada; **dado** uma `sync` já aberta, **então** um novo sinal de base andada é ignorado e nenhuma segunda etapa nasce.
-- **CA-SYNC-05** · *rápida* — **Dado** uma `sync` em andamento e a base andando de novo, **quando** o Dev dá `done` e a verificação passa, **então** o gate roda outra vez antes de concluir; **dado** um workspace sem comando de verificação confirmado, **então** a `sync` volta ao Mestre da mesa com a pergunta dos comandos.
+- **CA-SYNC-05** · *rápida* — **Dado** uma `sync` em andamento e a base andando de novo, **quando** o Dev dá `done` e a verificação passa, **então** o gate roda outra vez antes de concluir; **dado** uma campanha sem comando de verificação confirmado, **então** a `sync` volta ao Mestre da mesa com a pergunta dos comandos.
 
 ## Depende de
 
 - [Ações por nível](../github/acoes-por-nivel.md)
 - [Mesas](mesas.md)
 - [Missões](missoes.md)
-- [Sessão zero do workspace](../sessao-zero/workspace.md)
+- [Sessão zero da campanha](../sessao-zero/workspace.md)

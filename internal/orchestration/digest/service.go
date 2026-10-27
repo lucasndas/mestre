@@ -725,7 +725,7 @@ func (s *Service) suggestionText(x Suggestion, more bool) string {
 	if x.Effect == "deny" {
 		verb = "negar"
 	}
-	scope := "no workspace " + x.Workspace
+	scope := "na campanha " + x.Workspace
 	if x.Mesa != "" {
 		scope = "na mesa " + x.Mesa
 	}

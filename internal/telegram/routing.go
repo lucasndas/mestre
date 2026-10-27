@@ -111,7 +111,7 @@ func (r *Routing) Deliver(ctx context.Context, in Inbound) error {
 	}
 	switch len(allowed) {
 	case 0:
-		r.say(ctx, in, "Você não atua em nenhum workspace ainda. Peça ao Dono para incluí-lo em um.")
+		r.say(ctx, in, "Você não atua em nenhuma campanha ainda. Peça ao Senhor da Guilda para incluí-lo em um.")
 		return nil
 	case 1:
 		return r.to(ctx, in, allowed, allowed[0], "", in.Text, false)
@@ -127,7 +127,7 @@ func (r *Routing) Deliver(ctx context.Context, in Inbound) error {
 	if err := st.Park(ctx, in); err != nil {
 		return err
 	}
-	r.ask(ctx, in, allowed, "Em qual workspace entrego a sua mensagem? A escolha passa a ser o seu workspace ativo.")
+	r.ask(ctx, in, allowed, "Em qual campanha entrego a sua mensagem? A escolha passa a ser a sua campanha ativa.")
 	return nil
 }
 
@@ -185,13 +185,13 @@ func (r *Routing) receive(ctx context.Context, in Inbound, ws string) (attachmen
 
 func listOf(allowed []string) string {
 	if len(allowed) == 0 {
-		return "Você não atua em nenhum workspace."
+		return "Você não atua em nenhuma campanha."
 	}
 	names := make([]string, len(allowed))
 	for i, w := range allowed {
 		names[i] = "#" + w
 	}
-	return "Workspaces que você pode usar: " + strings.Join(names, ", ") + "."
+	return "Campanhas que você pode usar: " + strings.Join(names, ", ") + "."
 }
 
 // say answers the user from the engine.
@@ -239,11 +239,11 @@ func (r *Routing) workspaceCommand(ctx context.Context, call Call) (string, erro
 	allowed := permitted(all, call.User)
 	switch len(allowed) {
 	case 0:
-		return "Você não atua em nenhum workspace.", nil
+		return "Você não atua em nenhuma campanha.", nil
 	case 1:
-		return "Você atua só em #" + allowed[0] + ": ele é sempre o seu workspace ativo.", nil
+		return "Você atua só em #" + allowed[0] + ": ela é sempre a sua campanha ativa.", nil
 	}
-	r.ask(ctx, Inbound{User: call.User, ChatID: call.ChatID}, allowed, "Escolha o workspace ativo. O `#nome` no começo de uma mensagem a leva a outro sem trocar o ativo.")
+	r.ask(ctx, Inbound{User: call.User, ChatID: call.ChatID}, allowed, "Escolha a campanha ativa. O `#nome` no começo de uma mensagem a leva a outro sem trocar a ativa.")
 	return "", nil
 }
 
@@ -261,7 +261,7 @@ func (r *Routing) choose(ctx context.Context, k Click) (string, string, error) {
 	}
 	allowed := permitted(all, u)
 	if !contains(allowed, k.Arg) {
-		return "", "", errors.New("você não atua nesse workspace")
+		return "", "", errors.New("você não atua nessa campanha")
 	}
 	if users.Require(u.Level, users.TalkToGrandMaster) != nil {
 		return "", "", errors.New("com o seu nível você não fala com o Grão-Mestre")

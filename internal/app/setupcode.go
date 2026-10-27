@@ -17,7 +17,7 @@ import (
 
 // SetupCodeMain is `mestre setup-code [--instance <inst>] [--dir <pasta>]`: it makes
 // a new code of setup of the Owner, voiding the one before, for a Guild that has
-// no user yet (docs/painel/login.md#assistente-do-dono-primeira-vez). Only root or
+// no user yet (docs/painel/login.md#assistente-do-senhor-da-guilda-primeira-vez). Only root or
 // an administrator, on the machine of the Citadel, and never from an agent. It
 // returns the exit code.
 func SetupCodeMain(ctx context.Context, args []string, stdout, stderr io.Writer, lookupEnv func(string) (string, bool)) int {

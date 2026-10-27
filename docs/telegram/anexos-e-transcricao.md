@@ -14,11 +14,11 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
   - O limite é configurável. O padrão é **20 MB**, que é também o teto para o Telegram, porque a Bot API na nuvem só baixa arquivos de até 20 MB.
   - O motor confere o `file_size` **antes** de chamar `getFile`. Acima do limite, responde com o limite e não baixa nada. O limite vale também durante o download: um arquivo que passa dele, seja qual for o tamanho declarado, é cortado e recusado, sem nova tentativa.
 - **Download:** `getFile` e depois o link de arquivo, que vale pelo menos 1 hora. De uma foto, o motor baixa o maior tamanho disponível.
-- **Onde fica:** `.mestre/anexos/<AAAA>/<MM>/<id>-<nome>` no clone principal do workspace, na Cidadela.
+- **Onde fica:** `.mestre/anexos/<AAAA>/<MM>/<id>-<nome>` no clone principal da campanha, na Cidadela.
   - O nome é saneado: sem separadores de caminho nem caracteres de controle, com até 100 caracteres. Uma foto sem nome vira `foto-<id>.jpg`.
-  - A pasta fica fora do git ([sessão zero do workspace](../sessao-zero/workspace.md)).
+  - A pasta fica fora do git ([sessão zero da campanha](../sessao-zero/workspace.md)).
 - **Registro no banco:**
-  - ID e workspace;
+  - ID e campanha;
   - autor e data;
   - origem: canal, `chat_id` e `message_id`, ou sessão do painel;
   - nome original e tipo MIME (detectado pelo conteúdo e comparado com o declarado);
@@ -34,13 +34,13 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
   - Numa Torre, o arquivo vai primeiro ao clone principal dela pela transferência `kind: file` ([protocolo](../conectividade/protocolo.md#transferência-em-partes)) e a Cidadela manda `table.attach`; a Torre copia para o worktree, sem permissão de execução. A linha do anexo cita o arquivo na [replicação](../guilda/replicacao.md#arquivos-e-espelhos): uma Torre que estava fora recebe o arquivo antes da linha e, ao aplicá-la, copia o anexo para as mesas dela que a linha cita.
   - Onde a cópia fica está em [sessão zero da mesa](../sessao-zero/mesa.md).
 - **Qualquer tipo é guardado:** o motor não recusa um tipo; vale o que o conteúdo diz ser, o arquivo nasce sem permissão de execução e o caminho é sempre o saneado. Legenda e transcrição passam pelo mascaramento de segredos antes de chegar a um agente.
-- **Mensagem que espera:** a mensagem do usuário guardada com o Mestre travado, ou à espera da escolha do workspace, leva a referência do arquivo; o arquivo só é baixado quando a mensagem é entregue, já com o workspace conhecido.
+- **Mensagem que espera:** a mensagem do usuário guardada com o Mestre travado, ou à espera da escolha da campanha, leva a referência do arquivo; o arquivo só é baixado quando a mensagem é entregue, já com a campanha conhecida.
 - **Nunca executar:** anexos são conteúdo trazido pelo usuário. Os agentes leem e usam, mas nunca executam. É regra fixa do Mestre: o `mestre hook` nega executar ou dar permissão de execução a arquivos de `.mestre/anexos/` ([permissões](../classes/permissoes.md)).
 - **Limpeza:** não há limpeza automática; os anexos ficam até alguém apagá-los.
 
 ### Envio de arquivos (`mestre reply --attach`)
 
-- **Quem lê o arquivo é a CLI**, que roda como o próprio agente: o motor nunca abre um caminho que um agente nomeia, e o caminho não segue na chamada ([regras da CLI](../cli/comunicacao.md#regras-e-erros)). A CLI só aceita um arquivo dentro do clone principal do workspace ou de um worktree de mesa (achados pelo worktree onde o processo está, com os links resolvidos; a pasta do git e `.mestre/agents/` ficam de fora) e recusa qualquer outro caminho com 3 `path_not_allowed` (a recusa é da CLI; o motor nunca vê o caminho), para não mandar por engano arquivos da máquina; ela não é uma barreira (quem monta o pedido à mão não passa por ela), e o que o agente não consegue ler, a CLI também não lê.
+- **Quem lê o arquivo é a CLI**, que roda como o próprio agente: o motor nunca abre um caminho que um agente nomeia, e o caminho não segue na chamada ([regras da CLI](../cli/comunicacao.md#regras-e-erros)). A CLI só aceita um arquivo dentro do clone principal da campanha ou de um worktree de mesa (achados pelo worktree onde o processo está, com os links resolvidos; a pasta do git e `.mestre/agents/` ficam de fora) e recusa qualquer outro caminho com 3 `path_not_allowed` (a recusa é da CLI; o motor nunca vê o caminho), para não mandar por engano arquivos da máquina; ela não é uma barreira (quem monta o pedido à mão não passa por ela), e o que o agente não consegue ler, a CLI também não lê.
 - **Como sai:**
   - Imagens JPG, PNG ou WebP de até 10 MB saem com `sendPhoto`.
   - O resto sai com `sendDocument`, até **50 MB** (limite da Bot API).

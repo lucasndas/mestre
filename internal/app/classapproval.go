@@ -71,7 +71,7 @@ func (a classAlerts) ClassChanged(ctx context.Context, al classes.ClassAlert) er
 		return err
 	}
 	_, err = svc.Request(ctx, chain.OpenRequest{Type: classes.RequestWorkspaceClass, Workspace: a.workspace, Proposer: p.By, Target: target,
-		About: fmt.Sprintf("criar ou mudar a classe %s do workspace (proposta %d, pacote %s)", al.Key.Name, p.ID, shortHash(p.Hash))})
+		About: fmt.Sprintf("criar ou mudar a classe %s da campanha (proposta %d, pacote %s)", al.Key.Name, p.ID, shortHash(p.Hash))})
 	if err != nil {
 		return fmt.Errorf("app: asking the people about the class %s: %w", al.Key.Name, err)
 	}
@@ -95,7 +95,7 @@ func (c *classApprovals) Decided(ctx context.Context, res chain.Result) error {
 	}
 	// only an "Aprovar" puts the class in use; delegating the request is not approving the package
 	if r.Decision == nil || !r.Decision.Answer.Approves() {
-		c.tell(ctx, fmt.Sprintf("O pedido %d, da classe do workspace, foi encerrado sem um \"Aprovar\": a classe não entrou em uso.", r.ID))
+		c.tell(ctx, fmt.Sprintf("O pedido %d, da classe da campanha, foi encerrado sem um \"Aprovar\": a classe não entrou em uso.", r.ID))
 		return nil
 	}
 	by, user := "", false

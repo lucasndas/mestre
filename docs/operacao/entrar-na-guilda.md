@@ -2,19 +2,19 @@
 
 > **Assunto:** passo a passo para uma máquina nova (Windows ou Ubuntu) entrar na Guilda: comparar o código de entrada, aceitar com PIN, conferir, excluir e remover uma máquina, máquina fora da rede local · **Componente:** Todos · **Atualizado:** 2026-10-19
 
-Guia para quem usa. Só o Dono aceita e remove máquinas. Como a entrada funciona por dentro (código de comparação, certificados, prazo): [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda). Como a máquina acha a Guilda: [descoberta](../conectividade/descoberta.md).
+Guia para quem usa. Só o Senhor da Guilda aceita e remove máquinas. Como a entrada funciona por dentro (código de comparação, certificados, prazo): [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda). Como a máquina acha a Guilda: [descoberta](../conectividade/descoberta.md).
 
-Antes: a primeira máquina instalada (a Cidadela) e o [primeiro acesso](primeiro-acesso.md) feito (Dono criado). Um pedido feito antes de o Dono existir espera e aparece no painel depois do assistente do Dono.
+Antes: a primeira máquina instalada (a Cidadela) e o [primeiro acesso](primeiro-acesso.md) feito (Senhor da Guilda criado). Um pedido feito antes de o Senhor da Guilda existir espera e aparece no painel depois do assistente do Senhor da Guilda.
 
 ## 1. Instalar na máquina nova
 
 Rode o instalador normal ([instalar](instalar.md)). Ele procura a Guilda na rede local sozinho e mostra o que achou (nome da Cidadela e quantas máquinas). Se achar mais de uma Guilda, pergunta em qual entrar.
 
-No fim, o instalador mostra o **código de entrada**, com 6 dígitos (ex.: `123 456`), e fica esperando a resposta do Dono. Deixe a janela aberta.
+No fim, o instalador mostra o **código de entrada**, com 6 dígitos (ex.: `123 456`), e fica esperando a resposta do Senhor da Guilda. Deixe a janela aberta.
 
 ## 2. Aceitar no Telegram ou no painel
 
-1. O Dono recebe no Telegram (e vê no painel, em **Guilda e saúde das máquinas**) a pergunta "Aceitar `<máquina>` (`<sistema>`) na Guilda? Código 123 456".
+1. O Senhor da Guilda recebe no Telegram (e vê no painel, em **Guilda e saúde das máquinas**) a pergunta "Aceitar `<máquina>` (`<sistema>`) na Guilda? Código 123 456".
 2. **Compare o código** da mensagem com o da tela do instalador. Só aceite se forem iguais; diferentes indicam que alguém está no meio da conexão: recuse.
 3. Toque em **Aceitar** e responda o seu PIN. A máquina recebe uma cópia de tudo, inclusive o cofre cifrado, e pode assumir se a Cidadela cair; para que ela nunca guarde segredos nem assuma, marque **Excluída** já na aceitação (padrão: não) ou depois (abaixo; [replicação](../guilda/replicacao.md)).
 4. O instalador termina sozinho: a máquina recebe a configuração, passa a confiar na CA da Guilda e conecta como Torre.
