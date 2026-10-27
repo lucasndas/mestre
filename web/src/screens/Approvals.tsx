@@ -61,18 +61,21 @@ export function Approvals({
   request,
   notice,
   table,
+  workspace,
 }: {
   request?: number;
   notice?: number;
   /** Opens the central already filtered by a table (the card of a table that waits for a decision). */
   table?: string;
+  /** The campaign of that table: two campaigns may have a table with the same name. */
+  workspace?: string;
 }) {
   const { t } = useTranslation("approvals");
   const tx = useDynamicT("approvals");
   const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
   const [filters, setFilters] = useState<ApprovalFilters>({
-    workspace: "",
+    workspace: workspace ?? "",
     table: table ?? "",
     type: "",
   });

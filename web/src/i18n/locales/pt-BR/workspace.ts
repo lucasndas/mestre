@@ -109,6 +109,7 @@ export default {
     level_denied: "Seu nível não permite pausar mesas.",
     table_over: "Esta mesa já terminou.",
     unavailable: "A pausa de mesa não está disponível agora.",
+    secret: "Não escreva senhas no motivo; diga só por que pausar.",
   },
   life: {
     situation: {

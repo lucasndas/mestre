@@ -112,6 +112,7 @@ const workspace: Widen<typeof ptBR> = {
     level_denied: "Your level does not allow pausing tables.",
     table_over: "This table is over already.",
     unavailable: "Pausing a table is not available right now.",
+    secret: "Do not write passwords in the reason; say only why to pause.",
   },
   life: {
     situation: {

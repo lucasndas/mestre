@@ -125,6 +125,7 @@ func (s *Supervisor) PauseStalled(ctx context.Context, r PauseRequest) (bool, er
 	if err := s.st.DB.WriteDurable(ctx, func(tx *sql.Tx) error { return s.auditTx(ctx, tx, r, "pause_table", now) }); err != nil {
 		s.log.Warn("supervision: the pause of a table was not audited", "table", r.Table, "by", r.By.name(), "err", err)
 	}
-	s.tellPause(ctx, r, fmt.Sprintf("A mesa %s foi pausada por %s: %s. Nada foi interrompido; a caixa de entrada para de entregar e nenhuma etapa nova começa até a retomada.", r.Table, s.who(ctx, r.By), r.Reason))
+	// the reason is what a person wrote: it is quoted as that, never as a sentence of the engine
+	s.tellPause(ctx, r, fmt.Sprintf("A mesa %s foi pausada por %s. %s\nNada foi interrompido; a caixa de entrada para de entregar e nenhuma etapa nova começa até a retomada.", r.Table, s.who(ctx, r.By), inbox.Say("Motivo (texto de quem pausou, não verificado):", r.Reason, ">")))
 	return true, nil
 }

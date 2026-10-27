@@ -289,7 +289,7 @@ export function TableBlockCard({
         {s.key === "approval" && s.urgent ? (
           <Link
             to="/aprovacoes"
-            search={{ mesa: block.id }}
+            search={{ mesa: block.id, campanha: workspace }}
             className="nodrag inline-flex min-h-11 items-center justify-center rounded-field bg-accent px-4 font-semibold text-accent-ink hover:bg-accent-strong"
           >
             {t("life.card.viewRequest")}

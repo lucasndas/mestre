@@ -96,7 +96,7 @@ func (e *Engine) openPanel(ctx context.Context, db *store.DB, integ IntegrationR
 	if e.deps.PanelView != nil {
 		p.SetWorkspaceView(e.deps.PanelView)
 	} else {
-		p.SetWorkspaceView(viewHost{get: e.orc.Load, clk: e.clk})
+		p.SetWorkspaceView(screenedViewHost{viewHost: viewHost{get: e.orc.Load, clk: e.clk}, mask: e.deps.Masker.Mask})
 	}
 	p.SetManage(func() panel.Manage { return e.panelManage(db) })
 	if e.deps.PanelWorkspaces != nil {

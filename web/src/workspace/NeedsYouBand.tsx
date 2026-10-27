@@ -40,7 +40,7 @@ export function NeedsYouBand({ items, workspace }: { items: Pending[]; workspace
             {situation.key === "approval" ? (
               <Link
                 to="/aprovacoes"
-                search={{ mesa: block.id }}
+                search={{ mesa: block.id, campanha: workspace }}
                 className="inline-flex min-h-11 items-center rounded-field bg-accent px-4 font-semibold text-accent-ink hover:bg-accent-strong"
               >
                 {t("life.card.viewRequest")}

@@ -213,18 +213,19 @@ const approvalsRoute = createRoute({
   path: "/aprovacoes",
   validateSearch: (
     s: Record<string, unknown>,
-  ): { pedido?: number; aviso?: number; mesa?: string } => {
+  ): { pedido?: number; aviso?: number; mesa?: string; campanha?: string } => {
     const n = (v: unknown) =>
       Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : undefined;
     return {
       pedido: n(s.pedido),
       aviso: n(s.aviso),
       mesa: typeof s.mesa === "string" && s.mesa ? s.mesa : undefined,
+      campanha: typeof s.campanha === "string" && s.campanha ? s.campanha : undefined,
     };
   },
   component: function ApprovalsPage() {
-    const { pedido, aviso, mesa } = approvalsRoute.useSearch();
-    return <Approvals request={pedido} notice={aviso} table={mesa} />;
+    const { pedido, aviso, mesa, campanha } = approvalsRoute.useSearch();
+    return <Approvals request={pedido} notice={aviso} table={mesa} workspace={campanha} />;
   },
 });
 const approvalHistoryRoute = createRoute({

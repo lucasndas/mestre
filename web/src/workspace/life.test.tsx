@@ -81,6 +81,7 @@ test("a table that waits for an approval is the user's decision only for who dec
   expect(a.textContent).toContain("Espera a sua decisão");
   const see = within(a).getByRole("link", { name: "Ver o pedido" });
   expect(see.getAttribute("href")).toContain("mesa=42-login");
+  expect(see.getAttribute("href")).toContain("campanha=loja");
   expect(screen.getByRole("heading", { name: "Precisa de você (1)" })).toBeTruthy();
   unmount();
 

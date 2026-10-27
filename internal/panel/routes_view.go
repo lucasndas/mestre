@@ -159,6 +159,8 @@ func cleanReason(s string) string {
 	var b strings.Builder
 	for _, r := range s {
 		switch {
+		case unicode.Is(unicode.Cf, r):
+			// invisible format characters (bidi marks, zero width): not kept
 		case unicode.IsControl(r) || unicode.IsSpace(r):
 			b.WriteRune(' ')
 		default:
