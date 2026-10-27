@@ -42,7 +42,7 @@ export function TerminalScreen({ character }: { character: string }) {
             terminalId={data.terminal_id}
             info={data}
             feed={feed}
-            canType={canType}
+            canType={canType && data.can_type}
             refreshInfo={refresh}
             timeZone={timezone}
             readable

@@ -614,3 +614,34 @@ test("CA-TUI-03: an escape typed inside a message cannot end the paste early", a
   expect(encodeMessage("a\x1b[201~rm -rf /\nb")).toBe("\x1b[200~a[201~rm -rf /\nb\x1b[201~\r");
   expect(encodeMessage("só uma linha\x1b")).toBe("só uma linha\r");
 });
+
+// CA-TUI-03
+test("CA-TUI-03: a refused key of the direct keyboard never brings an old message back to the queue", async () => {
+  const u = user();
+  const { typed, followers } = setup();
+  await u.click(screen.getByRole("button", { name: "Digitar" }));
+  await u.type(screen.getByRole("textbox", { name: "Mensagem para Revisor" }), "deploy{Enter}");
+  expect(typed).toEqual(["deploy\r"]);
+  await u.click(screen.getByRole("button", { name: "Teclado direto" }));
+  act(() => followers.get("T1")?.refused?.({ code: "unavailable", message: "x" }));
+  await u.click(screen.getByRole("button", { name: "Parar de digitar" }));
+  await u.click(screen.getByRole("button", { name: "Digitar" }));
+  expect(typed).toEqual(["deploy\r"]);
+  expect(screen.queryByText(/Na fila/)).toBeNull();
+});
+
+// CA-TUI-03
+test("CA-TUI-03: C1 controls and tabs never reach the agent in a message", async () => {
+  const { encodeMessage } = await import("./MessageComposer");
+  expect(encodeMessage("a\u009bb\tc")).toBe("ab  c\r");
+});
+
+// CA-TUI-04
+test("CA-TUI-04: a level that drops while the box is open sends nothing more", async () => {
+  const u = user();
+  const { typed, rerender } = setup({ info: info({ busy: true, state: "busy" }) });
+  await u.click(screen.getByRole("button", { name: "Digitar" }));
+  await u.type(screen.getByRole("textbox", { name: "Mensagem para Revisor" }), "x{Enter}");
+  rerender({ canType: false, info: info({ busy: false }) });
+  expect(typed).toEqual([]);
+});

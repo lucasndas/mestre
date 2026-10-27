@@ -167,7 +167,8 @@ export function TerminalView({
   const status = context?.status;
   const needsDecision = Boolean(status && (status.key === "decision" || status.key === "approval"));
   const decision = permission || needsDecision;
-  const blocked = noSignal || reconnecting || ended || decision;
+  const locked = !canType;
+  const blocked = locked || noSignal || reconnecting || ended || decision;
   const queue = useMessageQueue({
     busy: info.busy,
     active: mode === "message" && !blocked,
@@ -246,7 +247,8 @@ export function TerminalView({
         setRefusal(e);
         if (e.code === "forbidden_level") setMode("read");
         if (e.code === "permission_prompt") setPermission(true);
-        refusedRef.current();
+        // only a refused message goes back to the queue, never a refused key of the direct keyboard
+        if (modeRef.current === "message") refusedRef.current();
       },
     });
     return () => {
@@ -290,6 +292,7 @@ export function TerminalView({
   );
 
   const start = async () => {
+    if (blocked) return;
     setRefusal(null);
     queue.clearSentBack();
     if (refreshInfo) {
@@ -302,6 +305,7 @@ export function TerminalView({
     setMode("message");
   };
   const keysAsked = async () => {
+    if (blocked) return;
     let now = info;
     if (refreshInfo) {
       try {
@@ -362,7 +366,6 @@ export function TerminalView({
   const since = info.no_signal_since;
   const label = t("region", { name: info.name });
   const live = renderer === "live";
-  const locked = !canType;
   const typeDisabled = locked || blocked;
   const support = (() => {
     if (locked) return t("support.lock");
@@ -392,7 +395,7 @@ export function TerminalView({
       data-phone={narrow ? "yes" : "no"}
       onKeyDownCapture={(e) => {
         // Ctrl+Alt+K lets go of the keyboard without sending anything to the agent
-        if (keys && e.ctrlKey && e.altKey && e.key.toLowerCase() === "k") {
+        if (keys && e.ctrlKey && e.altKey && (e.code === "KeyK" || e.key.toLowerCase() === "k")) {
           e.preventDefault();
           e.stopPropagation();
           leave();

@@ -15,9 +15,11 @@ export function encodeMessage(text: string): string {
   const clean = [...text.replace(/\r\n?/g, "\n")]
     .filter((ch) => {
       const c = ch.codePointAt(0) ?? 0;
-      return ch === "\n" || ch === "\t" || (c >= 0x20 && c !== 0x7f);
+      return ch === "\n" || ch === "\t" || (c >= 0x20 && c !== 0x7f && (c < 0x80 || c > 0x9f));
     })
-    .join("");
+    .join("")
+    // a Tab would reach the agent as a key (completion, mode switch)
+    .replace(/\t/g, "  ");
   return clean.includes("\n") ? `\x1b[200~${clean}\x1b[201~\r` : `${clean}\r`;
 }
 
@@ -88,16 +90,12 @@ export function useMessageQueue(o: {
     setQueue((q) => [{ id: next.current++, text }, ...q]);
   };
 
-  // a terminal that can be typed into again gets its queue back
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `active` is the trigger
-  useEffect(() => {
-    held.current = false;
-  }, [active]);
   // the character working, then free again: the turn of the next message
   useEffect(() => {
     if (busy && phase.current === "sent") phase.current = "working";
     if (!busy && phase.current === "working") {
       phase.current = "none";
+      lastSent.current = null;
       wake((n) => n + 1);
     }
   }, [busy]);
@@ -107,6 +105,7 @@ export function useMessageQueue(o: {
     const timer = setTimeout(() => {
       if (phase.current === "sent") {
         phase.current = "none";
+        lastSent.current = null;
         wake((n) => n + 1);
       }
     }, START_WAIT);
