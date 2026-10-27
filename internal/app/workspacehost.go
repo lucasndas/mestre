@@ -193,7 +193,7 @@ func (h workspaceHost) Retry(ctx context.Context, slug string) error {
 		return notFound(err)
 	}
 	if w.State != workspaces.StatePreparing {
-		return &panel.Refusal{Reason: "not_preparing", Message: "o workspace já passou da sessão zero"}
+		return &panel.Refusal{Reason: "not_preparing", Message: "a campanha já passou da sessão zero"}
 	}
 	// the stage can take minutes (a clone): it runs on, and the screen follows the
 	// workspace as it changes; a failure is recorded in the stage
@@ -330,7 +330,7 @@ func (h workspaceHost) ConfirmVerification(ctx context.Context, by users.User, s
 		return "", notFound(err)
 	}
 	if !w.MirrorReady() {
-		return "", &panel.Refusal{Reason: "not_ready", Message: "o clone principal do workspace ainda não existe"}
+		return "", &panel.Refusal{Reason: "not_ready", Message: "o clone principal da campanha ainda não existe"}
 	}
 	hash, err := h.verifications().Confirm(ctx, slug, by.ID, doc)
 	if errors.Is(err, verification.ErrInvalid) {
@@ -394,7 +394,7 @@ func (r *stdRun) checkOutsideEdits(ctx context.Context) {
 			continue
 		}
 		if changed {
-			text := "O arquivo " + verification.File + " do workspace " + w.Slug + " foi mudado fora do painel. Vale a última versão confirmada; para aplicar a mudança, confirme-a na tela de workspaces."
+			text := "O arquivo " + verification.File + " da campanha " + w.Slug + " foi mudado fora do painel. Vale a última versão confirmada; para aplicar a mudança, confirme-a na tela de campanhas."
 			if _, err := r.alert.AdminAlert(ctx, w.Slug, text); err != nil && !errors.Is(err, telegram.ErrQueued) {
 				r.env.Log.Warn("app: the Administrators were not told of an edit of the verification commands", "workspace", w.Slug, "err", err)
 			}

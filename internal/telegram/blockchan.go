@@ -118,7 +118,7 @@ func (c *BlockChannel) details(ctx context.Context, k Click) (string, string, er
 	}
 	u, err := c.Users.Get(ctx, k.User.ID) // the workspaces as stored now
 	if err != nil || !u.Acts(ws) {
-		return "", "", errors.New("esse aviso não é de um workspace seu")
+		return "", "", errors.New("esse aviso não é de uma campanha sua")
 	}
 	if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: fmt.Sprintf("Detalhes do aviso %d:\n%s", id, full), Workspace: ws, Mesa: mesa, Origin: "bloqueio"}); err != nil {
 		return "", "", err

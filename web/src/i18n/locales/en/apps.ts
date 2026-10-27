@@ -4,7 +4,7 @@ import type pt from "../pt-BR/apps";
 const apps: Widen<typeof pt> = {
   title: "GitHub Apps",
   intro:
-    "The fixed Apps and the ones of each class, the workspaces they are installed in, and how many Apps the account already has.",
+    "The fixed Apps and the ones of each class, the campaigns they are installed in, and how many Apps the account already has.",
   loading: "Loading the Apps…",
   count: "{{total}} of {{limit}} Apps on the account",
   countDetail: "{{mine}} from the Mestre and {{others}} from others.",
@@ -24,7 +24,7 @@ const apps: Widen<typeof pt> = {
     class: "Class",
     state: "State",
     repos: "Installed in",
-    noRepos: "no workspace",
+    noRepos: "no campaign",
     request: "Request",
     actions: "Action",
     fixed: "fixed",
@@ -53,6 +53,6 @@ const apps: Widen<typeof pt> = {
     done: "I copied it",
   },
   unavailable: "Creating Apps is not available in this period; the links come back when it is.",
-  ownerOnly: "Only the Owner makes creation links and tells the number of other Apps.",
+  ownerOnly: "Only the Guildmaster makes creation links and tells the number of other Apps.",
 };
 export default apps;

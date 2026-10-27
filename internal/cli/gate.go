@@ -105,7 +105,7 @@ var lockedRefuses = map[string]bool{
 
 // LockedResponse is the answer of a command the lock refuses.
 func LockedResponse() localchan.Response {
-	return localchan.Fail("locked", "o Mestre está travado: este comando não é executado até o Dono destravar", "o Dono destrava com /destravar")
+	return localchan.Fail("locked", "o Mestre está travado: este comando não é executado até o Senhor da Guilda destravar", "o Senhor da Guilda destrava com /destravar")
 }
 
 // RefusedWhenLocked says whether the lock refuses the command.

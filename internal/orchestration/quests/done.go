@@ -194,7 +194,7 @@ func (s *Service) finish(ctx context.Context, r DoneRequest, mode doneMode) (Don
 	}
 	if mode == modeUnverified {
 		res.Verification = VerificationUnverified
-		s.tellMaster(ctx, q, inbox.KindSystem, fmt.Sprintf("A etapa %s foi concluída sem verificação: o workspace não tem comando de verificação confirmado. Nenhuma prova dela conta como verificada pelo motor.", sd.Title()))
+		s.tellMaster(ctx, q, inbox.KindSystem, fmt.Sprintf("A etapa %s foi concluída sem verificação: a campanha não tem comando de verificação confirmado. Nenhuma prova dela conta como verificada pelo motor.", sd.Title()))
 	}
 	return res, nil
 }

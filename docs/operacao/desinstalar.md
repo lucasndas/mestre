@@ -52,5 +52,5 @@ Guia para quem usa. O que a remoção apaga por dentro está em [instalação e 
 ### Repositórios
 
 - Os arquivos gerados pelo Mestre (skills copiadas, hooks, `.mestre/agents/`) só existem nas cópias do Mestre e somem com os dados.
-- Se você escolheu **versionar `.mestre/`** no projeto ([sessão zero do workspace](../sessao-zero/workspace.md)), a pasta continua no repositório. Remova por PR, se quiser.
+- Se você escolheu **versionar `.mestre/`** no projeto ([sessão zero da campanha](../sessao-zero/workspace.md)), a pasta continua no repositório. Remova por PR, se quiser.
 - O `AGENTS.md` é do projeto e fica como está.

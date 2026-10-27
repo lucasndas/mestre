@@ -4,7 +4,7 @@
 
 ## Objetivo
 
-Cada máquina da Guilda se apresenta com uma **ficha** atualizada sozinha, e cada personagem declara do que precisa (**requisitos**). A Cidadela só põe um personagem numa máquina cuja ficha atende a todos os requisitos; se nenhuma atende, avisa o Dono em vez de rodar em outra. Nada no código pressupõe um sistema para cada papel: a escolha sai só da ficha.
+Cada máquina da Guilda se apresenta com uma **ficha** atualizada sozinha, e cada personagem declara do que precisa (**requisitos**). A Cidadela só põe um personagem numa máquina cuja ficha atende a todos os requisitos; se nenhuma atende, avisa o Senhor da Guilda em vez de rodar em outra. Nada no código pressupõe um sistema para cada papel: a escolha sai só da ficha.
 
 ## Comportamento
 
@@ -19,11 +19,11 @@ Cada máquina da Guilda se apresenta com uma **ficha** atualizada sozinha, e cad
 | `ips[]` | endereços IPv4 da máquina na rede local (sem loopback nem link-local); a Cidadela os passa ao registro de nomes e o certificado os acompanha ([credenciais](guilda.md#credenciais)) | motor |
 | `providers[]` | `{provider, profiles: [{name, version, logged_in, conformant, cli_unreachable, default}]}` (`default` marca o perfil que uma ficha sem `account` usa) para `claude-code`, `codex` e `antigravity` instalados; versão e conformidade são por máquina e [perfil de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta) ([conformidade](../provedores/conformidade.md)) | motor, com o resultado do [checklist](../plataforma/checklist.md) e da conformidade |
 | `browser` | `{name, version}` do navegador dos MCPs de navegador dos personagens (Chrome; senão, no Windows, o Edge, e no Linux, o Chromium; a versão no Windows vem do registro da máquina, HKLM, e só por último do da conta do serviço), ou ausente | motor |
-| `operador` | `{enabled, ready, reason}`: **habilitado** (`enabled`) quando o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) está instalado e ligado pelo Dono nesta máquina; **pronto** (`ready`) quando, além disso, o processo da sessão está ativo, a tela desbloqueada e os itens de UAC em dia; senão `reason` (`sem_usuario`, `tela_bloqueada`, `uac`, `tarefa`) | motor, pelo processo da sessão |
+| `operador` | `{enabled, ready, reason}`: **habilitado** (`enabled`) quando o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) está instalado e ligado pelo Senhor da Guilda nesta máquina; **pronto** (`ready`) quando, além disso, o processo da sessão está ativo, a tela desbloqueada e os itens de UAC em dia; senão `reason` (`sem_usuario`, `tela_bloqueada`, `uac`, `tarefa`) | motor, pelo processo da sessão |
 | `resources` | `cpu_cores`, `mem_bytes`, `disk_free_bytes` (do volume dos dados da máquina), `gpus[]` (modelo e, quando o sistema informa, memória); adaptador virtual (Hyper-V, VMware, VirtIO, QXL, "Basic Display") não conta como GPU | motor |
 | `transcricao` | `true` com o `whisper-server` verificado ([anexos e transcrição](../telegram/anexos-e-transcricao.md)) | motor |
 | `tools` | ferramentas instaladas, com versão (`git`, `ffmpeg`); a que falta fica de fora | motor |
-| `excluded` | se o Dono excluiu a máquina (sem segredos, fora da troca de Cidadela; [máquina excluída](guilda.md#máquina-excluída)) | o Dono, no painel; a ficha só mostra |
+| `excluded` | se o Senhor da Guilda excluiu a máquina (sem segredos, fora da troca de Cidadela; [máquina excluída](guilda.md#máquina-excluída)) | o Senhor da Guilda, no painel; a ficha só mostra |
 | `online` | se a máquina está conectada, com heartbeat em dia | a Cidadela, pela conexão ([protocolo](../conectividade/protocolo.md#heartbeat-e-reconexão)) |
 
 ### Atualização sozinha
@@ -60,8 +60,8 @@ Bases, fichas de personagem e classes podem declarar `requires` ([bases e fichas
 
 - **Casamento:** uma máquina atende a um personagem quando está online e atende a **todos** os requisitos dele. O resultado, para cada máquina, é "atende" ou o **primeiro requisito não atendido**, em texto curto (ex.: "windows-pc: perfil de conta `claude-trabalho` não está logado"). A ordem da conferência é a da tabela acima, com "offline" na frente, e a primeira que falha é a dita.
 - **Quem escolhe:** a Cidadela, ao criar o personagem, entre as máquinas que atendem; a ordem de preferência e a espera por vaga (`waiting_slot`) são de [personagens](../orquestracao/personagens.md#escolha-da-máquina).
-- **Nenhuma atende:** o personagem **não roda em outra máquina**. A criação falha com o motivo de cada máquina, e o Dono é avisado pelo Telegram e pelo painel, com o que falta em cada uma; quem pediu (o Mestre da mesa, por exemplo) recebe o mesmo motivo ([coordenação](../cli/coordenacao.md)).
-- **Durante a vida do personagem:** se a máquina deixa de atender (o login do perfil caiu, por exemplo), o personagem continua até o próximo reinício; ao reiniciar, a escolha é feita de novo, e o aviso ao Dono vale do mesmo jeito.
+- **Nenhuma atende:** o personagem **não roda em outra máquina**. A criação falha com o motivo de cada máquina, e o Senhor da Guilda é avisado pelo Telegram e pelo painel, com o que falta em cada uma; quem pediu (o Mestre da mesa, por exemplo) recebe o mesmo motivo ([coordenação](../cli/coordenacao.md)).
+- **Durante a vida do personagem:** se a máquina deixa de atender (o login do perfil caiu, por exemplo), o personagem continua até o próximo reinício; ao reiniciar, a escolha é feita de novo, e o aviso ao Senhor da Guilda vale do mesmo jeito.
 - O Grão-Mestre roda sempre na Cidadela ([Cidadela e Torres](cidadela-e-torres.md)); o checklist avisa quando uma máquina não excluída não atende aos requisitos da ficha dele.
 
 ### Melhor ficha

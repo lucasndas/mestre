@@ -19,7 +19,7 @@ import (
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
-// The numbers of the periodic reading (docs/github/eventos.md#intervalo-adaptativo-padrão-configurável-por-workspace).
+// The numbers of the periodic reading (docs/github/eventos.md#intervalo-adaptativo-padrão-configurável-por-campanha).
 const (
 	IntervalActive    = 30 * time.Second
 	IntervalAttentive = 2 * time.Minute
@@ -730,7 +730,7 @@ func (p *Poller) Tick(ctx context.Context) error {
 				}
 				if !p.alerted {
 					p.alerted = true
-					alert = fmt.Sprintf("O limite de requisições do GitHub acabou: as consultas de todos os workspaces voltam às %s UTC.", lim.At.UTC().Format("15:04"))
+					alert = fmt.Sprintf("O limite de requisições do GitHub acabou: as consultas de todas as campanhas voltam às %s UTC.", lim.At.UTC().Format("15:04"))
 				}
 			}
 		case ctx.Err() != nil: // leaving: not a failure of GitHub

@@ -375,7 +375,7 @@ func TestGitHubCommandRefusesWhoActsInNoWorkspaceAndTellsWhatGitHubRefused(t *te
 	// an Approver in no workspace
 	bia := w.member("Bia", "bia-gh", users.Approver)
 	said, err := w.github(bia)
-	if err != nil || !strings.Contains(said, "nenhum workspace") {
+	if err != nil || !strings.Contains(said, "nenhuma campanha") {
 		t.Fatalf("answer = %q, %v; want the refusal for acting in no workspace", said, err)
 	}
 	// a user with no github_login

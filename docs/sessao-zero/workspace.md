@@ -1,20 +1,20 @@
-# Sessão zero do workspace
+# Sessão zero da campanha
 
-> **Assunto:** o que acontece, uma vez por repositório, quando um workspace é criado: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, comandos de verificação, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-26
+> **Assunto:** o que acontece, uma vez por repositório, quando uma campanha é criada: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, comandos de verificação, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
-Preparar um repositório do GitHub para o Mestre sem mexer no que é da pessoa: clonar com a identidade certa, gerar a pasta `.mestre/`, as skills e os hooks, entender o projeto e descobrir como o GitHub dele trata as aprovações. O que é um workspace e o ciclo de vida dele: [workspaces](../orquestracao/workspaces.md). Durante toda a sessão zero o workspace está `preparing`, e cada passo abaixo é uma das **etapas** registradas ali (`apps`, `mirror`, `files`, `analysis`, `approval_test`); erro numa etapa fica registrado nela ([estados do workspace](../orquestracao/workspaces.md#estados)).
+Preparar um repositório do GitHub para o Mestre sem mexer no que é da pessoa: clonar com a identidade certa, gerar a pasta `.mestre/`, as skills e os hooks, entender o projeto e descobrir como o GitHub dele trata as aprovações. O que é uma campanha e o ciclo de vida dela: [campanhas](../orquestracao/workspaces.md). Durante toda a sessão zero a campanha está `preparing`, e cada passo abaixo é uma das **etapas** registradas ali (`apps`, `mirror`, `files`, `analysis`, `approval_test`); erro numa etapa fica registrado nela ([estados da campanha](../orquestracao/workspaces.md#estados)).
 
 ## Comportamento
 
 ### Início
-Um usuário Dono ou Administrador cria o workspace no painel ([administracao](../painel/administracao.md)) informando: repositório (`dono/nome`), ficha do Grão-Mestre e ficha padrão dos Mestres de mesa.
+Um usuário Senhor da Guilda ou Administrador cria a campanha no painel ([administracao](../painel/administracao.md)) informando: repositório (`dono/nome`), ficha do Grão-Mestre e ficha padrão dos Mestres de mesa.
 
 ```mermaid
 flowchart TD
   A[Painel: repositório + fichas] --> B{Apps fixos instalados no repo?}
-  B -- não --> C[API com a credencial do Dono ou link de instalação ao Dono]
+  B -- não --> C[API com a credencial do Senhor da Guilda ou link de instalação ao Senhor da Guilda]
   C --> B
   B -- sim --> D[Clona o espelho com o App Grão-Mestre]
   D --> E[Cria o clone principal e .mestre/]
@@ -25,14 +25,14 @@ flowchart TD
   I --> J[workspace active]
 ```
 
-1. **Apps fixos** (etapa `apps`)**:** o motor confere se "Grão-Mestre" e "Mestre" estão instalados no repositório. Se não estiverem, a etapa `apps` fica esperando: o motor acrescenta o repositório à instalação pela API, com a credencial pessoal do Dono, ou o Dono recebe o link para instalar (primeira instalação) ou marcar o repositório na instalação ([criacao-de-apps](../github/criacao-de-apps.md#repositórios-novos-e-permissões-novas), [identidades-e-apps](../github/identidades-e-apps.md)). A espera não é erro: o motor avisa o Dono uma única vez, olha de novo a cada 30 s e, enquanto faltar um App, não clona nada nem usa outra credencial.
+1. **Apps fixos** (etapa `apps`)**:** o motor confere se "Grão-Mestre" e "Mestre" estão instalados no repositório. Se não estiverem, a etapa `apps` fica esperando: o motor acrescenta o repositório à instalação pela API, com a credencial pessoal do Senhor da Guilda, ou o Senhor da Guilda recebe o link para instalar (primeira instalação) ou marcar o repositório na instalação ([criacao-de-apps](../github/criacao-de-apps.md#repositórios-novos-e-permissões-novas), [identidades-e-apps](../github/identidades-e-apps.md)). A espera não é erro: o motor avisa o Senhor da Guilda uma única vez, olha de novo a cada 30 s e, enquanto faltar um App, não clona nada nem usa outra credencial.
 2. **Espelho** (etapa `mirror`)**:** o motor clona o repositório sem cópia de trabalho (`--bare`) na pasta de dados da Cidadela (padrão `workspaces/<slug>/espelho.git`; [persistencia](../arquitetura/persistencia.md)), com um token de instalação do App "Grão-Mestre". Daí sai o **clone principal** (padrão `workspaces/<slug>/principal/`), onde o Grão-Mestre trabalha. Como as mesas e as máquinas da Guilda usam o espelho: [mesas](../orquestracao/mesas.md).
 3. **`.mestre/` e arquivos gerados** (etapa `files`)**:** o motor cria a estrutura abaixo (sem apagar nada que já exista) e gera, no clone principal, os mesmos arquivos que gera em cada worktree de mesa ([mesa](mesa.md)). Até o usuário responder à pergunta de versionamento, `.mestre/` fica só local. O que o motor encontra de inválido (um `teto.yaml` que não lê, um JSON de hook quebrado, uma skill `mestre-*` sem o marcador) fica como está e os usuários são avisados.
-4. **Grão-Mestre:** ao fim da etapa `files`, o motor inicia o Grão-Mestre (fixo e protegido) com a ficha escolhida no painel ao criar o workspace ([workspaces no painel](../painel/workspaces.md)); ele já conversa com os usuários, mas mesas só se abrem com o workspace `active`. As etapas seguintes (`analysis` e `approval_test`) são conduzidas pelo Grão-Mestre e pelo motor, cada uma visível no painel como pendente, feita ou com erro; concluída a `approval_test`, o workspace vai para `active`.
+4. **Grão-Mestre:** ao fim da etapa `files`, o motor inicia o Grão-Mestre (fixo e protegido) com a ficha escolhida no painel ao criar a campanha ([campanhas no painel](../painel/workspaces.md)); ele já conversa com os usuários, mas mesas só se abrem com a campanha `active`. As etapas seguintes (`analysis` e `approval_test`) são conduzidas pelo Grão-Mestre e pelo motor, cada uma visível no painel como pendente, feita ou com erro; concluída a `approval_test`, a campanha vai para `active`.
 
 ### Análise do projeto e `AGENTS.md` (etapa `analysis`)
 - O Grão-Mestre analisa o projeto: linguagem, estrutura, como instalar, rodar, testar e fazer build.
-- **Sem `AGENTS.md`:** ele propõe um, com o conteúdo do projeto (stack, comandos, convenções), e pede a aprovação do tipo `proposta_agents_md` ([política](../aprovacoes/politica.md#tipos-de-ação)), mostrando o texto inteiro. A etapa `analysis` termina com a proposta enviada; a aprovação fica pendente sem segurar o workspace. Só depois de aprovado o arquivo é criado, pelo PR da sessão zero (abaixo).
+- **Sem `AGENTS.md`:** ele propõe um, com o conteúdo do projeto (stack, comandos, convenções), e pede a aprovação do tipo `proposta_agents_md` ([política](../aprovacoes/politica.md#tipos-de-ação)), mostrando o texto inteiro. A etapa `analysis` termina com a proposta enviada; a aprovação fica pendente sem segurar a campanha. Só depois de aprovado o arquivo é criado, pelo PR da sessão zero (abaixo).
 - **Com `AGENTS.md`:** não mexe. Pode sugerir melhorias aos usuários, que aplicam ou não.
 - **Com `CLAUDE.md` ou `CLAUDE.local.md`:** avisa que os agentes Claude vão ler esse arquivo no lugar do `AGENTS.md` (os de Codex e Antigravity leem o `AGENTS.md`) e sugere unificar no `AGENTS.md`. O mesmo aviso fica no [checklist](../plataforma/checklist.md). Por que isso não quebra a camada do Mestre: [precedencia](../arquitetura/precedencia.md).
 
@@ -89,24 +89,24 @@ O motor descobre se a aprovação do App "Grão-Mestre" conta para as revisões 
 
 - O `AGENTS.md` existente nunca é editado; o `.gitignore` nunca é tocado.
 - `.mestre/` já presente no repositório (de outra instalação) é reaproveitado: o motor valida, cria só o que falta e avisa o que estiver inválido; nunca sobrescreve.
-- Repositório inacessível ao App "Grão-Mestre" → a etapa `mirror` fica com erro e o motivo no painel (o workspace continua `preparing`); nenhum outro token é tentado.
+- Repositório inacessível ao App "Grão-Mestre" → a etapa `mirror` fica com erro e o motivo no painel (a campanha continua `preparing`); nenhum outro token é tentado.
 - Falha numa etapa → nova tentativa com espera crescente; persistindo, alerta aos usuários e botão "tentar de novo" no painel.
-- Perguntas da sessão zero sem resposta (aprovar o `AGENTS.md`, versionar `.mestre/`) não seguram o workspace em `preparing`; ficam pendentes no painel e o Grão-Mestre lembra no resumo periódico.
+- Perguntas da sessão zero sem resposta (aprovar o `AGENTS.md`, versionar `.mestre/`) não seguram a campanha em `preparing`; ficam pendentes no painel e o Grão-Mestre lembra no resumo periódico.
 
 ## Critérios de aceite
 
-- **CA-SZ-WS-01** · *pesada* — **Dado** um repositório de teste no GitHub (dublê) com `AGENTS.md` e regra de revisão obrigatória, **quando** crio o workspace pelo painel, **então** `.mestre/`, skills e hooks são gerados, o `AGENTS.md` fica idêntico byte a byte, `git status` no clone principal fica limpo, um clone novo feito por outra pessoa não traz nenhum arquivo do Mestre, e o resultado do teste de aprovação aparece no painel (MVP-3).
-- **CA-SZ-WS-02** · *completa* — **Dado** um repositório sem os Apps fixos, **quando** o workspace é criado, **então** fica `preparing` na etapa `apps`, nenhum clone é feito com outra credencial e, instalados os Apps, segue sozinho para `mirror`.
-- **CA-SZ-WS-03** · *completa* — **Dado** um repositório sem `AGENTS.md`, **quando** a sessão zero roda, **então** a proposta chega aos usuários como aprovação `proposta_agents_md`, o workspace vai para `active` sem esperar a resposta e nenhum `AGENTS.md` existe antes da aprovação; aprovado, o PR `mestre/sessao-zero` contém o arquivo.
+- **CA-SZ-WS-01** · *pesada* — **Dado** um repositório de teste no GitHub (dublê) com `AGENTS.md` e regra de revisão obrigatória, **quando** crio a campanha pelo painel, **então** `.mestre/`, skills e hooks são gerados, o `AGENTS.md` fica idêntico byte a byte, `git status` no clone principal fica limpo, um clone novo feito por outra pessoa não traz nenhum arquivo do Mestre, e o resultado do teste de aprovação aparece no painel (MVP-3).
+- **CA-SZ-WS-02** · *completa* — **Dado** um repositório sem os Apps fixos, **quando** a campanha é criada, **então** fica `preparing` na etapa `apps`, nenhum clone é feito com outra credencial e, instalados os Apps, segue sozinho para `mirror`.
+- **CA-SZ-WS-03** · *completa* — **Dado** um repositório sem `AGENTS.md`, **quando** a sessão zero roda, **então** a proposta chega aos usuários como aprovação `proposta_agents_md`, a campanha vai para `active` sem esperar a resposta e nenhum `AGENTS.md` existe antes da aprovação; aprovado, o PR `mestre/sessao-zero` contém o arquivo.
 - **CA-SZ-WS-04** · *completa* — **Dado** um repositório com `CLAUDE.md` e `AGENTS.md`, **quando** a sessão zero roda, **então** os usuários recebem o aviso de leitura diferente e o checklist mostra o item.
 - **CA-SZ-WS-05** · *completa* — **Dado** a resposta "só local", **quando** a sessão zero termina, **então** `.git/info/exclude` contém `/.mestre/` dentro do bloco do Mestre e o `.gitignore` não mudou.
-- **CA-SZ-WS-06** · *completa* — **Dado** um GitHub falso em que a aprovação de App não satisfaz a revisão, **quando** a etapa `approval_test` roda, **então** o resultado `nao_conta` é registrado, a etapa termina e o workspace vai para `active`.
+- **CA-SZ-WS-06** · *completa* — **Dado** um GitHub falso em que a aprovação de App não satisfaz a revisão, **quando** a etapa `approval_test` roda, **então** o resultado `nao_conta` é registrado, a etapa termina e a campanha vai para `active`.
 - **CA-SZ-WS-07** · *rápida* — **Dado** um `.mestre/` existente com `teto.yaml` próprio, **quando** a estrutura é criada, **então** o `teto.yaml` não muda e só as pastas que faltavam são criadas.
 - **CA-SZ-WS-08** · *rápida* — **Dado** um projeto Go analisado pelo Grão-Mestre, **quando** a etapa `analysis` termina, **então** `.mestre/regras/verificacao.yaml` tem a proposta (`go build ./...` e `go test ./...`) e ela não vale antes da confirmação de um Administrador; **dado** uma edição por fora, **então** vale a última versão confirmada e os Administradores são avisados.
 
 ## Depende de
 
-- [Workspaces](../orquestracao/workspaces.md)
+- [Campanhas](../orquestracao/workspaces.md)
 - [Persistência](../arquitetura/persistencia.md)
 - [Componentes](../arquitetura/componentes.md)
 

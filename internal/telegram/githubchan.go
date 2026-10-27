@@ -105,7 +105,7 @@ func (c *GitHubChannel) begin(ctx context.Context, call Call) (string, error) {
 	u := call.User
 	// the Owner acts in every workspace; the others in the ones of their list
 	if u.Level != users.Owner && len(u.Workspaces) == 0 {
-		return "Você ainda não atua em nenhum workspace: peça a um Administrador. O GitHub pessoal é usado só nos workspaces em que você atua.", nil
+		return "Você ainda não atua em nenhuma campanha: peça a um Administrador. O GitHub pessoal é usado só nas campanhas em que você atua.", nil
 	}
 	ch, err := c.Personal.Begin(ctx, u.ID)
 	if err != nil {
@@ -183,9 +183,9 @@ func (c *GitHubChannel) explain(err error) string {
 	case errors.Is(err, github.ErrNoGitHubLogin):
 		return "O seu cadastro não tem login do GitHub: peça a um Administrador para preencher e tente de novo com /github."
 	case errors.Is(err, github.ErrDeviceFlowOff):
-		return "O App Grão-Mestre está com o device flow desligado no GitHub: o Dono precisa ligar a opção Enable Device Flow nas configurações do App."
+		return "O App Grão-Mestre está com o device flow desligado no GitHub: o Senhor da Guilda precisa ligar a opção Enable Device Flow nas configurações do App."
 	case errors.Is(err, github.ErrAppNotReady):
-		return "O App Grão-Mestre ainda não está pronto: o Dono precisa terminar a criação dele."
+		return "O App Grão-Mestre ainda não está pronto: o Senhor da Guilda precisa terminar a criação dele."
 	case errors.Is(err, github.ErrDeviceDenied):
 		return "A autorização foi recusada no GitHub. Se foi engano, envie /github de novo."
 	case errors.Is(err, github.ErrDeviceExpired):
@@ -193,8 +193,8 @@ func (c *GitHubChannel) explain(err error) string {
 	case errors.Is(err, github.ErrLoginMismatch):
 		return "A conta do GitHub que autorizou não é a cadastrada para você. Nada foi guardado; entre com a conta certa e envie /github de novo."
 	case errors.Is(err, github.ErrNoClientSecret):
-		return "O segredo do App Grão-Mestre não está no cofre: o Dono precisa recriar o App (veja o painel)."
+		return "O segredo do App Grão-Mestre não está no cofre: o Senhor da Guilda precisa recriar o App (veja o painel)."
 	}
 	c.Logger.Warn("telegram: the GitHub connection failed", "err", err)
-	return "Não consegui conectar o GitHub agora. Tente de novo em alguns minutos; o Dono recebe o detalhe no log."
+	return "Não consegui conectar o GitHub agora. Tente de novo em alguns minutos; o Senhor da Guilda recebe o detalhe no log."
 }

@@ -255,12 +255,12 @@ func (s *Supervisor) warn(ctx context.Context, m QueueMetric) {
 			}
 		}
 		if !told {
-			s.tellPeople(ctx, m.Workspace, "Administradores e Dono: "+text)
+			s.tellPeople(ctx, m.Workspace, "Administradores e Senhor da Guilda: "+text)
 		}
 	case LevelGrandMaster:
-		s.tellPeople(ctx, m.Workspace, "Administradores e Dono: "+text)
+		s.tellPeople(ctx, m.Workspace, "Administradores e Senhor da Guilda: "+text)
 	default:
-		s.tellPeople(ctx, m.Workspace, "Dono: "+text)
+		s.tellPeople(ctx, m.Workspace, "Senhor da Guilda: "+text)
 	}
 }
 

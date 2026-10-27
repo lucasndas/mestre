@@ -206,7 +206,7 @@ func TestRevogarTudoIsTheOwnersAndTellsTheAdministrators(t *testing.T) {
 	if _, keys := w.buttons(adminTG); keys["Revogar todas as delegações"] != "" {
 		t.Fatal("an Administrator was offered the emergency button")
 	}
-	if got := lastText(w, adminTG); !strings.Contains(got, "exige o nível Dono") {
+	if got := lastText(w, adminTG); !strings.Contains(got, "exige o nível Senhor da Guilda") {
 		t.Fatalf("the Administrator was told %q, want the level it needs", got)
 	}
 	untouched("after the Administrator")

@@ -155,7 +155,7 @@ export function WorkspaceScreen({ workspace }: { workspace: string }) {
           {say(`state.${w.state}`)}
         </Badge>
         <span className="text-sm text-muted">
-          <Term name="Workspace" />: {w.repo}
+          <Term name="Campanha" />: {w.repo}
         </span>
       </div>
       <Shortcuts />

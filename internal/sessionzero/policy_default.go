@@ -57,7 +57,7 @@ cadeia:                        # níveis de agentes (ver cadeia-de-aprovacao.md)
   resumo_mesas: 30m            # resumo das decisões das mesas ao Grão-Mestre (ver supervisao-da-cadeia.md)
   alerta_fila: { abertos: 10, fator: 2 }   # fila que acumula: abertos, ou o mais antigo acima de fator × prazo
 
-risco:                         # ajustes do Dono à tabela de risco (ver classificacao-de-risco.md)
+risco:                         # ajustes do Senhor da Guilda à tabela de risco (ver classificacao-de-risco.md)
   ajustes: []                  # ex.: { comando: "make deploy-teste", risco: alto }
   nivel_minimo: { alto: administrador }
 

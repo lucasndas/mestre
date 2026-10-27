@@ -12,7 +12,7 @@ const auth: Widen<typeof pt> = {
   },
   setup: {
     title: "Create your Guild",
-    subtitle: "You will be the Owner. Use the code shown in the installation terminal.",
+    subtitle: "You will be the Guildmaster. Use the code shown in the installation terminal.",
     code: "Setup code",
     name: "Your name",
     login: "Login name",
@@ -25,7 +25,7 @@ const auth: Widen<typeof pt> = {
   },
   first: {
     title: "First access",
-    subtitle: "Use the code the Owner gave you.",
+    subtitle: "Use the code the Guildmaster gave you.",
     code: "First-access code",
     login: "Choose a login name",
     password: "Password (at least 12 characters)",

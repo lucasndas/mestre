@@ -210,7 +210,7 @@ func confirmationText(p Proposal, moment string) string {
 	} else if !p.Until.IsZero() {
 		until = "até " + moment
 	}
-	where := "workspace " + p.Workspace
+	where := "campanha " + p.Workspace
 	if p.Mesa != "" {
 		where += ", mesa " + p.Mesa
 	}
@@ -674,7 +674,7 @@ func (s *Service) Reactivate(ctx context.Context, number int64, userID string) e
 		if _, err := tx.ExecContext(ctx, `UPDATE decrees SET author_id = ?, author_level = ?, suspended_by = '' WHERE id = ?`, by.ID, string(classes.LevelOwner), number); err != nil {
 			return err
 		}
-		if _, err := transition(ctx, tx, number, Active, by.ID, "reativado pelo Dono", now, Suspended); err != nil {
+		if _, err := transition(ctx, tx, number, Active, by.ID, "reativado pelo Senhor da Guilda", now, Suspended); err != nil {
 			return err
 		}
 		cs, err = s.detectConflicts(ctx, tx, number, now)

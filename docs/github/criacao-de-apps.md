@@ -1,16 +1,16 @@
 # Criação e instalação de Apps
 
-> **Assunto:** como o Grão-Mestre prepara um GitHub App pelo fluxo de manifesto e o Dono o cria e instala com um clique, por link no próprio navegador · **Componente:** Motor · **Atualizado:** 2026-10-20
+> **Assunto:** como o Grão-Mestre prepara um GitHub App pelo fluxo de manifesto e o Senhor da Guilda o cria e instala com um clique, por link no próprio navegador · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
-Criar e instalar os Apps do Mestre com o mínimo de trabalho do usuário. O GitHub não cria App por API: a criação e a primeira instalação exigem um clique de quem é dono da conta. O Grão-Mestre prepara tudo (nome, permissões, manifesto) e manda um link; o Dono abre no próprio navegador, no celular ou no PC, clica em "Criar" e depois em "Instalar"; a Cidadela termina sozinha ([ADR 0006](../decisoes/0006-app-por-classe-criado-pelo-navegador.md)).
+Criar e instalar os Apps do Mestre com o mínimo de trabalho do usuário. O GitHub não cria App por API: a criação e a primeira instalação exigem um clique de quem é dono da conta. O Grão-Mestre prepara tudo (nome, permissões, manifesto) e manda um link; o Senhor da Guilda abre no próprio navegador, no celular ou no PC, clica em "Criar" e depois em "Instalar"; a Cidadela termina sozinha ([ADR 0006](../decisoes/0006-app-por-classe-criado-pelo-navegador.md)).
 
 ## Comportamento
 
 ### Quando acontece
 
-- **Apps fixos "Grão-Mestre" e "Mestre":** no primeiro acesso, logo depois de criar o Dono; o assistente do painel encadeia os dois links ([primeiro acesso](../operacao/primeiro-acesso.md), [identidades](identidades-e-apps.md)). A primeira instalação deles acontece com o primeiro workspace ([sessão zero do workspace](../sessao-zero/workspace.md)); logo depois da instalação do "Grão-Mestre", o motor cria o [repositório da trava](identidades-e-apps.md#repositório-da-trava).
+- **Apps fixos "Grão-Mestre" e "Mestre":** no primeiro acesso, logo depois de criar o Senhor da Guilda; o assistente do painel encadeia os dois links ([primeiro acesso](../operacao/primeiro-acesso.md), [identidades](identidades-e-apps.md)). A primeira instalação deles acontece com a primeira campanha ([sessão zero da campanha](../sessao-zero/workspace.md)); logo depois da instalação do "Grão-Mestre", o motor cria o [repositório da trava](identidades-e-apps.md#repositório-da-trava).
 - **App de classe:** quando uma classe pede App próprio (`mestre app create`, [CLI do Grão-Mestre](../cli/grao-mestre.md); [classes](../classes/classes.md)). Até ele ficar pronto, vale o [App temporário "Mestre"](identidades-e-apps.md#app-temporário-mestre-com-classe).
 - Um pedido por App; vários podem estar abertos ao mesmo tempo, cada um com o seu link.
 
@@ -35,11 +35,11 @@ Estes são os identificadores únicos do estado de um App; os outros documentos 
 sequenceDiagram
   participant GM as Grão-Mestre
   participant C as Cidadela (motor e painel)
-  participant D as Dono (Telegram e navegador próprio)
+  participant D as Senhor da Guilda (Telegram e navegador próprio)
   participant G as github.com
   GM->>C: mestre app create
   C->>D: link https://mestre.local:<porta>/github/apps/novo/<token> (Telegram e painel)
-  D->>C: abre o link e entra no painel como Dono
+  D->>C: abre o link e entra no painel como Senhor da Guilda
   C-->>D: página com nome, permissões e o botão "Criar no GitHub"
   D->>G: POST /settings/apps/new?state=… (formulário com o manifesto)
   D->>G: clica "Create GitHub App"
@@ -55,13 +55,13 @@ sequenceDiagram
   C->>GM: App pronto (caixa de entrada)
 ```
 
-- **O link:** página do painel, com token aleatório válido por 24 h (padrão), preso ao pedido. Quem o abre primeiro é o único que o reabre, até a hora de entregar o `code`; um link novo do mesmo App invalida o anterior. Vai ao Dono pelo [bot](../telegram/bot.md) e aparece em "Apps do GitHub" no [painel](../painel/administracao.md). Abrir exige login de Dono ([login](../painel/login.md)), porque os Apps nascem na conta pessoal dele.
+- **O link:** página do painel, com token aleatório válido por 24 h (padrão), preso ao pedido. Quem o abre primeiro é o único que o reabre, até a hora de entregar o `code`; um link novo do mesmo App invalida o anterior. Vai ao Senhor da Guilda pelo [bot](../telegram/bot.md) e aparece em "Apps do GitHub" no [painel](../painel/administracao.md). Abrir exige login de Senhor da Guilda ([login](../painel/login.md)), porque os Apps nascem na conta pessoal dele.
 - **Antes do clique**, a página mostra o nome do App, a classe, as permissões e os repositórios que serão marcados na instalação.
-- **Redirecionamentos:** são navegações do próprio navegador do Dono, então basta o aparelho alcançar a Cidadela na rede local e confiar na CA ([primeiro acesso](../operacao/primeiro-acesso.md)). O endereço usado é sempre o nome do painel, `https://mestre.local:<porta do painel>` (porta da instância, [portas](../arquitetura/componentes.md#portas)), nunca um IP: o certificado da Cidadela em exercício traz `mestre.local`, e o nome segue a Cidadela depois de uma troca (a promovida emite o seu, [segurança](../arquitetura/seguranca.md#tls-e-ca-interna)).
+- **Redirecionamentos:** são navegações do próprio navegador do Senhor da Guilda, então basta o aparelho alcançar a Cidadela na rede local e confiar na CA ([primeiro acesso](../operacao/primeiro-acesso.md)). O endereço usado é sempre o nome do painel, `https://mestre.local:<porta do painel>` (porta da instância, [portas](../arquitetura/componentes.md#portas)), nunca um IP: o certificado da Cidadela em exercício traz `mestre.local`, e o nome segue a Cidadela depois de uma troca (a promovida emite o seu, [segurança](../arquitetura/seguranca.md#tls-e-ca-interna)).
 - **Troca do `code`:** feita pela Cidadela, dentro de 1 hora (regra do GitHub) contada da primeira abertura do link. Só um retorno por vez usa o `code`; se o GitHub limitar o uso, ou o `code` não valer, o pedido segue aberto até a hora acabar. A chave privada (`pem`) vai direto para o [cofre](../plataforma/cofre.md): nunca passa pelo banco, pelo navegador ou por log. O `state` é aleatório e de uso único; o callback com outro `state` é recusado.
-- **Conferências depois da troca:** o `owner` do App precisa ser a conta do GitHub do Dono; o motor lê o `bot_user_id` ([identidades](identidades-e-apps.md#autoria-dos-commits)).
-- **Instalação:** a página de instalação já vem com os repositórios sugeridos; o Dono mantém "Only select repositories". O retorno pelo `setup_url` não é aceito às cegas: o motor confere a instalação e os repositórios dela com o JWT do App. Se o retorno não chegar (aparelho saiu da rede), o motor consulta `GET /users/<login-do-dono>/installation` a cada 30 s por até 1 hora da criação; passada a hora, avisa o Dono uma vez e deixa a conferência para o retorno do navegador. Um retorno de instalação de um App já pronto (o Dono acrescentou repositórios) só atualiza a lista de repositórios.
-- **App "Grão-Mestre":** a mesma página traz um passo a mais, o link da configuração do App para marcar **"Enable Device Flow"**, usado pela credencial pessoal dos usuários ([aprovação no GitHub](aprovacao-no-github.md)). O motor confere iniciando um device flow de teste e só marca o App como pronto depois disso; lembra o Dono uma vez e segue conferindo, sem limite de tempo, até a opção ser marcada.
+- **Conferências depois da troca:** o `owner` do App precisa ser a conta do GitHub do Senhor da Guilda; o motor lê o `bot_user_id` ([identidades](identidades-e-apps.md#autoria-dos-commits)).
+- **Instalação:** a página de instalação já vem com os repositórios sugeridos; o Senhor da Guilda mantém "Only select repositories". O retorno pelo `setup_url` não é aceito às cegas: o motor confere a instalação e os repositórios dela com o JWT do App. Se o retorno não chegar (aparelho saiu da rede), o motor consulta `GET /users/<login-do-dono>/installation` a cada 30 s por até 1 hora da criação; passada a hora, avisa o Senhor da Guilda uma vez e deixa a conferência para o retorno do navegador. Um retorno de instalação de um App já pronto (o Senhor da Guilda acrescentou repositórios) só atualiza a lista de repositórios.
+- **App "Grão-Mestre":** a mesma página traz um passo a mais, o link da configuração do App para marcar **"Enable Device Flow"**, usado pela credencial pessoal dos usuários ([aprovação no GitHub](aprovacao-no-github.md)). O motor confere iniciando um device flow de teste e só marca o App como pronto depois disso; lembra o Senhor da Guilda uma vez e segue conferindo, sem limite de tempo, até a opção ser marcada.
 
 ### Conteúdo do manifesto
 
@@ -70,7 +70,7 @@ sequenceDiagram
 | `name` | nome gerado pelas regras de [nomes](identidades-e-apps.md#nomes) |
 | `url` | `https://github.com/<login-do-dono>` (padrão) |
 | `description` | "App do Mestre para a classe <Classe>" |
-| `public` | `false` (só a conta do Dono instala) |
+| `public` | `false` (só a conta do Senhor da Guilda instala) |
 | `hook_attributes` | `{"url": "https://example.invalid", "active": false}`, sempre enviado (formato documentado para webhook inativo) |
 | `redirect_url` | `https://mestre.local:<porta>/github/manifest/callback` |
 | `setup_url` | `https://mestre.local:<porta>/github/apps/instalado` |
@@ -80,35 +80,35 @@ sequenceDiagram
 
 ### Repositórios novos e permissões novas
 
-- **Repositório novo para um App já instalado:** o motor chama `PUT /user/installations/{installation_id}/repositories/{repository_id}` com a credencial pessoal do Dono, se ele a tiver conectado ([aprovação no GitHub](aprovacao-no-github.md)). Sem ela, ou se for recusada, o Grão-Mestre manda ao Dono o link da configuração da instalação (`https://github.com/settings/installations/<id>`) para marcar o repositório; o motor confere como acima.
+- **Repositório novo para um App já instalado:** o motor chama `PUT /user/installations/{installation_id}/repositories/{repository_id}` com a credencial pessoal do Senhor da Guilda, se ele a tiver conectado ([aprovação no GitHub](aprovacao-no-github.md)). Sem ela, ou se for recusada, o Grão-Mestre manda ao Senhor da Guilda o link da configuração da instalação (`https://github.com/settings/installations/<id>`) para marcar o repositório; o motor confere como acima.
 - **Permissão nova num App existente** (ex.: Workflows): link para a página de permissões do App e, depois, para o aceite na instalação ([workflows](identidades-e-apps.md#workflows)).
-- A instalação usa sempre "repositórios selecionados", para o menor escopo. Quais Apps um workspace novo precisa: [sessão zero do workspace](../sessao-zero/workspace.md).
+- A instalação usa sempre "repositórios selecionados", para o menor escopo. Quais Apps uma campanha nova precisa: [sessão zero da campanha](../sessao-zero/workspace.md).
 
 ## Regras e erros
 
-- O link só funciona para o Dono; outro usuário logado vê "exige Dono" e nada vai ao GitHub.
-- Link vencido ou já usado: a página explica; o Dono gera outro no painel e o Grão-Mestre pode pedir de novo (`expirado` → `aguardando_criacao`). A classe segue com o App "Mestre".
-- `code` não trocado em 1 hora → `falhou`; o App pode ter sido criado sem a chave chegar à Cidadela: o Grão-Mestre manda ao Dono o link para excluí-lo, e o próximo pedido usa o nome seguinte.
-- `owner` diferente da conta do Dono (o navegador estava em outra conta do GitHub): o motor apaga a chave do cofre, não usa o App e avisa o Dono para excluí-lo naquela conta.
-- Nome já em uso: o próprio GitHub mostra o erro na página de criação; o Dono pode ajustar o nome ali (o motor usa o nome e o slug que a conversão devolver) ou pedir novo link, que já sai com `-2`, `-3`…
+- O link só funciona para o Senhor da Guilda; outro usuário logado vê "exige Senhor da Guilda" e nada vai ao GitHub.
+- Link vencido ou já usado: a página explica; o Senhor da Guilda gera outro no painel e o Grão-Mestre pode pedir de novo (`expirado` → `aguardando_criacao`). A classe segue com o App "Mestre".
+- `code` não trocado em 1 hora → `falhou`; o App pode ter sido criado sem a chave chegar à Cidadela: o Grão-Mestre manda ao Senhor da Guilda o link para excluí-lo, e o próximo pedido usa o nome seguinte.
+- `owner` diferente da conta do Senhor da Guilda (o navegador estava em outra conta do GitHub): o motor apaga a chave do cofre, não usa o App e avisa o Senhor da Guilda para excluí-lo naquela conta.
+- Nome já em uso: o próprio GitHub mostra o erro na página de criação; o Senhor da Guilda pode ajustar o nome ali (o motor usa o nome e o slug que a conversão devolver) ou pedir novo link, que já sai com `-2`, `-3`…
 - Limite de 100 Apps atingido: nem gera link ([identidades](identidades-e-apps.md#limite-de-100-apps)).
 - O endpoint de conversão tem limite de uso; em erro 403/429 o motor respeita `retry-after` dentro da janela de 1 hora.
 - Toda criação e instalação fica na auditoria (quem pediu, quem abriu o link, App, repositórios, horários).
 
-- **Implementação:** `github.Installs` (`internal/github/installs.go`) e `sessionzero.GitHubInstallations` são o lado do GitHub da etapa `apps`: `Missing` relê a lista de repositórios da instalação de cada App fixo (o Dono pode ter marcado o repositório no GitHub) e é assim que a etapa conclui sozinha; `AddRepository` faz o `PUT` com a [credencial pessoal](aprovacao-no-github.md#credencial-pessoal-user-access-token-pelo-device-flow) do Dono (`github.ErrNoCredential` vira `sessionzero.ErrNoPersonalCredential`); `InstallLink` é a página de configuração da instalação, ou a da primeira instalação se o App ainda não está instalado. A conversão do manifesto guarda no cofre o segredo de cliente do App "Grão-Mestre", que renova e revoga os tokens de usuário.
+- **Implementação:** `github.Installs` (`internal/github/installs.go`) e `sessionzero.GitHubInstallations` são o lado do GitHub da etapa `apps`: `Missing` relê a lista de repositórios da instalação de cada App fixo (o Senhor da Guilda pode ter marcado o repositório no GitHub) e é assim que a etapa conclui sozinha; `AddRepository` faz o `PUT` com a [credencial pessoal](aprovacao-no-github.md#credencial-pessoal-user-access-token-pelo-device-flow) do Senhor da Guilda (`github.ErrNoCredential` vira `sessionzero.ErrNoPersonalCredential`); `InstallLink` é a página de configuração da instalação, ou a da primeira instalação se o App ainda não está instalado. A conversão do manifesto guarda no cofre o segredo de cliente do App "Grão-Mestre", que renova e revoga os tokens de usuário.
 
-- **No painel (M6):** as três páginas são de `github.Web`, montadas pelo painel em `/github/…` com o login do painel (`Panel.whoIs`); o formulário só existe para o Dono e a política de conteúdo deixa o envio apenas ao `github.com`. O link refeito pelo painel ("novo link", Dono, com PIN) aparece uma única vez na resposta: o banco guarda só o hash do token, então um link já enviado não é mostrado de novo. `mestre app create` manda o link ao Dono pelo Telegram, sem passar pelo sino do painel. O cookie da sessão é `SameSite=Strict` e não vai numa navegação vinda de outro site (o retorno do GitHub, um link aberto do Telegram web): sem o cookie e com `Sec-Fetch-Site` de outro site, o painel responde uma página sem dados que segue sozinha para o mesmo endereço, já com a sessão; nada é trocado na primeira requisição.
+- **No painel (M6):** as três páginas são de `github.Web`, montadas pelo painel em `/github/…` com o login do painel (`Panel.whoIs`); o formulário só existe para o Senhor da Guilda e a política de conteúdo deixa o envio apenas ao `github.com`. O link refeito pelo painel ("novo link", Senhor da Guilda, com PIN) aparece uma única vez na resposta: o banco guarda só o hash do token, então um link já enviado não é mostrado de novo. `mestre app create` manda o link ao Senhor da Guilda pelo Telegram, sem passar pelo sino do painel. O cookie da sessão é `SameSite=Strict` e não vai numa navegação vinda de outro site (o retorno do GitHub, um link aberto do Telegram web): sem o cookie e com `Sec-Fetch-Site` de outro site, o painel responde uma página sem dados que segue sozinha para o mesmo endereço, já com a sessão; nada é trocado na primeira requisição.
 
 ## Critérios de aceite
 
 - **CA-GH-APPS-01** · *rápida* — **Dado** um pedido com `state` X, **quando** chega um callback com `state` Y, **então** a Cidadela recusa e não troca o `code`.
 - **CA-GH-APPS-02** · *rápida* — **Dado** um `code` válido e o GitHub falso respondendo à conversão, **quando** a Cidadela faz a troca, **então** o `pem` está no cofre, não aparece no banco nem nos logs, e o App fica `aguardando_instalacao`.
-- **CA-GH-APPS-03** · *rápida* — **Dado** um link enviado há 24 h no relógio falso, **quando** o relógio avança, **então** o App vai para `expirado`, o token do link deixa de valer e o Dono recebe o aviso com a opção de novo link.
-- **CA-GH-APPS-04** · *rápida* — **Dado** um Administrador logado, **quando** abre o link de criação, **então** recebe "exige Dono" e nenhum formulário é montado.
-- **CA-GH-APPS-05** · *completa* — **Dado** um App `pronto` e um workspace novo, **quando** o Dono tem a credencial pessoal, **então** o motor usa o `PUT` da API; **quando** não tem, **então** o Dono recebe o link da configuração da instalação e o motor conclui ao ver o repositório na instalação.
-- **CA-GH-APPS-06** · *pesada* — **Dado** uma classe nova com `--app novo`, **quando** o Grão-Mestre pede o App, **então** o link chega ao Dono pelo Telegram (dublê), o teste abre o link num navegador real, clica "Criar" e "Instalar" nas páginas do GitHub falso, e a ação seguinte da classe sai com o App novo (MVP-5).
+- **CA-GH-APPS-03** · *rápida* — **Dado** um link enviado há 24 h no relógio falso, **quando** o relógio avança, **então** o App vai para `expirado`, o token do link deixa de valer e o Senhor da Guilda recebe o aviso com a opção de novo link.
+- **CA-GH-APPS-04** · *rápida* — **Dado** um Administrador logado, **quando** abre o link de criação, **então** recebe "exige Senhor da Guilda" e nenhum formulário é montado.
+- **CA-GH-APPS-05** · *completa* — **Dado** um App `pronto` e uma campanha nova, **quando** o Senhor da Guilda tem a credencial pessoal, **então** o motor usa o `PUT` da API; **quando** não tem, **então** o Senhor da Guilda recebe o link da configuração da instalação e o motor conclui ao ver o repositório na instalação.
+- **CA-GH-APPS-06** · *pesada* — **Dado** uma classe nova com `--app novo`, **quando** o Grão-Mestre pede o App, **então** o link chega ao Senhor da Guilda pelo Telegram (dublê), o teste abre o link num navegador real, clica "Criar" e "Instalar" nas páginas do GitHub falso, e a ação seguinte da classe sai com o App novo (MVP-5).
 - **CA-GH-APPS-07** · *rápida* — **Dado** um retorno de instalação com `installation_id` que não é deste App, **quando** o motor confere com o JWT, **então** recusa e o App continua `aguardando_instalacao`.
-- **CA-GH-APPS-08** · *rápida* — **Dado** uma conversão que devolve `owner` diferente da conta do Dono, **quando** o motor confere, **então** a chave é apagada do cofre, o App não é usado e o Dono é avisado.
+- **CA-GH-APPS-08** · *rápida* — **Dado** uma conversão que devolve `owner` diferente da conta do Senhor da Guilda, **quando** o motor confere, **então** a chave é apagada do cofre, o App não é usado e o Senhor da Guilda é avisado.
 
 ## Depende de
 
@@ -119,10 +119,10 @@ sequenceDiagram
 
 ## Verificar na implementação
 
-Os itens são conferidos na primeira criação real, a dos Apps fixos no [primeiro acesso](../operacao/primeiro-acesso.md), e no primeiro workspace com mais de um repositório; as respostas reais viram gravações do [GitHub falso](../qualidade/dubles.md).
+Os itens são conferidos na primeira criação real, a dos Apps fixos no [primeiro acesso](../operacao/primeiro-acesso.md), e na primeira campanha com mais de um repositório; as respostas reais viram gravações do [GitHub falso](../qualidade/dubles.md).
 
-- **Verificar na implementação:** o GitHub aceita `redirect_url` e `setup_url` com o endereço da Cidadela na rede local (nome `.local` ou IP, certificado da CA interna); a documentação não exige endereço público. **Padrão:** aceita, como acima. **Se falhar:** o manifesto usa `http://localhost/…`, a navegação de volta falha no aparelho, e a página do link pede ao Dono para colar no painel o endereço que o navegador mostrou (ele traz o `code` e o `state`), a tempo da janela de 1 hora. **Onde:** à mão, na criação dos Apps fixos no primeiro acesso.
-- **Verificar na implementação:** `PUT /user/installations/{installation_id}/repositories/{repository_id}` aceita o user access token do App "Grão-Mestre" (a documentação cita token pessoal), que o `GET /repos/{dono}/{repo}` com esse token enxerga um repositório privado ainda fora da instalação (para ler o `repository_id`) e que o mesmo token serve à instalação do App "Mestre". **Padrão:** tudo isso funciona. **Se falhar:** o `repository_id` vem de outra leitura; sem outra, repositório novo vai sempre pelo link da configuração da instalação. **Onde:** à mão, no primeiro workspace criado com a credencial pessoal do Dono conectada; fica para o M7, com as demais verificações no GitHub real, e o link segue como plano B até lá. **Decisão do dono (2026-10-20):** o `PUT` automático vale também para o workspace criado por um Administrador.
+- **Verificar na implementação:** o GitHub aceita `redirect_url` e `setup_url` com o endereço da Cidadela na rede local (nome `.local` ou IP, certificado da CA interna); a documentação não exige endereço público. **Padrão:** aceita, como acima. **Se falhar:** o manifesto usa `http://localhost/…`, a navegação de volta falha no aparelho, e a página do link pede ao Senhor da Guilda para colar no painel o endereço que o navegador mostrou (ele traz o `code` e o `state`), a tempo da janela de 1 hora. **Onde:** à mão, na criação dos Apps fixos no primeiro acesso.
+- **Verificar na implementação:** `PUT /user/installations/{installation_id}/repositories/{repository_id}` aceita o user access token do App "Grão-Mestre" (a documentação cita token pessoal), que o `GET /repos/{dono}/{repo}` com esse token enxerga um repositório privado ainda fora da instalação (para ler o `repository_id`) e que o mesmo token serve à instalação do App "Mestre". **Padrão:** tudo isso funciona. **Se falhar:** o `repository_id` vem de outra leitura; sem outra, repositório novo vai sempre pelo link da configuração da instalação. **Onde:** à mão, na primeira campanha criada com a credencial pessoal do Senhor da Guilda conectada; fica para o M7, com as demais verificações no GitHub real, e o link segue como plano B até lá. **Decisão do dono (2026-10-20):** o `PUT` automático vale também para a campanha criada por um Administrador.
 
 ## Fontes
 

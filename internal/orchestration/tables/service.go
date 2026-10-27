@@ -335,7 +335,7 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, er
 	prefix := s.o.Settings.BranchPrefix(ws)
 	branch := prefix + id
 	if !validBranch(branch) || strings.HasPrefix(branch, "refs/") || strings.HasPrefix(branch, "mestre/") {
-		return OpenResult{}, fmt.Errorf("o prefixo de branch %q do workspace não gera um nome de branch válido (%q)", prefix, branch)
+		return OpenResult{}, fmt.Errorf("o prefixo de branch %q da campanha não gera um nome de branch válido (%q)", prefix, branch)
 	}
 	t := Table{Workspace: ws, ID: id, Epic: epic.Number, EpicTitle: epic.Title, Branch: branch, BaseBranch: base, BaseCommit: string(start),
 		State: StateOpen, OpenedBy: gm.ID, CreatedAt: now, UpdatedAt: now}

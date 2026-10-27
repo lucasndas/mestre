@@ -120,3 +120,28 @@ func TestEnglishTableMustPairWithTheTerms(t *testing.T) {
 		t.Fatalf("pairing = %v", pairing)
 	}
 }
+
+// CA-JORN-13 and CA-JORN-14: the glossary says Campanha, Companhia and Senhor
+// da Guilda, in both languages, and no longer has the old names as terms.
+func TestGlossaryUsesTheThemedVocabulary(t *testing.T) {
+	t.Parallel()
+	terms, err := glossary.Load("../../docs/produto/glossario.md", "../../docs/produto/glossario-en.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]glossary.Term{}
+	for _, tm := range terms {
+		byName[tm.Name] = tm
+	}
+	for name, en := range map[string]string{"Campanha": "Campaign", "Companhia": "Party", "Senhor da Guilda": "Guildmaster", "Teto da campanha": "Campaign ceiling"} {
+		tm, ok := byName[name]
+		if !ok || tm.En.Name != en {
+			t.Errorf("term %q = %+v; want English name %q", name, tm, en)
+		}
+	}
+	for _, old := range []string{"Workspace", "Party", "Dono", "Teto do workspace"} {
+		if _, ok := byName[old]; ok {
+			t.Errorf("the glossary still has the term %q", old)
+		}
+	}
+}

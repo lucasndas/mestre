@@ -10,14 +10,14 @@ Garantir que todo worktree onde roda um personagem tenha a fiação que os prove
 
 ### Quando roda
 - ao abrir uma mesa (worktree na Cidadela) e quando uma Torre recebe o primeiro personagem da mesa (worktree na Torre; [mesas](../orquestracao/mesas.md));
-- no clone principal, na criação do workspace ([workspace](workspace.md));
+- no clone principal, na criação da campanha ([campanha](workspace.md));
 - antes de iniciar cada personagem (verifica e corrige, sem reescrever o que já está certo);
 - ao regenerar depois de uma versão nova dos modelos ([personagem](personagem.md)).
 
 A geração é idempotente: rodar de novo sem mudança nos modelos não altera nenhum byte (o Antigravity e o Claude Code recarregam a configuração a cada mudança de arquivo).
 
 ### Arquivos gerados no worktree
-| Arquivo | Para | Conteúdo | Dono do formato |
+| Arquivo | Para | Conteúdo | Senhor da Guilda do formato |
 |---|---|---|---|
 | `.agents/skills/mestre-comunicacao/SKILL.md` | Codex, Antigravity | a única skill compartilhada (as de nível e de classe são por personagem: [personagem](personagem.md#skills-por-personagem)), ao lado das [skills de apoio](../classes/skills-de-apoio.md) ligadas na mesa (desde o M8) | [skills-geradas](../cli/skills-geradas.md) |
 | `.claude/skills/mestre-comunicacao/SKILL.md` | Claude Code | cópia gerenciada da anterior (cópia, não link: links no Windows exigem permissão especial) | idem |
@@ -43,7 +43,7 @@ O motor mantém um bloco próprio, de nome `managed`, no `info/exclude` do repos
 /.mestre/
 # <<< mestre:managed <<<
 ```
-- `/.mestre/` só aparece quando o workspace escolheu "só local" ([workspace](workspace.md)); desde o M8, o bloco ganha uma linha `/.agents/skills/<nome>/` por [skill de apoio](../classes/skills-de-apoio.md) materializada.
+- `/.mestre/` só aparece quando a campanha escolheu "só local" ([campanha](workspace.md)); desde o M8, o bloco ganha uma linha `/.agents/skills/<nome>/` por [skill de apoio](../classes/skills-de-apoio.md) materializada.
 - `.agents/hooks.json` só entra se foi o Mestre que criou o arquivo (um arquivo da pessoa, ainda não versionado, continua aparecendo para ela no `git status`).
 - Linhas fora do bloco nunca são tocadas; o `.gitignore` do projeto nunca é alterado.
 
@@ -90,7 +90,7 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 - Nada é apagado nem sobrescrito fora das partes marcadas como do Mestre.
 - Falha ao gerar um arquivo de um provedor bloqueia só personagens daquele provedor naquele worktree, com o motivo no painel; os outros seguem.
 - O início do Grão-Mestre, que roda no clone principal, passa pelo `CheckStart` como o de todo personagem (a mesa `""`): o `Runtime` do `mestre run` o recusa com `BlockedError` se os arquivos do provedor dele não foram gerados, sem segurar os outros provedores ([CA-GM-17](../orquestracao/grao-mestre.md#critérios-de-aceite)). As worktrees das mesas são preparadas pela própria mesa (Cidadela ao abrir, Torre no primeiro personagem).
-- A cópia em `.claude/skills/` só deixa de ser gerada por decisão de usuário: quando o teste de conformidade detecta que o Claude Code lê `.agents/skills/`, o checklist (ALL-13) **oferece** desligar a cópia; só depois que um Dono ou Administrador aprova, ela deixa de ser gerada e a existente é removida. Sem a aprovação, nada muda.
+- A cópia em `.claude/skills/` só deixa de ser gerada por decisão de usuário: quando o teste de conformidade detecta que o Claude Code lê `.agents/skills/`, o checklist (ALL-13) **oferece** desligar a cópia; só depois que um Senhor da Guilda ou Administrador aprova, ela deixa de ser gerada e a existente é removida. Sem a aprovação, nada muda.
 
 ## Critérios de aceite
 
@@ -102,11 +102,11 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 - **CA-SZ-MESA-06** · *completa* — **Dado** um `.agents/hooks.json` versionado e mesclado, **quando** um agente faz commit de tudo, **então** o commit não contém o hook `mestre`; e, num clone novo sem o `mestre` no PATH, o agente Antigravity falso tem o PreToolUse liberado (MVP-3).
 - **CA-SZ-MESA-07** · *completa* — **Dado** um worktree com confiança gravada nos três provedores, **quando** a mesa é encerrada e o worktree removido, **então** as entradas de confiança daquele caminho deixam de existir.
 - **CA-SZ-MESA-08** · *completa* — **Dado** o comando de hook gerado para o Claude Code ou o Antigravity, **quando** roda sem `MESTRE_AGENT_ID`, **então** imprime a resposta neutra do evento, sai com 0 e não executa o `mestre`. A linha roda num shell de verdade, e a suíte rápida não inicia processos ([testes](../qualidade/testes.md#regras-e-erros)); a rápida confere só a forma da linha (o teste de `MESTRE_AGENT_ID` vem antes da chamada).
-- **CA-SZ-MESA-09** · *rápida* — **Dado** a conformidade marcando que o Claude Code lê `.agents/skills/`, **quando** a geração roda sem a aprovação de um Dono ou Administrador, **então** a cópia em `.claude/skills/` continua sendo gerada; **quando** a aprovação existe, **então** a cópia é removida e não volta.
+- **CA-SZ-MESA-09** · *rápida* — **Dado** a conformidade marcando que o Claude Code lê `.agents/skills/`, **quando** a geração roda sem a aprovação de um Senhor da Guilda ou Administrador, **então** a cópia em `.claude/skills/` continua sendo gerada; **quando** a aprovação existe, **então** a cópia é removida e não volta.
 
 ## Depende de
 
-- [Sessão zero do workspace](workspace.md)
+- [Sessão zero da campanha](workspace.md)
 - [Bases e fichas](../orquestracao/bases-e-fichas.md)
 - [Adaptador](../provedores/adaptador.md) · [Claude Code](../provedores/claude-code.md) · [Codex](../provedores/codex.md) · [Antigravity](../provedores/antigravity.md)
 - [Classes](../classes/classes.md)

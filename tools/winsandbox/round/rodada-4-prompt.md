@@ -1,4 +1,4 @@
-Você está num Windows Sandbox descartável (usuário WDAGUtilityAccount, administrador, rede ligada), no repositório do Mestre em C:\mestre, na branch `round/m3m4-windows` (criada a partir da `main`). A pasta `C:\winsandbox` é a do Dono (compartilhada com o Windows dele): ali estão os resultados da **rodada de verificações reais** que o `run-all.ps1` já rodou, em `C:\winsandbox\resultados\round\` (`RESULTADO.txt` e `detalhes\`). Esta é a **triagem**: você lê, separa o que é achado real do que é erro do script, conserta o que for do script e roda de novo os itens afetados.
+Você está num Windows Sandbox descartável (usuário WDAGUtilityAccount, administrador, rede ligada), no repositório do Mestre em C:\mestre, na branch `round/m3m4-windows` (criada a partir da `main`). A pasta `C:\winsandbox` é a do Senhor da Guilda (compartilhada com o Windows dele): ali estão os resultados da **rodada de verificações reais** que o `run-all.ps1` já rodou, em `C:\winsandbox\resultados\round\` (`RESULTADO.txt` e `detalhes\`). Esta é a **triagem**: você lê, separa o que é achado real do que é erro do script, conserta o que for do script e roda de novo os itens afetados.
 
 Leia antes, nesta ordem: `AGENTS.md`; a seção "Rodada de verificações reais" de `docs/arquitetura/windows.md`; `tools/winsandbox/round/run-all.ps1`; `RESULTADO.txt` e os arquivos de `detalhes\` que ele cita (`item8-casos.txt`, os logs da conformidade de cada provedor, `instalador-*.log`).
 
@@ -13,7 +13,7 @@ Para cada item FAIL ou SKIP do `RESULTADO.txt` (e para cada subitem), classifiqu
 - Nunca grave senhas, tokens ou saída de `claude auth`/`codex login` em arquivos do repositório nem nos resultados; mascare o que sair em log.
 - Mudanças só em `tools/winsandbox/round/`, `tools/conformance/` e, se for achado de documento, em `docs/` seguindo o `INDEX.md` (documento dono, até ~150 linhas, cabeçalho de data). Código de produção não muda nesta rodada.
 - Rode `go vet ./tools/...` e `go test ./tools/...` no Windows e anote o resultado.
-- Nunca faça push para `main`. Não faça push de nada: o Dono leva o resultado de volta.
+- Nunca faça push para `main`. Não faça push de nada: o Senhor da Guilda leva o resultado de volta.
 - Gaste cota real só no que precisar para repetir um item.
 
 ## Entrega (faça mesmo que algo falhe)

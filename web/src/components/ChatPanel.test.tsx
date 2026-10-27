@@ -413,14 +413,14 @@ test("the progress is one card at the top, updated in place", async () => {
   renderApp("/");
   const panel = await openPanel(user);
   const sock = online();
-  const card = await within(panel).findByRole("region", { name: "Andamento do workspace" });
+  const card = await within(panel).findByRole("region", { name: "Andamento da campanha" });
   expect(card.textContent).toContain("2 mesas, 1 trabalhando");
   expect(within(card).getByText("Mesa 42: aguardando você")).toBeTruthy();
   c = conv({ progress: { lines: ["2 mesas, 2 trabalhando"], updated_at: "2026-10-26T17:00:00Z" } });
   act(() => emit(sock, "chat:u1", "changed", { workspace: "loja" }));
   await waitFor(() => expect(within(panel).getByText("2 mesas, 2 trabalhando")).toBeTruthy());
   expect(within(panel).queryByText("2 mesas, 1 trabalhando")).toBeNull();
-  expect(within(panel).getAllByRole("region", { name: "Andamento do workspace" })).toHaveLength(1);
+  expect(within(panel).getAllByRole("region", { name: "Andamento da campanha" })).toHaveLength(1);
 });
 
 // The state of the Grão-Mestre follows the events, with no new read.

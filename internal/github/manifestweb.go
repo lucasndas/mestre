@@ -86,10 +86,10 @@ func (w *Web) owner(rw http.ResponseWriter, r *http.Request) (users.User, bool) 
 	u, ok := w.Who(r)
 	switch {
 	case !ok:
-		w.render(rw, http.StatusUnauthorized, pageData{Title: "Entre no painel", Message: "Abra o painel como Dono e use o link de novo."})
+		w.render(rw, http.StatusUnauthorized, pageData{Title: "Entre no painel", Message: "Abra o painel como Senhor da Guilda e use o link de novo."})
 		return users.User{}, false
 	case users.Require(u.Level, users.GitHubApps) != nil || u.State != users.Active:
-		w.render(rw, http.StatusForbidden, pageData{Title: "Exige Dono", Message: "Só o Dono cria os Apps do GitHub: eles nascem na conta pessoal dele."})
+		w.render(rw, http.StatusForbidden, pageData{Title: "Exige Senhor da Guilda", Message: "Só o Senhor da Guilda cria os Apps do GitHub: eles nascem na conta pessoal dele."})
 		return users.User{}, false
 	}
 	return u, true
@@ -146,7 +146,7 @@ func (w *Web) fail(rw http.ResponseWriter, err error) {
 	case errors.Is(err, ErrLinkGone):
 		w.render(rw, http.StatusGone, pageData{Title: "Link vencido ou já usado", Message: "Peça outro link no painel (Apps do GitHub) ou ao Grão-Mestre."})
 	case errors.Is(err, ErrOwnerOnly):
-		w.render(rw, http.StatusForbidden, pageData{Title: "Exige Dono", Message: "Só o Dono cria os Apps do GitHub."})
+		w.render(rw, http.StatusForbidden, pageData{Title: "Exige Senhor da Guilda", Message: "Só o Senhor da Guilda cria os Apps do GitHub."})
 	case errors.Is(err, ErrBadState):
 		w.render(rw, http.StatusBadRequest, pageData{Title: "Retorno não reconhecido", Message: "Este retorno do GitHub não pertence a um pedido aberto do Mestre."})
 	case errors.Is(err, ErrCodeLate):

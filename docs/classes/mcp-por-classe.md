@@ -1,6 +1,6 @@
 # MCP por classe
 
-> **Assunto:** o catálogo de servidores MCP do workspace, o campo `mcp` da classe, o gateway do Mestre que entrega a cada personagem só os servidores dele, igual nos três provedores, as chaves e a rede · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** o catálogo de servidores MCP da campanha, o campo `mcp` da classe, o gateway do Mestre que entrega a cada personagem só os servidores dele, igual nos três provedores, as chaves e a rede · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -8,7 +8,7 @@ Deixar a classe dizer de quais servidores MCP o personagem precisa (navegador pa
 
 ## Comportamento
 
-### O catálogo do workspace
+### O catálogo da campanha
 
 Fica em `.mestre/regras/mcp.yaml` no clone principal ([estrutura de `.mestre/`](../sessao-zero/workspace.md#estrutura-de-mestre)) e muda só pelo painel, por Administrador ou acima ([administração](../painel/administracao.md)):
 
@@ -22,7 +22,7 @@ servers:
     url: "https://mcp.context7.com/mcp"
     domains: ["mcp.context7.com"]
     auth: {header: CONTEXT7_API_KEY, secret: context7}   # nome no cofre, nunca o valor
-  navegador-do-usuario:                    # de controle: só o Dono cadastra, só no Operador do PC
+  navegador-do-usuario:                    # de controle: só o Senhor da Guilda cadastra, só no Operador do PC
     command: ["npx", "-y", "@playwright/mcp@0.0.41", "--extension"]
     domains: ["*"]
 ```
@@ -31,7 +31,7 @@ servers:
 - **Servidor local** (`command`): `command[0]` é um lançador conhecido (`npx`, `uvx`, `node`, `python`), nunca um shell (`sh`, `bash`, `cmd`, `powershell`), e a versão é exata. O `command` diz o que **instalar**: o motor instala o pacote, com as dependências travadas e conferidas, numa pasta dele que o `mestre-agente` não escreve, e grava o ponto de entrada. Nada é baixado nem procurado no `PATH` no uso.
 - **Servidor remoto** (`url`): só `https`. `auth` (o cabeçalho e o nome de uma `mcp_key` do [cofre](../plataforma/cofre.md)) só existe com `url`; servidor local com chave fica fora (abaixo, "A confirmar"). Chave escrita em `command` ou `url` é recusada.
 - **Entrar no catálogo é uma decisão de pessoa:** quem acrescenta é Administrador ou acima, e fica na auditoria. Na aprovação, o motor guarda a impressão da lista de ferramentas do servidor (nomes e descrições); se ela mudar, o servidor fica suspenso até um Administrador aprovar de novo.
-- **Servidor de controle** do computador ou do navegador do usuário, qualquer que seja o nome dado a ele, é um destes: um pacote de navegador (`@playwright/mcp`, `chrome-devtools-mcp`) com algum argumento fora dos seguros (`--headless`, `--isolated`, `--browser`, `--viewport-size`; qualquer outro, como `--extension`, `--cdp-endpoint`, `--browserUrl`, `--autoConnect` ou `--config`, o torna de controle); ou o que o Dono marca `control: true`, como o de controle do computador do Operador. A lista fica no binário e só muda numa versão nova do Mestre; outro pacote é comum, roda como `mestre-agente` e não alcança a área de trabalho nem o navegador do usuário. Só o Dono o cadastra, e ele só serve à base Operador do PC, pela regra fixa ([regras fixas](permissoes.md#regras-fixas-de-segurança)).
+- **Servidor de controle** do computador ou do navegador do usuário, qualquer que seja o nome dado a ele, é um destes: um pacote de navegador (`@playwright/mcp`, `chrome-devtools-mcp`) com algum argumento fora dos seguros (`--headless`, `--isolated`, `--browser`, `--viewport-size`; qualquer outro, como `--extension`, `--cdp-endpoint`, `--browserUrl`, `--autoConnect` ou `--config`, o torna de controle); ou o que o Senhor da Guilda marca `control: true`, como o de controle do computador do Operador. A lista fica no binário e só muda numa versão nova do Mestre; outro pacote é comum, roda como `mestre-agente` e não alcança a área de trabalho nem o navegador do usuário. Só o Senhor da Guilda o cadastra, e ele só serve à base Operador do PC, pela regra fixa ([regras fixas](permissoes.md#regras-fixas-de-segurança)).
 - Arquivo mudado por fora do painel: vale a última versão aprovada e os Administradores são avisados, como no [teto](teto-do-workspace.md).
 
 ### A classe declara
@@ -41,7 +41,7 @@ mcp:                       # frontmatter do CLASS.md
   - {name: playwright, enabled: true}
 ```
 
-- O `class check` confere que cada nome **ligado** (`enabled: true`) existe no catálogo do workspace; nome ligado que não existe é erro, e a classe não é salva. Nome desligado não é conferido: as [classes sugeridas](classes-sugeridas.md) trazem todos desligados e valem com o catálogo vazio.
+- O `class check` confere que cada nome **ligado** (`enabled: true`) existe no catálogo da campanha; nome ligado que não existe é erro, e a classe não é salva. Nome desligado não é conferido: as [classes sugeridas](classes-sugeridas.md) trazem todos desligados e valem com o catálogo vazio.
 - **Rede:** ligar um servidor é dar a rede dele ao personagem. O `class check` e a montagem das regras efetivas recusam ligar um servidor cujos `domains` não cabem nas regras de rede da classe e do [teto](teto-do-workspace.md) (`["*"]` exige internet sem lista de domínios); vale também para classe da mesa, que não passa por aprovação.
 - Declarar não libera as ferramentas: quem decide cada chamada continua sendo `tools` do [`permissions.yaml`](formato-das-permissoes.md) (ex.: `tools.allow: ["mcp__playwright__*"]`).
 - `enabled` é o mesmo liga/desliga das [skills de apoio](skills-de-apoio.md), com as mesmas aprovações: desligado é como não declarado (não pede o catálogo, não entra na rede nem na lista do gateway).
@@ -78,7 +78,7 @@ Os arquivos são gerados do zero e o caminho é conferido na forma canônica. Em
 
 - **CA-MCP-01** · *rápida* — **Dado** um catálogo com `playwright` e `context7` e uma classe `qa` com só `playwright` ligado, **quando** o gateway de um QA atende `tools/list`, **então** mostra só `playwright__*`; **e** um `tools/call` de `context7__resolve` é negado e registrado; **e**, ligado `context7` na classe, o gateway manda `list_changed`.
 - **CA-MCP-02** · *rápida* — **Dado** uma classe que declara o servidor `inexistente`, **quando** o `class check` roda, **então** aponta o erro e a classe não é salva; **dado** o mesmo nome com `enabled: false` e o catálogo vazio, **então** a classe é salva.
-- **CA-MCP-03** · *rápida* — **Dado** um Administrador que acrescenta ao catálogo um servidor `pc` marcado `control: true`, **quando** salva, **então** é recusado com "só o Dono", e o Dono consegue; **dado** um Administrador que acrescenta `@playwright/mcp` com `--extension`, `--cdp-endpoint` ou `--config`, com qualquer nome, **então** é recusado com "só o Dono", e `@playwright/mcp --headless --isolated` é aceito; **dado** uma chave no `command` ou na `url`, `auth` com `command`, `url` em `http`, `url` fora dos domínios da chave, ou o nome `mestre` ou `a__b`, **então** é recusado; **dado** um servidor usado por uma classe, **então** removê-lo é recusado.
+- **CA-MCP-03** · *rápida* — **Dado** um Administrador que acrescenta ao catálogo um servidor `pc` marcado `control: true`, **quando** salva, **então** é recusado com "só o Senhor da Guilda", e o Senhor da Guilda consegue; **dado** um Administrador que acrescenta `@playwright/mcp` com `--extension`, `--cdp-endpoint` ou `--config`, com qualquer nome, **então** é recusado com "só o Senhor da Guilda", e `@playwright/mcp --headless --isolated` é aceito; **dado** uma chave no `command` ou na `url`, `auth` com `command`, `url` em `http`, `url` fora dos domínios da chave, ou o nome `mestre` ou `a__b`, **então** é recusado; **dado** um servidor usado por uma classe, **então** removê-lo é recusado.
 - **CA-MCP-04** · *rápida* — **Dado** um QA e um Revisor em cada provedor, **quando** o motor monta os inícios, **então** a configuração de cada um tem só o `mestre`, com `env` e `cwd` vazios; no Claude vai `--strict-mcp-config`; no Antigravity a ACL que o motor monta para a pasta do `mcp_config.json` não dá escrita ao `mestre-agente` e o `tools` do arquivo de agente tem o `mestre`; **e** a camada do Mestre de cada um tem a linha `Servidores MCP ligados: <servidor>, …` (ausente quando não há).
 - **CA-MCP-05** · *completa* — **Dado** um QA de cada provedor com `playwright` ligado e o agente falso, **quando** ele chama `mcp__mestre__playwright__browser_navigate` e depois `mcp__x__run` (servidor fora do gateway), **então** a primeira passa pelo pipeline e chega ao servidor, e a segunda é negada pelo despachante e registrada.
 - **CA-MCP-06** · *rápida* — **Dado** um teto com `network.domains: ["github.com"]` e uma classe da mesa que liga `playwright` (`domains: ["*"]`), **quando** o `class check` roda, **então** recusa e cita os domínios; **dado** um servidor com `command: ["sh", "-c", …]`, **então** o catálogo recusa.
@@ -99,7 +99,7 @@ Os arquivos são gerados do zero e o caminho é conferido na forma canônica. Em
 - [Cofre](../plataforma/cofre.md)
 - [Canal local](../arquitetura/canal-local.md)
 - [Despachante de hooks](../provedores/despachante-de-hooks.md)
-- [Sessão zero do workspace](../sessao-zero/workspace.md)
+- [Sessão zero da campanha](../sessao-zero/workspace.md)
 - [Bases e fichas](../orquestracao/bases-e-fichas.md)
 - [Cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md)
 - [Administração](../painel/administracao.md)

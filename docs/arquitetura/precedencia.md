@@ -8,17 +8,17 @@ Este documento é a **fonte única** da ordem de precedência. Os outros documen
 
 Do mais forte para o mais fraco:
 
-1. **Decretos ativos de pessoas**, por nível do autor: **Dono > Administrador > Aprovador** (inclusive as exceções pontuais que as aprovações delas criam).
-2. **Regras fixas do Mestre** (CLI, `done`, segurança, comportamento em missão), seguidas das instruções extras que o usuário acrescentou para o Grão-Mestre ou os Mestres de mesa do workspace, que somam e nunca substituem as fixas ([Grão-Mestre](../orquestracao/grao-mestre.md), [Mestre da mesa](../orquestracao/mestre-da-mesa.md)).
+1. **Decretos ativos de pessoas**, por nível do autor: **Senhor da Guilda > Administrador > Aprovador** (inclusive as exceções pontuais que as aprovações delas criam).
+2. **Regras fixas do Mestre** (CLI, `done`, segurança, comportamento em missão), seguidas das instruções extras que o usuário acrescentou para o Grão-Mestre ou os Mestres de mesa da campanha, que somam e nunca substituem as fixas ([Grão-Mestre](../orquestracao/grao-mestre.md), [Mestre da mesa](../orquestracao/mestre-da-mesa.md)).
 3. **Decisões de agentes da cadeia de aprovação:** exceções pontuais e [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md) dadas pelo Grão-Mestre ou por um Mestre da mesa. Só transformam em `allow` uma ação que as outras camadas deixam em `ask`; nunca vencem um `deny` nem um decreto de pessoa ([cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md), [ADR 0024](../decisoes/0024-cadeia-de-aprovacao-por-risco.md)).
-4. **Classe** do personagem (`CLASS.md` e `permissions.yaml`), sempre dentro do **teto do workspace**.
+4. **Classe** do personagem (`CLASS.md` e `permissions.yaml`), sempre dentro do **teto da campanha**.
 5. **Ficha** do personagem: só **restringe** o que a classe permite, nunca libera.
 6. **Instruções do projeto:** `AGENTS.md` (ou `CLAUDE.md`, que o Claude Code lê no lugar dele; [Claude Code](../provedores/claude-code.md)).
 
 Fora da ordem, valendo sempre:
 - **Proteções do GitHub** (branch protegida, revisões obrigatórias, CI): nenhum nível as contorna; quando não dá para cumprir, o motor explica ([ações por nível](../github/acoes-por-nivel.md)).
-- **Sistema travado** (`/travar`): todos os decretos ficam suspensos e os agentes congelados até o Dono destravar ([segurança do canal](../telegram/seguranca-do-canal.md)).
-- **Teto do workspace:** não é uma camada a mais; é o limite das camadas 4 e 5. Só um decreto o amplia ([teto do workspace](../classes/teto-do-workspace.md)).
+- **Sistema travado** (`/travar`): todos os decretos ficam suspensos e os agentes congelados até o Senhor da Guilda destravar ([segurança do canal](../telegram/seguranca-do-canal.md)).
+- **Teto da campanha:** não é uma camada a mais; é o limite das camadas 4 e 5. Só um decreto o amplia ([teto da campanha](../classes/teto-do-workspace.md)).
 - **Delegação** (decreto `delegation` e subdelegação): não libera ação nenhuma; muda só **quem** pode decidir um pedido na cadeia, e o que esse nível aprova entra na camada 3 ([delegação](../aprovacoes/delegacao.md)).
 
 ## Invariantes arquiteturais

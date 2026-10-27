@@ -10,7 +10,7 @@ Toda máquina da Guilda tem os mesmos componentes; o papel (Cidadela ou Torre) v
 
 | Componente | O que faz | Onde roda |
 |---|---|---|
-| **Motor** (serviço `mestre`) | em toda máquina: entra na Guilda, manda a ficha da máquina, inicia e acompanha os terminais dos personagens dali (cada um no seu `mestre-pty`), mantém os worktrees das mesas, atende a CLI, guarda o banco local de máquina e a réplica do banco. **Na Cidadela**, também: banco principal, workspaces, mesas, missões, esperas, rituais, decretos, aprovações, espelhos, GitHub, Telegram, cofre, painel e API, Grão-Mestre e a recepção das Torres | todas as máquinas |
+| **Motor** (serviço `mestre`) | em toda máquina: entra na Guilda, manda a ficha da máquina, inicia e acompanha os terminais dos personagens dali (cada um no seu `mestre-pty`), mantém os worktrees das mesas, atende a CLI, guarda o banco local de máquina e a réplica do banco. **Na Cidadela**, também: banco principal, campanhas, mesas, missões, esperas, rituais, decretos, aprovações, espelhos, GitHub, Telegram, cofre, painel e API, Grão-Mestre e a recepção das Torres | todas as máquinas |
 | **`mestre-pty`** | um processo por terminal, com a conta `mestre-agente`: segura o PTY ou ConPTY, o agente, o emulador e o buffer, e continua vivo quando o motor reinicia ([terminal](terminal.md#mestre-pty)) | toda máquina com terminais |
 | **Guardião** | vigia e conserta o motor da própria máquina; lista fechada de ações; página reserva e Telegram em modo reduzido ([Guardião](../autocura/guardiao.md)) | todas as máquinas |
 | **CLI `mestre`** | comandos dos agentes; fala com o motor local pelo [canal local](canal-local.md) ([convenções da CLI](../cli/convencoes.md)). As pessoas usam o painel e o Telegram; da CLI, só os subcomandos de serviço (abaixo), o `mestre attach` e o `mestre debug` | todas as máquinas (no PATH, e em `MESTRE_CLI`) |
@@ -30,7 +30,7 @@ Três binários por plataforma (Linux amd64 e Windows amd64), compilados com `CG
 | `mestre install [--join <endereço>] [--new-guild] [--instance <nome>]` | Linux, Windows | registra os serviços e as contas, descobre a Guilda e entra nela ou a cria ([Guilda](../guilda/guilda.md#formação)); `--join` usa só o endereço dado; `--new-guild` cria uma Guilda mesmo que outra responda; `--restore <pasta do backup>` cria a Guilda a partir de um backup, com a chave de recuperação ([cofre](../plataforma/cofre.md#backup-e-chave-de-recuperação)); `--operator-user <usuário>` habilita o Operador do PC no Windows; `--instance` escolhe a [instância](#instâncias); comportamento em [instalação e atualização](../plataforma/instalacao-e-atualizacao.md) |
 | `mestre join <endereço>` | Linux, Windows | pede de novo a entrada numa Guilda, numa máquina já instalada que está fora de uma ([entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)) |
 | `mestre uninstall [--purge]` | Linux, Windows | pede a saída da Guilda e remove os serviços; `--purge` apaga também as pastas de dados da instância, sem a qual logs, worktrees e perfis ficam ([saída e remoção](../guilda/guilda.md#saída-e-remoção)) |
-| `mestre setup-code` | Linux, Windows | gera um novo código de configuração do Dono (invalida o anterior) quando o da instalação se perdeu; só root ou administrador na Cidadela e só enquanto não existe usuário; abre o banco da Cidadela e imprime o código ([login](../painel/login.md#implementação)) |
+| `mestre setup-code` | Linux, Windows | gera um novo código de configuração do Senhor da Guilda (invalida o anterior) quando o da instalação se perdeu; só root ou administrador na Cidadela e só enquanto não existe usuário; abre o banco da Cidadela e imprime o código ([login](../painel/login.md#implementação)) |
 | `mestre launcher` | Linux, Windows | o serviço `mestre-launcher`, o único que inicia processos com outra conta ([iniciador](#iniciador-mestre-launcher)); recusa rodar fora do serviço |
 | `mestre mcp --instance <inst>` | Linux, Windows | o gateway do Mestre (desde o M7): servidor MCP por stdio, filho do CLI do personagem, que fala com o motor pelo canal local (`cmd: "mcp"`); só dentro do terminal de um personagem, fora dele o motor responde `not_identified` ([MCP por classe](../classes/mcp-por-classe.md#o-gateway-do-mestre)) |
 | `mestre operator-session` | Windows | processo da sessão do [Operador do PC](windows.md#operador-do-pc): iniciado pela tarefa agendada `\Mestre\Operador` no logon do usuário configurado, com a conta dele; liga-se ao `mestre` pelo pipe do Operador e cria os terminais do Operador; recusa rodar como serviço ou com outra conta |
@@ -117,7 +117,7 @@ Tabela única de portas e rotas. Os números são os da instância padrão; cada
 
 ## Instâncias
 
-Uma máquina pode ter **várias instâncias** do Mestre, em qualquer sistema e modo; cada instância é uma máquina separada da Guilda. Servem à suíte completa (duas ou três instâncias como processos comuns, sem instalar serviços; [testes](../qualidade/testes.md#troca-de-cidadela-e-replicação-na-completa)) e ao teste manual do Dono (duas instâncias instaladas, para testar entrada, replicação e troca de Cidadela).
+Uma máquina pode ter **várias instâncias** do Mestre, em qualquer sistema e modo; cada instância é uma máquina separada da Guilda. Servem à suíte completa (duas ou três instâncias como processos comuns, sem instalar serviços; [testes](../qualidade/testes.md#troca-de-cidadela-e-replicação-na-completa)) e ao teste manual do Senhor da Guilda (duas instâncias instaladas, para testar entrada, replicação e troca de Cidadela).
 
 | O quê | Por instância (`<inst>`, padrão `principal`) |
 |---|---|
@@ -143,4 +143,4 @@ flowchart LR
   P -- segura --> T[agente]
 ```
 
-O Guardião nunca é alterado por uma ação de cura ([Guardião](../autocura/guardiao.md)). Entre máquinas, as Torres vigiam a Cidadela ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)).
+O Guardião nunca é alterado por uma ação de cura ([Guardião](../autocura/guardiao.md)). Entre máquinas, as Torres vigiam a Cidadela ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-senhor-da-guilda)).

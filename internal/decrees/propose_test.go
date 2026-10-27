@@ -91,7 +91,7 @@ func TestDecreeProposeBuildsTheProposalFromTheMessageAndNothingHoldsBeforeTheCli
 		t.Fatalf("offered = %+v, want one proposal to the author of the message", off.list)
 	}
 	shown := off.list[0].Text
-	if want := "Entendi: permitir comandos make deploy-teste para a classe dev, permanente (workspace loja). Confirma?"; shown != want {
+	if want := "Entendi: permitir comandos make deploy-teste para a classe dev, permanente (campanha loja). Confirma?"; shown != want {
 		t.Errorf("the proposal shown to the author = %q, want %q (effect permission, target classe dev, scope)", shown, want)
 	}
 	// the original text of the order is shown with the proposal, unchanged

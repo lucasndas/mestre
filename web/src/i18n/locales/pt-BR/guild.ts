@@ -1,7 +1,7 @@
 export default {
   title: "Guilda e máquinas",
   intro:
-    "Uma linha por máquina da Guilda, ao vivo. Só o Dono muda algo aqui, e cada mudança pede o seu PIN.",
+    "Uma linha por máquina da Guilda, ao vivo. Só o Senhor da Guilda muda algo aqui, e cada mudança pede o seu PIN.",
   loading: "Carregando a Guilda…",
   epoch: "Época {{epoch}}",
   single: {

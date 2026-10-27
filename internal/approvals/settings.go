@@ -255,7 +255,7 @@ func (s *Settings) Decided(ctx context.Context, r chain.Result) error {
 	ws := r.Request.Workspace
 	if !r.Approved {
 		if t.PlanB {
-			return s.human(ctx, ws, "o Dono não aprovou o ruleset de exceção para o Grão-Mestre")
+			return s.human(ctx, ws, "o Senhor da Guilda não aprovou o ruleset de exceção para o Grão-Mestre")
 		}
 		return nil
 	}
@@ -292,7 +292,7 @@ func (s *Settings) human(ctx context.Context, workspace, why string) error {
 	if err := s.Modes.Set(ctx, workspace, ModeHuman, why); err != nil {
 		return err
 	}
-	s.tell(ctx, workspace, fmt.Sprintf("O workspace %s passou ao modo de aprovação humana: %s. Cada merge vai pedir a aprovação de uma pessoa pelo Telegram.", workspace, why))
+	s.tell(ctx, workspace, fmt.Sprintf("A campanha %s passou ao modo de aprovação humana: %s. Cada merge vai pedir a aprovação de uma pessoa pelo Telegram.", workspace, why))
 	return nil
 }
 

@@ -44,7 +44,7 @@ func (s *Service) RequestSystem(ctx context.Context, o SystemRequest) (int64, er
 	if r.Risk.Risk != classes.RiskFixed {
 		return 0, fmt.Errorf("chain: the request of type %s is not of a fixed rule", o.Type)
 	}
-	r.Why = []string{"pedido do motor: só o Dono responde"}
+	r.Why = []string{"pedido do motor: só o Senhor da Guilda responde"}
 	r, err := s.st.Insert(ctx, r)
 	if err != nil {
 		return 0, err

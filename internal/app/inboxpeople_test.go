@@ -104,10 +104,10 @@ func TestTheNoticeSystemWithNoGrandMasterAndTheAnswerOfReplyReachTheUserChannel(
 		t.Fatalf("the Owner got %q after the notice; want one \"Sistema\" notice with its text", got[before:])
 	}
 	// and a notice for the Owner himself
-	if err := c.orc.Inbox.Notify(ctx, characters.Notice{Kind: characters.NoticeSystem, To: characters.Recipient{Kind: characters.ToOwner}, Workspace: c.ws.Slug, Text: "aviso ao Dono"}); err != nil {
+	if err := c.orc.Inbox.Notify(ctx, characters.Notice{Kind: characters.NoticeSystem, To: characters.Recipient{Kind: characters.ToOwner}, Workspace: c.ws.Slug, Text: "aviso ao Senhor da Guilda"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := c.chatTexts(77); !strings.Contains(got[len(got)-1], "aviso ao Dono") {
+	if got := c.chatTexts(77); !strings.Contains(got[len(got)-1], "aviso ao Senhor da Guilda") {
 		t.Fatalf("the Owner got %q; want the notice", got)
 	}
 	// an answer while the bot is not up is kept for it (ErrChannelDown), not lost

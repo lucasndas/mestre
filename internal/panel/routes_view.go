@@ -69,7 +69,7 @@ func (a *workspaceArea) handleView(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !found {
-		WriteError(w, Err(CodeNotFound, "workspace não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "campanha não encontrada", nil))
 		return
 	}
 	if out.Workspace.State != "preparing" {
@@ -98,7 +98,7 @@ func (a *workspaceArea) handleViewLayout(w http.ResponseWriter, r *http.Request)
 	}
 	vs := a.p.viewSource()
 	if vs == nil {
-		WriteError(w, Err(CodeUnavailable, "a visão do workspace não está disponível agora", nil))
+		WriteError(w, Err(CodeUnavailable, "a visão da campanha não está disponível agora", nil))
 		return
 	}
 	var in ViewLayoutRequest
@@ -129,7 +129,7 @@ func (a *workspaceArea) handlePauseTable(w http.ResponseWriter, r *http.Request)
 	}
 	vs := a.p.viewSource()
 	if vs == nil {
-		WriteError(w, Err(CodeUnavailable, "a visão do workspace não está disponível agora", nil))
+		WriteError(w, Err(CodeUnavailable, "a visão da campanha não está disponível agora", nil))
 		return
 	}
 	table := r.PathValue("table")

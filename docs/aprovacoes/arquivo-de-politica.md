@@ -1,14 +1,14 @@
 # Arquivo de política
 
-> **Assunto:** o arquivo `politica-de-aprovacao.yaml` de cada workspace: onde fica, quem edita, conteúdo padrão (condições, áreas e comandos sensíveis, tipos, quórum, prazos da cadeia, ajustes de risco, delegação e resumo) e regras de leitura · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** o arquivo `politica-de-aprovacao.yaml` de cada campanha: onde fica, quem edita, conteúdo padrão (condições, áreas e comandos sensíveis, tipos, quórum, prazos da cadeia, ajustes de risco, delegação e resumo) e regras de leitura · **Componente:** Motor · **Atualizado:** 2026-10-18
 
-Documento de referência da [política de aprovação](politica.md), que é dona do comportamento e dos critérios de aceite. O sentido de cada seção nova está no documento dono dela: `cadeia` na [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) e na [supervisão da cadeia](../orquestracao/supervisao-da-cadeia.md), `risco` na [classificação de risco](../classes/classificacao-de-risco.md#ajustes-do-dono), `delegacao` na [delegação](delegacao.md) e `resumo` em [resumo e sugestões](resumo-e-sugestoes.md).
+Documento de referência da [política de aprovação](politica.md), que é dona do comportamento e dos critérios de aceite. O sentido de cada seção nova está no documento dono dela: `cadeia` na [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) e na [supervisão da cadeia](../orquestracao/supervisao-da-cadeia.md), `risco` na [classificação de risco](../classes/classificacao-de-risco.md#ajustes-do-senhor-da-guilda), `delegacao` na [delegação](delegacao.md) e `resumo` em [resumo e sugestões](resumo-e-sugestoes.md).
 
 ## Onde fica e quem edita
 
-- Fica em `.mestre/regras/politica-de-aprovacao.yaml`, no clone principal do workspace na Cidadela. É criado na [sessão zero](../sessao-zero/workspace.md) com o conteúdo padrão abaixo.
-- Editado só pelo Dono ([tabela de níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)), no painel ([administração](../painel/administracao.md)) ou direto no arquivo. Nenhum agente pode editá-lo: é regra fixa do Mestre.
-- O motor lê o arquivo a cada uso, só pelo caminho seguro (um link, um arquivo que não é regular ou com mais de 256 KiB não vale) e valida ao carregar. Arquivo inválido: continua valendo a última versão válida e o Dono recebe alerta com o erro. Cada pedido e cada decisão guardam a versão (hash) do arquivo que valia ([auditoria](fluxo.md#auditoria)).
+- Fica em `.mestre/regras/politica-de-aprovacao.yaml`, no clone principal da campanha na Cidadela. É criado na [sessão zero](../sessao-zero/workspace.md) com o conteúdo padrão abaixo.
+- Editado só pelo Senhor da Guilda ([tabela de níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)), no painel ([administração](../painel/administracao.md)) ou direto no arquivo. Nenhum agente pode editá-lo: é regra fixa do Mestre.
+- O motor lê o arquivo a cada uso, só pelo caminho seguro (um link, um arquivo que não é regular ou com mais de 256 KiB não vale) e valida ao carregar. Arquivo inválido: continua valendo a última versão válida e o Senhor da Guilda recebe alerta com o erro. Cada pedido e cada decisão guardam a versão (hash) do arquivo que valia ([auditoria](fluxo.md#auditoria)).
 
 ## Conteúdo padrão
 
@@ -68,7 +68,7 @@ cadeia:                        # níveis de agentes (ver cadeia-de-aprovacao.md)
   resumo_mesas: 30m            # resumo das decisões das mesas ao Grão-Mestre (ver supervisao-da-cadeia.md)
   alerta_fila: { abertos: 10, fator: 2 }   # fila que acumula: abertos, ou o mais antigo acima de fator × prazo
 
-risco:                         # ajustes do Dono à tabela de risco (ver classificacao-de-risco.md)
+risco:                         # ajustes do Senhor da Guilda à tabela de risco (ver classificacao-de-risco.md)
   ajustes: []                  # ex.: { comando: "make deploy-teste", risco: alto }
   nivel_minimo: { alto: administrador }
 
@@ -87,10 +87,10 @@ resumo:                        # resumo do que os agentes decidiram (ver resumo-
 ## Regras de leitura
 
 - `quorum.regras`: cada regra casa por `tipo` e/ou `mesa` (aceita `*`). Uma regra que casa com o pedido **obriga a perguntar** às pessoas, mesmo que as condições passem e mesmo com delegação. Se várias casam, vale a mais exigente.
-- `condicoes.linhas_ignoradas` e `areas_sensiveis.palavras_em_linhas_adicionadas` são lidos como a [política](politica.md#o-que-o-motor-lê-do-pr) descreve: glob malformado ou palavra vazia torna o arquivo inválido; uma lista vazia em `areas_sensiveis.permissoes_e_segredos` ou `mestre` também (apagaria a proteção: apague a chave para valer o padrão), e uma chave que o motor não conhece, em qualquer seção lida por ele (`cadeia`, `risco`, `tipos`), idem. Um workspace que tem arquivos gerados próprios acrescenta os globs em `linhas_ignoradas`; o que não está na lista conta.
+- `condicoes.linhas_ignoradas` e `areas_sensiveis.palavras_em_linhas_adicionadas` são lidos como a [política](politica.md#o-que-o-motor-lê-do-pr) descreve: glob malformado ou palavra vazia torna o arquivo inválido; uma lista vazia em `areas_sensiveis.permissoes_e_segredos` ou `mestre` também (apagaria a proteção: apague a chave para valer o padrão), e uma chave que o motor não conhece, em qualquer seção lida por ele (`cadeia`, `risco`, `tipos`), idem. Uma campanha que tem arquivos gerados próprios acrescenta os globs em `linhas_ignoradas`; o que não está na lista conta.
 - `exigir_usuarios` lista usuários do cadastro ([usuários e níveis](../telegram/usuarios-e-niveis.md)) cuja aprovação é obrigatória.
 - `sozinho` vale só para tipos de risco `medio`, o teto do Grão-Mestre; num tipo `alto`, `se_condicoes` torna o arquivo inválido: o `alto` só se abre ao Grão-Mestre por [delegação](delegacao.md).
-- Prazos (`expiracao`, `cadeia.*`, `delegacao.*`) são durações positivas (`30s`, `10m`, `2h`, `30d`); `regra_temporaria_max` vai até 7 dias e `delegacao.validade_padrao` até 30 dias e `delegacao.aviso_antes` menor que ela; `negacoes_para_pausar` vai de 1 a 10; `alerta_fila.abertos`, de 1 a 1000, e `alerta_fila.fator`, de 1 a 10. `cadeia.mesa_decide` lista os grupos de `medio` que o Mestre da mesa decide, os da [tabela de grupos](../orquestracao/cadeia-de-aprovacao.md#condições-da-mesa) (fonte única); o Dono acrescenta ou tira qualquer um, e `[]` deixa só o `baixo` com ele. Nome que não é um desses grupos (`alto`, `fixo`, um desconhecido) torna o arquivo inválido. Nenhuma chave muda o teto de cada nível (`baixo`, `medio`) nem as condições de cada grupo, que são do motor.
+- Prazos (`expiracao`, `cadeia.*`, `delegacao.*`) são durações positivas (`30s`, `10m`, `2h`, `30d`); `regra_temporaria_max` vai até 7 dias e `delegacao.validade_padrao` até 30 dias e `delegacao.aviso_antes` menor que ela; `negacoes_para_pausar` vai de 1 a 10; `alerta_fila.abertos`, de 1 a 1000, e `alerta_fila.fator`, de 1 a 10. `cadeia.mesa_decide` lista os grupos de `medio` que o Mestre da mesa decide, os da [tabela de grupos](../orquestracao/cadeia-de-aprovacao.md#condições-da-mesa) (fonte única); o Senhor da Guilda acrescenta ou tira qualquer um, e `[]` deixa só o `baixo` com ele. Nome que não é um desses grupos (`alto`, `fixo`, um desconhecido) torna o arquivo inválido. Nenhuma chave muda o teto de cada nível (`baixo`, `medio`) nem as condições de cada grupo, que são do motor.
 - `resumo`: `frequencia` é `diario`, `semanal` ou `desligado`; `horario` é `HH:MM`; `para` é uma lista não vazia de `dono`, `administradores` ou nomes de usuários; `amostra` vai de 0 a 50 e `sugerir_apos`, de 2 a 20; qualquer outro valor, ou chave desconhecida, torna o arquivo inválido.
-- Campos ausentes assumem o valor do conteúdo padrão. Um `tipo` desconhecido, um dos tipos de regra fixa (`ativacao_operador`, `entrada_na_guilda`, `promocao_cidadela`, `atualizacao_mestre`) ou um ajuste de risco inválido ([ajustes](../classes/classificacao-de-risco.md#ajustes-do-dono)) torna o arquivo inválido.
+- Campos ausentes assumem o valor do conteúdo padrão. Um `tipo` desconhecido, um dos tipos de regra fixa (`ativacao_operador`, `entrada_na_guilda`, `promocao_cidadela`, `atualizacao_mestre`) ou um ajuste de risco inválido ([ajustes](../classes/classificacao-de-risco.md#ajustes-do-senhor-da-guilda)) torna o arquivo inválido.
 - O comportamento de quórum e expiração está em [fluxo](fluxo.md); o do resumo, em [resumo e sugestões](resumo-e-sugestoes.md).

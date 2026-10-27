@@ -16,7 +16,7 @@ import (
 )
 
 // RiskAdjustments are the owner's adjustments of the risco section of the
-// approval policy file (docs/classes/classificacao-de-risco.md#ajustes-do-dono):
+// approval policy file (docs/classes/classificacao-de-risco.md#ajustes-do-senhor-da-guilda):
 // they hold before the default table, in the order of the file.
 type RiskAdjustments struct {
 	Items []RiskAdjustment
@@ -38,9 +38,9 @@ type RiskAdjustment struct {
 
 func (a RiskAdjustment) rule() string {
 	if a.Command != "" {
-		return fmt.Sprintf("ajuste %d do Dono: comando %q → %s", a.Index, a.Command, a.Risk)
+		return fmt.Sprintf("ajuste %d do Senhor da Guilda: comando %q → %s", a.Index, a.Command, a.Risk)
 	}
-	return fmt.Sprintf("ajuste %d do Dono: ferramenta %q → %s", a.Index, a.Tool, a.Risk)
+	return fmt.Sprintf("ajuste %d do Senhor da Guilda: ferramenta %q → %s", a.Index, a.Tool, a.Risk)
 }
 
 // DefaultMinLevel is nivel_minimo of the default content: alto needs an

@@ -496,7 +496,7 @@ func (c *Creation) Callback(ctx context.Context, code, state string, who users.U
 	}
 	if !strings.EqualFold(owner, conv.Owner.Login) {
 		// the key was never put in the vault: nothing to erase, and the App is not used
-		c.abort(bg, r, who.ID, fmt.Sprintf("o App foi criado na conta %q, que não é a do Dono; exclua-o naquela conta e peça outro link, abrindo-o com a conta certa do GitHub", conv.Owner.Login))
+		c.abort(bg, r, who.ID, fmt.Sprintf("o App foi criado na conta %q, que não é a do Senhor da Guilda; exclua-o naquela conta e peça outro link, abrindo-o com a conta certa do GitHub", conv.Owner.Login))
 		return "", ErrWrongOwner
 	}
 	if err := c.o.Vault.Put(bg, KeySecret(r.app), vault.TypeGitHubAppKey, []byte(conv.PEM), nil); err != nil {

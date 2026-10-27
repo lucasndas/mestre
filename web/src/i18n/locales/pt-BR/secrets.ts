@@ -1,7 +1,7 @@
 export default {
   title: "Segredos",
   intro:
-    "O que está guardado no cofre: nome, tipo, impressão curta, datas e metadados. Nenhum valor aparece de novo, nem para o Dono: só dá para substituir ou apagar, com o seu PIN.",
+    "O que está guardado no cofre: nome, tipo, impressão curta, datas e metadados. Nenhum valor aparece de novo, nem para o Senhor da Guilda: só dá para substituir ou apagar, com o seu PIN.",
   loading: "Carregando os segredos…",
   empty: "O cofre ainda não tem segredos.",
   types: {

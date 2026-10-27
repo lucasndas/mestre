@@ -151,9 +151,9 @@ func (p *Panel) userError(w http.ResponseWriter, err error) bool {
 	case errors.Is(err, users.ErrNoUser):
 		WriteError(w, Err(CodeNotFound, "usuário não encontrado", nil))
 	case errors.Is(err, users.ErrOwnerExists):
-		WriteError(w, Err(CodeOwnerExists, "só há um Dono; o posto passa por transferência", nil))
+		WriteError(w, Err(CodeOwnerExists, "só há um Senhor da Guilda; o posto passa por transferência", nil))
 	case errors.Is(err, users.ErrSelf):
-		WriteError(w, Err(CodeSelfAction, "o Dono não pode suspender nem remover a si mesmo: transfira o posto antes", nil))
+		WriteError(w, Err(CodeSelfAction, "o Senhor da Guilda não pode suspender nem remover a si mesmo: transfira o posto antes", nil))
 	case errors.Is(err, users.ErrBadLevel):
 		WriteError(w, Err(CodeBadLevel, "nível inválido", nil))
 	case errors.Is(err, users.ErrTransferBad):
@@ -394,11 +394,11 @@ func (p *Panel) githubError(w http.ResponseWriter, err error) {
 	case errors.Is(err, github.ErrDeviceExpired):
 		WriteError(w, Err(CodeGitHubExpired, "o código venceu; comece de novo", nil))
 	case errors.Is(err, github.ErrNoGitHubLogin):
-		WriteError(w, Err(CodeGitHubNoLogin, "peça ao Dono para cadastrar o seu login do GitHub", nil))
+		WriteError(w, Err(CodeGitHubNoLogin, "peça ao Senhor da Guilda para cadastrar o seu login do GitHub", nil))
 	case errors.Is(err, github.ErrNoDeviceFlow):
 		WriteError(w, Err(CodeGitHubNoFlow, "nenhuma conexão foi começada; comece de novo", nil))
 	case errors.Is(err, github.ErrNoCredential):
-		WriteError(w, Err(CodeGitHubNoRight, "o seu nível ou os seus workspaces não permitem a credencial pessoal", nil))
+		WriteError(w, Err(CodeGitHubNoRight, "o seu nível ou as suas campanhas não permitem a credencial pessoal", nil))
 	case errors.Is(err, github.ErrDeviceFlowOff):
 		WriteError(w, Err(CodeGitHubFlowOff, "o App Grão-Mestre está com o device flow desligado", nil))
 	case errors.Is(err, github.ErrAppNotReady), errors.Is(err, github.ErrNoClientSecret):

@@ -1,6 +1,6 @@
 # Primeiro acesso
 
-> **Assunto:** passo a passo para confiar na CA do Mestre, criar o Dono, criar os GitHub Apps fixos pelo link e configurar os perfis de conta · **Componente:** Painel · **Atualizado:** 2026-10-13
+> **Assunto:** passo a passo para confiar na CA do Mestre, criar o Senhor da Guilda, criar os GitHub Apps fixos pelo link e configurar os perfis de conta · **Componente:** Painel · **Atualizado:** 2026-10-13
 
 Guia para quem usa, depois de [instalar a Cidadela](instalar.md) (no Ubuntu ou no Windows). Tenha à mão o que o instalador mostrou: endereço do painel, impressão digital da CA e código de configuração. Regras do login e do assistente: [login](../painel/login.md).
 
@@ -33,14 +33,14 @@ Depois, feche e abra o navegador. O painel deve abrir com o cadeado, sem aviso.
 
 O motor e o Guardião de cada máquina confiam na CA sozinhos, na entrada na Guilda ([Guilda](../guilda/guilda.md#credenciais)). O navegador de cada máquina, inclusive a da Cidadela, ainda precisa deste passo, como qualquer aparelho.
 
-## 2. Criar o Dono
+## 2. Criar o Senhor da Guilda
 
-1. Abra o endereço do painel. Como ainda não existe nenhum usuário, aparece o **assistente do Dono**.
+1. Abra o endereço do painel. Como ainda não existe nenhum usuário, aparece o **assistente do Senhor da Guilda**.
 2. Informe o **código de configuração** mostrado pelo instalador.
 3. Preencha nome, nome de login, senha (duas vezes) e **PIN pessoal** (duas vezes). O PIN é pedido de novo em toda ação sensível; regras em [usuários e níveis](../telegram/usuarios-e-niveis.md#pin-pessoal).
-4. Pronto: você entra como **Dono**, e o painel mostra os próximos passos (outras máquinas da Guilda, GitHub, Telegram).
+4. Pronto: você entra como **Senhor da Guilda**, e o painel mostra os próximos passos (outras máquinas da Guilda, GitHub, Telegram).
 
-Perdeu o código antes de usar? Há um comando local de recuperação, só para root ou administrador na máquina da Cidadela ([login](../painel/login.md#assistente-do-dono-primeira-vez)). Depois que o Dono existe, o assistente não abre mais.
+Perdeu o código antes de usar? Há um comando local de recuperação, só para root ou administrador na máquina da Cidadela ([login](../painel/login.md#assistente-do-senhor-da-guilda-primeira-vez)). Depois que o Senhor da Guilda existe, o assistente não abre mais.
 
 Outras pessoas entram com um código de primeiro acesso que você gera em **Usuários** ([login](../painel/login.md#primeiro-acesso-de-cada-usuário)).
 
@@ -52,7 +52,7 @@ O Mestre age no GitHub com dois Apps fixos, **"Grão-Mestre"** e **"Mestre"**, c
 2. Clique em **Criar no GitHub**. O seu navegador abre o GitHub (entre na sua conta pessoal, se ele pedir) com o App já preenchido. Clique em **Create GitHub App**.
 3. O GitHub volta para o painel sozinho. Na mesma página, abra o link **Ligar o device flow**, marque **Enable Device Flow** na configuração do App e salve.
 4. O painel passa para o App **"Mestre"**: clique em **Criar no GitHub** e em **Create GitHub App** de novo.
-5. Em **Apps do GitHub**, os dois aparecem criados. Eles são instalados nos repositórios quando você cria cada workspace: o painel, ou o Telegram, manda o link de instalação, e você só escolhe o repositório e clica em **Install** ([sessão zero do workspace](../sessao-zero/workspace.md)). Logo depois da primeira instalação do "Grão-Mestre", o Mestre cria sozinho um repositório privado `mestre-guilda-…` na sua conta, a trava que garante uma só Cidadela; não apague ([repositório da trava](../github/identidades-e-apps.md#repositório-da-trava)). Se o GitHub não deixar, o painel manda o link para você criá-lo com um clique.
+5. Em **Apps do GitHub**, os dois aparecem criados. Eles são instalados nos repositórios quando você cria cada campanha: o painel, ou o Telegram, manda o link de instalação, e você só escolhe o repositório e clica em **Install** ([sessão zero da campanha](../sessao-zero/workspace.md)). Logo depois da primeira instalação do "Grão-Mestre", o Mestre cria sozinho um repositório privado `mestre-guilda-…` na sua conta, a trava que garante uma só Cidadela; não apague ([repositório da trava](../github/identidades-e-apps.md#repositório-da-trava)). Se o GitHub não deixar, o painel manda o link para você criá-lo com um clique.
 6. Opcional: em **Usuários**, **Conectar GitHub** mostra um código e o endereço `https://github.com/login/device`. Autorizar ali dá ao Mestre a sua credencial pessoal, usada para incluir repositórios nas instalações sem link e, se você delegar, para aprovar em seu nome ([aprovação no GitHub](../github/aprovacao-no-github.md)).
 
 Faça isso num aparelho na rede local e que já confia na CA (passo 1): os retornos do GitHub voltam para o painel. Os Apps de classe criados depois seguem o mesmo caminho: o Grão-Mestre manda o link pelo Telegram e pelo painel, e você clica em **Criar** e **Instalar**.
@@ -71,4 +71,4 @@ Repita para cada máquina nova, depois de [aceitá-la na Guilda](entrar-na-guild
 ## Depois
 
 - [Parear o Telegram](parear-telegram.md).
-- Criar o primeiro workspace: **Workspaces → Criar** ([sessão zero do workspace](../sessao-zero/workspace.md)).
+- Criar a primeira campanha: **Campanhas → Criar** ([sessão zero da campanha](../sessao-zero/workspace.md)).

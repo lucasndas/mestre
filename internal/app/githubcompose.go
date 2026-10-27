@@ -351,7 +351,7 @@ func (a appCreator) Begin(ctx context.Context, app, requestedBy string) (ghcli.A
 	if err != nil {
 		return ghcli.AppLink{}, err
 	}
-	a.tell(ctx, fmt.Sprintf("O Grão-Mestre pediu o App %s. Abra o link no seu navegador, entre no painel como Dono e clique em \"Criar no GitHub\" (vale até %s): %s",
+	a.tell(ctx, fmt.Sprintf("O Grão-Mestre pediu o App %s. Abra o link no seu navegador, entre no painel como Senhor da Guilda e clique em \"Criar no GitHub\" (vale até %s): %s",
 		link.App, link.ExpiresAt.Format("02/01 15:04"), link.URL))
 	return ghcli.AppLink{ExpiresAt: link.ExpiresAt, ID: link.App}, nil
 }

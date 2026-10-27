@@ -80,7 +80,7 @@ func (c *GuildChannel) Bind(bot *Bot) {
 // Commands is /guilda, for Options.Commands. It only reads, so it is answered
 // while the Mestre is locked.
 func (c *GuildChannel) Commands() []Command {
-	return []Command{{Name: "guilda", Description: "máquinas da Guilda; o Dono exclui ou desfaz a exclusão de uma Torre, com o PIN", Query: true, Capability: users.Status, Run: c.list}}
+	return []Command{{Name: "guilda", Description: "máquinas da Guilda; o Senhor da Guilda exclui ou desfaz a exclusão de uma Torre, com o PIN", Query: true, Capability: users.Status, Run: c.list}}
 }
 
 // Actions are the buttons, for Options.Actions.
@@ -150,7 +150,7 @@ func (c *GuildChannel) pendingLines(ps []GuildPending) []string {
 	if len(out) == 0 {
 		return nil
 	}
-	return append([]string{"", "Esperam o Dono (a resposta é no pedido de aprovação):"}, out...)
+	return append([]string{"", "Esperam o Senhor da Guilda (a resposta é no pedido de aprovação):"}, out...)
 }
 
 // plainGuildText drops the marks the Telegram turns into links, bold or code,

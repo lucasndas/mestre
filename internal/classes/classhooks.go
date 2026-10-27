@@ -220,7 +220,7 @@ func parseHooks(data []byte, scope ClassScope, files Files) (Hooks, []Problem, [
 				}
 				referenced[script] = true
 				if scope == ClassTable {
-					bad(where, "o script %q não pode existir numa classe da mesa: só linhas de comando em `run`; scripts ficam para classes globais e do workspace, que passam por aprovação", script)
+					bad(where, "o script %q não pode existir numa classe da mesa: só linhas de comando em `run`; scripts ficam para classes globais e da campanha, que passam por aprovação", script)
 				} else if _, found := files.Get(script); !found {
 					bad(where, "o script %q não está no pacote", script)
 				}
@@ -231,7 +231,7 @@ func parseHooks(data []byte, scope ClassScope, files Files) (Hooks, []Problem, [
 	if scope == ClassTable {
 		for _, f := range files.Under(HooksDir) {
 			if f.Path != HooksFile && !referenced[f.Path] {
-				bad(f.Path, "classes da mesa não podem ter scripts no pacote: só linhas de comando em `run`; scripts ficam para classes globais e do workspace, que passam por aprovação")
+				bad(f.Path, "classes da mesa não podem ter scripts no pacote: só linhas de comando em `run`; scripts ficam para classes globais e da campanha, que passam por aprovação")
 			}
 		}
 	}

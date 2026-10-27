@@ -33,7 +33,7 @@ func (c *DecreeChannel) DelegationEnding(ctx context.Context, d decrees.Decree) 
 	}
 	n := strconv.FormatInt(d.Number, 10)
 	_, err = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Origin: "motor", Workspace: d.Workspace, Mesa: d.Mesa,
-		Text:    fmt.Sprintf("A delegação %d (%s) acaba em %s. Renovar vale pela validade padrão do workspace (até 30 dias), com o seu PIN.", d.Number, d.Summary(), c.Svc.Moment(ctx, d.Until)),
+		Text:    fmt.Sprintf("A delegação %d (%s) acaba em %s. Renovar vale pela validade padrão da campanha (até 30 dias), com o seu PIN.", d.Number, d.Summary(), c.Svc.Moment(ctx, d.Until)),
 		Buttons: [][]Button{{{Text: "Renovar", Action: DelegationRenewAction, Arg: n}, {Text: "Deixar vencer", Action: DelegationLapseAction, Arg: n}}}})
 	if err != nil {
 		c.bot.log.Warn("telegram: the reminder of a delegation was not queued", "decree", d.Number, "err", err)
@@ -65,7 +65,7 @@ func (c *DecreeChannel) lapse(_ context.Context, k Click) (string, string, error
 // one confirmation by button, no PIN: it only restricts.
 func (c *DecreeChannel) revokeAllAsk(ctx context.Context, call Call) (string, error) {
 	_, err := c.bot.Send(ctx, Out{ChatID: call.ChatID, UserID: call.User.ID, Origin: "motor",
-		Text:    "Revogar todas as delegações (de decisão, no GitHub, do Operador e subdelegações) e todas as regras temporárias de mesa, em todos os workspaces? Não para os agentes: para isso há o /travar.",
+		Text:    "Revogar todas as delegações (de decisão, no GitHub, do Operador e subdelegações) e todas as regras temporárias de mesa, em todas as campanhas? Não para os agentes: para isso há o /travar.",
 		Buttons: [][]Button{{{Text: "Revogar todas as delegações", Action: RevokeAllAction, Capability: users.DelegateHigh}}}})
 	return "", err
 }
@@ -76,7 +76,7 @@ func (c *DecreeChannel) revokeAll(ctx context.Context, k Click) (string, string,
 	rep, err := c.Svc.RevokeAllDelegations(ctx, k.User.ID)
 	switch {
 	case errors.Is(err, decrees.ErrNotAllowed):
-		return "", "", errors.New("só o Dono revoga todas as delegações")
+		return "", "", errors.New("só o Senhor da Guilda revoga todas as delegações")
 	case err != nil:
 		return "", "", err
 	}

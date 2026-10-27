@@ -2,9 +2,9 @@
 
 > **Assunto:** passo a passo para criar o bot do Telegram, ligá-lo ao Mestre e parear cada usuário por código · **Componente:** Motor · **Atualizado:** 2026-10-13
 
-Guia para quem usa. Há duas partes: **ligar o bot** (uma vez, feito pelo Dono) e **parear cada usuário** (inclusive o próprio Dono). As regras de níveis, códigos e PIN estão em [usuários e níveis](../telegram/usuarios-e-niveis.md); o funcionamento do bot, em [bot](../telegram/bot.md).
+Guia para quem usa. Há duas partes: **ligar o bot** (uma vez, feito pelo Senhor da Guilda) e **parear cada usuário** (inclusive o próprio Senhor da Guilda). As regras de níveis, códigos e PIN estão em [usuários e níveis](../telegram/usuarios-e-niveis.md); o funcionamento do bot, em [bot](../telegram/bot.md).
 
-Antes: tenha feito o [primeiro acesso](primeiro-acesso.md) (Dono criado, com PIN) e tenha o Telegram instalado no celular.
+Antes: tenha feito o [primeiro acesso](primeiro-acesso.md) (Senhor da Guilda criado, com PIN) e tenha o Telegram instalado no celular.
 
 ## Parte A: criar e ligar o bot (uma vez)
 
@@ -19,31 +19,31 @@ Antes: tenha feito o [primeiro acesso](primeiro-acesso.md) (Dono criado, com PIN
 
 ## Parte B: parear um usuário
 
-### O próprio Dono
+### O próprio Senhor da Guilda
 
 1. No painel, abra **Usuários**, escolha o seu usuário e clique em **Parear Telegram**.
 2. O painel mostra um **código** e um **link**. O código é de uso único e vence em pouco tempo.
 3. No celular, toque no link: ele abre a conversa com o bot. Toque em **Iniciar**. Se preferir, abra a conversa privada com o bot e envie `/start <código>` ou só o código.
-4. O bot responde com o seu nível, os workspaces e uma mensagem de boas-vindas.
+4. O bot responde com o seu nível, as campanhas e uma mensagem de boas-vindas.
 5. Teste: envie `/status`. O bot responde com o estado da Cidadela, das máquinas e dos agentes.
 
 ### Outro usuário
 
-1. O Dono cadastra a pessoa no painel: **Usuários → Novo**, com nome, nível e workspaces ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)).
-2. O Dono clica em **Parear Telegram** no cadastro dela.
-3. O Dono passa o link ou o código à pessoa por um canal de confiança (pessoalmente ou em mensagem direta para ela). Nunca em grupo.
+1. O Senhor da Guilda cadastra a pessoa no painel: **Usuários → Novo**, com nome, nível e campanhas ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)).
+2. O Senhor da Guilda clica em **Parear Telegram** no cadastro dela.
+3. O Senhor da Guilda passa o link ou o código à pessoa por um canal de confiança (pessoalmente ou em mensagem direta para ela). Nunca em grupo.
 4. A pessoa toca no link, ou envia o código ao bot **em chat privado**, antes de vencer.
-5. O bot confirma para ela, e o Dono recebe um aviso de que o pareamento foi feito.
-6. Para usar o painel, a pessoa faz o primeiro acesso com o código que o Dono gera em **Usuários** e define senha e PIN ([login](../painel/login.md#primeiro-acesso-de-cada-usuário)). Sem PIN, ela não conclui ações que pedem PIN.
+5. O bot confirma para ela, e o Senhor da Guilda recebe um aviso de que o pareamento foi feito.
+6. Para usar o painel, a pessoa faz o primeiro acesso com o código que o Senhor da Guilda gera em **Usuários** e define senha e PIN ([login](../painel/login.md#primeiro-acesso-de-cada-usuário)). Sem PIN, ela não conclui ações que pedem PIN.
 
 ## Se algo der errado
 
 | O que acontece | O que fazer |
 |---|---|
-| O bot responde "código inválido ou expirado" | O código venceu ou já foi usado. O Dono gera outro no painel. |
+| O bot responde "código inválido ou expirado" | O código venceu ou já foi usado. O Senhor da Guilda gera outro no painel. |
 | O bot não responde mais nada às tentativas | Muitas tentativas erradas: o bot fica em silêncio por um tempo ([regras](../telegram/usuarios-e-niveis.md#pareamento-por-código)). Espere e use um código novo. |
 | O código foi enviado num grupo | Mensagens em grupo são ignoradas. Envie de novo na conversa privada com o bot. |
-| A pessoa trocou de conta do Telegram | O Dono limpa o ID do Telegram no cadastro dela e gera um código novo. |
+| A pessoa trocou de conta do Telegram | O Senhor da Guilda limpa o ID do Telegram no cadastro dela e gera um código novo. |
 | O painel não mostra o bot como conectado | Confira se o token foi colado inteiro e se a Cidadela tem acesso à internet. Os alertas aparecem no painel de saúde ([checklist](../plataforma/checklist.md)). |
 | Um Observador escreve e nada acontece | É o esperado: Observador consulta e recebe alertas, mas não conversa com o Grão-Mestre. |
 
@@ -57,4 +57,4 @@ Antes: tenha feito o [primeiro acesso](primeiro-acesso.md) (Dono criado, com PIN
 
 - O Telegram não tem criptografia ponta a ponta nas conversas com bots. Nunca envie senhas, tokens ou chaves por lá; o Mestre também não envia.
 - Remover ou suspender alguém é feito no painel, em **Usuários** ([regras](../telegram/usuarios-e-niveis.md#suspensão-e-remoção)).
-- Como as mensagens escolhem o workspace (`/workspace`, `#nome`): [roteamento](../telegram/roteamento.md).
+- Como as mensagens escolhem a campanha (`/workspace`, `#nome`): [roteamento](../telegram/roteamento.md).

@@ -10,8 +10,9 @@ export default {
     expired: "A credencial da conta {{login}} venceu. Conecte de novo.",
   },
   registered: "Login do GitHub cadastrado para você: {{login}}. Só essa conta pode autorizar.",
-  noLogin: "Nenhum login do GitHub foi cadastrado para você. Peça ao Dono para cadastrá-lo.",
-  mayNot: "O seu nível ou os seus workspaces não permitem uma credencial pessoal.",
+  noLogin:
+    "Nenhum login do GitHub foi cadastrado para você. Peça ao Senhor da Guilda para cadastrá-lo.",
+  mayNot: "O seu nível ou as suas campanhas não permitem uma credencial pessoal.",
   connect: "Conectar GitHub",
   reconnect: "Conectar de novo",
   steps: {

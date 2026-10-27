@@ -29,7 +29,7 @@ func TestTheEffectiveRulesTheCitadelBuildsCutTheSecretsOfTheDefaultCeiling(t *te
 			Tool: &providers.Tool{NativeName: "Read", Kind: providers.KindRead, Paths: []string{filepath.Join(wt, filepath.FromSlash(rel))}}})
 	}
 	for _, secret := range []string{"config/service-account-prod.json", ".env.local", ".env.production", ".env.development", ".env.example"} {
-		if d := read(secret); d.Verdict != classes.Deny || d.Layer != classes.LayerCeiling || !strings.Contains(d.Reason, "teto do workspace") {
+		if d := read(secret); d.Verdict != classes.Deny || d.Layer != classes.LayerCeiling || !strings.Contains(d.Reason, "teto da campanha") {
 			t.Errorf("reading %s = %s by %s (%q); want a denial of the ceiling", secret, d.Verdict, d.Layer, d.Reason)
 		}
 	}

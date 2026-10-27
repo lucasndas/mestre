@@ -2,7 +2,7 @@
 
 > **Assunto:** classe sugerida QA: prova cada critério da missão e procura os testes que faltam · **Componente:** Motor · **Atualizado:** 2026-10-19
 
-Classe do pacote [sugerido](../classes-sugeridas.md): vem desligada, e um Administrador a ativa como classe do workspace. Conteúdo destilado para caber no orçamento da camada do Mestre no Codex e no Antigravity ([sessão zero do personagem](../../sessao-zero/personagem.md)).
+Classe do pacote [sugerido](../classes-sugeridas.md): vem desligada, e um Administrador a ativa como classe da campanha. Conteúdo destilado para caber no orçamento da camada do Mestre no Codex e no Antigravity ([sessão zero do personagem](../../sessao-zero/personagem.md)).
 
 ## Papel
 

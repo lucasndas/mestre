@@ -68,7 +68,7 @@ func (c *DigestChannel) Send(ctx context.Context, m digest.Message) error {
 func (c *DigestChannel) say(err error) error {
 	switch {
 	case errors.Is(err, digest.ErrNotOwner):
-		return errors.New("só o Dono responde a uma sugestão")
+		return errors.New("só o Senhor da Guilda responde a uma sugestão")
 	case errors.Is(err, digest.ErrNotOpen):
 		return errors.New("essa sugestão já foi respondida ou saiu")
 	}

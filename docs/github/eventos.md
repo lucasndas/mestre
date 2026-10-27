@@ -10,18 +10,18 @@ Saber o que mudou no GitHub (comentário, revisão, CI, mudança de issue ou PR)
 
 ### Quem consulta
 
-O motor da Cidadela, um laço por workspace, com o token de instalação do App "Grão-Mestre" ([identidades](identidades-e-apps.md)). Nenhum agente consulta a API. Só a Cidadela consulta, com o aluguel da trava válido ([aluguel](../guilda/trava-no-github.md#aluguel)); com o [GitHub fora](../guilda/trava-no-github.md#github-fora), os laços param e retomam pelos cursores; depois de uma troca de Cidadela, a nova reconcilia pelos marcadores de operação ([regras da troca](../guilda/cidadela-e-torres.md)) e retoma os laços pelo estado do banco replicado (cursores e ETags; [replicação](../guilda/replicacao.md)).
+O motor da Cidadela, um laço por campanha, com o token de instalação do App "Grão-Mestre" ([identidades](identidades-e-apps.md)). Nenhum agente consulta a API. Só a Cidadela consulta, com o aluguel da trava válido ([aluguel](../guilda/trava-no-github.md#aluguel)); com o [GitHub fora](../guilda/trava-no-github.md#github-fora), os laços param e retomam pelos cursores; depois de uma troca de Cidadela, a nova reconcilia pelos marcadores de operação ([regras da troca](../guilda/cidadela-e-torres.md)) e retoma os laços pelo estado do banco replicado (cursores e ETags; [replicação](../guilda/replicacao.md)).
 
-### Intervalo adaptativo (padrão, configurável por workspace)
+### Intervalo adaptativo (padrão, configurável por campanha)
 
-| Situação do workspace | Intervalo |
+| Situação da campanha | Intervalo |
 |---|---|
 | **Ativo:** PR de mesa com CI em andamento, ou mudança vista nos últimos 5 minutos, ou ação do motor no GitHub (envio, merge) nos últimos 5 minutos | 30 s |
 | **Atento:** há mesa aberta ou PR de mesa aberto, sem nada do item anterior | 2 min |
 | **Parado:** nenhuma mesa aberta | 5 min |
 
-- Qualquer mudança vista leva o workspace para "ativo" na hora.
-- Cada intervalo tem variação aleatória de ±10% para os workspaces não consultarem todos juntos.
+- Qualquer mudança vista leva a campanha para "ativo" na hora.
+- Cada intervalo tem variação aleatória de ±10% para as campanhas não consultarem todos juntos.
 - Todo o tempo vem do relógio injetável ([dublês](../qualidade/dubles.md)).
 
 ### O que é consultado
@@ -45,7 +45,7 @@ O motor da Cidadela, um laço por workspace, com o token de instalação do App 
 - Resposta `304` (nada mudou) não gasta a cota principal, desde que a requisição vá com o cabeçalho `Authorization`.
 - Resposta `200`: o motor compara cada item com o cursor da URL (o maior `updated_at` já processado) e só trata os mais novos.
 - `ETag` e cursor ficam no banco (tabela `github_poll_state`, [persistência](../arquitetura/persistencia.md)), para sobreviver a reinícios.
-- Num workspace novo, o cursor começa no momento da criação: o histórico antigo não vira evento.
+- Numa campanha nova, o cursor começa no momento da criação: o histórico antigo não vira evento.
 
 ### Deduplicação
 
@@ -65,7 +65,7 @@ Cada mudança recebe uma chave única, guardada na tabela `github_seen_events` (
 
 ### Entrega na caixa de entrada
 
-- Cada evento é normalizado: tipo (`comentario`, `revisao`, `ci`, `issue_alterada`, `pr_alterado`, `pr_mergeado`, `pr_fechado`), workspace, mesa, autor, link e um resumo curto.
+- Cada evento é normalizado: tipo (`comentario`, `revisao`, `ci`, `issue_alterada`, `pr_alterado`, `pr_mergeado`, `pr_fechado`), campanha, mesa, autor, link e um resumo curto.
 - A mesa é descoberta pelas regras de [ações por nível](acoes-por-nivel.md). Sem mesa, o evento vai marcado "sem mesa".
 - Os eventos do mesmo ciclo e da mesma mesa viram **uma única mensagem** na caixa de entrada do Grão-Mestre, para não gastar um turno por evento.
 - Prioridade e entrega: [esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md).
@@ -74,30 +74,30 @@ Cada mudança recebe uma chave única, guardada na tabela `github_seen_events` (
 
 ### Orçamento de cota
 
-Cada ciclo "ativo" custa 3 listas + `pulls?state=open` + 3 chamadas por PR de mesa (revisões, `check-runs`, `status`). Com 5 PRs, o pior caso (nenhum `304`) é (4 + 3 × 5) × 120 = 2.280 requisições por hora **por workspace**. A cota de 5.000 por hora é da **instalação** do App "Grão-Mestre", dividida entre todos os workspaces da conta e a trava (120 por hora, [trava](../guilda/trava-no-github.md)): dois workspaces assim já somam 4.680, e três passam do limite. Por isso, ao bater o limite primário (abaixo), o laço para em todos os workspaces.
+Cada ciclo "ativo" custa 3 listas + `pulls?state=open` + 3 chamadas por PR de mesa (revisões, `check-runs`, `status`). Com 5 PRs, o pior caso (nenhum `304`) é (4 + 3 × 5) × 120 = 2.280 requisições por hora **por campanha**. A cota de 5.000 por hora é da **instalação** do App "Grão-Mestre", dividida entre todas as campanhas da conta e a trava (120 por hora, [trava](../guilda/trava-no-github.md)): duas campanhas assim já somam 4.680, e três passam do limite. Por isso, ao bater o limite primário (abaixo), o laço para em todas as campanhas.
 
 ## Regras e erros
 
 - Erro 403 ou 429: o motor respeita `retry-after` ou `x-ratelimit-reset` e só volta depois disso.
-- Cota restante abaixo de 10%: o workspace fica em "parado" até a cota renovar, e o [checklist](../plataforma/checklist.md) (desde o M7) registra o alerta. `GET /rate_limit` pode ser usado, porque não gasta cota.
+- Cota restante abaixo de 10%: a campanha fica em "parado" até a cota renovar, e o [checklist](../plataforma/checklist.md) (desde o M7) registra o alerta. `GET /rate_limit` pode ser usado, porque não gasta cota.
 - **Escrita também espera.** Com a cota nessa faixa, as ações que mudam dados (comentário, issue, review, merge) não saem: ficam na fila de saída, cada uma com o mesmo uuid e o [marcador de operação](acoes-por-nivel.md#marcador-de-operação), e saem uma vez só quando a cota renova, como no [GitHub fora](../guilda/trava-no-github.md#github-fora). Só segurar a leitura deixaria o motor gastando a cota que sobra em escrita.
-- No máximo 4 requisições simultâneas por workspace, abaixo dos limites secundários do GitHub. Para esses limites, o motor conta toda requisição, inclusive as que voltam `304` (hipótese conservadora; nada depende de medir isso).
+- No máximo 4 requisições simultâneas por campanha, abaixo dos limites secundários do GitHub. Para esses limites, o motor conta toda requisição, inclusive as que voltam `304` (hipótese conservadora; nada depende de medir isso).
 - GitHub fora do ar ou erro de rede: o laço tenta de novo no próximo ciclo, com backoff até o intervalo "parado". Nada se perde, porque o cursor só avança depois que o evento é gravado.
-- **Limite batido (a cota chegou a zero, `403` ou `429` por limite primário):** o motor para os laços da instalação até a renovação e avisa o Dono. Reduzir também o número de mesas em `working` ao mesmo tempo é **pendente**: o campo, a tela, o valor inicial e a espera da mesa nova ainda não têm documento dono em `orquestracao/`. Limite **secundário** (abuso, `retry-after`): a escrita falha com o motivo e nada que muda dados é repetido sozinho ([ações por nível](acoes-por-nivel.md#regras-e-erros)).
+- **Limite batido (a cota chegou a zero, `403` ou `429` por limite primário):** o motor para os laços da instalação até a renovação e avisa o Senhor da Guilda. Reduzir também o número de mesas em `working` ao mesmo tempo é **pendente**: o campo, a tela, o valor inicial e a espera da mesa nova ainda não têm documento dono em `orquestracao/`. Limite **secundário** (abuso, `retry-after`): a escrita falha com o motivo e nada que muda dados é repetido sozinho ([ações por nível](acoes-por-nivel.md#regras-e-erros)).
 - Consultas só leem; nenhuma consulta muda dados no GitHub.
 
 ## Critérios de aceite
 
 - **CA-GH-EV-01** · *rápida* — **Dado** um `ETag` guardado para a lista de comentários, **quando** o motor consulta de novo, **então** a requisição leva `If-None-Match` com esse valor, e uma resposta `304` não gera evento.
-- **CA-GH-EV-02** · *rápida* — **Dado** um workspace "ativo" sem mudanças, **quando** o relógio falso avança 5 minutos, **então** o intervalo passa a 2 minutos; e uma mudança vista volta o intervalo a 30 s.
+- **CA-GH-EV-02** · *rápida* — **Dado** uma campanha "ativo" sem mudanças, **quando** o relógio falso avança 5 minutos, **então** o intervalo passa a 2 minutos; e uma mudança vista volta o intervalo a 30 s.
 - **CA-GH-EV-03** · *rápida* — **Dado** um comentário já processado, **quando** a Cidadela reinicia e a primeira consulta devolve `200` com o mesmo comentário, **então** nenhum evento novo é criado.
 - **CA-GH-EV-04** · *rápida* — **Dado** um comentário criado pelo próprio motor, **quando** ele aparece na consulta, **então** não vira evento.
 - **CA-GH-EV-05** · *rápida* — **Dado** uma revisão e o fim do CI do PR da mesa A no mesmo ciclo, **quando** o motor entrega, **então** a caixa de entrada do Grão-Mestre recebe uma única mensagem citando a mesa A e os dois eventos.
-- **CA-GH-EV-06** · *rápida* — **Dado** uma resposta 429 com `retry-after: 60`, **quando** o motor processa, **então** a próxima consulta daquele workspace só acontece após 60 s no relógio falso.
+- **CA-GH-EV-06** · *rápida* — **Dado** uma resposta 429 com `retry-after: 60`, **quando** o motor processa, **então** a próxima consulta daquela campanha só acontece após 60 s no relógio falso.
 - **CA-GH-EV-07** · *completa* — **Dado** o GitHub falso com um PR de mesa aberto e CI em andamento, **quando** o CI termina com falha, **então** em até um ciclo o Grão-Mestre recebe o evento `ci` com o link do check.
 - **CA-GH-EV-08** · *rápida* — **Dado** um evento `pr_mergeado` cujo `merge_commit_sha` não é alcançável da base no espelho, **quando** o motor o processa, **então** a mesa não é marcada como mesclada e o Grão-Mestre recebe o aviso; **dado** o commit alcançável, **então** a mesa é marcada.
-- **CA-GH-EV-09** · *rápida* — **Dado** o GitHub falso com a cota em zero e um comentário pedido nesse momento, **quando** o motor processa, **então** os laços param, o Dono é avisado, o comentário espera na fila de saída com o uuid e, renovada a cota (relógio falso), sai uma vez só.
-- **CA-GH-EV-10** · *rápida* — **Dado** a cota restante em 9%, **quando** o motor processa, **então** o workspace passa a "parado", uma ação que muda dados fica na fila de saída e a leitura continua no intervalo "parado"; **dado** um `403` com `retry-after` de limite secundário, **então** a escrita sai com falha e o motivo e não é repetida.
+- **CA-GH-EV-09** · *rápida* — **Dado** o GitHub falso com a cota em zero e um comentário pedido nesse momento, **quando** o motor processa, **então** os laços param, o Senhor da Guilda é avisado, o comentário espera na fila de saída com o uuid e, renovada a cota (relógio falso), sai uma vez só.
+- **CA-GH-EV-10** · *rápida* — **Dado** a cota restante em 9%, **quando** o motor processa, **então** a campanha passa a "parado", uma ação que muda dados fica na fila de saída e a leitura continua no intervalo "parado"; **dado** um `403` com `retry-after` de limite secundário, **então** a escrita sai com falha e o motivo e não é repetida.
 - **CA-GH-EV-11** · *rápida* — **Dado** um `pr_mergeado` com o `merge_commit_sha` ainda ausente do espelho, **quando** o espelho busca e passa a alcançá-lo (relógio falso), **então** a mesa é marcada na busca seguinte sem novo aviso; **dado** que ele nunca chega, **quando** passa 1 h (relógio falso), **então** o motor registra o alerta e não checa mais.
 
 ## Depende de

@@ -59,7 +59,7 @@ func (f *fakeWorkspaces) Pause(_ context.Context, slug string) error {
 }
 
 func (f *fakeWorkspaces) Resume(context.Context, string) error {
-	return &panel.Refusal{Reason: "bad_state", Message: "o workspace não está pausado"}
+	return &panel.Refusal{Reason: "bad_state", Message: "a campanha não está pausada"}
 }
 
 func (f *fakeWorkspaces) AnswerVersioning(_ context.Context, _ users.User, _, answer string) error {

@@ -2,7 +2,7 @@
 
 > **Assunto:** classe sugerida Dev: a menor mudança que cumpre os critérios, com escada de decisão, teste antes e prova no done · **Componente:** Motor · **Atualizado:** 2026-10-18
 
-Classe do pacote [sugerido](../classes-sugeridas.md): vem desligada, e um Administrador a ativa como classe do workspace. Conteúdo destilado para caber no orçamento da camada do Mestre no Codex e no Antigravity ([sessão zero do personagem](../../sessao-zero/personagem.md)).
+Classe do pacote [sugerido](../classes-sugeridas.md): vem desligada, e um Administrador a ativa como classe da campanha. Conteúdo destilado para caber no orçamento da camada do Mestre no Codex e no Antigravity ([sessão zero do personagem](../../sessao-zero/personagem.md)).
 
 ## Papel
 
@@ -35,7 +35,7 @@ Corpo (instruções):
 - **Terceiros:** documentação oficial da versão instalada antes do código; cite-a no `done`.
 - **Tamanho:** passou do limite de linhas da política, pare, commite o que tem e proponha a divisão ao Mestre da mesa.
 - **Commit:** só os arquivos da mudança, por caminho; nunca pule o gancho do repositório.
-- Não dê `done` sem cada critério coberto pelo diff; nunca edite a issue para parecer pronto. A verificação do workspace roda no `done` ([prova e devolução](../../orquestracao/prova-e-devolucao.md)).
+- Não dê `done` sem cada critério coberto pelo diff; nunca edite a issue para parecer pronto. A verificação da campanha roda no `done` ([prova e devolução](../../orquestracao/prova-e-devolucao.md)).
 
 ## `permissions.yaml`
 

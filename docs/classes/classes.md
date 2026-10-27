@@ -12,13 +12,13 @@ A classe diz a um personagem **o que fazer e o que pode fazer** (ex.: Dev, QA, R
 
 | Escopo | Pasta (fonte na Cidadela) | Quem cria | Aprovação |
 |---|---|---|---|
-| global | `<dados da Cidadela>/classes-globais/<classe>/` ([persistência](../arquitetura/persistencia.md#arquivos)) | Dono ou Administrador, pelo painel | — |
-| workspace | `.mestre/classes/<classe>/` no clone principal | Dono ou Administrador; o Grão-Mestre pode propor | de um Administrador ou acima, pelo pedido `classe_workspace` do [fluxo de aprovação](../aprovacoes/fluxo.md) (ligado ao hash do pacote) ou pelo painel; o Grão-Mestre nunca aprova a própria proposta |
-| mesa | `.mestre/mesas/<mesa>/classes/<classe>/` | Mestre da mesa (ou usuários) | nenhuma, desde que dentro do [teto do workspace](teto-do-workspace.md) |
+| global | `<dados da Cidadela>/classes-globais/<classe>/` ([persistência](../arquitetura/persistencia.md#arquivos)) | Senhor da Guilda ou Administrador, pelo painel | — |
+| campanha | `.mestre/classes/<classe>/` no clone principal | Senhor da Guilda ou Administrador; o Grão-Mestre pode propor | de um Administrador ou acima, pelo pedido `classe_workspace` do [fluxo de aprovação](../aprovacoes/fluxo.md) (ligado ao hash do pacote) ou pelo painel; o Grão-Mestre nunca aprova a própria proposta |
+| mesa | `.mestre/mesas/<mesa>/classes/<classe>/` | Mestre da mesa (ou usuários) | nenhuma, desde que dentro do [teto da campanha](teto-do-workspace.md) |
 
 - As classes são arquivos, para poderem ser versionadas; o banco da Cidadela guarda o índice ([persistência](../arquitetura/persistencia.md)). As Torres recebem cópias materializadas pelo motor ([mesa](../sessao-zero/mesa.md)).
-- O nome (slug `[a-z0-9-]`) é único entre os escopos visíveis numa mesa (global + workspace + mesa). Variações têm nome próprio (ex.: `qa-api`).
-- Criar, editar e excluir têm a sintaxe em [CLI de classes e rituais](../cli/coordenacao-classes-e-rituais.md) e também podem ser feitos no [painel](../painel/administracao.md). Quem não tem o direito no escopo recebe `forbidden`: o Grão-Mestre só cria classe do workspace (como proposta) e o Mestre da mesa só a da própria mesa.
+- O nome (slug `[a-z0-9-]`) é único entre os escopos visíveis numa mesa (global + campanha + mesa). Variações têm nome próprio (ex.: `qa-api`).
+- Criar, editar e excluir têm a sintaxe em [CLI de classes e rituais](../cli/coordenacao-classes-e-rituais.md) e também podem ser feitos no [painel](../painel/administracao.md). Quem não tem o direito no escopo recebe `forbidden`: o Grão-Mestre só cria classe da campanha (como proposta) e o Mestre da mesa só a da própria mesa.
 
 ### Onde a classe é alterada
 
@@ -59,9 +59,9 @@ O corpo do `CLASS.md` traz as instruções: o que fazer, como entregar, critéri
 
 ### Exemplo: classe para o Operador do PC
 
-Só um exemplo, para o Dono criar pelo painel se quiser usar o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc); o Mestre não a cria sozinho.
+Só um exemplo, para o Senhor da Guilda criar pelo painel se quiser usar o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc); o Mestre não a cria sozinho.
 ```yaml
-# permissions.yaml (escopo global, criada pelo Dono)
+# permissions.yaml (escopo global, criada pelo Senhor da Guilda)
 operator: true                     # só valida com o teto que tenha operator: true
 tools:
   allow: ["mcp__navegador-do-usuario__*", "mcp__<mcp-de-controle>__*"]   # ligados no mcp: do CLASS.md (desde o M7)
@@ -73,7 +73,7 @@ O `CLASS.md` descreve a tarefa típica, o que nunca fazer (ex.: compras, mudar s
 
 ### Vínculo com um App do GitHub
 
-Toda classe nasce vinculada a um App: `novo` (o Grão-Mestre prepara o App e o Dono o cria e instala pelo link; até ficar pronto, a classe usa o App "Mestre" com o nome dela na mensagem e aparece "em criação"), `herdar:<classe>` (usa o App da classe de origem; só se `git.workflows` não for maior que o dela, ver [workflows](../github/identidades-e-apps.md#workflows)) ou o slug de um App existente. O vínculo fica no frontmatter e no banco; trocar de App só vale para ações novas. Detalhes em [identidades e Apps](../github/identidades-e-apps.md) e [criação de Apps](../github/criacao-de-apps.md).
+Toda classe nasce vinculada a um App: `novo` (o Grão-Mestre prepara o App e o Senhor da Guilda o cria e instala pelo link; até ficar pronto, a classe usa o App "Mestre" com o nome dela na mensagem e aparece "em criação"), `herdar:<classe>` (usa o App da classe de origem; só se `git.workflows` não for maior que o dela, ver [workflows](../github/identidades-e-apps.md#workflows)) ou o slug de um App existente. O vínculo fica no frontmatter e no banco; trocar de App só vale para ações novas. Detalhes em [identidades e Apps](../github/identidades-e-apps.md) e [criação de Apps](../github/criacao-de-apps.md).
 
 ### Hooks extras da classe
 
@@ -109,7 +109,7 @@ pre_tool:
 - **Falha ou tempo esgotado:** registra o erro (no stderr da chamada do `mestre hook`) e segue, a não ser com `blocking: true`, que nega. Numa Torre os hooks rodam como na Cidadela: a Torre não tem a biblioteca de classes, então a Cidadela manda os hooks da classe aprovada (e o hash do pacote) junto das regras efetivas; os `sync` decidem no `mestre hook` da Torre, os `async` rodam no terminal do personagem lá, e a saída para o pergaminho ou a caixa de entrada volta à Cidadela (`hook.output`). Se a Torre não recebeu os hooks, o personagem **não inicia** e o `mestre hook` nega (falha fechada), em vez de rodar sem eles.
 - **Saída** (padrão `log`): `log` vai para o log do personagem; `scroll` é anexada ao pergaminho da missão ([pergaminhos](../orquestracao/pergaminhos-e-tomos.md)); `agent` é entregue pela [caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md). `scroll` e `agent` só valem em `async`.
 - Em provedor sem o evento (ex.: Antigravity não tem `pre_compact`), o hook não roda; `session_end` vem do fim do processo no PTY. O `class check` mostra isso por provedor.
-- O `run` de cada hook (e o `run_windows`) é uma única linha de comando de até 4096 bytes, e o `class check` aponta o que passar; ele passa pelo mesmo pipeline de permissões da classe, como um comando do personagem. O que o pipeline não libera não roda: o hook `blocking` então nega e o `class check` avisa. Classes da mesa não podem ter scripts no pacote: só linhas de comando checadas; scripts ficam para classes globais e do workspace, que passam por aprovação de um usuário. Um script do pacote só roda da cópia aprovada, que o motor materializa do banco ([mesa](../sessao-zero/mesa.md#arquivos-gerados-no-worktree)) e que o agente não pode alterar; a do worktree ele pode trocar. O `HookExec` do hook assíncrono é a mensagem `hook` do `mestre-pty` ([terminal](../arquitetura/terminal.md#protocolo-motor--mestre-pty)); a execução dos scripts do pacote, que pede a cópia aprovada materializada, ainda não existe, e até lá o motor, sem interpretar o shell, recusa o `run` que **possa** alcançar `hooks/`: o que cita `hooks` de qualquer forma, sem maiúsculas e depois de tirar aspas, barras invertidas, crases e `^` (`cd hooks && ./x`, `true;hooks/x`, `(hooks/x)`, `$PWD/hooks/x`, `.//hooks/x`, o caminho absoluto do worktree, `h""ooks/x`), e o que tem palavra montada na execução (`$x`, `%x%`, `~`, glob, chaves, `$(…)`) que seja um caminho ou esteja numa linha que muda de pasta (`cd`, `pushd`, `-C`). Esse hook conta como recusado, e o `blocking` nega; o custo é recusar também linha legítima que cite `hooks` (como `core.hooksPath`).
+- O `run` de cada hook (e o `run_windows`) é uma única linha de comando de até 4096 bytes, e o `class check` aponta o que passar; ele passa pelo mesmo pipeline de permissões da classe, como um comando do personagem. O que o pipeline não libera não roda: o hook `blocking` então nega e o `class check` avisa. Classes da mesa não podem ter scripts no pacote: só linhas de comando checadas; scripts ficam para classes globais e da campanha, que passam por aprovação de um usuário. Um script do pacote só roda da cópia aprovada, que o motor materializa do banco ([mesa](../sessao-zero/mesa.md#arquivos-gerados-no-worktree)) e que o agente não pode alterar; a do worktree ele pode trocar. O `HookExec` do hook assíncrono é a mensagem `hook` do `mestre-pty` ([terminal](../arquitetura/terminal.md#protocolo-motor--mestre-pty)); a execução dos scripts do pacote, que pede a cópia aprovada materializada, ainda não existe, e até lá o motor, sem interpretar o shell, recusa o `run` que **possa** alcançar `hooks/`: o que cita `hooks` de qualquer forma, sem maiúsculas e depois de tirar aspas, barras invertidas, crases e `^` (`cd hooks && ./x`, `true;hooks/x`, `(hooks/x)`, `$PWD/hooks/x`, `.//hooks/x`, o caminho absoluto do worktree, `h""ooks/x`), e o que tem palavra montada na execução (`$x`, `%x%`, `~`, glob, chaves, `$(…)`) que seja um caminho ou esteja numa linha que muda de pasta (`cd`, `pushd`, `-C`). Esse hook conta como recusado, e o `blocking` nega; o custo é recusar também linha legítima que cite `hooks` (como `core.hooksPath`).
 
 ### Skills da classe
 
@@ -135,16 +135,16 @@ Confere: frontmatter e nome (a unicidade do nome entre os escopos é conferida a
 ## Critérios de aceite
 
 - **CA-CLASSES-01** · *rápida* — **Dado** um pedido de criação sem `--app`, **quando** o motor valida, **então** recusa e lista `novo`, `herdar:<classe>` e `<nome-do-app>`.
-- **CA-CLASSES-02** · *rápida* — **Dado** uma classe de workspace `qa`, **quando** o Mestre de uma mesa cria uma classe da mesa `qa`, **então** a criação é recusada por nome repetido.
+- **CA-CLASSES-02** · *rápida* — **Dado** uma classe de campanha `qa`, **quando** o Mestre de uma mesa cria uma classe da mesa `qa`, **então** a criação é recusada por nome repetido.
 - **CA-CLASSES-03** · *rápida* — **Dado** um hook `pre_tool` com `blocking: true`, **quando** ele sai com 2, falha ou estoura o tempo, **então** a decisão é negar (com o stderr como motivo no exit 2); com `blocking: false`, a falha só é registrada.
 - **CA-CLASSES-04** · *completa* — **Dado** uma classe com hook `turn_end` assíncrono e `output: scroll`, **quando** o agente falso termina o turno, **então** o próximo turno começa sem esperar o hook e a saída aparece no pergaminho da missão.
 - **CA-CLASSES-05** · *rápida* — **Dado** uma classe da mesa com um script em `hooks/`, **quando** `class check` roda, **então** aponta o erro e a classe não é salva.
-- **CA-CLASSES-06** · *completa* — **Dado** uma classe de workspace proposta pelo Grão-Mestre, **quando** o próprio Grão-Mestre tenta aprovar, **então** a aprovação é recusada e a classe só passa a valer com o "Aprovar" de um Administrador.
+- **CA-CLASSES-06** · *completa* — **Dado** uma classe de campanha proposta pelo Grão-Mestre, **quando** o próprio Grão-Mestre tenta aprovar, **então** a aprovação é recusada e a classe só passa a valer com o "Aprovar" de um Administrador.
 - **CA-CLASSES-07** · *rápida* — **Dado** uma classe com `app: novo` e hook `pre_compact`, **quando** `class check` roda, **então** mostra o App "em criação" e que o hook não roda no Antigravity.
 - **CA-CLASSES-08** · *rápida* — **Dado** uma classe aprovada e uma edição manual **válida** no `permissions.yaml` dela (hash diferente do registrado), **quando** um personagem dessa classe inicia um turno, **então** valem as regras da última versão aprovada e existe uma proposta pendente com a mudança.
 
 ## Depende de
 
-- [Permissões](permissoes.md) · [Teto do workspace](teto-do-workspace.md)
+- [Permissões](permissoes.md) · [Teto da campanha](teto-do-workspace.md)
 - [Adaptador](../provedores/adaptador.md) (eventos do Mestre para os hooks extras)
 - [Persistência](../arquitetura/persistencia.md)

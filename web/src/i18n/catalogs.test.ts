@@ -36,3 +36,31 @@ test("every code of the API has a text (internal/panel/errors.go through the gen
   expect(codes.length).toBeGreaterThan(10);
   for (const c of codes) expect(Object.keys(ptBR.errors), c).toContain(c);
 });
+
+// CA-JORN-13
+test("no text shown in Portuguese names a campaign, the highest level or the party in English", () => {
+  const allowed = ["Dono da credencial", "Dono: {{name}}"];
+  for (const [key, text] of Object.entries(flatten(ptBR))) {
+    const left = allowed.reduce((s, a) => s.replaceAll(a, ""), text).replace(/{{\w+}}/g, "");
+    expect(left, key).not.toMatch(/\b(Workspaces?|workspaces?|Party|Dono)\b/);
+  }
+  expect(ptBR.shell.nav.workspaces).toBe("Campanhas");
+  expect(ptBR.errors.level_owner).toBe("Senhor da Guilda");
+  expect(ptBR.shell.nav.ceiling).toBe("Teto da campanha");
+  expect(ptBR.workspace.block.party).toBe("Companhia");
+});
+
+// CA-JORN-14
+test("the English panel says Guildmaster and Campaign, and keeps Party", () => {
+  for (const [key, text] of Object.entries(flatten(en))) {
+    const left = text
+      .replace(/{{\w+}}/g, "")
+      .replaceAll("Owner of the credential", "")
+      .replaceAll("Owner: ", "");
+    expect(left, key).not.toMatch(/\b(Workspaces?|workspaces?|Owner)\b/);
+  }
+  expect(en.errors.level_owner).toBe("Guildmaster");
+  expect(en.shell.nav.workspaces).toBe("Campaigns");
+  expect(en.shell.nav.ceiling).toBe("Campaign ceiling");
+  expect(en.workspace.block.party).toBe("Party");
+});

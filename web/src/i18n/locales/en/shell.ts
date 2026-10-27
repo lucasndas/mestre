@@ -5,7 +5,7 @@ const shell: Widen<typeof pt> = {
   nav: {
     approvals: "Approvals",
     overview: "Overview",
-    workspaces: "Workspaces",
+    workspaces: "Campaigns",
     sessions: "My sessions",
     password: "Change password",
     users: "Users",
@@ -14,7 +14,7 @@ const shell: Widen<typeof pt> = {
     decrees: "Decrees",
     delegations: "Delegations",
     chain: "Chain supervision",
-    ceiling: "Workspace ceiling",
+    ceiling: "Campaign ceiling",
     policy: "Approval policy",
     instructions: "Extra instructions",
     guild: "Guild",
@@ -29,7 +29,7 @@ const shell: Widen<typeof pt> = {
     main: "Main navigation",
   },
   top: {
-    workspace: "Workspace",
+    workspace: "Campaign",
     approvals: "Approvals",
     notices: "Notices",
     menu: "Account menu",
@@ -41,7 +41,7 @@ const shell: Widen<typeof pt> = {
   overview: {
     title: "Your Guild is ready",
     welcome: "Hello, {{name}}. Your level is {{level}}.",
-    emptyTitle: "There is no workspace yet",
+    emptyTitle: "There is no campaign yet",
     emptyBody: "When you connect a GitHub repository, it shows up here.",
     times: "Times are in the {{zone}} time zone.",
   },

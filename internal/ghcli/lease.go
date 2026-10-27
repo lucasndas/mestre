@@ -59,7 +59,7 @@ func (h *Handlers) leaseHeld() *localchan.Response {
 func (h *Handlers) isLocked(ctx context.Context) bool { return h.Locked != nil && h.Locked(ctx) }
 
 func lockedResponse() localchan.Response {
-	return localchan.Fail("locked", "o Mestre está travado: nada é feito no GitHub até o Dono destravar", "o Dono destrava com /destravar")
+	return localchan.Fail("locked", "o Mestre está travado: nada é feito no GitHub até o Senhor da Guilda destravar", "o Senhor da Guilda destrava com /destravar")
 }
 
 type handler func(ctx context.Context, c *localchan.Call) localchan.Response

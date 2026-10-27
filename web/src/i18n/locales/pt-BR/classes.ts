@@ -1,7 +1,7 @@
 export default {
   title: "Classes",
   intro:
-    "As classes do Mestre: as globais, as do workspace e as das mesas, com o App de cada uma, e as propostas que esperam a sua aprovação.",
+    "As classes do Mestre: as globais, as da campanha e as das mesas, com o App de cada uma, e as propostas que esperam a sua aprovação.",
   loading: "Carregando as classes…",
   band: "{{total}} de {{limit}} Apps na conta. Perto do limite do GitHub, criar mais Apps pode falhar.",
   bandLink: "Ver os Apps",
@@ -31,9 +31,9 @@ export default {
     app: "App",
     version: "Versão",
     noApp: "sem App",
-    everywhere: "todos os workspaces",
+    everywhere: "todas as campanhas",
   },
-  scopes: { global: "Global", workspace: "Workspace", table: "Mesa" },
+  scopes: { global: "Global", workspace: "Campanha", table: "Mesa" },
   states: {
     approved: "Aprovada",
     pending: "Mudança pendente",

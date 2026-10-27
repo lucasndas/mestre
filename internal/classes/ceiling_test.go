@@ -92,7 +92,7 @@ func TestTheCeilingDenyDecidesWithItsReason(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := newMachine()
-	want(t, decide(m.env(), r, m.file(providers.KindEdit, m.in("infra/main.tf"))), classes.Deny, classes.LayerCeiling, "teto do workspace")
+	want(t, decide(m.env(), r, m.file(providers.KindEdit, m.in("infra/main.tf"))), classes.Deny, classes.LayerCeiling, "teto da campanha")
 	want(t, decide(m.env(), r, m.file(providers.KindEdit, m.in("src/main.go"))), classes.Allow, "")
 }
 

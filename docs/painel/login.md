@@ -1,10 +1,10 @@
 # Login do painel
 
-> **Assunto:** login, assistente de criação do Dono, primeiro acesso de cada usuário, sessões com expiração e PIN em ações sensíveis · **Componente:** Painel · **Atualizado:** 2026-10-26
+> **Assunto:** login, assistente de criação do Senhor da Guilda, primeiro acesso de cada usuário, sessões com expiração e PIN em ações sensíveis · **Componente:** Painel · **Atualizado:** 2026-10-26
 
 ## Objetivo
 
-Garantir que só usuários autorizados usem o painel, cada um com o seu nível e os seus workspaces. Os usuários e níveis são os mesmos do Telegram; a tabela de níveis é única e mora em [usuários e níveis](../telegram/usuarios-e-niveis.md).
+Garantir que só usuários autorizados usem o painel, cada um com o seu nível e as suas campanhas. Os usuários e níveis são os mesmos do Telegram; a tabela de níveis é única e mora em [usuários e níveis](../telegram/usuarios-e-niveis.md).
 
 ## Comportamento
 
@@ -16,12 +16,12 @@ Garantir que só usuários autorizados usem o painel, cada um com o seu nível e
 - Confiar na CA no navegador é feito uma vez por aparelho; o passo a passo está em [primeiro acesso](../operacao/primeiro-acesso.md).
 - Qualquer rota do painel ou da API sem sessão válida responde 401 e o navegador vai para a tela de login.
 
-### Assistente do Dono (primeira vez)
+### Assistente do Senhor da Guilda (primeira vez)
 
 1. A instalação que cria a Guilda (a primeira, que vira Cidadela) gera um **código de configuração** de uso único (12 caracteres) e o mostra no terminal da instalação ([instalação e atualização](../plataforma/instalacao-e-atualizacao.md)). Ele vale até ser usado.
 2. Enquanto não existe nenhum usuário, o painel abre o assistente em vez do login.
 3. O assistente pede: o código de configuração, nome, nome de login, senha (duas vezes) e PIN (duas vezes, regras do PIN em [usuários e níveis](../telegram/usuarios-e-niveis.md#pin-pessoal)).
-4. Cria o usuário com nível **Dono**, marca o código como usado e abre a sessão.
+4. Cria o usuário com nível **Senhor da Guilda**, marca o código como usado e abre a sessão.
 5. Em seguida, o painel leva aos próximos passos do primeiro acesso (Apps fixos, Telegram, outras máquinas da Guilda), descritos em [primeiro acesso](../operacao/primeiro-acesso.md).
 
 - Depois que existe um usuário, o assistente não abre mais; a rota dele responde 404.
@@ -30,16 +30,16 @@ Garantir que só usuários autorizados usem o painel, cada um com o seu nível e
 
 ### Primeiro acesso de cada usuário
 
-- O Dono cadastra o usuário ([administração](administracao.md)) e o painel gera um **código de primeiro acesso** de uso único, válido por 24 h (padrão). O Dono entrega o código pessoalmente ou por um canal que ele escolher; o Mestre nunca o envia pelo Telegram.
+- O Senhor da Guilda cadastra o usuário ([administração](administracao.md)) e o painel gera um **código de primeiro acesso** de uso único, válido por 24 h (padrão). O Senhor da Guilda entrega o código pessoalmente ou por um canal que ele escolher; o Mestre nunca o envia pelo Telegram.
 - Na tela de login, "primeiro acesso" pede o código, o nome de login, a senha e o PIN.
-- O mesmo mecanismo serve para **redefinir a senha** de alguém: o Dono gera um código novo; a senha antiga deixa de valer e as sessões do usuário acabam.
+- O mesmo mecanismo serve para **redefinir a senha** de alguém: o Senhor da Guilda gera um código novo; a senha antiga deixa de valer e as sessões do usuário acabam.
 
 ### Senha
 
 - Mínimo de 12 caracteres, sem outras regras de composição.
 - Guardada só como hash argon2id (com sal por usuário). O mesmo hash vai (desde o M7), criptografado, para a réplica dos Guardiões ([cofre](../plataforma/cofre.md#réplica-para-os-guardiões)), para o login da [página reserva](../autocura/pagina-reserva.md).
 - Trocar a senha pede a senha atual e encerra as outras sessões do usuário.
-- 5 senhas erradas em 15 min para o mesmo login → login bloqueado por 15 min (padrão), com aviso ao Dono.
+- 5 senhas erradas em 15 min para o mesmo login → login bloqueado por 15 min (padrão), com aviso ao Senhor da Guilda.
 
 ### Sessões
 
@@ -49,7 +49,7 @@ Garantir que só usuários autorizados usem o painel, cada um com o seu nível e
 - Toda requisição que muda algo, e a abertura do WebSocket, conferem o cabeçalho `Origin` contra o endereço do painel.
 - Quando a sessão acaba, o WebSocket do painel é fechado pela Cidadela.
 - **Encerram na hora** todas as sessões do usuário: suspensão, remoção, mudança de nível, redefinição ou troca de senha.
-- Cada usuário vê e encerra as próprias sessões; o Dono vê e encerra as de todos.
+- Cada usuário vê e encerra as próprias sessões; o Senhor da Guilda vê e encerra as de todos.
 - O [`mestre attach`](../cli/attach.md) entra pelas mesmas rotas, com as mesmas regras e auditoria; a sessão dele aparece com o aparelho "CLI em <máquina>" e acaba quando o comando sai.
 
 ### PIN em ações sensíveis
@@ -73,20 +73,20 @@ O painel esconde o que o nível não permite, mas quem decide é o servidor, em 
 | Rota | Quem | O que faz |
 |---|---|---|
 | `GET /api/status` | todos | `{setup_open}`: o front abre o assistente ou o login |
-| `POST /api/setup` | todos, enquanto não há usuário | `{code, name, login, password, pin}` cria o Dono e abre a sessão; depois, 404 |
+| `POST /api/setup` | todos, enquanto não há usuário | `{code, name, login, password, pin}` cria o Senhor da Guilda e abre a sessão; depois, 404 |
 | `POST /api/login` | todos | `{login, password}` abre a sessão |
 | `POST /api/first-access` | todos | `{code, login, password, pin?}`: primeiro acesso, ou nova senha após redefinição (sem PIN) |
 | `POST /api/logout`, `GET /api/me`, `POST /api/password` | sessão | sair; `{user, session, capabilities, timezone}` (`timezone` é o fuso da Guilda, em que o painel mostra todo horário); `{current, new}` |
 | `PUT /api/me/language` | sessão | `{language: "pt-BR"\|"en"}` guarda o idioma do usuário e devolve o `Me`; outro valor é `bad_request` |
-| `PUT /api/me/workspace` | sessão | `{workspace}` guarda o último workspace aberto (o `Me` traz `user.last_workspace`) e devolve o `Me`; um workspace que o usuário não vê é `not_found` |
-| `GET /api/sessions`, `DELETE /api/sessions/{id}` | sessão | as próprias; o Dono encerra qualquer uma |
-| `GET /api/admin/sessions` | Dono | as de todos |
-| `POST /api/users/{id}/access-code` | Dono, com PIN | `{kind: "first"\|"reset"}` devolve `{code, kind, expires_at}`; o código só aparece nessa resposta |
+| `PUT /api/me/workspace` | sessão | `{workspace}` guarda a última campanha aberta (o `Me` traz `user.last_workspace`) e devolve o `Me`; uma campanha que o usuário não vê é `not_found` |
+| `GET /api/sessions`, `DELETE /api/sessions/{id}` | sessão | as próprias; o Senhor da Guilda encerra qualquer uma |
+| `GET /api/admin/sessions` | Senhor da Guilda | as de todos |
+| `POST /api/users/{id}/access-code` | Senhor da Guilda, com PIN | `{kind: "first"\|"reset"}` devolve `{code, kind, expires_at}`; o código só aparece nessa resposta |
 
 - **`GET /ws/ui`:** envelope do protocolo sem `machine_id` e `epoch`. O navegador manda `ui.subscribe` e `ui.unsubscribe` com `{topics}`; a Cidadela responde `ui.subscribed {topics, rejected: [{topic, code}]}` (com `reply_to`), manda o retrato como `ui.event {topic, event: "snapshot", data}` e depois cada `ui.event`; um pedido recusado volta como `error` com o corpo de erro acima. As áreas registram o tipo de tópico com `Hub.Provide` (quem pode seguir e o retrato) e publicam com `Hub.Publish` e `Hub.PublishFrame` (frame binário `0x01`). Fila cheia de eventos fecha o socket; a de frames binários perde frames. O fim da sessão fecha com o código `4001`.
 - **Auditoria** (`audit_log`, sem senha, PIN, código nem token): `panel.setup`, `panel.login`, `panel.login.failed`, `panel.login.suspended`, `panel.login.blocked`, `panel.logout`, `panel.first_access`, `panel.password.changed`, `panel.session.ended`, `panel.access_code.created`, `panel.origin_refused`, `panel.pin.ok`, `panel.pin.failed`, `panel.pin.required`, `panel.pin.locked`. O nome de login só entra se for de um usuário.
 - **Código de configuração:** `users.Service.NewSetupCode` o gera (só guarda o hash); `mestre setup-code` abre o banco da Cidadela e o chama, enquanto a instalação (M7) o mostrará no terminal. O comando recusa agente, quem não é root nem administrador, máquina que não é a Cidadela e Guilda que já tem usuário.
-- **Escolhas:** a tentativa de senha é reservada antes de a senha ser conferida (requisições ao mesmo tempo não passam do limite), e uma senha atual errada em `/api/password` conta no mesmo limite; no máximo 3 hashes argon2 ao mesmo tempo, e o excedente recebe `rate_limited`; a troca do posto de Dono encerra as sessões dos dois; o bloqueio do login conta por nome de login, e os erros de código de configuração e de primeiro acesso por IP; o `307` usa `mestre.local` na porta do motor da própria máquina (a Guilda usa uma porta só); a atividade do usuário grava `last_used_at` no máximo uma vez por minuto, porque cada escrita é replicada.
+- **Escolhas:** a tentativa de senha é reservada antes de a senha ser conferida (requisições ao mesmo tempo não passam do limite), e uma senha atual errada em `/api/password` conta no mesmo limite; no máximo 3 hashes argon2 ao mesmo tempo, e o excedente recebe `rate_limited`; a troca do posto de Senhor da Guilda encerra as sessões dos dois; o bloqueio do login conta por nome de login, e os erros de código de configuração e de primeiro acesso por IP; o `307` usa `mestre.local` na porta do motor da própria máquina (a Guilda usa uma porta só); a atividade do usuário grava `last_used_at` no máximo uma vez por minuto, porque cada escrita é replicada.
 
 ## Regras e erros
 
@@ -97,11 +97,11 @@ O painel esconde o que o nível não permite, mas quem decide é o servidor, em 
 
 ## Critérios de aceite
 
-- **CA-LOGIN-01** · *completa* — **Dado** uma Guilda recém-criada, sem usuários, **quando** abro o painel e informo o código de configuração, **então** o assistente cria o Dono e, depois disso, a rota do assistente responde 404 (MVP-1).
+- **CA-LOGIN-01** · *completa* — **Dado** uma Guilda recém-criada, sem usuários, **quando** abro o painel e informo o código de configuração, **então** o assistente cria o Senhor da Guilda e, depois disso, a rota do assistente responde 404 (MVP-1).
 - **CA-LOGIN-02** · *rápida* — **Dado** uma sessão sem uso por 12 h (relógio falso), **quando** chega uma requisição, **então** a resposta é 401 e o WebSocket da sessão é fechado.
 - **CA-LOGIN-03** · *rápida* — **Dado** uma ação de cofre sem PIN na requisição, **quando** chega ao servidor, **então** é recusada com "PIN obrigatório" e nada muda.
-- **CA-LOGIN-04** · *rápida* — **Dado** um usuário com duas sessões abertas, **quando** o Dono o suspende, **então** as duas sessões deixam de valer na hora.
-- **CA-LOGIN-05** · *rápida* — **Dado** 5 senhas erradas em 15 min, **quando** chega a sexta, **então** o login é recusado sem conferir a senha e o Dono recebe aviso.
+- **CA-LOGIN-04** · *rápida* — **Dado** um usuário com duas sessões abertas, **quando** o Senhor da Guilda o suspende, **então** as duas sessões deixam de valer na hora.
+- **CA-LOGIN-05** · *rápida* — **Dado** 5 senhas erradas em 15 min, **quando** chega a sexta, **então** o login é recusado sem conferir a senha e o Senhor da Guilda recebe aviso.
 - **CA-LOGIN-06** · *rápida* — **Dado** uma requisição de mudança com `Origin` diferente do painel, **quando** chega, **então** é recusada.
 - **CA-LOGIN-07** · *rápida* — **Dado** um código de primeiro acesso com mais de 24 h, **quando** é usado, **então** é recusado.
 - **CA-LOGIN-08** · *completa* — **Dado** uma Guilda com Cidadela A e Torre B, **quando** o navegador abre o endereço do painel em B, **então** é redirecionado para A, e a API em B não responde com dados; **depois** de B ser promovida, o mesmo endereço em A redireciona para B.

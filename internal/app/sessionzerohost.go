@@ -78,7 +78,7 @@ var _ sessionzero.Users = szUsers{}
 // AskOwnerToInstall sends the links to the Owner alone (docs/github/criacao-de-apps.md).
 func (u szUsers) AskOwnerToInstall(ctx context.Context, workspace string, links []sessionzero.InstallLink) error {
 	var b strings.Builder
-	fmt.Fprintf(&b, "O workspace %s precisa dos Apps do Mestre no repositório. Abra o link, escolha o repositório e clique em Install:", workspace)
+	fmt.Fprintf(&b, "A campanha %s precisa dos Apps do Mestre no repositório. Abra o link, escolha o repositório e clique em Install:", workspace)
 	for _, l := range links {
 		fmt.Fprintf(&b, "\n- %s: %s", l.App, l.URL)
 	}
@@ -95,7 +95,7 @@ func (u szUsers) Notify(ctx context.Context, workspace string, n sessionzero.Not
 // (versionar ou ficar só local) is given in the panel (milestone 6): the bot
 // does not take it.
 func (u szUsers) AskVersioning(ctx context.Context, workspace string) error {
-	return u.tell(ctx, workspace, "Pergunta pendente do workspace "+workspace+": a pasta .mestre/ deve ser versionada no projeto ou ficar só local? Até a resposta ela fica só local. A resposta é dada no painel.")
+	return u.tell(ctx, workspace, "Pergunta pendente da campanha "+workspace+": a pasta .mestre/ deve ser versionada no projeto ou ficar só local? Até a resposta ela fica só local. A resposta é dada no painel.")
 }
 
 func (u szUsers) tell(ctx context.Context, workspace, text string) error {

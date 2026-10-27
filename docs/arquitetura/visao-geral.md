@@ -12,10 +12,10 @@
 Toda máquina recebe **a mesma instalação** do Mestre, em Linux ou Windows, com o mesmo binário. As instalações formam a **Guilda** ([ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md)): a primeira cria a Guilda e as outras a encontram na rede local e pedem para entrar ([Guilda](../guilda/guilda.md)).
 
 - **Cidadela:** a única máquina no comando por vez. Tem o Grão-Mestre, o bot do Telegram, a integração com o GitHub, o painel, o banco principal (fonte da verdade) e o cofre ativo.
-- **Torres:** as demais. Rodam personagens, recebem a réplica de tudo (banco, arquivos, espelhos e o cofre cifrado, que só a Cidadela abre) e vigiam a Cidadela. Toda máquina pode assumir, menos a que o Dono excluir.
+- **Torres:** as demais. Rodam personagens, recebem a réplica de tudo (banco, arquivos, espelhos e o cofre cifrado, que só a Cidadela abre) e vigiam a Cidadela. Toda máquina pode assumir, menos a que o Senhor da Guilda excluir.
 - **Personagens** (Mestres de mesa e party) rodam em qualquer máquina da Guilda, inclusive na Cidadela, escolhida pela [ficha da máquina](../guilda/ficha-da-maquina.md). Grão-Mestre e Mestre da mesa são nomes de agentes, nunca de máquinas.
 - **Guardião:** cada máquina tem um, separado do motor, que vigia e conserta o motor local.
-- Se a Cidadela cai de vez, outra máquina pode assumir, sempre por promoção manual do Dono, decidida pela trava no GitHub ([Cidadela e Torres](../guilda/cidadela-e-torres.md)).
+- Se a Cidadela cai de vez, outra máquina pode assumir, sempre por promoção manual do Senhor da Guilda, decidida pela trava no GitHub ([Cidadela e Torres](../guilda/cidadela-e-torres.md)).
 - Uma máquina pode ter várias [instâncias](componentes.md#instâncias), cada uma uma máquina da Guilda.
 
 As quatro composições: só Linux, Cidadela Linux + Torre Windows, Cidadela Windows + Torre Linux e só Windows; a Guilda de uma máquina só é o [modo máquina única](../autocura/camadas.md#modo-máquina-única). Como qualquer máquina pode virar Cidadela, tudo o que a Cidadela faz (painel, Telegram, transcrição, banco, GitHub, cofre) roda nos dois sistemas.
@@ -85,7 +85,7 @@ Portas padrão: [componentes](componentes.md#portas). Segurança dos canais: [se
 5. **Agentes conversam por texto digitado.** O motor entrega as mensagens no terminal do destinatário, só quando ele está livre; os agentes só precisam da CLI `mestre` ([esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)).
 6. **O motor conduz, deterministicamente:** missões, esperas, rituais, sincronização de worktrees e ações no GitHub são código do motor, não comportamento esperado de um agente ([missões](../orquestracao/missoes.md), [ADR 0005](../decisoes/0005-motor-executa-github-grao-mestre-porteiro.md)).
 7. **Uma lógica de hooks para todos os provedores**, no comando `mestre hook` ([ADR 0012](../decisoes/0012-despachante-unico-de-hooks.md)).
-8. **Mudar de Cidadela é sempre decisão do Dono**, e só uma máquina vence a trava ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)).
+8. **Mudar de Cidadela é sempre decisão do Senhor da Guilda**, e só uma máquina vence a trava ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-senhor-da-guilda)).
 
 ## Terminais
 

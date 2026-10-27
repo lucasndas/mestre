@@ -63,11 +63,11 @@ var answerTexts = map[Answer]answerText{
 	AnswerApprove:         {"approve", "Aprovar agora", "uma exceção para esta ação, usada uma vez", "", ""},
 	AnswerApproveFor:      {"approve-for", "Aprovar por um tempo", "regra temporária desta ação na mesa (até o fim da missão ou N horas)", "decreto com validade (Administrador ou acima, em qualquer escopo)", "--for <duração> ou --until-quest"},
 	AnswerApprovePattern:  {"approve-pattern", "Aprovar o padrão", "regra temporária de um padrão", "decreto permanente do padrão (Administrador ou acima, com PIN)", `--pattern "npm install *" e --for <duração> ou --until-quest`},
-	AnswerApproveAlways:   {"always", "Aprovar sempre", "aprova agora e deixa uma sugestão de regra permanente para o Dono", "decreto permanente na classe (Administrador ou acima, com PIN)", ""},
+	AnswerApproveAlways:   {"always", "Aprovar sempre", "aprova agora e deixa uma sugestão de regra permanente para o Senhor da Guilda", "decreto permanente na classe (Administrador ou acima, com PIN)", ""},
 	AnswerDelegate:        {"", "Delegar", "", "entrega a decisão de pedidos como este ao Grão-Mestre", ""},
 	AnswerDeny:            {"deny", "Negar agora", "", "", ""},
 	AnswerDenyInstruction: {"deny-with", "Negar com instrução", "o texto chega a quem pediu", "", `--text "use pnpm"`},
-	AnswerDenyAlways:      {"never", "Negar sempre", "nega agora e deixa uma sugestão de regra para o Dono", "decreto permanente que nega (Administrador ou acima)", ""},
+	AnswerDenyAlways:      {"never", "Negar sempre", "nega agora e deixa uma sugestão de regra para o Senhor da Guilda", "decreto permanente que nega (Administrador ou acima)", ""},
 	AnswerAskBack:         {"ask-back", "Perguntar de volta", "pede contexto a quem pediu; o pedido espera e o seu prazo recomeça na resposta", "pede contexto a quem pediu; o pedido espera e o prazo final das pessoas continua correndo", `--text "<pergunta>"`},
 	AnswerClimb:           {"escalate", "Subir agora", "leva o pedido ao nível seguinte", "", ""},
 }

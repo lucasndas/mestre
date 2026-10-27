@@ -742,7 +742,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 			}
 		},
 		RerouteFn: func(ctx context.Context, workspace string) error {
-			return orc.Chain.RerouteWorkspace(ctx, workspace, "o Dono revogou todas as delegações")
+			return orc.Chain.RerouteWorkspace(ctx, workspace, "o Senhor da Guilda revogou todas as delegações")
 		}})
 	// the validity and the reminder of the delegations are those of the policy file of each workspace
 	if orc.Policy != nil {
@@ -850,19 +850,19 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	}}
 }
 
-// ownerName is the name of the Owner, who acts on a credential ("o Dono" when
+// ownerName is the name of the Owner, who acts on a credential ("o Senhor da Guilda" when
 // the users cannot be read).
 func (r *stdRun) ownerName(ctx context.Context, _ string) string {
 	all, err := r.users.List(ctx)
 	if err != nil {
-		return "o Dono"
+		return "o Senhor da Guilda"
 	}
 	for _, u := range all {
 		if u.Level == users.Owner && u.State == users.Active {
 			return u.Name
 		}
 	}
-	return "o Dono"
+	return "o Senhor da Guilda"
 }
 
 // lateSink is the sink of an approval that ends on GitHub: it goes out under the

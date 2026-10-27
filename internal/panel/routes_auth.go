@@ -428,7 +428,7 @@ func (p *Panel) handleLastWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Workspace == "" || !visible(u, in.Workspace) {
-		WriteError(w, Err(CodeNotFound, "workspace não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "campanha não encontrada", nil))
 		return
 	}
 	if err := p.users.SetLastWorkspace(r.Context(), u.ID, in.Workspace); err != nil {

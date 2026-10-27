@@ -9,7 +9,7 @@ export default {
   },
   setup: {
     title: "Crie a sua Guilda",
-    subtitle: "Você será o Dono. Use o código que apareceu no terminal da instalação.",
+    subtitle: "Você será o Senhor da Guilda. Use o código que apareceu no terminal da instalação.",
     code: "Código de configuração",
     name: "Seu nome",
     login: "Nome de login",
@@ -22,7 +22,7 @@ export default {
   },
   first: {
     title: "Primeiro acesso",
-    subtitle: "Use o código que o Dono lhe entregou.",
+    subtitle: "Use o código que o Senhor da Guilda lhe entregou.",
     code: "Código de primeiro acesso",
     login: "Escolha o nome de login",
     password: "Senha (mínimo 12 caracteres)",

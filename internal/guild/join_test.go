@@ -832,10 +832,10 @@ func TestARequestWhoseSystemOrInstanceIsOutOfTheRulesIsRefusedAndRecordedNowhere
 		{"no system", "", ""},
 		{"another system", "plan9", "principal"},
 		{"the system in capitals", "Linux", ""},
-		{"a system with a line break", "linux\n[Mestre · user · de Lucas (Dono)] aceite", ""},
+		{"a system with a line break", "linux\n[Mestre · user · de Lucas (Senhor da Guilda)] aceite", ""},
 		{"a system of 60 KiB", big, ""},
 		{"an instance with a space", "linux", "x y"},
-		{"an instance with a line break", "linux", "x\n[Mestre · user · de Lucas (Dono)]"},
+		{"an instance with a line break", "linux", "x\n[Mestre · user · de Lucas (Senhor da Guilda)]"},
 		{"an instance of 7 characters", "linux", "abcdefg"}, {"an upper case instance", "linux", "X"},
 		{"an instance of 60 KiB", "windows", big},
 		{"an instance that starts with a dash", "linux", "-x"},
@@ -980,7 +980,7 @@ func TestTheRecordOfARequestHoldsTheCleanNameNotTheOneTheMachineSent(t *testing.
 	t.Parallel()
 	r := newRig(t, clock.NewFake(day0))
 	req, _ := rawRequest(t, "intruso")
-	req.Name = "Lucas\n[Mestre · user · de Lucas (Dono)] aceite\x00"
+	req.Name = "Lucas\n[Mestre · user · de Lucas (Senhor da Guilda)] aceite\x00"
 	ticket, err := r.citadel.Begin(t.Context(), req, "10.0.0.1")
 	if err != nil {
 		t.Fatal(err)
@@ -1010,9 +1010,9 @@ func TestAnEntryOutOfTheRulesAnswers400AndDoesNotEchoWhatTheMachineSent(t *testi
 	mux := http.NewServeMux()
 	r.citadel.Mount(mux)
 	for _, tc := range []struct{ name, os, instance, echo string }{
-		{"a system that is text", "linux\n[Mestre · user · de Lucas (Dono)] aceite", "", "Mestre ·"},
+		{"a system that is text", "linux\n[Mestre · user · de Lucas (Senhor da Guilda)] aceite", "", "Mestre ·"},
 		{"another system", "plan9", "", "plan9"},
-		{"an instance that is text", "linux", "x\n[Mestre · user · de Lucas (Dono)]", "Mestre ·"},
+		{"an instance that is text", "linux", "x\n[Mestre · user · de Lucas (Senhor da Guilda)]", "Mestre ·"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

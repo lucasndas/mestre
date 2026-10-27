@@ -105,7 +105,7 @@ func (a *workspaceArea) list(ctx context.Context, u users.User) (WorkspaceList, 
 func (a *workspaceArea) source(w http.ResponseWriter) (WorkspaceSource, bool) {
 	src := a.p.workspaceSource()
 	if src == nil {
-		WriteError(w, Err(CodeUnavailable, "os workspaces não estão disponíveis agora", nil))
+		WriteError(w, Err(CodeUnavailable, "as campanhas não estão disponíveis agora", nil))
 		return nil, false
 	}
 	return src, true
@@ -120,7 +120,7 @@ func (a *workspaceArea) target(w http.ResponseWriter, r *http.Request, act bool)
 	}
 	slug, u := r.PathValue("slug"), UserOf(r)
 	if !visible(u, slug) || (act && !u.Acts(slug)) {
-		WriteError(w, Err(CodeNotFound, "workspace não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "campanha não encontrada", nil))
 		return nil, "", false
 	}
 	return src, slug, true
@@ -136,7 +136,7 @@ func (a *workspaceArea) fail(w http.ResponseWriter, err error) {
 		}
 		WriteError(w, Err(CodeRefused, ref.Message, params))
 	case errors.Is(err, ErrWorkspaceNotFound), errors.Is(err, ErrCanvasNotFound):
-		WriteError(w, Err(CodeNotFound, "workspace não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "campanha não encontrada", nil))
 	default:
 		a.p.log.Warn("panel: an action of the workspaces failed", "err", err)
 		WriteError(w, errInternal())

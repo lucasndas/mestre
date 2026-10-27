@@ -15,7 +15,7 @@ O instalador é o mesmo em toda máquina e não pergunta papel. Ele procura uma 
 | Cidadela Windows + Torre Linux | instale no Windows → [primeiro acesso](primeiro-acesso.md) → instale no Ubuntu e [aceite a entrada](entrar-na-guilda.md) | — |
 | Só Windows | instale no Windows | máquina única, como no "só Linux" |
 
-**Ordem completa:** instalar a primeira máquina → [primeiro acesso](primeiro-acesso.md) (CA, Dono, Apps do GitHub e perfis de conta) → instalar cada outra máquina e [aceitá-la na Guilda](entrar-na-guilda.md) → [parear o Telegram](parear-telegram.md).
+**Ordem completa:** instalar a primeira máquina → [primeiro acesso](primeiro-acesso.md) (CA, Senhor da Guilda, Apps do GitHub e perfis de conta) → instalar cada outra máquina e [aceitá-la na Guilda](entrar-na-guilda.md) → [parear o Telegram](parear-telegram.md).
 
 ## Antes de começar
 
@@ -43,12 +43,12 @@ O instalador é o mesmo em toda máquina e não pergunta papel. Ele procura uma 
 1. Baixe `mestre-<versão>-x64.msi` da página de Releases, confira o SHA-256 publicado (`Get-FileHash .\mestre-<versão>-x64.msi`) e abra. O instalador não tem assinatura de código: se o Windows mostrar "O Windows protegeu o computador", clique em **Mais informações** → **Executar assim mesmo**, e aceite o pedido de administrador.
 2. Siga [O que aparece no fim](#o-que-aparece-no-fim).
 3. Confira: `Get-Service mestre, mestre-guardiao` mostra os dois `Running`, e `Get-LocalUser mestre-agente` mostra a conta ativa. O `mestre` roda numa conta própria do sistema e inicia os agentes com a conta `mestre-agente` ([Windows](../arquitetura/windows.md)); eles trabalham mesmo com você deslogado. Os serviços sobem sozinhos com o Windows e, depois de um reinício, o Mestre retoma o que estava fazendo.
-4. **Operador do PC (opcional):** o instalador pergunta se quer habilitar o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc), um agente que usa este PC com a sua conta, só quando o Dono aprova, por pouco tempo e com aviso na tela. Se quiser, responda **sim** e escolha o seu usuário do Windows. Antes, deixe o Controle de Conta de Usuário (UAC) ligado, com "Sempre notificar" ou o nível padrão, e o Chrome com a extensão do Playwright MCP instalada. Depois, faça a configuração inicial em **Administração → Operador do PC**. Para desligar, rode o instalador de novo e responda **não**.
+4. **Operador do PC (opcional):** o instalador pergunta se quer habilitar o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc), um agente que usa este PC com a sua conta, só quando o Senhor da Guilda aprova, por pouco tempo e com aviso na tela. Se quiser, responda **sim** e escolha o seu usuário do Windows. Antes, deixe o Controle de Conta de Usuário (UAC) ligado, com "Sempre notificar" ou o nível padrão, e o Chrome com a extensão do Playwright MCP instalada. Depois, faça a configuração inicial em **Administração → Operador do PC**. Para desligar, rode o instalador de novo e responda **não**.
 
 ## O que aparece no fim
 
-- **Primeira máquina (cria a Guilda):** o terminal mostra o **endereço do painel** (ex.: `https://mestre.local:7443`), a **impressão digital SHA-256 da CA** e o **código de configuração** (usado uma vez para criar o Dono). **Anote os três.** Depois mostra **uma única vez** a **chave de recuperação** do cofre (52 caracteres em grupos de 4) e pede que você redigite dois grupos. Guarde-a fora do Mestre (papel, gerenciador de senhas): sem ela, o backup do cofre é inútil e uma Cidadela perdida sem nenhuma outra máquina não excluída leva junto todos os segredos ([cofre](../plataforma/cofre.md#backup-e-chave-de-recuperação)). Siga para o [primeiro acesso](primeiro-acesso.md).
-- **Outras máquinas (entram na Guilda):** o instalador mostra a Guilda que achou e um **código de entrada** de 6 dígitos, e espera o Dono aceitar: siga [entrar na Guilda](entrar-na-guilda.md).
+- **Primeira máquina (cria a Guilda):** o terminal mostra o **endereço do painel** (ex.: `https://mestre.local:7443`), a **impressão digital SHA-256 da CA** e o **código de configuração** (usado uma vez para criar o Senhor da Guilda). **Anote os três.** Depois mostra **uma única vez** a **chave de recuperação** do cofre (52 caracteres em grupos de 4) e pede que você redigite dois grupos. Guarde-a fora do Mestre (papel, gerenciador de senhas): sem ela, o backup do cofre é inútil e uma Cidadela perdida sem nenhuma outra máquina não excluída leva junto todos os segredos ([cofre](../plataforma/cofre.md#backup-e-chave-de-recuperação)). Siga para o [primeiro acesso](primeiro-acesso.md).
+- **Outras máquinas (entram na Guilda):** o instalador mostra a Guilda que achou e um **código de entrada** de 6 dígitos, e espera o Senhor da Guilda aceitar: siga [entrar na Guilda](entrar-na-guilda.md).
 
 ## Conferir tudo
 
@@ -56,6 +56,6 @@ O instalador é o mesmo em toda máquina e não pergunta papel. Ele procura uma 
 2. Veja a coluna **Checklist** de cada máquina e use a correção oferecida; correções de rede, firewall ou serviços pedem a sua aprovação ([checklist](../plataforma/checklist.md)).
 3. As portas que o firewall precisa liberar, se for conferir um, estão na tabela de [componentes](../arquitetura/componentes.md#portas).
 
-Em seguida: [primeiro acesso](primeiro-acesso.md), [parear o Telegram](parear-telegram.md) e criar o primeiro workspace (**Workspaces → Criar**, [sessão zero do workspace](../sessao-zero/workspace.md)). Máquina em outra rede: `--join <endereço da Cidadela>` no instalador, ou `JOIN=<endereço>` no MSI ([entrar na Guilda](entrar-na-guilda.md#máquina-fora-da-rede-local)).
+Em seguida: [primeiro acesso](primeiro-acesso.md), [parear o Telegram](parear-telegram.md) e criar a primeira campanha (**Campanhas → Criar**, [sessão zero da campanha](../sessao-zero/workspace.md)). Máquina em outra rede: `--join <endereço da Cidadela>` no instalador, ou `JOIN=<endereço>` no MSI ([entrar na Guilda](entrar-na-guilda.md#máquina-fora-da-rede-local)).
 
 **Testar a Guilda numa máquina só:** instale uma segunda instância com `sudo mestre install --instance teste` (no Windows, num terminal de administrador). Ela tem pasta, portas e serviços próprios e entra na Guilda como outra máquina, o que basta para testar a entrada, a replicação e a troca de Cidadela ([instâncias](../arquitetura/componentes.md#instâncias)).

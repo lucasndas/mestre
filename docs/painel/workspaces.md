@@ -1,17 +1,17 @@
-# Workspaces no painel
+# Campanhas no painel
 
-> **Assunto:** telas de workspaces: lista, criação (com a ficha do Grão-Mestre), etapas da sessão zero e nova tentativa, pausa, pergunta de versionamento do `.mestre/` e comandos de verificação (proposta, edição, confirmação e edição por fora) · **Componente:** Painel · **Atualizado:** 2026-10-27
+> **Assunto:** telas de campanhas: lista, criação (com a ficha do Grão-Mestre), etapas da sessão zero e nova tentativa, pausa, pergunta de versionamento do `.mestre/` e comandos de verificação (proposta, edição, confirmação e edição por fora) · **Componente:** Painel · **Atualizado:** 2026-10-27
 
 ## Objetivo
 
-Dar ao Dono e aos Administradores o lugar onde um workspace nasce e onde se acompanha a [sessão zero](../sessao-zero/workspace.md). A tela é só interface: as regras são as de [workspaces](../orquestracao/workspaces.md) e da sessão zero, e o servidor confere o nível e o workspace em toda requisição ([administração](administracao.md)).
+Dar ao Senhor da Guilda e aos Administradores o lugar onde uma campanha nasce e onde se acompanha a [sessão zero](../sessao-zero/workspace.md). A tela é só interface: as regras são as de [campanhas](../orquestracao/workspaces.md) e da sessão zero, e o servidor confere o nível e a campanha em toda requisição ([administração](administracao.md)).
 
 ## Comportamento
 
-- **Lista** (`/workspaces`, ao vivo pelo tópico `workspaces:all` do `/ws/ui`): cada usuário vê só os workspaces dele; o Dono vê todos. Cada cartão mostra repositório, apelido, estado (em preparação, ativo, pausado), a ficha e o estado do Grão-Mestre, quantas mesas andam e quantos pedidos esperam o usuário, e o pull request da sessão zero; os botões são **Abrir** (a [visão do workspace](visao-do-workspace.md#como-se-chega-e-o-workspace-atual)) e **Conversar**. Sem workspace, o vazio diz que é preciso criar um (e, para o Dono sem os Apps do GitHub, que o passo antes é conectá-los: [Primeiros passos](primeira-jornada.md#primeiros-passos)); "Criar workspace" fica no alto da lista.
-- **Criar** (Administrador ou acima): repositório `dono/nome`, apelido opcional (imutável) e a **ficha do Grão-Mestre**, escolhida entre as fichas que rodam um agente, não usam a base do Operador do PC e têm base executável em toda máquina não excluída (`characters.GrandMasterSheetProblem`, a mesma regra de quem cria o Grão-Mestre por qualquer caminho). A criação abre a sessão zero; a ficha fica guardada e a etapa `files` inicia o Grão-Mestre com ela. Recusas com o motivo: ficha desconhecida, repositório que já é um workspace, repositório ou apelido inválidos. Quem cria sem ser o Dono só atua no workspace novo depois que o Dono o põe na lista dele.
+- **Lista** (`/workspaces`, ao vivo pelo tópico `workspaces:all` do `/ws/ui`): cada usuário vê só as campanhas dele; o Senhor da Guilda vê todos. Cada cartão mostra repositório, apelido, estado (em preparação, ativo, pausado), a ficha e o estado do Grão-Mestre, quantas mesas andam e quantos pedidos esperam o usuário, e o pull request da sessão zero; os botões são **Abrir** (a [visão da campanha](visao-do-workspace.md#como-se-chega-e-a-campanha-atual)) e **Conversar**. Sem campanha, o vazio diz que é preciso criar um (e, para o Senhor da Guilda sem os Apps do GitHub, que o passo antes é conectá-los: [Primeiros passos](primeira-jornada.md#primeiros-passos)); "Criar campanha" fica no alto da lista.
+- **Criar** (Administrador ou acima): repositório `dono/nome`, apelido opcional (imutável) e a **ficha do Grão-Mestre**, escolhida entre as fichas que rodam um agente, não usam a base do Operador do PC e têm base executável em toda máquina não excluída (`characters.GrandMasterSheetProblem`, a mesma regra de quem cria o Grão-Mestre por qualquer caminho). A criação abre a sessão zero; a ficha fica guardada e a etapa `files` inicia o Grão-Mestre com ela. Recusas com o motivo: ficha desconhecida, repositório que já é uma campanha, repositório ou apelido inválidos. Quem cria sem ser o Senhor da Guilda só atua na campanha nova depois que o Senhor da Guilda o põe na lista dele.
 - **Etapas da sessão zero** (Apps, espelho, arquivos, análise, teste de aprovação), cada uma pendente, em andamento, esperando (e o quê), feita ou com erro (motivo e quantas vezes). **Tentar de novo** (Administrador) roda a etapa agora, sem esperar o recuo; o resultado aparece na própria lista.
-- **Pausar e retomar** (Administrador): pausa as mesas junto; um workspace em preparação não se pausa.
+- **Pausar e retomar** (Administrador): pausa as mesas junto; uma campanha em preparação não se pausa.
 - **Pergunta do versionamento:** enquanto o `.mestre/` não foi respondido, o cartão traz a pergunta (só local ou versionar no projeto, que abre o pull request da sessão zero); quem não é Administrador vê que ela espera. A resposta fica na auditoria.
 
 ### Comandos de verificação
@@ -29,27 +29,27 @@ Código: `internal/panel/routes_workspaces.go` e `types_workspaces.go` (`Workspa
 |---|---|---|
 | `GET /api/workspaces` | Observador ou acima | a lista, as fichas possíveis e se o usuário cria |
 | `POST /api/workspaces` | Administrador | cria com a ficha do Grão-Mestre |
-| `POST /api/workspaces/{slug}/retry`, `/pause`, `/resume`, `/versioning` | Administrador, no workspace dele | tentar de novo, pausar, retomar, responder (`local` ou `versioned`) |
-| `GET`, `PUT /api/workspaces/{slug}/verification` | leitura: quem vê o workspace; `PUT`: Administrador | a visão e a confirmação |
+| `POST /api/workspaces/{slug}/retry`, `/pause`, `/resume`, `/versioning` | Administrador, na campanha dele | tentar de novo, pausar, retomar, responder (`local` ou `versioned`) |
+| `GET`, `PUT /api/workspaces/{slug}/verification` | leitura: quem vê a campanha; `PUT`: Administrador | a visão e a confirmação |
 
 Auditoria `panel.workspace.*` (`created`, `retry`, `pause`, `resume`, `versioning`, `verification_confirmed`, esta com o antes e o depois do documento). O que o motor recusa volta como `refused` com `reason` (`unknown_sheet`, `bad_grand_master_sheet`, `repo_taken`, `invalid_slug`, `not_ready`, `invalid_document`…), e nada é auditado como feito.
 
 ## Regras e erros
 
-- O servidor confere o nível e o workspace em toda requisição; quem não atua num workspace recebe "não encontrado", como no canvas.
-- Criar, tentar de novo, pausar, retomar, responder e confirmar são do Administrador ou acima; o Dono vê e age em todos. Nenhuma dessas ações pede PIN ([lista de ações com PIN](../telegram/usuarios-e-niveis.md#pin-pessoal)).
+- O servidor confere o nível e a campanha em toda requisição; quem não atua numa campanha recebe "não encontrado", como no canvas.
+- Criar, tentar de novo, pausar, retomar, responder e confirmar são do Administrador ou acima; o Senhor da Guilda vê e age em todos. Nenhuma dessas ações pede PIN ([lista de ações com PIN](../telegram/usuarios-e-niveis.md#pin-pessoal)).
 - O que o motor recusa nunca vira ação feita: nada é gravado e nada vai para a auditoria.
-- Sem ficha escolhida (um workspace criado fora do painel), a etapa `files` para dizendo isso.
+- Sem ficha escolhida (uma campanha criada fora do painel), a etapa `files` para dizendo isso.
 
 ## Critérios de aceite
 
-- **CA-WSP-01** · *rápida* — **Dado** um Administrador e uma ficha de agente, **quando** cria o workspace, **então** a sessão zero abre, a ficha fica guardada e a etapa `files` inicia o Grão-Mestre com ela; **dado** uma ficha desconhecida, **então** a criação é recusada e nenhum workspace nasce.
-- **CA-WSP-02** · *rápida* — **Dado** um Aprovador, **quando** chama a API de criar, tentar de novo, responder o versionamento ou confirmar os comandos, **então** recebe a recusa com o nível exigido; **dado** um Administrador de outro workspace, **então** recebe "não encontrado" e o motor não é chamado.
-- **CA-WSP-03** · *rápida* — **Dado** um usuário que atua só em `loja`, **quando** abre a lista, **então** vê só `loja`; o Dono vê todos; sem o motor a API responde que não está disponível.
+- **CA-WSP-01** · *rápida* — **Dado** um Administrador e uma ficha de agente, **quando** cria a campanha, **então** a sessão zero abre, a ficha fica guardada e a etapa `files` inicia o Grão-Mestre com ela; **dado** uma ficha desconhecida, **então** a criação é recusada e nenhuma campanha nasce.
+- **CA-WSP-02** · *rápida* — **Dado** um Aprovador, **quando** chama a API de criar, tentar de novo, responder o versionamento ou confirmar os comandos, **então** recebe a recusa com o nível exigido; **dado** um Administrador de outra campanha, **então** recebe "não encontrado" e o motor não é chamado.
+- **CA-WSP-03** · *rápida* — **Dado** um usuário que atua só em `loja`, **quando** abre a lista, **então** vê só `loja`; o Senhor da Guilda vê todos; sem o motor a API responde que não está disponível.
 
 ## Depende de
 
 - [Administração](administracao.md)
-- [Workspaces](../orquestracao/workspaces.md)
-- [Sessão zero do workspace](../sessao-zero/workspace.md)
+- [Campanhas](../orquestracao/workspaces.md)
+- [Sessão zero da campanha](../sessao-zero/workspace.md)
 - [Usuários e níveis](../telegram/usuarios-e-niveis.md)

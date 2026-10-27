@@ -159,7 +159,7 @@ func TestApprovingAProposalAsksThePINAndGoesToTheLibraryWithTheHash(t *testing.T
 	m.wantErr(m.call("POST", "/api/classes/proposals/7/approve", body, opts{cookie: adm, pin: "654321"}), 409, panel.CodeProposalStale)
 }
 
-// CA-GH-APPS-04: an Administrator who opens the link of creation gets "exige Dono" and no
+// CA-GH-APPS-04: an Administrator who opens the link of creation gets "exige Senhor da Guilda" and no
 // form is made; nobody logged in is asked to enter; the Owner gets the form that goes to GitHub.
 func TestOnlyTheOwnerOpensTheLinkOfCreationAndNoFormIsMadeForAnAdministrator(t *testing.T) {
 	t.Parallel()
@@ -187,7 +187,7 @@ func TestOnlyTheOwnerOpensTheLinkOfCreationAndNoFormIsMadeForAnAdministrator(t *
 		return rec
 	}
 	got := open(adm)
-	if got.Code != http.StatusForbidden || !strings.Contains(got.Body.String(), "Exige Dono") || strings.Contains(got.Body.String(), "<form") {
+	if got.Code != http.StatusForbidden || !strings.Contains(got.Body.String(), "Exige Senhor da Guilda") || strings.Contains(got.Body.String(), "<form") {
 		t.Fatalf("Administrator opening the link: %d %s", got.Code, got.Body)
 	}
 	if got := open(""); got.Code != http.StatusUnauthorized || strings.Contains(got.Body.String(), "<form") {

@@ -313,7 +313,7 @@ func (s *Service) moved(ctx context.Context, w Workspace, now time.Time, cause e
 		return
 	}
 	err := s.o.Alerts.Operational(ctx, Alert{Workspace: w.Slug, Kind: AlertWorktreeMoved, Since: now,
-		Detail: fmt.Sprintf("O clone principal do workspace %s não aponta mais para o espelho do Mestre; o motor não o usa até alguém conferir. %v", w.Slug, cause)})
+		Detail: fmt.Sprintf("O clone principal da campanha %s não aponta mais para o espelho do Mestre; o motor não o usa até alguém conferir. %v", w.Slug, cause)})
 	if err != nil {
 		s.log.Error("workspace alert", "workspace", w.Slug, "kind", AlertWorktreeMoved, "err", err)
 		return
@@ -336,7 +336,7 @@ func (s *Service) alerts(ctx context.Context, slug string) {
 	now := s.o.Clock.Now()
 	if due, _ := s.fetchAlertDue(w, now); due {
 		err := s.o.Alerts.Operational(ctx, Alert{Workspace: w.Slug, Kind: AlertFetchFailing, Since: w.Fetch.FailingSince,
-			Detail: fmt.Sprintf("O espelho do workspace %s não consegue buscar o GitHub desde %s: %s. As mesas seguem trabalhando localmente.",
+			Detail: fmt.Sprintf("O espelho da campanha %s não consegue buscar o GitHub desde %s: %s. As mesas seguem trabalhando localmente.",
 				w.Slug, w.Fetch.FailingSince.Format(time.RFC3339), w.Fetch.Error)})
 		if err == nil {
 			err = s.store.FetchAlerted(ctx, w.Slug, now)
@@ -345,7 +345,7 @@ func (s *Service) alerts(ctx context.Context, slug string) {
 	}
 	if due, _ := s.advanceAlertDue(w, now); due {
 		err := s.o.GrandMaster.NotifySystem(ctx, w.Slug, fmt.Sprintf(
-			"O clone principal do workspace %s não avança para origin/%s desde %s: %s.",
+			"O clone principal da campanha %s não avança para origin/%s desde %s: %s.",
 			w.Slug, w.DefaultBranch, w.Advance.BlockedSince.Format(time.RFC3339), w.Advance.Reason))
 		if err == nil {
 			err = s.store.AdvanceAlerted(ctx, w.Slug, now)

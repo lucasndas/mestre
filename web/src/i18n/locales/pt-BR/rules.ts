@@ -1,11 +1,11 @@
 export default {
   loading: "Carregando…",
   noWorkspace:
-    "Ainda não há nenhum workspace. Quando você conectar um repositório, as regras dele aparecem aqui.",
-  workspace: "Workspace",
+    "Ainda não há nenhuma campanha. Quando você conectar um repositório, as regras dela aparecem aqui.",
+  workspace: "Campanha",
   cancel: "Cancelar",
   levels: {
-    owner: "Dono",
+    owner: "Senhor da Guilda",
     admin: "Administrador",
     administrator: "Administrador",
     approver: "Aprovador",
@@ -16,7 +16,7 @@ export default {
   types: {
     envio_workflows: "envio de workflows",
     configuracao_repositorio: "configuração do repositório",
-    classe_workspace: "classe do workspace",
+    classe_workspace: "classe da campanha",
     acao_destrutiva: "ação destrutiva",
     proposta_agents_md: "proposta de AGENTS.md",
     ativacao_operador: "ativação do Operador",
@@ -41,7 +41,7 @@ export default {
     made: "Decreto feito.",
     new: "Novo decreto",
     showEnded: "Mostrar também os que já acabaram",
-    empty: "Nenhum decreto em vigor neste workspace.",
+    empty: "Nenhum decreto em vigor nesta campanha.",
     revoked: "Decreto {{number}} revogado.",
     number: "Decreto {{number}}",
     kinds: { rule: "Regra permanente", exception: "Exceção pontual" },
@@ -56,7 +56,7 @@ export default {
     text: "Ordem original",
     author: "Autor",
     scope: "Alcance",
-    wholeWorkspace: "o workspace inteiro",
+    wholeWorkspace: "a campanha inteira",
     validity: "Validade",
     once: "uma vez",
     until: "até {{when}}",
@@ -85,7 +85,7 @@ export default {
         class: "Uma classe",
         character: "Um personagem",
         table: "Uma mesa",
-        workspace: "O workspace inteiro",
+        workspace: "A campanha inteira",
       },
       targetName: "Nome",
       side: "Efeito",
@@ -121,9 +121,9 @@ export default {
       "O que o Grão-Mestre e os Mestres de mesa podem decidir no lugar das pessoas, e por quanto tempo. Revogar tira a permissão na hora.",
     renewed: "Delegação renovada.",
     revokeAllHint:
-      "Para uma emergência: encerra todas as delegações e regras temporárias de todos os workspaces.",
+      "Para uma emergência: encerra todas as delegações e regras temporárias de todas as campanhas.",
     revokeAllWarning:
-      "Isto encerra {{count}} delegação(ões), subdelegação(ões) e regra(s) temporária(s) em todos os workspaces, e não se desfaz.",
+      "Isto encerra {{count}} delegação(ões), subdelegação(ões) e regra(s) temporária(s) em todas as campanhas, e não se desfaz.",
     revokeAllConfirm: "Sim, revogar tudo",
     revokeAll: "Revogar todas as delegações",
     revokedAll:
@@ -151,7 +151,7 @@ export default {
     title: "Supervisão da cadeia",
     intro:
       "Por mesa: se a autonomia do Mestre da mesa está pausada, quem pausou e por quê, e como anda a fila de aprovações.",
-    noTables: "Nenhuma mesa aberta neste workspace.",
+    noTables: "Nenhuma mesa aberta nesta campanha.",
     queues: "Fila de aprovações",
     level: "Nível",
     open: "Abertos",
@@ -179,11 +179,11 @@ export default {
     resume: "Retomar",
   },
   ceiling: {
-    title: "Teto do workspace",
+    title: "Teto da campanha",
     intro:
-      "O máximo que qualquer classe do workspace pode ter. Ampliar o teto só se faz por decreto.",
+      "O máximo que qualquer classe da campanha pode ter. Ampliar o teto só se faz por decreto.",
     inForce: "O teto em vigor",
-    noFile: "Este workspace não tem arquivo de teto: valem só as regras fixas.",
+    noFile: "Esta campanha não tem arquivo de teto: valem só as regras fixas.",
     invalid: "O arquivo do teto não é válido e o Mestre o recusa: {{reason}}",
     fileLabel: "Arquivo do teto, somente leitura",
     readOnly: "Aqui o teto só se lê. Para ampliá-lo, abra um pedido de decreto.",
@@ -204,7 +204,7 @@ export default {
       "O arquivo que diz o que o Grão-Mestre decide sozinho, o que vai às pessoas e em quanto tempo. O Mestre confere o arquivo inteiro antes de salvar.",
     saved: "Política salva. Vale a partir do próximo pedido.",
     default:
-      "Este workspace ainda não tem o próprio arquivo: o conteúdo abaixo é o padrão e vira o arquivo quando você salvar.",
+      "Esta campanha ainda não tem o próprio arquivo: o conteúdo abaixo é o padrão e vira o arquivo quando você salvar.",
     fileLabel: "politica-de-aprovacao.yaml",
     fileHint: "YAML. Um arquivo inválido não salva nada.",
     line: "Linha {{line}}:",
@@ -215,13 +215,13 @@ export default {
   instructions: {
     title: "Instruções extras",
     intro:
-      "O seu texto para o Grão-Mestre e para os Mestres de mesa de cada workspace. Ele soma às instruções do sistema, nunca as substitui.",
+      "O seu texto para o Grão-Mestre e para os Mestres de mesa de cada campanha. Ele soma às instruções do sistema, nunca as substitui.",
     adds: "Vale a partir do próximo turno. Se algo conflitar com as instruções do sistema, valem as do sistema.",
     grandMaster: "Instruções para o Grão-Mestre",
     tableMasters: "Instruções para os Mestres de mesa",
     textLabel: "Texto: {{who}}",
     grandMasterHint: "Por exemplo: prefira Codex para revisão neste repositório.",
-    tableMastersHint: "Vale para todos os Mestres de mesa deste workspace.",
+    tableMastersHint: "Vale para todos os Mestres de mesa desta campanha.",
     size: "{{size}} de {{max}} bytes",
     saved: "Instruções salvas.",
     save: "Salvar",

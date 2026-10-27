@@ -83,7 +83,7 @@ A entrega aos personagens é feita pela sessão zero ([mesa](../sessao-zero/mesa
 ## Regras e erros
 
 - Skills geradas nunca são editadas à mão: a regeneração sobrescreve tudo que tem o marcador. Uma pasta `mestre-*` sem o marcador (feita por alguém) não é tocada, nem para sobrescrever, nem para remover (também a cópia de `.claude/skills/` e a pasta de skills de cada personagem); o motor avisa o conflito no checklist. O marcador só vale na linha logo depois do frontmatter: um arquivo que cita o marcador em outro lugar não é gerado.
-- A cópia em `.claude/skills/` só é desligada quando a conformidade detecta que o Claude Code passou a ler `.agents/skills/`, o checklist oferece desligá-la e um Dono ou Administrador aprova ([checklist](../plataforma/checklist.md), ALL-13).
+- A cópia em `.claude/skills/` só é desligada quando a conformidade detecta que o Claude Code passou a ler `.agents/skills/`, o checklist oferece desligá-la e um Senhor da Guilda ou Administrador aprova ([checklist](../plataforma/checklist.md), ALL-13).
 - O teste de conformidade de cada provedor confere que as skills aparecem ([conformidade](../provedores/conformidade.md)).
 
 ## Critérios de aceite

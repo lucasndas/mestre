@@ -59,7 +59,7 @@ func TestAHandEditThatFreesDockerHoldsOnlyAfterADecree(t *testing.T) {
 		}
 		return decide(m.env(), r, m.shell("docker run alpine"))
 	}
-	want(t, dockerUnder(), classes.Deny, classes.LayerCeiling, "teto do workspace")
+	want(t, dockerUnder(), classes.Deny, classes.LayerCeiling, "teto da campanha")
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -77,7 +77,7 @@ func TestAHandEditThatFreesDockerHoldsOnlyAfterADecree(t *testing.T) {
 	if a.Kind != classes.CeilingWidens || a.Approved != approved || !strings.Contains(strings.Join(a.Diff.Widens, ";"), "docker *") {
 		t.Fatalf("alert = %+v; want the widening that frees docker *", a)
 	}
-	want(t, dockerUnder(), classes.Deny, classes.LayerCeiling, "teto do workspace")
+	want(t, dockerUnder(), classes.Deny, classes.LayerCeiling, "teto da campanha")
 
 	pending := ceiling(t, edited).Hash
 	if err := k.ApprovePending(ctx, pending, classes.Authority{Level: classes.LevelAdmin, Via: classes.ViaPanel}); !errors.Is(err, classes.ErrCeilingNeedsDecree) {

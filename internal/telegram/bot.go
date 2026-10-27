@@ -558,7 +558,7 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 			b.say(ctx, m.Chat.ID, u.ID, "O Mestre está travado e não consegui guardar a mensagem. Mande de novo depois.")
 			return
 		}
-		b.say(ctx, m.Chat.ID, u.ID, "O Mestre está travado: a sua mensagem fica guardada e vai ao Grão-Mestre quando o Dono destravar.")
+		b.say(ctx, m.Chat.ID, u.ID, "O Mestre está travado: a sua mensagem fica guardada e vai ao Grão-Mestre quando o Senhor da Guilda destravar.")
 		return
 	}
 	if b.o.Router == nil {

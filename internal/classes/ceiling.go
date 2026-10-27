@@ -179,7 +179,7 @@ func (e Excess) String() string {
 // ErrCeilingDenied is a class that does not fit in the ceiling: it is not
 // created or saved (ceiling_denied of the CLI,
 // docs/cli/coordenacao-classes-e-rituais.md).
-var ErrCeilingDenied = errors.New("acima do teto do workspace")
+var ErrCeilingDenied = errors.New("acima do teto da campanha")
 
 // Fits returns nil when the class fits in the ceiling, or ErrCeilingDenied
 // citing every item that passes it. Creating or editing a class (of the

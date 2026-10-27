@@ -147,4 +147,4 @@ A mesa acumula as missões na branch do épico; quando o épico está pronto, o 
 
 - [Mesas](mesas.md) · [Personagens](personagens.md) · [Esperas e caixa de entrada](esperas-e-caixa-de-entrada.md) · [Conexões](conexoes.md)
 - [Pergaminhos e tomos](pergaminhos-e-tomos.md)
-- [Teto do workspace](../classes/teto-do-workspace.md)
+- [Teto da campanha](../classes/teto-do-workspace.md)
