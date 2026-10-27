@@ -2,14 +2,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useChatControl } from "../../app/chatControl";
 import { useCan, useFormatDateTime } from "../../app/session";
 import { SensitiveButton } from "../../components/PinField";
-import { Term } from "../../components/Term";
-import { Alert } from "../../components/ui";
+import { Alert, Button } from "../../components/ui";
 import type { ClassRow, ProposalRow } from "../../gen/panel";
 import { api } from "../../lib/api";
-import { errorText } from "../../lib/errors";
-import { Badge, PageHeader } from "./kit";
+import { Badge, EmptyState, LoadError, PageHeader, StatusStrip, VocabLine } from "./kit";
 import { classesQuery, labelOr, type Say } from "./manage";
 
 /** The tone of the label of an App state ("em criação", "pronto", "com erro"). */
@@ -19,31 +18,70 @@ export function appTone(state: string): "plain" | "ok" | "warn" | "danger" {
   return "warn";
 }
 
+/** The class has an App that is not ready: without it the class cannot open PRs. */
+const appWaits = (c: ClassRow) => c.app !== "" && c.app_state !== "" && c.app_state !== "pronto";
+
 /**
- * The classes screen: the warning band of the Apps count (CA-ADM-02), the proposals that wait
- * for an Administrator, and the classes in force with the App of each.
+ * The classes screen: where the classes stand, the proposals that wait for an Administrator, and
+ * the classes in force by scope with the App of each.
  */
 export function Classes() {
   const { t } = useTranslation("classes");
-  const { t: te } = useTranslation("errors");
-  const { data, error } = useQuery(classesQuery);
+  const chat = useChatControl();
+  const { data, error, refetch } = useQuery(classesQuery);
   const [notice, setNotice] = useState<string | null>(null);
 
   return (
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
-      <div className="flex max-w-5xl flex-col gap-6">
-        {data?.apps.near ? <AppsBand total={data.apps.total} limit={data.apps.limit} /> : null}
-        {notice ? <Alert tone="ok">{notice}</Alert> : null}
-        {error ? <Alert>{errorText(te, error)}</Alert> : null}
-        {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
-        {data ? (
-          <>
+      <VocabLine terms={["Classe", "App do GitHub"]} />
+      {error ? <LoadError what={t("what")} error={error} onRetry={() => void refetch()} /> : null}
+      {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
+      {data && !error ? (
+        <div className="flex max-w-4xl flex-col gap-6">
+          {data.proposals.length > 0 ? (
+            <StatusStrip
+              tone="warn"
+              title={
+                data.proposals.length === 1
+                  ? t("strip.proposalsOne")
+                  : t("strip.proposals", { count: data.proposals.length })
+              }
+              hint={t("strip.proposalsHint")}
+            />
+          ) : data.classes.length > 0 ? (
+            <StatusStrip
+              tone={data.classes.some(appWaits) ? "warn" : "ok"}
+              title={
+                data.classes.length === 1
+                  ? t("strip.inForceOne")
+                  : t("strip.inForce", { count: data.classes.length })
+              }
+              hint={data.classes.some(appWaits) ? t("strip.inForceApp") : t("strip.inForceHint")}
+            />
+          ) : (
+            <StatusStrip tone="warn" title={t("strip.none")} hint={t("strip.noneHint")}>
+              <Button onPress={chat.show}>{t("strip.talk")}</Button>
+            </StatusStrip>
+          )}
+          {data.apps.near ? <AppsBand total={data.apps.total} limit={data.apps.limit} /> : null}
+          {notice ? <Alert tone="ok">{notice}</Alert> : null}
+          {data.proposals.length > 0 ? (
             <Proposals proposals={data.proposals} onApproved={setNotice} />
+          ) : null}
+          {data.classes.length > 0 ? (
             <ClassList classes={data.classes} />
-          </>
-        ) : null}
-      </div>
+          ) : (
+            <EmptyState
+              title={t("empty.title")}
+              why={t("empty.why")}
+              steps={[t("empty.step1"), t("empty.step2"), t("empty.step3")]}
+            >
+              <Button onPress={chat.show}>{t("strip.talk")}</Button>
+            </EmptyState>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -58,7 +96,7 @@ function AppsBand({ total, limit }: { total: number; limit: number }) {
     >
       <span>{t("band", { total, limit })}</span>
       {canApps ? (
-        <Link to="/apps" className="underline underline-offset-2">
+        <Link to="/apps" className="inline-flex min-h-11 items-center underline underline-offset-2">
           {t("bandLink")}
         </Link>
       ) : null}
@@ -79,7 +117,6 @@ function Proposals({
       <h2 id="proposals-title" className="text-2xl">
         {t("proposals.title")}
       </h2>
-      {proposals.length === 0 ? <p className="text-muted">{t("proposals.empty")}</p> : null}
       <ul className="flex flex-col gap-3">
         {proposals.map((p) => (
           <ProposalItem key={p.id} p={p} onApproved={onApproved} />
@@ -115,115 +152,101 @@ function ProposalItem({ p, onApproved }: { p: ProposalRow; onApproved: (text: st
               <li key={x}>{x}</li>
             ))}
           </ul>
+          <p className="mt-1 text-muted">{t("proposals.howToFix")}</p>
         </div>
-      ) : null}
-      <div className="mt-3">
-        <SensitiveButton
-          isDisabled={blocked}
-          onConfirm={async (pin) => {
-            try {
-              await api(
-                "POST",
-                `/api/classes/proposals/${p.id}/approve`,
-                { workspace: p.workspace, hash: p.hash },
-                { pin },
-              );
-            } catch (err) {
-              // a proposal that changed or went away: show what is there now
-              await qc.invalidateQueries({ queryKey: ["admin", "classes"] });
-              throw err;
-            }
-            onApproved(t("proposals.approved", { name: p.name }));
-            await qc.invalidateQueries({ queryKey: ["admin"] });
-          }}
-        >
-          {t("proposals.approve", { name: p.name })}
-        </SensitiveButton>
-      </div>
+      ) : (
+        <div className="mt-3">
+          <SensitiveButton
+            onConfirm={async (pin) => {
+              try {
+                await api(
+                  "POST",
+                  `/api/classes/proposals/${p.id}/approve`,
+                  { workspace: p.workspace, hash: p.hash },
+                  { pin },
+                );
+              } catch (err) {
+                // a proposal that changed or went away: show what is there now
+                await qc.invalidateQueries({ queryKey: ["admin", "classes"] });
+                throw err;
+              }
+              onApproved(t("proposals.approved", { name: p.name }));
+              await qc.invalidateQueries({ queryKey: ["admin"] });
+            }}
+          >
+            {t("proposals.approve", { name: p.name })}
+          </SensitiveButton>
+        </div>
+      )}
     </li>
   );
 }
 
+/** The classes in cards, grouped by where they hold: the whole Guild, each campaign, the tables. */
 function ClassList({ classes }: { classes: ClassRow[] }) {
   const { t } = useTranslation("classes");
-  const say = t as unknown as Say;
+  const groups: { key: string; title: string; rows: ClassRow[] }[] = [];
+  const add = (key: string, title: string, c: ClassRow) => {
+    const g = groups.find((x) => x.key === key);
+    if (g) g.rows.push(c);
+    else groups.push({ key, title, rows: [c] });
+  };
+  const order = { global: 0, workspace: 1, table: 2 } as Record<string, number>;
+  for (const c of [...classes].sort((a, b) => (order[a.scope] ?? 3) - (order[b.scope] ?? 3))) {
+    if (c.scope === "workspace")
+      add(`ws/${c.workspace}`, t("groups.workspace", { where: c.workspace }), c);
+    else if (c.scope === "table") add("table", t("groups.table"), c);
+    else add("global", t("groups.global"), c);
+  }
   return (
-    <section aria-labelledby="classes-title" className="flex flex-col gap-3">
-      <h2 id="classes-title" className="text-2xl">
-        {t("list.title")}
-      </h2>
-      <p className="text-sm text-muted">
-        <Term name="Classe" />
+    <div className="flex flex-col gap-6">
+      {groups.map((g) => (
+        <section key={g.key} aria-label={g.title} className="flex flex-col gap-3">
+          <h2 className="text-2xl">{g.title}</h2>
+          <ul className="flex flex-col gap-3">
+            {g.rows.map((c) => (
+              <ClassItem key={`${c.scope}/${c.workspace}/${c.table}/${c.name}`} c={c} />
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function ClassItem({ c }: { c: ClassRow }) {
+  const { t } = useTranslation("classes");
+  const say = t as unknown as Say;
+  const notReady = appWaits(c);
+  return (
+    <li className="rounded-field border border-line bg-surface p-4">
+      <p className="flex flex-wrap items-center gap-2 text-lg font-semibold">
+        <span>{c.name}</span>
+        <Badge>{labelOr(say, `states.${c.state}`, c.state)}</Badge>
+        {c.app ? (
+          <Badge tone={appTone(c.app_state)}>
+            {c.app}
+            {c.app_state ? ` · ${c.app_state}` : ""}
+          </Badge>
+        ) : (
+          <Badge tone="warn">{t("list.noApp")}</Badge>
+        )}
+        <span className="text-sm font-normal text-muted">
+          {t("list.version", { version: c.version })}
+          {c.table ? ` · ${c.workspace} / ${c.table}` : ""}
+        </span>
       </p>
-      {classes.length === 0 ? <p className="text-muted">{t("list.empty")}</p> : null}
-      {classes.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] border-collapse text-left">
-            <caption className="sr-only">{t("list.caption")}</caption>
-            <thead>
-              <tr className="border-b border-line text-sm text-muted">
-                <th scope="col" className="py-2 pr-4">
-                  {t("list.name")}
-                </th>
-                <th scope="col" className="py-2 pr-4">
-                  {t("list.scope")}
-                </th>
-                <th scope="col" className="py-2 pr-4">
-                  {t("list.where")}
-                </th>
-                <th scope="col" className="py-2 pr-4">
-                  {t("list.state")}
-                </th>
-                <th scope="col" className="py-2 pr-4">
-                  {t("list.app")}
-                </th>
-                <th scope="col" className="py-2">
-                  {t("list.version")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {classes.map((c) => (
-                <tr
-                  key={`${c.scope}/${c.workspace}/${c.table}/${c.name}`}
-                  className="border-b border-line align-top"
-                >
-                  <th scope="row" className="py-2 pr-4 font-semibold">
-                    {c.name}
-                    {c.problems.length > 0 ? (
-                      <span className="block text-sm font-normal text-danger">
-                        {c.problems.join("; ")}
-                      </span>
-                    ) : null}
-                  </th>
-                  <td className="py-2 pr-4">{labelOr(say, `scopes.${c.scope}`, c.scope)}</td>
-                  <td className="py-2 pr-4">
-                    {c.workspace
-                      ? c.table
-                        ? `${c.workspace} / ${c.table}`
-                        : c.workspace
-                      : t("list.everywhere")}
-                  </td>
-                  <td className="py-2 pr-4">{labelOr(say, `states.${c.state}`, c.state)}</td>
-                  <td className="py-2 pr-4">
-                    {c.app ? (
-                      <span className="flex flex-wrap items-center gap-2">
-                        {c.app}
-                        {c.app_state ? (
-                          <Badge tone={appTone(c.app_state)}>{c.app_state}</Badge>
-                        ) : null}
-                      </span>
-                    ) : (
-                      <span className="text-muted">{t("list.noApp")}</span>
-                    )}
-                  </td>
-                  <td className="py-2">{c.version}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {c.problems.length > 0 ? (
+        <p className="mt-1 text-sm text-danger">{c.problems.join("; ")}</p>
       ) : null}
-    </section>
+      {notReady ? (
+        <p className="mt-2 text-sm">
+          {t("list.appNotReady")}{" "}
+          <Link to="/apps" className="font-semibold underline underline-offset-2">
+            {t("list.appLink")}
+          </Link>
+        </p>
+      ) : null}
+    </li>
   );
 }

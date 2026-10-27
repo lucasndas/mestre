@@ -215,7 +215,7 @@ test("the Owner sees the classes and exports and imports a sheet", async ({ page
   await page.getByRole("button", { name: "Entrar" }).click();
   await openSetting(page, /^Classes/);
   await expect(page.getByRole("heading", { name: "Classes", level: 1 })).toBeVisible();
-  await expect(page.getByRole("rowheader", { name: "revisor" })).toBeVisible();
+  await expect(page.getByText("revisor", { exact: true }).first()).toBeVisible();
 
   await openSetting(page, /^Bases e fichas/);
   await expect(page.getByRole("heading", { name: "Bases e fichas", level: 1 })).toBeVisible();

@@ -2,7 +2,21 @@ export default {
   title: "Consumo de uso",
   intro:
     "Quanto custou e quanto tempo trabalharam os personagens, por dia, campanha, mesa, missão e conta, e quanto falta para cada limite.",
+  what: "o consumo",
   loading: "Carregando o consumo…",
+  strip: {
+    used: "{{percent}}% usado",
+    nearest: "O limite mais próximo de acabar é: {{name}}.",
+    nothing: "Nada gasto ainda",
+    nothingHint:
+      "Assim que um agente trabalhar, o gasto e o que falta para cada limite aparecem aqui.",
+    noLimit: "Nenhum limite com dado ainda",
+    noLimitHint:
+      "O gasto aparece abaixo; os limites mostram quanto falta quando o provedor informa o uso.",
+  },
+  emptyTitle: "Nada gasto ainda",
+  emptyStep1: "Peça algo ao Grão-Mestre para uma mesa começar a trabalhar.",
+  emptyStep2: "Volte aqui: o custo e o tempo de cada personagem entram por dia.",
   period: "Período",
   days: "Últimos {{count}} dias",
   noData: "sem dado",

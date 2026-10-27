@@ -1,36 +1,55 @@
 export default {
   title: "Apps do GitHub",
   intro:
-    "Os Apps fixos e os de cada classe, as campanhas em que estão instalados e quantos Apps a conta já tem.",
+    "Os robôs do Mestre no GitHub: cada ação dos agentes aparece com o nome de um deles, e você pode cortar o acesso quando quiser.",
+  what: "os Apps do GitHub",
   loading: "Carregando os Apps…",
+  strip: {
+    none: "Nenhum App do GitHub ainda",
+    noneHint: "Sem os Apps, os agentes não conseguem abrir PRs nem comentar no GitHub.",
+    waiting: "{{count}} Apps esperando um passo seu",
+    waitingOne: "1 App esperando um passo seu",
+    waitingHint: "Cada App diz abaixo o que fazer com ele.",
+    allReady: "Todos os Apps estão prontos",
+    allReadyHint: "Os agentes já podem abrir PRs com o nome de cada App.",
+    action: "Gerar o link do App {{name}}",
+  },
+  empty: {
+    title: "O que é um App do GitHub",
+    why: "É a identidade com que o Mestre age no GitHub. Você cria cada App uma vez, e o Mestre guarda a chave dele no cofre.",
+    step1: "Gere o link de criação do App (o PIN confirma).",
+    step2: "Abra o link no navegador em que você está logado no GitHub e confirme.",
+    step3: "Instale o App nos repositórios das suas campanhas.",
+  },
   count: "{{total}} de {{limit}} Apps na conta",
-  countDetail: "{{mine}} do Mestre e {{others}} de outros.",
+  countDetail:
+    "{{mine}} do Mestre e {{others}} de outros. O GitHub aceita até {{limit}} por conta.",
+  meterTitle: "Uso do limite de Apps",
   near: "Perto do limite de {{limit}} Apps do GitHub: criar mais pode falhar.",
   others: {
+    summary: "O Mestre não vê os seus outros Apps. Informar quantos são",
     label: "Outros Apps da conta",
-    hint: "O Mestre não lê a página de Apps do GitHub: informe quantos Apps que não são dele a conta tem e atualize quando mudar.",
+    hint: "Informe quantos Apps que não são do Mestre a conta tem e atualize quando mudar.",
     save: "Salvar",
     saved: "Número de outros Apps atualizado.",
   },
   list: {
     title: "Apps",
-    empty: "Ainda não há nenhum App. Eles aparecem quando uma classe ou o Mestre precisa de um.",
     caption: "Apps do Mestre",
-    name: "App",
-    role: "Papel",
-    class: "Classe",
-    state: "Estado",
-    repos: "Instalado em",
-    noRepos: "nenhuma campanha",
-    request: "Pedido",
-    actions: "Ação",
     fixed: "fixo",
+    class: "da classe {{class}}",
+    installed: "Instalado em: {{repos}}",
+    notInstalled: "Ainda não está instalado em nenhuma campanha.",
+  },
+  next: {
+    link: "Abra o link no navegador em que você está logado no GitHub e confirme. Vale até {{when}}.",
+    expired: "O link venceu.",
+    noLink: "Ainda sem link de criação.",
+    failed: "A criação falhou. Gere um novo link para tentar de novo.",
+    exchanging: "O GitHub está criando o App. Aguarde um instante.",
+    waitingOwner: "Só o Senhor da Guilda gera o link deste App.",
   },
   requests: {
-    title: "Pedidos de criação",
-    empty: "Nenhum pedido de criação aberto.",
-    expires: "vale até {{when}}",
-    expired: "vencido",
     status: {
       link: "link emitido",
       opened: "página aberta",
@@ -41,8 +60,8 @@ export default {
     },
   },
   link: {
-    new: "Novo link para {{name}}",
-    make: "Gerar link para {{name}}",
+    new: "Gerar novo link",
+    make: "Gerar o link de criação",
     title: "Link de criação do App {{name}}",
     detail:
       "Abra o link no navegador em que você está logado no GitHub com a sua conta pessoal. Vale até {{when}}.",
@@ -51,5 +70,6 @@ export default {
   },
   unavailable:
     "A criação de Apps não está disponível neste período; os links voltam quando estiver.",
-  ownerOnly: "Só o Senhor da Guilda gera links de criação e informa o número de outros Apps.",
+  readOnly:
+    "Você só lê esta tela: gerar links de criação e informar os outros Apps da conta é do Senhor da Guilda.",
 } as const;

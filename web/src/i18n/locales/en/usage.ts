@@ -5,7 +5,21 @@ const usage: Widen<typeof pt> = {
   title: "Usage",
   intro:
     "What the characters cost and how long they worked, by day, campaign, table, mission and account, and how much is left for each limit.",
+  what: "the usage",
   loading: "Loading the usage…",
+  strip: {
+    used: "{{percent}}% used",
+    nearest: "The limit closest to running out is: {{name}}.",
+    nothing: "Nothing spent yet",
+    nothingHint:
+      "As soon as an agent works, the spending and what is left for each limit show here.",
+    noLimit: "No limit with data yet",
+    noLimitHint:
+      "The spending shows below; the limits show what is left when the provider reports the usage.",
+  },
+  emptyTitle: "Nothing spent yet",
+  emptyStep1: "Ask the Grand Master for something so a table starts working.",
+  emptyStep2: "Come back here: the cost and time of each character come in by day.",
   period: "Period",
   days: "Last {{count}} days",
   noData: "no data",

@@ -2,12 +2,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SensitiveButton } from "../../components/PinField";
-import { Term } from "../../components/Term";
 import { Alert, Button } from "../../components/ui";
 import type { BaseRow, PresetSaved, SheetRow } from "../../gen/panel";
 import { api } from "../../lib/api";
-import { errorText } from "../../lib/errors";
-import { Badge, PageHeader } from "./kit";
+import { Badge, EmptyState, LoadError, PageHeader, StatusStrip, VocabLine } from "./kit";
 import { presetsQuery } from "./manage";
 import { ExportPanel, ImportPanel } from "./PresetsTransfer";
 
@@ -29,9 +27,8 @@ interface Editing {
 /** Bases and sheets: the lists, the YAML editor, and the export and import (Owner). */
 export function Presets() {
   const { t } = useTranslation("presets");
-  const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
-  const { data, error } = useQuery(presetsQuery);
+  const { data, error, refetch } = useQuery(presetsQuery);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin"] });
@@ -46,13 +43,31 @@ export function Presets() {
   return (
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
-      <p className="mb-6 max-w-2xl text-sm text-muted">
-        <Term name="Base" /> · <Term name="Ficha" />
-      </p>
+      <VocabLine terms={["Base", "Ficha"]} />
+      {error ? <LoadError what={t("what")} error={error} onRetry={() => void refetch()} /> : null}
+      {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
       <div className="flex max-w-5xl flex-col gap-8">
+        {data && !error ? (
+          <StatusStrip
+            tone={data.sheets.length === 0 ? "warn" : "ok"}
+            title={t("strip.title", { bases: data.bases.length, sheets: data.sheets.length })}
+            hint={data.sheets.length === 0 ? t("strip.noSheets") : t("strip.hint")}
+          >
+            <Button
+              onPress={() =>
+                setEditing({
+                  kind: "sheets",
+                  path: "novo",
+                  title: t("sheets.new"),
+                  yaml: NEW_SHEET,
+                })
+              }
+            >
+              {t("strip.action")}
+            </Button>
+          </StatusStrip>
+        ) : null}
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
-        {error ? <Alert>{errorText(te, error)}</Alert> : null}
-        {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
         {editing ? (
           <Editor
             key={`${editing.kind}/${editing.path}`}
@@ -64,7 +79,7 @@ export function Presets() {
             }}
           />
         ) : null}
-        {data ? (
+        {data && !error ? (
           <>
             <BaseList
               bases={data.bases}
@@ -204,7 +219,9 @@ function BaseList({
           {t("bases.new")}
         </Button>
       </div>
-      {bases.length === 0 ? <p className="text-muted">{t("bases.empty")}</p> : null}
+      {bases.length === 0 ? (
+        <EmptyState title={t("bases.emptyTitle")} why={t("bases.empty")} />
+      ) : null}
       {bases.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[40rem] border-collapse text-left">
@@ -275,7 +292,9 @@ function SheetList({
           {t("sheets.new")}
         </Button>
       </div>
-      {sheets.length === 0 ? <p className="text-muted">{t("sheets.empty")}</p> : null}
+      {sheets.length === 0 ? (
+        <EmptyState title={t("sheets.emptyTitle")} why={t("sheets.empty")} />
+      ) : null}
       {sheets.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[40rem] border-collapse text-left">
