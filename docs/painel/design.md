@@ -22,7 +22,7 @@ Escolhida pelo Senhor da Guilda em 2026-10-26, entre três propostas vistas em t
 - **Menu de quatro itens**, nunca mais: **Início**, **Aprovações** (com o contador de pendentes, só para quem decide), **Campanhas** e **Configurações**. No computador é uma coluna à esquerda; no celular, quatro abas fixas embaixo, com alvo de 56 px. O item da seção atual fica marcado em toda tela dela, inclusive visão da campanha, mesa e terminal (`aria-current`).
 - **Uma árvore só:** Campanhas › campanha › mesa (quadro, terminal e conversa). Toda tela com mais de um nível mostra **migalhas** acima do título: cada nível acima é um link, o último é o texto da página, e a campanha da migalha abre a troca de campanha. Telas de configuração mostram Configurações › grupo › tela. Nunca há tela sem caminho de volta.
 - **Uma campanha atual por vez** (a da migalha; fora de uma campanha, a última aberta, [visão da campanha](visao-do-workspace.md#como-se-chega-e-a-campanha-atual)), o mesmo para a conversa, o botão **Falar com o Grão-Mestre** e os atalhos; a conversa diz sempre sobre qual campanha fala.
-- **Barra de cima:** marca (leva ao Início), sino de avisos, botão **Grão-Mestre** e menu da conta, nessa ordem, numa linha só em qualquer largura (no celular o botão é só o ícone, com `aria-label`). O seletor de campanha e o contador de aprovações saem da barra: um vira migalha, o outro vira o número do item Aprovações. O menu da conta traz Minha conta (sessões e senha), idioma e Sair. O botão **Grão-Mestre** abre o painel lateral ([conversa](conversa-e-aprovacoes.md#conversa-com-o-grão-mestre)): uma coluna à direita no computador, tela inteira no celular; o texto do Grão-Mestre é Markdown sem HTML ativo (sem tag, sem imagem, só links `http`, `https` e `mailto`, que abrem em outra página). O número do item Aprovações vem de `/api/approvals/count` e de eventos `count` do assunto `approvals:<usuário>`; o sino é um balão (`DialogTrigger`) com a lista de avisos.
+- **Barra de cima:** marca (leva ao Início), sino de avisos, botão **Falar com o Grão-Mestre** (botão cheio, na cor de destaque) e avatar com o menu da conta, nessa ordem, numa linha só em qualquer largura (no celular o botão é só o ícone, com `aria-label`). O seletor de campanha e o contador de aprovações saem da barra: um vira migalha, o outro vira o número do item Aprovações. O menu da conta traz Minha conta (sessões e senha), idioma e Sair, e no rodapé a Guilda e o fuso em uso. O botão **Grão-Mestre** abre o painel lateral ([conversa](conversa-e-aprovacoes.md#conversa-com-o-grão-mestre), a mesma em toda tela): uma coluna à direita no computador, tela inteira no celular; o texto do Grão-Mestre é Markdown sem HTML ativo (sem tag, sem imagem, só links `http`, `https` e `mailto`, que abrem em outra página). O número do item Aprovações vem de `/api/approvals/count` e de eventos `count` do assunto `approvals:<usuário>`; o sino é um balão (`DialogTrigger`) com a lista de avisos.
 - **Início** é "o que está acontecendo agora" ([primeira jornada e Início](primeira-jornada.md#início-no-dia-a-dia)), não uma tela de boas-vindas.
 - **Configurações** é um índice de quatro grupos, cada um com a frase do que a tela faz: **Conta** (sessões, senha, GitHub pessoal), **Pessoas e acesso** (usuários, segredos, auditoria), **Infraestrutura** (Guilda e máquinas, perfis de conta, Apps do GitHub, classes, bases e fichas) e **Regras e consumo** (decretos, delegações, cadeia de aprovação, teto da campanha, política de aprovação, instruções extras, consumo) ([administração](administracao.md#telas)). Os nomes do vocabulário ficam, com `Term` e a frase ao lado; as rotas antigas continuam valendo.
 - Um cabeçalho de página por tela, `h1` único; um link "Ir para o conteúdo" para quem navega por teclado.
@@ -34,6 +34,28 @@ Escolhida pelo Senhor da Guilda em 2026-10-26, entre três propostas vistas em t
 - **Erro:** em cima do campo ou do formulário, com o motivo e a saída; texto traduzido pelo `code` e os `params` do servidor ([login](login.md#implementação)). Um código sem texto cai na mensagem em português do servidor, nunca em "erro desconhecido".
 - **Ocupado:** o botão que dispara fica desabilitado até a resposta; o PIN e as senhas são limpos depois de usados.
 - **Sucesso:** confirmação discreta no próprio lugar ("Sessão encerrada."), sem janela.
+
+## Vocabulário de estados
+
+Escrito uma vez, aqui. Toda tela (campanha, Início, canvas, sino, conversa) usa **estes rótulos e nenhum outro**; cada um tem palavra, ícone de forma própria e tom, nunca só cor. Diz-se sempre "aprovação".
+
+| Mesa | Quando ([estados](../orquestracao/mesas.md#estados) e esperas) |
+|---|---|
+| Preparando | `open` |
+| Trabalhando | `working`, sem espera |
+| Em revisão | `in_review` |
+| Espera a sua decisão | espera de aprovação |
+| Esperando | cota, outra mesa, pausa ou outra espera (a frase diz o quê) |
+| Travada | mesma falha repetida, ou sem entrega além do limite |
+| Entregue | `closed` com PR (também enquanto `closing`, com "encerrando" na frase) |
+| Cancelada · Encerrada | `cancelled` (e `cancelling`) · `closed` sem PR |
+
+**Personagem:** Trabalhando, Ocioso, Espera a sua decisão, Esperando (quem ou o quê), Sem sinal, Encerrado.
+
+- **Precisa de você** é o único nome das pendências, no Início e na campanha: aprovações, mesas Travadas e sem entrega. Uma aprovação também chega ao sino.
+- **Verbos:** Falar com o Grão-Mestre, Abrir mesa, Fixar e Desafixar. **Pausar mesa** pede sempre um motivo e para o trabalho de uma mesa; **Pausar autonomia** é outra coisa: muda o que os agentes decidem sozinhos ([supervisão](../orquestracao/supervisao-da-cadeia.md#pausa-de-autonomia)).
+- O sino e os avisos dizem o **nome humano** da mesa (o título do épico), nunca o identificador; o técnico (impressão, `arquivo:linha`, branch) fica em "Detalhes técnicos", recolhido.
+- O que muda por baixo avisa com um **aviso na tela** (embaixo à direita, com a ação, `role="status"`, some em 9 s, fecha com ×), sem janela ([vida da mesa](vida-da-mesa.md)).
 
 ## Recusa e desfazer
 

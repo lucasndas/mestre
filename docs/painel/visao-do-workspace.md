@@ -25,6 +25,8 @@ Dar, numa tela só, o estado de todas as mesas de uma campanha e o caminho para 
 
 ### Bloco da mesa
 
+O bloco abre com a **situação** da mesa (uma palavra, um ícone e uma frase) e a tela ganha a faixa "Precisa de você", filtros por situação e a lista por urgência: ver [vida da mesa](vida-da-mesa.md). Os campos abaixo continuam, só que recolhidos em "Detalhes" quando não são a situação.
+
 | Campo | Conteúdo |
 |---|---|
 | Título | título do épico e número da issue, com link para o GitHub |

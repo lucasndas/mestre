@@ -42,6 +42,7 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - Um sino no topo com os avisos que o usuário receberia no Telegram: notificações do Grão-Mestre (`mestre notify`), alertas operacionais do motor (autocura, etapa travada, impasse, limite de uso) e mensagens "Sistema" ([bot](../telegram/bot.md)).
 - Cada aviso tem campanha e mesa (ou "Sistema"), horário e link para o lugar certo (mesa, máquina, pedido).
 - Lido/não lido por usuário, guardado na Cidadela.
+- **Novos e Todos:** o balão abre em **Novos**; **Todos** mostra os dos últimos 30 dias, agrupados por dia, cada um com o tipo em palavras e ícone (Grão-Mestre, Mesa parada, Alerta do motor, Sistema, GitHub) e **Marcar todos como lidos**. Abrir um aviso o marca como lido e leva ao lugar; o aviso de uma mesa também acende "1 aviso novo" no cartão dela ([vida da mesa](vida-da-mesa.md#sino-e-histórico)).
 - O alerta de remetente desconhecido do bot ([segurança do canal](../telegram/seguranca-do-canal.md)) aparece aqui, para o Senhor da Guilda e os Administradores, além do Telegram do Senhor da Guilda (CA-CANAL-07, M6).
 
 ### Implementação
@@ -82,6 +83,8 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - **CA-CONV-11** · *rápida* — **Dado** um pedido `custo_extra` de risco `medio` pedido pelo motor, **quando** a central o mostra, **então** o título e as linhas "Se você aprovar" e "Se negar" estão em português, "Quem pediu" diz que foi o Mestre, as palavras `custo_extra`, `risco medio` e "Respostas deste nível" só aparecem em "Ver detalhes técnicos", e as respostas além de Aprovar e Negar estão em **Mais opções**.
 - **CA-CONV-12** · *rápida* — **Dado** um pedido de um `type` sem texto no catálogo, **quando** a central o mostra, **então** o cartão mostra o `about` e o texto do servidor, com os botões, sem erro.
 - **CA-CONV-10** · *rápida* — **Dado** um aviso `credencial` com o passo "cadastrar no cofre", **quando** um Administrador e o Senhor da Guilda abrem a central, **então** o Administrador não vê botão de cadastro e o Senhor da Guilda vê o botão que abre Segredos e pede o PIN.
+
+- **CA-CONV-13** · *rápida* — **Dado** três avisos novos e um lido de ontem, **quando** abro o sino, **então** vejo os três em **Novos** e o lido só em **Todos**, agrupado em "Ontem"; **quando** abro o aviso de uma mesa, **então** ele fica lido, o contador desce e o cartão da mesa deixa de mostrar "1 aviso novo".
 
 ## Depende de
 
