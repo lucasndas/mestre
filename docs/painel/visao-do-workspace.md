@@ -1,6 +1,6 @@
 # Visão do workspace
 
-> **Assunto:** tela do workspace com o Grão-Mestre ao centro e as mesas ao redor, e o seletor de workspaces · **Componente:** Painel · **Atualizado:** 2026-10-26
+> **Assunto:** tela do workspace com o Grão-Mestre no alto e as mesas ligadas a ele, como se chega a ela (lista, migalha, troca de workspace) e o workspace atual · **Componente:** Painel · **Atualizado:** 2026-10-27
 
 ## Objetivo
 
@@ -8,18 +8,19 @@ Dar, numa tela só, o estado de todas as mesas de um workspace e o caminho para 
 
 ## Comportamento
 
-### Seletor de workspaces
+### Como se chega e o workspace atual
 
-- Fica no topo de todas as telas do painel.
-- Lista só os workspaces que o usuário pode ver ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)); o Dono vê todos.
-- O último workspace aberto fica lembrado por usuário (no banco da Cidadela, não no navegador).
-- Criar workspace (Dono ou Administrador) abre o fluxo de [sessão zero do workspace](../sessao-zero/workspace.md). Enquanto o workspace está `preparing`, a tela mostra a etapa atual da sessão zero, as concluídas e o erro de uma etapa que falhou, com o botão "tentar de novo" ([estados do workspace](../orquestracao/workspaces.md#estados)).
+- **Pela lista:** cada cartão da [lista de workspaces](workspaces.md) tem **Abrir** (leva a esta tela) e **Conversar** (abre a conversa naquele workspace); o cartão em preparação mostra a etapa e deixa **Abrir** desligado. Também chegam: o Início (mesas em andamento levam à mesa, e a migalha leva ao workspace), os avisos e os pedidos de aprovação.
+- **Migalha** (`Workspaces › loja`): o primeiro nível volta à lista; o workspace abre a **troca de workspace**, que lista só os que o usuário vê (o Dono vê todos) e "Ver todos". Escolher o workspace em que já se está fecha a lista e nada mais acontece. A mesa tem a migalha `Workspaces › loja › título da mesa` ([canvas](canvas.md)); o item Workspaces do menu fica marcado nas duas telas.
+- **Workspace atual** é um só para o painel inteiro: o da migalha; fora de um workspace, o último aberto (`users.last_workspace`, guardado por usuário na Cidadela, não no navegador); sem nenhum, o primeiro da lista. A conversa, o botão **Falar com o Grão-Mestre** e os atalhos usam sempre esse, e a conversa diz de qual workspace fala. Não há seletor na barra de cima nem outro na conversa.
+- A troca lista só os workspaces que o usuário pode ver ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)).
+- **Criar workspace** (Dono ou Administrador, na lista de workspaces) abre o fluxo de [sessão zero do workspace](../sessao-zero/workspace.md). Enquanto o workspace está `preparing`, a tela mostra a etapa atual da sessão zero, as concluídas e o erro de uma etapa que falhou, com o botão "tentar de novo" ([estados do workspace](../orquestracao/workspaces.md#estados)).
 
 ### Layout
 
-- Canvas do mesmo tipo do [canvas da mesa](canvas.md) (React Flow), só que com elementos do workspace.
-- **Grão-Mestre ao centro**, como personagem com terminal ao vivo (mesmas regras de leitura e digitação do [canvas](canvas.md#digitar-no-terminal)).
-- **Cada mesa é um bloco** ligado ao Grão-Mestre por uma linha. Posição inicial automática em círculo; o usuário pode arrastar, e a posição fica salva.
+- Canvas do mesmo tipo do [canvas da mesa](canvas.md) (React Flow), só que com elementos do workspace, abrindo num zoom em que o texto é legível (17 px ou mais, como no [canvas](canvas.md#canvas-infinito)); no celular, em vez do canvas, cartões em lista, o do Grão-Mestre primeiro.
+- **Grão-Mestre no alto**, como personagem com terminal ao vivo (mesmas regras de leitura e digitação do [canvas](canvas.md#digitar-no-terminal)).
+- **Cada mesa é um bloco**, com o botão **Abrir mesa**, ligado ao Grão-Mestre por uma linha. Posição inicial automática (as mesas em fileira abaixo do Grão-Mestre, quebrando linha); o usuário pode arrastar, e a posição fica salva.
 - Não há outros elementos: pergaminhos existem só dentro das mesas ([pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md)).
 
 ### Bloco da mesa
@@ -44,7 +45,7 @@ Dar, numa tela só, o estado de todas as mesas de um workspace e o caminho para 
 ### Atalhos da tela
 
 - Abrir a [conversa com o Grão-Mestre](conversa-e-aprovacoes.md) do workspace.
-- Contador de aprovações pendentes do usuário, que leva à [central de aprovações](conversa-e-aprovacoes.md#central-de-aprovações).
+- Contador de aprovações pendentes do usuário (o botão "N aprovações pendentes" da tela, além do número do menu), que leva à [central de aprovações](conversa-e-aprovacoes.md#central-de-aprovações).
 - Selo de saúde (Cidadela e Torres), que leva a [administração](administracao.md#guilda-e-saúde-das-máquinas).
 
 ### Implementação
@@ -52,14 +53,14 @@ Dar, numa tela só, o estado de todas as mesas de um workspace e o caminho para 
 - **Código:** `internal/panel/routes_view.go` e `types_view.go` (rotas e tipos), `internal/app/viewhost.go` (o motor: blocos, entrega útil, esperas, uso), `internal/orchestration/quests/viewing.go` (critérios e falha repetida) e `web/src/workspace/` (seletor, tela, canvas e bloco). A rota do navegador é `/workspaces/<workspace>`.
 - **Rotas** (o servidor confere nível e workspace em todas): `GET /api/workspaces/{slug}/view` (Observador ou acima; um workspace que o usuário não vê é `not_found`, e `preparing` traz as etapas e nenhuma mesa), `PUT /api/workspaces/{slug}/view/layout` (só as chaves `gm` e `table:<id>`), `POST /api/workspaces/{slug}/tables/{table}/pause` (**Pausar mesa**: Aprovador ou acima que atua no workspace, sem PIN, auditada como `panel.workspace.table_paused`) e `PUT /api/me/workspace` (o último aberto, em `users.last_workspace`; só um que o usuário vê).
 - **Tempo real:** a tela segue o tópico `workspaces:all`; cada `changed` (qualquer gravação no banco, depois de 150 ms de calma) faz ler a visão de novo.
-- **Escolhas:** o selo "sem entrega há" usa o limite padrão de 3 h da [supervisão](../orquestracao/supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira); a posição é por workspace, compartilhada entre os usuários, como a do canvas da mesa; a impressão da falha repetida fica em `quest_paused_failure`, porque a contagem do passo recomeça na pausa; "Criar workspace…" do seletor leva à [tela dos workspaces](administracao.md), onde a sessão zero roda; o selo de saúde só aparece para quem vê a Guilda (Dono).
+- **Escolhas:** o selo "sem entrega há" usa o limite padrão de 3 h da [supervisão](../orquestracao/supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira); a posição é por workspace, compartilhada entre os usuários, como a do canvas da mesa; a impressão da falha repetida fica em `quest_paused_failure`, porque a contagem do passo recomeça na pausa; "Criar workspace" é da [tela dos workspaces](workspaces.md), onde a sessão zero roda; o selo de saúde só aparece para quem vê a Guilda (Dono).
 - **Mesa sem issue:** só o aviso do bloco quando o épico da mesa não tem número (`epic` 0), com o motivo; o `table open` já exige o épico, então é um caso defensivo.
 
 ## Regras e erros
 
 - Workspace sem permissão (link antigo, por exemplo) → tela "sem acesso" com a lista dos workspaces permitidos.
 - Mesa sem issue ainda criada no GitHub (falha na criação) → o bloco aparece com aviso e o motivo; o Grão-Mestre já foi avisado pelo motor ([mesas](../orquestracao/mesas.md)).
-- Sem nenhuma mesa → mensagem curta explicando que mesas são abertas pelo Grão-Mestre a partir de pedidos na conversa.
+- Sem nenhuma mesa → só o Grão-Mestre e uma mensagem curta explicando que mesas são abertas pelo Grão-Mestre a partir de pedidos na conversa.
 
 ## Critérios de aceite
 
@@ -71,6 +72,8 @@ Dar, numa tela só, o estado de todas as mesas de um workspace e o caminho para 
 - **CA-VWS-06** · *rápida* — **Dado** um workspace em `preparing` com a etapa `mirror` com erro, **quando** a tela abre, **então** mostra `apps` concluída, `mirror` com o motivo do erro e o botão "tentar de novo", e nenhum bloco de mesa nem pergaminho.
 - **CA-VWS-07** · *rápida* — **Dado** a missão atual com C1 verificado pelo motor, C2 declarado e C3 sem prova, **quando** o bloco renderiza, **então** mostra "Critérios 2 de 3 (1 verificado)".
 - **CA-VWS-08** · *rápida* — **Dado** a mesa `working` há 4 h sem entrega útil (relógio falso), **quando** o bloco renderiza, **então** mostra o selo "sem entrega há 4 h" e **Pausar mesa**, que um Aprovador toca e um Observador não vê; **dado** a mesma mesa pausada, **então** o selo não aparece.
+- **CA-VWS-10** · *rápida* — **Dado** a lista com um workspace ativo e outro em preparação, **quando** a renderizo, **então** o ativo tem **Abrir** (leva a `/workspaces/<slug>`) e **Conversar**, o outro tem **Abrir** desligado com a etapa, e escolher na migalha o workspace em que já estou não faz nada.
+- **CA-VWS-11** · *rápida* — **Dado** o último workspace aberto `loja` e o usuário no Início, **quando** abre a conversa, **então** ela fala de `loja`; **dado** o usuário na visão de `blog`, **então** a conversa muda para `blog` sem outro seletor.
 - **CA-VWS-09** · *rápida* — **Dado** a missão pausada por "mesma falha repetida", **quando** o bloco renderiza, **então** a coluna de esperas mostra o motivo e o `arquivo:linha`.
 
 ## Depende de

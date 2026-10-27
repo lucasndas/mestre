@@ -1,6 +1,6 @@
 # Design do painel
 
-> **Assunto:** direção visual, princípios e padrões de interface do painel (estados, recusa e desfazer, reconexão, densidade, ajuda dos termos, fuso, idioma, acessibilidade) · **Componente:** Painel · **Atualizado:** 2026-10-26
+> **Assunto:** direção visual, estrutura das telas (menu de quatro itens, migalhas, barra de cima, Início, Configurações), princípios e padrões de interface do painel (estados, recusa e desfazer, reconexão, densidade, ajuda dos termos, fuso, idioma, acessibilidade) · **Componente:** Painel · **Atualizado:** 2026-10-27
 
 Documento de referência: toda tela do painel segue o que está aqui, e uma tela nova que precise fugir da regra muda este documento na mesma alteração. Os **valores** (cores, fontes, raios, sombras) moram no arquivo de tokens, [`web/src/index.css`](../../web/src/index.css), no bloco `@theme`; este documento não os copia. Cores, fontes e sombras de uma tela vêm sempre de um token, nunca de um valor solto. A pilha de ferramentas está no [ADR 0027](../decisoes/0027-pilha-do-painel.md) e o painel bilíngue no [ADR 0028](../decisoes/0028-painel-bilingue-e-marco-m6-mais.md).
 
@@ -18,14 +18,19 @@ Escolhida pelo Dono em 2026-10-26, entre três propostas vistas em telas reais (
 ## Estrutura da tela
 
 - **Entrada** (assistente, login, primeiro acesso): um cartão centrado sobre o papel, com a marca, o título, uma linha de apoio e o formulário; o seletor de idioma no canto.
-- **Dentro do painel:** barra de cima, navegação lateral (vira uma linha rolável no celular) e área de conteúdo. A navegação mostra só o que o nível do usuário pode fazer; o servidor decide de qualquer forma ([nível em cada tela](login.md#nível-em-cada-tela)).
-- **Barra de cima:** marca, seletor de workspace, contador de aprovações pendentes, sino de avisos, idioma e menu da conta, nessa ordem. Seletor, contador e sino são **espaços reservados** (`data-slot`) que as unidades preenchem ([visão do workspace](visao-do-workspace.md), [conversa e aprovações](conversa-e-aprovacoes.md)); vazios, não aparecem. O botão **Conversa** (depois do sino) abre o painel lateral com o Grão-Mestre ([conversa](conversa-e-aprovacoes.md#conversa-com-o-grão-mestre)): uma coluna à direita no computador, tela inteira no celular; o texto do Grão-Mestre é Markdown sem HTML ativo (sem tag, sem imagem, só links `http`, `https` e `mailto`, que abrem em outra página). O contador (só para quem decide aprovações) e o sino já estão preenchidos: o número vem de `/api/approvals/count` e de eventos `count` do assunto `approvals:<usuário>`, e o sino é um balão (`DialogTrigger`) com a lista de avisos.
+- **Dentro do painel:** barra de cima, menu e área de conteúdo, com a [jornada de primeiro uso](primeira-jornada.md) como fio: o painel é desenhado para quem acabou de instalar e continua servindo a quem volta todo dia. A navegação mostra só o que o nível do usuário pode fazer; o servidor decide de qualquer forma ([nível em cada tela](login.md#nível-em-cada-tela)).
+- **Menu de quatro itens**, nunca mais: **Início**, **Aprovações** (com o contador de pendentes, só para quem decide), **Workspaces** e **Configurações**. No computador é uma coluna à esquerda; no celular, quatro abas fixas embaixo, com alvo de 56 px. O item da seção atual fica marcado em toda tela dela, inclusive visão do workspace, mesa e terminal (`aria-current`).
+- **Uma árvore só:** Workspaces › workspace › mesa (quadro, terminal e conversa). Toda tela com mais de um nível mostra **migalhas** acima do título: cada nível acima é um link, o último é o texto da página, e o workspace da migalha abre a troca de workspace. Telas de configuração mostram Configurações › grupo › tela. Nunca há tela sem caminho de volta.
+- **Um workspace atual por vez** (o da migalha; fora de um workspace, o último aberto, [visão do workspace](visao-do-workspace.md#como-se-chega-e-o-workspace-atual)), o mesmo para a conversa, o botão **Falar com o Grão-Mestre** e os atalhos; a conversa diz sempre sobre qual workspace fala.
+- **Barra de cima:** marca (leva ao Início), sino de avisos, botão **Grão-Mestre** e menu da conta, nessa ordem, numa linha só em qualquer largura (no celular o botão é só o ícone, com `aria-label`). O seletor de workspace e o contador de aprovações saem da barra: um vira migalha, o outro vira o número do item Aprovações. O menu da conta traz Minha conta (sessões e senha), idioma e Sair. O botão **Grão-Mestre** abre o painel lateral ([conversa](conversa-e-aprovacoes.md#conversa-com-o-grão-mestre)): uma coluna à direita no computador, tela inteira no celular; o texto do Grão-Mestre é Markdown sem HTML ativo (sem tag, sem imagem, só links `http`, `https` e `mailto`, que abrem em outra página). O número do item Aprovações vem de `/api/approvals/count` e de eventos `count` do assunto `approvals:<usuário>`; o sino é um balão (`DialogTrigger`) com a lista de avisos.
+- **Início** é "o que está acontecendo agora" ([primeira jornada e Início](primeira-jornada.md#início-no-dia-a-dia)), não uma tela de boas-vindas.
+- **Configurações** é um índice de quatro grupos, cada um com a frase do que a tela faz: **Conta** (sessões, senha, GitHub pessoal), **Pessoas e acesso** (usuários, segredos, auditoria), **Infraestrutura** (Guilda e máquinas, perfis de conta, Apps do GitHub, classes, bases e fichas) e **Regras e consumo** (decretos, delegações, cadeia de aprovação, teto do workspace, política de aprovação, instruções extras, consumo) ([administração](administracao.md#telas)). Os nomes do vocabulário ficam, com `Term` e a frase ao lado; as rotas antigas continuam valendo.
 - Um cabeçalho de página por tela, `h1` único; um link "Ir para o conteúdo" para quem navega por teclado.
 
 ## Estados
 
 - **Carregando:** texto curto no lugar do conteúdo, sem "spinner" sozinho; o que já se sabe continua na tela enquanto atualiza.
-- **Vazio:** diz o que falta e o que fazer, com o termo do vocabulário e a ajuda dele ("Ainda não há nenhum workspace…"). Nunca uma tela em branco.
+- **Vazio:** diz o que falta e o que fazer, com o termo do vocabulário e a ajuda dele ("Ainda não há nenhum workspace…"). Nunca uma tela em branco, e nunca contra o que outra parte da mesma tela mostra: o vazio nasce do mesmo dado que a tela lê.
 - **Erro:** em cima do campo ou do formulário, com o motivo e a saída; texto traduzido pelo `code` e os `params` do servidor ([login](login.md#implementação)). Um código sem texto cai na mensagem em português do servidor, nunca em "erro desconhecido".
 - **Ocupado:** o botão que dispara fica desabilitado até a resposta; o PIN e as senhas são limpos depois de usados.
 - **Sucesso:** confirmação discreta no próprio lugar ("Sessão encerrada."), sem janela.
@@ -60,7 +65,7 @@ Quando o canal `/ws/ui` cai, uma faixa âmbar "Reconectando à Cidadela…" fica
 ## Idioma, datas e números
 
 - Dois idiomas, pt-BR e en, com um catálogo por área e a **mesma lista de chaves** (verificada na suíte rápida e pelo compilador). A chave faltando é erro de `tsc`.
-- O idioma é escolhido por usuário e guardado na Cidadela; sem escolha, vale o do navegador. O seletor fica na barra de cima e também nas telas de entrada (onde só vale neste navegador).
+- O idioma é escolhido por usuário e guardado na Cidadela; sem escolha, vale o do navegador. O seletor fica no menu da conta e também nas telas de entrada (onde só vale neste navegador).
 - **Fuso:** todo horário aparece no fuso da **Guilda** (o mesmo do Telegram, `guild.timezone`), nunca no do navegador, formatado com `Intl` no idioma do usuário. A tela diz o fuso em uso onde mostra horários.
 
 ## Acessibilidade e movimento
