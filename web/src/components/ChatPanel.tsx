@@ -10,7 +10,7 @@ import { ApiError, api } from "../lib/api";
 import { chatOverviewQuery, chatQuery, humanSize, newMessageId } from "../lib/chatQueries";
 import { errorText } from "../lib/errors";
 import { formatTime } from "../lib/format";
-import { useCurrentWorkspace } from "../workspace/current";
+import { useCurrentWorkspace, useRouteWorkspace } from "../workspace/current";
 import { isEnded } from "../workspace/model";
 import { viewQuery } from "../workspace/queries";
 import { ChatMarkdown } from "./Markdown";
@@ -580,11 +580,16 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation("chat");
   const { data: overview, isPending } = useQuery(chatOverviewQuery);
   const current = useCurrentWorkspace();
+  const routed = useRouteWorkspace();
+  const me = useMe();
   const list = overview?.workspaces ?? [];
   // the conversation is about the current campaign (the one of the trail, else the last opened); one the user cannot talk in falls to the first that works
   const known = list.some((w) => w.slug === current.slug);
-  // a campaign that is known but has no conversation (paused, say) is said so, never swapped for another one
-  const noTalk = !known && current.slug !== "" && current.list.some((w) => w.slug === current.slug);
+  // a campaign the user chose (the trail or the last opened) that has no conversation (paused, say) is said so,
+  // never swapped for another one; only the default, the first of the list, falls to one that works
+  const chosen =
+    current.slug !== "" && (current.slug === routed || current.slug === me.user.last_workspace);
+  const noTalk = !known && chosen && current.list.some((w) => w.slug === current.slug);
   const workspace = noTalk ? "" : known ? current.slug : (list[0]?.slug ?? "");
   const named = noTalk ? current.slug : workspace;
   return (
