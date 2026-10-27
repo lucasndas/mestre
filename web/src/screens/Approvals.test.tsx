@@ -461,7 +461,8 @@ test("an Observer has no counter, no link and no central", async () => {
   renderApp("/");
   await screen.findByRole("heading", { name: "Sua Guilda está pronta" });
   expect(screen.queryByRole("link", { name: /Aprovações/ })).toBeNull();
-  expect(openSocket().subscribed()).toEqual(["notices:u1", "chat:u1"]);
+  const socket = openSocket();
+  await waitFor(() => expect(socket.subscribed()).toEqual(["notices:u1", "chat:u1"]));
 });
 
 const notice = (id: number, extra: Partial<NoticeView> = {}): NoticeView => ({

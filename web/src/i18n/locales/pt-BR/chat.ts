@@ -1,10 +1,12 @@
 export default {
-  toggle: "Conversa",
+  toggle: "Grão-Mestre",
   toggleUnread: "Conversa com o Grão-Mestre, {{count}} novas",
   toggleOpen: "Abrir a conversa com o Grão-Mestre",
   title: "Conversa com o Grão-Mestre",
   close: "Fechar a conversa",
+  openWorkspace: "Abrir campanha",
   workspace: "Campanha",
+  noTalk: "A campanha {{workspace}} não tem conversa agora: só as campanhas ativas conversam.",
   loading: "Carregando a conversa…",
   loadError: "Não consegui carregar a conversa.",
   noWorkspace:
@@ -22,6 +24,7 @@ export default {
     locked: "Sistema travado: o que você enviar fica guardado até destravar.",
   },
   progress: {
+    tables: "Mesas",
     title: "Andamento da campanha",
     updated: "Atualizado às {{time}}",
   },

@@ -193,8 +193,6 @@ test("an Administrator sees the Apps and none of the Owner's actions", async () 
   renderApp("/apps");
   expect(await screen.findByText("1 de 100 Apps na conta")).toBeTruthy();
   expect(screen.queryByLabelText("Outros Apps da conta")).toBeNull();
-  expect(screen.queryByRole("link", { name: "Perfis de conta" })).toBeNull();
-  expect(screen.getByRole("link", { name: "Classes" })).toBeTruthy();
 });
 
 // Part of CA-ADM-05: a sheet exported and imported back

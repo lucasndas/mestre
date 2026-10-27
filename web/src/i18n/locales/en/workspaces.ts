@@ -2,7 +2,17 @@ export default {
   title: "Campaigns",
   intro:
     "The projects Mestre looks after. Creating a campaign starts the session zero: Mestre prepares the repository and the Grand Master analyses the project.",
-  empty: "None of your campaigns yet.",
+  empty: {
+    title: "You have no campaigns yet.",
+    create: "Create the first one to be able to talk to the Grand Master.",
+    ask: "Ask the Guildmaster to give you access to a campaign.",
+  },
+  open: "Open",
+  openNamed: "Open the campaign {{slug}}",
+  openWaiting: "Available when the preparation ends (now: {{stage}}).",
+  openPreparing: "Available when the preparation ends.",
+  talk: "Talk",
+  talkNamed: "Talk to the Grand Master of {{slug}}",
   state: { preparing: "preparing", active: "active", paused: "paused" },
   grandMasterState: {
     none: "no Grand Master yet",
