@@ -2,6 +2,7 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { Button as AriaButton, Label, TextArea, TextField } from "react-aria-components";
 import { useTranslation } from "react-i18next";
+import { useChatControl } from "../../app/chatControl";
 import { SensitiveButton } from "../../components/PinField";
 import { Alert, Button } from "../../components/ui";
 import type {
@@ -16,7 +17,7 @@ import type {
 } from "../../gen/panel";
 import { api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
-import { NativeSelect } from "./kit";
+import { EmptyState, LoadError, NativeSelect } from "./kit";
 
 // What the screens of the rules and of the chain ask the server. The keys sit under
 // "admin", so the invalidation every mutation does reloads them.
@@ -74,12 +75,24 @@ export function WorkspacePicker({
   children: (workspace: string, picker: ReactNode) => ReactNode;
 }) {
   const { t } = useTranslation("rules");
-  const { data, error } = useQuery(ruleWorkspacesQuery);
-  const { t: te } = useTranslation("errors");
+  const { data, error, refetch } = useQuery(ruleWorkspacesQuery);
+  const chat = useChatControl();
   const [picked, setPicked] = useState("");
-  if (error) return <Alert>{errorText(te, error)}</Alert>;
+  if (error)
+    return (
+      <LoadError what={t("loadWhat.workspaces")} error={error} onRetry={() => void refetch()} />
+    );
   if (!data) return <p className="text-muted">{t("loading")}</p>;
-  if (data.workspaces.length === 0) return <p className="text-muted">{t("noWorkspace")}</p>;
+  if (data.workspaces.length === 0)
+    return (
+      <EmptyState
+        title={t("noWorkspaceTitle")}
+        why={t("noWorkspace")}
+        steps={[t("noWorkspaceStep1"), t("noWorkspaceStep2")]}
+      >
+        <Button onPress={chat.show}>{t("talk")}</Button>
+      </EmptyState>
+    );
   const ws = data.workspaces.includes(picked) ? picked : (data.workspaces[0] ?? "");
   const picker =
     data.workspaces.length > 1 ? (
@@ -104,9 +117,11 @@ export function Area({
   rows = 4,
   mono = false,
   invalidText,
+  placeholder,
 }: {
   label: string;
   description?: string;
+  placeholder?: string;
   value: string;
   onChange: (v: string) => void;
   rows?: number;
@@ -123,6 +138,7 @@ export function Area({
       <Label className="text-[0.95em] font-semibold tracking-wide">{label}</Label>
       <TextArea
         rows={rows}
+        placeholder={placeholder}
         spellCheck={!mono}
         className={`min-h-11 rounded-field border border-line bg-paper px-3 py-2 text-ink outline-none transition-shadow placeholder:text-muted focus:border-accent focus:ring-3 focus:ring-accent/25 invalid:border-danger ${
           mono ? "font-mono text-sm leading-relaxed whitespace-pre" : ""

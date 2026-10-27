@@ -1,10 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Checkbox } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { useFormatDateTime } from "../../app/session";
 import { SensitiveButton } from "../../components/PinField";
-import { Term } from "../../components/Term";
 import { Alert, Button, Field } from "../../components/ui";
 import type {
   RecoveryKeyResponse,
@@ -13,16 +13,20 @@ import type {
   SiteCredentialInput,
 } from "../../gen/panel";
 import { api } from "../../lib/api";
-import { errorText } from "../../lib/errors";
 import {
   Badge,
   ChoiceGroup,
+  EmptyState,
+  LevelGate,
+  LoadError,
   NativeSelect,
   PageHeader,
   ShownOnce,
+  StatusStrip,
   secretsQuery,
   splitList,
   usersQuery,
+  VocabLine,
 } from "./kit";
 
 type Say = (k: string, o?: object) => string;
@@ -31,52 +35,72 @@ const KINDS = ["senha_de_app", "token", "chave_api", "senha_principal"] as const
 
 export function Secrets() {
   const { t } = useTranslation("secrets");
-  const { t: te } = useTranslation("errors");
   const say = t as unknown as Say;
   const fmt = useFormatDateTime();
   const qc = useQueryClient();
-  const { data, error } = useQuery(secretsQuery);
+  const { data, error, refetch } = useQuery(secretsQuery);
   const people = useQuery(usersQuery).data?.users ?? [];
   const [creating, setCreating] = useState(false);
   const [replacing, setReplacing] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin"] });
   const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? id;
+  const sites = (data?.secrets ?? []).filter((s) => !s.managed);
+  const managed = (data?.secrets ?? []).filter((s) => s.managed);
+  const expiring = sites.filter((s) => s.notice).length;
+  const openButton = (
+    <LevelGate need="owner" label={t("site.open")}>
+      {creating ? null : <Button onPress={() => setCreating(true)}>{t("site.open")}</Button>}
+    </LevelGate>
+  );
 
   return (
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
-      <p className="mb-6 max-w-2xl text-sm text-muted">
-        <Term name="Cofre" /> · <Term name="Impressão" />
-      </p>
+      <VocabLine terms={["Cofre", "Impressão"]} />
+      {data ? (
+        <StatusStrip
+          tone={expiring > 0 ? "warn" : "ok"}
+          title={
+            sites.length > 0
+              ? t("strip", { count: sites.length, expiring })
+              : t("stripNone", { count: managed.length })
+          }
+          hint={t("stripHint")}
+        >
+          {sites.length > 0 ? openButton : null}
+        </StatusStrip>
+      ) : null}
       <div className="flex max-w-3xl flex-col gap-4">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
-        {error ? <Alert>{errorText(te, error)}</Alert> : null}
-        {!data && !error ? <p className="text-muted">…</p> : null}
-        {data ? (
-          creating ? (
-            <SiteForm
-              people={people}
-              submitLabel={t("site.submit")}
-              title={t("site.title")}
-              onClose={() => setCreating(false)}
-              onSubmit={async (pin, input) => {
-                await api("POST", "/api/secrets/site", input, { pin });
-                setCreating(false);
-                setNotice(t("site.created"));
-                await refresh();
-              }}
-              withName
-            />
-          ) : (
-            <div>
-              <Button onPress={() => setCreating(true)}>{t("site.open")}</Button>
-            </div>
-          )
+        {error ? (
+          <LoadError what={t("loadWhat")} error={error} onRetry={() => void refetch()} />
         ) : null}
-        {data && data.secrets.length === 0 ? <p className="text-muted">{t("empty")}</p> : null}
+        {!data && !error ? <p className="text-muted">…</p> : null}
+        {data && creating ? (
+          <SiteForm
+            people={people}
+            submitLabel={t("site.submit")}
+            title={t("site.title")}
+            onClose={() => setCreating(false)}
+            onSubmit={async (pin, input) => {
+              await api("POST", "/api/secrets/site", input, { pin });
+              setCreating(false);
+              setNotice(t("site.created"));
+              await refresh();
+            }}
+            withName
+          />
+        ) : null}
+        {data && sites.length === 0 && !creating ? (
+          <EmptyState title={t("emptyTitle")} why={t("empty")}>
+            {openButton}
+          </EmptyState>
+        ) : null}
+        {data ? <WhereKeysGo /> : null}
+        {sites.length > 0 ? <h2 className="text-2xl">{t("sitesTitle")}</h2> : null}
         <ul className="flex flex-col gap-3">
-          {data?.secrets.map((s) => (
+          {sites.map((s) => (
             <li key={s.name} className="rounded-field border border-line bg-surface p-4">
               <p className="flex flex-wrap items-center gap-2 font-semibold">
                 {s.name}
@@ -108,10 +132,8 @@ export function Secrets() {
                   </>
                 ) : null}
               </dl>
-              {s.managed ? (
-                <p className="mt-3 text-sm text-muted">{t("managed")}</p>
-              ) : (
-                <div className="mt-3 flex flex-col gap-3">
+              <div className="mt-3 flex flex-col gap-3">
+                <LevelGate need="owner" label={t("replace.open")}>
                   <div className="flex flex-wrap items-start gap-3">
                     <Button
                       variant="secondary"
@@ -129,25 +151,79 @@ export function Secrets() {
                       }}
                     />
                   </div>
-                  {replacing === s.name ? (
-                    <Replace
-                      s={s}
-                      people={people}
-                      onClose={() => setReplacing(null)}
-                      onDone={async () => {
-                        setReplacing(null);
-                        setNotice(t("replace.done"));
-                        await refresh();
-                      }}
-                    />
-                  ) : null}
-                </div>
-              )}
+                </LevelGate>
+                {replacing === s.name ? (
+                  <Replace
+                    s={s}
+                    people={people}
+                    onClose={() => setReplacing(null)}
+                    onDone={async () => {
+                      setReplacing(null);
+                      setNotice(t("replace.done"));
+                      await refresh();
+                    }}
+                  />
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>
+        {managed.length > 0 ? (
+          <section aria-labelledby="sec-managed" className="flex flex-col gap-2">
+            <h2 id="sec-managed" className="text-2xl">
+              {t("managedTitle")}
+            </h2>
+            <p className="text-sm text-muted">{t("managed")}</p>
+            <ul className="flex flex-col gap-2">
+              {managed.map((s) => (
+                <li
+                  key={s.name}
+                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-field border border-line bg-surface px-4 py-3 text-sm"
+                >
+                  <span className="font-semibold">{typeLabel(say, s.type)}</span>
+                  <span className="text-muted">
+                    {t("fingerprint")}: <code>{s.fingerprint}</code>
+                  </span>
+                  <span className="text-muted">
+                    {t("technicalName")}: <code>{s.name}</code>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         {data ? <RecoveryKey /> : null}
       </div>
+    </section>
+  );
+}
+
+/** Where each kind of key goes, so nobody looks for a button that does not exist. */
+function WhereKeysGo() {
+  const { t } = useTranslation("secrets");
+  const link = "font-semibold text-accent underline underline-offset-2";
+  return (
+    <section aria-labelledby="sec-where" className="flex flex-col gap-2">
+      <h2 id="sec-where" className="text-2xl">
+        {t("where.title")}
+      </h2>
+      <ul className="flex flex-col gap-2 text-sm">
+        <li>{t("where.site")}</li>
+        <li>
+          {t("where.github")}{" "}
+          <Link to="/apps" className={link}>
+            {t("where.githubLink")}
+          </Link>
+        </li>
+        <li>
+          {t("where.ai")}{" "}
+          <Link to="/perfis" className={link}>
+            {t("where.aiLink")}
+          </Link>
+        </li>
+        <li>{t("where.telegram")}</li>
+        <li>{t("where.provider")}</li>
+      </ul>
     </section>
   );
 }
@@ -313,14 +389,6 @@ function SiteForm({
         options={KINDS.map((k) => ({ value: k, label: say(`kinds.${k}`) }))}
       />
       <p className="text-sm text-muted">{t("kindHint")}</p>
-      {people.length > 0 ? (
-        <NativeSelect
-          label={t("site.owner")}
-          value={owner}
-          onChange={setOwner}
-          options={people.map((p) => ({ value: p.id, label: p.name }))}
-        />
-      ) : null}
       <Field
         label={t("site.classes")}
         description={t("site.classesHint")}
@@ -335,18 +403,36 @@ function SiteForm({
         onChange={setDomains}
         autoComplete="off"
       />
-      <Field label={t("site.expires")} type="date" value={expires} onChange={setExpires} />
-      <label className="flex flex-col gap-1">
-        <span className="text-[0.95em] font-semibold tracking-wide">{t("site.selectors")}</span>
-        <textarea
-          rows={3}
-          value={selectors}
-          onChange={(e) => setSelectors(e.target.value)}
-          className="rounded-field border border-line bg-paper px-3 py-2 font-mono text-sm outline-none focus:border-accent focus:ring-3 focus:ring-accent/25"
-        />
-        <span className="text-sm text-muted">{t("site.selectorsHint")}</span>
-      </label>
-      <Field label={t("site.success")} value={success} onChange={setSuccess} autoComplete="off" />
+      <details className="flex flex-col gap-4">
+        <summary className="min-h-11 cursor-pointer py-2 font-semibold">{t("site.more")}</summary>
+        <div className="flex flex-col gap-4">
+          {people.length > 0 ? (
+            <NativeSelect
+              label={t("site.owner")}
+              value={owner}
+              onChange={setOwner}
+              options={people.map((p) => ({ value: p.id, label: p.name }))}
+            />
+          ) : null}
+          <Field label={t("site.expires")} type="date" value={expires} onChange={setExpires} />
+          <label className="flex flex-col gap-1">
+            <span className="text-[0.95em] font-semibold tracking-wide">{t("site.selectors")}</span>
+            <textarea
+              rows={3}
+              value={selectors}
+              onChange={(e) => setSelectors(e.target.value)}
+              className="rounded-field border border-line bg-paper px-3 py-2 font-mono text-sm outline-none focus:border-accent focus:ring-3 focus:ring-accent/25"
+            />
+            <span className="text-sm text-muted">{t("site.selectorsHint")}</span>
+          </label>
+          <Field
+            label={t("site.success")}
+            value={success}
+            onChange={setSuccess}
+            autoComplete="off"
+          />
+        </div>
+      </details>
       <div className="flex flex-wrap items-start gap-3">
         <SensitiveButton isDisabled={!ready} onConfirm={(pin) => onSubmit(pin, input())}>
           {submitLabel}

@@ -1,12 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Term } from "../../components/Term";
 import { Alert, Button } from "../../components/ui";
 import type { Instructions as InstructionsData } from "../../gen/panel";
 import { api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
-import { PageHeader } from "./kit";
+import { LoadError, PageHeader, StatusStrip, VocabLine } from "./kit";
 import { Area, instructionsQuery, WorkspacePicker } from "./rulesKit";
 
 const bytes = (s: string) => new TextEncoder().encode(s).length;
@@ -16,9 +15,7 @@ export function Instructions() {
   return (
     <section>
       <PageHeader title={t("instructions.title")} intro={t("instructions.intro")} />
-      <p className="mb-6 max-w-2xl text-sm text-muted">
-        <Term name="Grão-Mestre" /> · <Term name="Mestre da mesa" />
-      </p>
+      <VocabLine terms={["Grão-Mestre", "Mestre da mesa"]} />
       <WorkspacePicker>
         {(ws, picker) => <InstructionsOf key={ws} workspace={ws} picker={picker} />}
       </WorkspacePicker>
@@ -28,12 +25,27 @@ export function Instructions() {
 
 function InstructionsOf({ workspace, picker }: { workspace: string; picker: React.ReactNode }) {
   const { t } = useTranslation("rules");
-  const { t: te } = useTranslation("errors");
-  const { data, error } = useQuery(instructionsQuery(workspace));
+  const { data, error, refetch } = useQuery(instructionsQuery(workspace));
+  const filled = data
+    ? [data.grand_master, data.table_masters].filter((x) => x.trim() !== "").length
+    : 0;
   return (
     <div className="flex max-w-3xl flex-col gap-8">
       {picker}
-      {error ? <Alert>{errorText(te, error)}</Alert> : null}
+      {data ? (
+        <StatusStrip
+          tone={filled > 0 ? "ok" : "neutral"}
+          title={
+            filled > 0
+              ? t("instructions.stripSome", { count: filled })
+              : t("instructions.stripNone")
+          }
+          hint={t("instructions.adds")}
+        />
+      ) : null}
+      {error ? (
+        <LoadError what={t("loadWhat.instructions")} error={error} onRetry={() => void refetch()} />
+      ) : null}
       {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
       {data ? (
         <>
@@ -49,7 +61,6 @@ function InstructionsOf({ workspace, picker }: { workspace: string; picker: Reac
             saved={data.table_masters}
             max={data.max_bytes}
           />
-          <p className="text-sm text-muted">{t("instructions.adds")}</p>
         </>
       ) : null}
     </div>
@@ -118,6 +129,11 @@ function Editor({
           setNotice(null);
         }}
         rows={8}
+        placeholder={t(
+          which === "grand_master"
+            ? "instructions.grandMasterHint"
+            : "instructions.tableMastersHint",
+        )}
         invalidText={over ? "over" : undefined}
       />
       <p

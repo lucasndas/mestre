@@ -76,9 +76,7 @@ test("revoking a decree asks again, then revokes and says so", async () => {
   expect(await screen.findByText("Decreto 7 revogado.")).toBeTruthy();
   const post = calls.find((c) => c.path === "/api/decrees/7/revoke");
   expect(post?.headers["X-Mestre-Pin"]).toBeUndefined();
-  await waitFor(() =>
-    expect(screen.getByText("Nenhum decreto em vigor nesta campanha.")).toBeTruthy(),
-  );
+  await waitFor(() => expect(screen.getByText("Para que serve um decreto?")).toBeTruthy());
 });
 
 test("a decree that restricted something is revoked with the PIN in the very request", async () => {
@@ -394,7 +392,7 @@ test("widening the ceiling opens a request that the author confirms; the file is
   renderApp("/teto");
   expect(await screen.findByText(/version: 1/)).toBeTruthy();
   expect(screen.queryByRole("textbox")).toBeNull(); // no way to edit the file here
-  await user.click(screen.getByRole("button", { name: "Ampliar o teto" }));
+  await user.click(screen.getByRole("button", { name: "Pedir um teto maior" }));
   await fill(user, screen.getByLabelText("Padrão"), "registry.npmjs.org");
   await fill(user, screen.getByLabelText("A ordem, com as suas palavras"), "libere o npm");
   await user.click(screen.getByRole("button", { name: "Abrir o pedido de decreto" }));
@@ -485,4 +483,166 @@ test("the screens speak English when the language is English", async () => {
   expect(await screen.findByRole("heading", { name: "Decrees", level: 1 })).toBeTruthy();
   expect(await screen.findByText("Permanent rule", { selector: "span" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Revoke" })).toBeTruthy();
+});
+
+// the status strip of the screen: the one status that opens with a tone symbol
+const strips = () =>
+  screen.queryAllByRole("status").filter((el) => el.querySelector("p > span[aria-hidden]"));
+
+// A fresh install: every read answers with nothing, and the screens still say what they are for.
+const EMPTY: Record<string, { path: string; routes: Record<string, unknown>; empty: string }> = {
+  decrees: {
+    path: "/decretos",
+    routes: { "GET /api/decrees": { workspaces: [{ workspace: "loja", decrees: [] }] } },
+    empty: "Para que serve um decreto?",
+  },
+  delegations: {
+    path: "/delegacoes",
+    routes: {
+      "GET /api/delegations": {
+        workspaces: [{ workspace: "loja", delegations: [], subdelegations: [], rules: [] }],
+        can_revoke_all: true,
+        can_revoke: true,
+      },
+    },
+    empty: "Ninguém decide por você",
+  },
+  chain: {
+    path: "/cadeia",
+    routes: { "GET /api/chain": { workspaces: [], can_pause: true } },
+    empty: "A fila aparece com a primeira mesa",
+  },
+  ceiling: {
+    path: "/teto",
+    routes: {
+      "GET /api/rules/workspaces": { workspaces: ["loja"] },
+      "GET /api/workspaces/loja/ceiling": {
+        workspace: "loja",
+        present: false,
+        valid: false,
+        text: "",
+        widenings: [],
+        can_widen: true,
+      },
+    },
+    empty: "Sem arquivo de teto",
+  },
+};
+
+// CA-ADM-17
+test.each(Object.entries(EMPTY))(
+  "%s on a fresh install has one title, a status strip and an empty state with a way out",
+  async (_name, c) => {
+    fakeServer({
+      ...OWNER,
+      ...Object.fromEntries(Object.entries(c.routes).map(([k, body]) => [k, () => ({ body })])),
+    });
+    renderApp(c.path);
+    const empty = await screen.findByRole("heading", { name: c.empty });
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByText("Vocabulário:")).toBeTruthy();
+    expect(strips()).toHaveLength(1);
+    const box = empty.closest("section") as HTMLElement;
+    expect(box.querySelector("button, a")).toBeTruthy();
+  },
+);
+
+// CA-ADM-18
+test.each([
+  ["/decretos", "GET /api/decrees"],
+  ["/delegacoes", "GET /api/delegations"],
+  ["/cadeia", "GET /api/chain"],
+  ["/teto", "GET /api/rules/workspaces"],
+])(
+  "%s with a failed read shows what, why, a retry and the raw answer folded",
+  async (path, route) => {
+    fakeServer({
+      ...OWNER,
+      [route]: () => ({
+        status: 500,
+        body: { error: { code: "internal", message: "db locked: boom" } },
+      }),
+    });
+    renderApp(path);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Não foi possível carregar");
+    expect(strips()).toHaveLength(0); // no state is claimed when it is not known
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeTruthy();
+    const details = screen.getByText("Detalhes técnicos").closest("details") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(details.textContent).toContain("db locked: boom");
+  },
+);
+
+// CA-ADM-23
+test("the chain screen tells Pausar autonomia from Pausar mesa in its first lines", async () => {
+  fakeServer({ ...OWNER, "GET /api/chain": () => ({ body: chainBody() }) });
+  renderApp("/cadeia");
+  const intro = await screen.findByText(/Pausar autonomia só tira do Mestre da mesa/);
+  expect(intro.textContent).toContain("os pedidos sobem ao Grão-Mestre e o trabalho continua");
+  expect(intro.textContent).toContain("Para parar a mesa de vez, use Pausar mesa, dentro dela");
+  expect(screen.getByRole("heading", { name: "Supervisão da cadeia", level: 1 })).toBeTruthy();
+  await waitFor(() => expect(strips()).toHaveLength(1));
+  expect(strips()[0]?.textContent).toContain("4 pedidos na fila, 1 mesa(s) com autonomia pausada");
+});
+
+// CA-ADM-24
+test("the queue tables roll inside their own box and the buttons are tall enough to touch", async () => {
+  fakeServer({ ...OWNER, "GET /api/chain": () => ({ body: chainBody() }) });
+  renderApp("/cadeia");
+  const table = (await screen.findAllByRole("table"))[0] as HTMLElement;
+  expect(table.parentElement?.className).toContain("overflow-x-auto");
+  const main = within(screen.getByRole("main"));
+  for (const b of main.getAllByRole("button")) {
+    if (!b.getAttribute("aria-label")?.startsWith("Ajuda sobre"))
+      expect(b.className).toContain("min-h-11");
+  }
+});
+
+// CA-ADM-25
+test("an Administrator opening the policy by its address sees the level it needs and no action", async () => {
+  fakeServer({
+    ...caps("status"),
+    "GET /api/me": () => ({
+      body: { ...ME, user: { ...ME.user, level: "administrator" }, capabilities: ["status"] },
+    }),
+    "GET /api/rules/workspaces": () => ({ body: { workspaces: ["loja"] } }),
+    "GET /api/workspaces/loja/policy": () => ({
+      status: 403,
+      body: {
+        error: {
+          code: "forbidden_level",
+          message: "x",
+          params: { need: "owner", have: "administrator" },
+        },
+      },
+    }),
+  });
+  renderApp("/politica");
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain(
+    "Esta ação exige o nível Senhor da Guilda; o seu é Administrador.",
+  );
+  expect(screen.queryByRole("button", { name: /Salvar/ })).toBeNull();
+});
+
+// CA-ADM-25
+test("buttons a level cannot press show the level they need", async () => {
+  fakeServer({
+    ...caps("status", "revoke_temporary"),
+    "GET /api/me": () => ({
+      body: {
+        ...ME,
+        user: { ...ME.user, level: "administrator" },
+        capabilities: ["status", "revoke_temporary"],
+      },
+    }),
+    "GET /api/delegations": () => ({ body: delegations }),
+  });
+  renderApp("/delegacoes");
+  const renew = await screen.findByRole("button", { name: "Renovar" });
+  expect((renew as HTMLButtonElement).disabled).toBe(true);
+  expect(
+    screen.getAllByText("Exige o nível Senhor da Guilda; o seu é Administrador.").length,
+  ).toBeGreaterThan(0);
 });

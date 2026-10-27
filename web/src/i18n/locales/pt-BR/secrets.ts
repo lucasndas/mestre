@@ -1,9 +1,31 @@
 export default {
   title: "Segredos",
   intro:
-    "O que está guardado no cofre: nome, tipo, impressão curta, datas e metadados. Nenhum valor aparece de novo, nem para o Senhor da Guilda: só dá para substituir ou apagar, com o seu PIN.",
+    "As senhas e chaves que o Mestre guarda no cofre. O valor nunca volta a aparecer, nem para o Senhor da Guilda: só dá para substituir ou apagar, com o seu PIN.",
   loading: "Carregando os segredos…",
-  empty: "O cofre ainda não tem segredos.",
+  loadWhat: "o cofre",
+  strip_one: "{{count}} credencial de site, {{expiring}} perto de vencer",
+  strip_other: "{{count}} credenciais de site, {{expiring}} perto de vencer",
+  stripNone_one: "Só há {{count}} segredo do próprio Mestre no cofre",
+  stripNone_other: "Só há {{count}} segredos do próprio Mestre no cofre",
+  stripHint:
+    "Credenciais de site são as senhas que os agentes usam para entrar em páginas por você.",
+  emptyTitle: "Nenhuma credencial de site ainda",
+  empty:
+    "Quando um agente precisar entrar numa página (um painel de hospedagem, um serviço de e-mail), a senha dele fica aqui, no cofre, e nunca na conversa. Cadastre uma quando precisar.",
+  sitesTitle: "Credenciais de site",
+  managedTitle: "Guardados pelo Mestre",
+  technicalName: "nome técnico",
+  where: {
+    title: "Onde cada chave vai",
+    site: "Senha ou chave de um site: aqui, em Cadastrar credencial de site (prefira senha de app, token ou chave de API).",
+    github: "Chave de um App do GitHub: entra no cofre sozinha quando o App é criado.",
+    githubLink: "Ir para Apps do GitHub",
+    ai: "Conta de Claude, Codex ou Antigravity: entra por login, no terminal da máquina.",
+    aiLink: "Ir para Perfis de conta",
+    telegram: "Token do bot do Telegram: o Mestre o guarda na instalação.",
+    provider: "Chave de API de um provedor de IA: ainda não dá para cadastrar por aqui.",
+  },
   types: {
     site_credential: "Credencial de site",
     provider_api_key: "Chave de API de provedor",
@@ -32,7 +54,8 @@ export default {
   kind: "Tipo",
   expiresAt: "Vence em",
   noExpiry: "sem validade",
-  managed: "Guardado pelo próprio Mestre: aparece aqui, mas não se muda por aqui.",
+  managed:
+    "O Mestre guarda estes por conta própria: aparecem aqui só para você saber que existem, e não se mudam por aqui.",
   notice: {
     expired: "Venceu há {{count}} dia(s). Troque a credencial.",
     expiring: "Vence em {{count}} dia(s).",
@@ -40,6 +63,7 @@ export default {
   },
   site: {
     open: "Cadastrar credencial de site",
+    more: "Mais opções",
     close: "Fechar",
     title: "Nova credencial de site",
     hint: "É o único lugar de cadastro: nunca mande senhas pelo Telegram nem pela conversa com o Grão-Mestre.",
@@ -76,7 +100,7 @@ export default {
     done: "Segredo apagado.",
   },
   recovery: {
-    title: "Chave de recuperação",
+    title: "Cópia de segurança do cofre",
     intro:
       "A chave de recuperação abre o backup do cofre. O Mestre não a guarda: quem a perde e perde as máquinas fica sem os segredos.",
     open: "Gerar nova chave de recuperação",

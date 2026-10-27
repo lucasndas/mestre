@@ -4,6 +4,19 @@ import type pt from "../pt-BR/rules";
 const rules: Widen<typeof pt> = {
   loading: "Loading…",
   noWorkspace: "There is no campaign yet. When you connect a repository, its rules show up here.",
+  noWorkspaceTitle: "No campaign yet",
+  noWorkspaceStep1: "Ask the Grand Master to create the first campaign.",
+  noWorkspaceStep2: "Come back: its rules show up on their own.",
+  talk: "Talk to the Grand Master",
+  loadWhat: {
+    workspaces: "the campaigns",
+    chain: "the chain supervision",
+    delegations: "the delegations",
+    decrees: "the decrees",
+    ceiling: "the ceiling",
+    policy: "the approval policy",
+    instructions: "the extra instructions",
+  },
   workspace: "Campaign",
   cancel: "Cancel",
   levels: {
@@ -39,7 +52,17 @@ const rules: Widen<typeof pt> = {
   decrees: {
     title: "Decrees",
     intro:
-      "The orders of authorized people that stand above the rules: the ones in force, the suspended ones, what each one freed and who gave it.",
+      "Orders of yours that stand above the rules: free something once, or make a rule that holds until you cancel it.",
+    strip_one: "{{count}} decree in force",
+    strip_other: "{{count}} decrees in force",
+    stripToday_one: "{{count}} ends today.",
+    stripToday_other: "{{count}} end today.",
+    emptyTitle: "What is a decree for?",
+    emptyWhy:
+      "A decree is an order of yours that the Mestre follows above the rules. Example: “may run npm test without asking”.",
+    emptyStep1: "Pick the kind and write the order in your own words.",
+    emptyStep2:
+      "Read the Mestre's “Understood: …” before confirming; only your click makes the decree.",
     made: "Decree made.",
     new: "New decree",
     showEnded: "Also show the ones that are over",
@@ -55,7 +78,7 @@ const rules: Widen<typeof pt> = {
       revoked: "Revoked",
     },
     frozen: "Mestre locked",
-    text: "Original order",
+    text: "You said",
     author: "Author",
     scope: "Scope",
     wholeWorkspace: "the whole campaign",
@@ -116,7 +139,13 @@ const rules: Widen<typeof pt> = {
   delegations: {
     title: "Delegations and temporary rules",
     intro:
-      "What the Grand Master and the Table Masters may decide in place of the people, and for how long. Revoking takes the permission away at once.",
+      "Permission for the Grand Master or the Table Master to decide requests in your place, for a limited time. Revoking cuts it at once.",
+    strip_one: "{{count}} active delegation",
+    strip_other: "{{count}} active delegations",
+    stripSoonest: "The one that ends first runs out on {{when}}.",
+    emergency: "Emergency",
+    emptyTitle: "Nobody decides for you",
+    toDecrees: "Delegating is a decree: go to Decrees",
     renewed: "Delegation renewed.",
     revokeAllHint: "For an emergency: ends every delegation and temporary rule in every campaign.",
     revokeAllWarning:
@@ -125,7 +154,7 @@ const rules: Widen<typeof pt> = {
     revokeAll: "Revoke all delegations",
     revokedAll:
       "Revoked: {{delegations}} delegation(s), {{subdelegations}} subdelegation(s) and {{rules}} temporary rule(s).",
-    empty: "No delegation or temporary rule in force.",
+    empty: "No delegation or temporary rule is in force: every request waits for a person.",
     delegations: "Delegations",
     subdelegations: "Subdelegations",
     rules: "Temporary table rules",
@@ -147,7 +176,12 @@ const rules: Widen<typeof pt> = {
   chain: {
     title: "Chain supervision",
     intro:
-      "Per table: whether the autonomy of the Table Master is paused, who paused it and why, and how the queue of approvals is doing.",
+      "When an agent asks for permission, the request goes through a queue of approvers. Here you see whether the queue moves. Pause autonomy only takes from the Table Master the power to decide alone: requests go up to the Grand Master and the work goes on. To stop the table for good, use Pause table, inside it.",
+    strip_one: "{{count}} request in the queue, {{paused}} table(s) with autonomy paused",
+    strip_other: "{{count}} requests in the queue, {{paused}} table(s) with autonomy paused",
+    stripOldest: "The oldest request has waited {{age}}.",
+    stripNone: "No request waits in the queues.",
+    emptyTitle: "The queue shows up with the first table",
     noTables: "No open table in this campaign.",
     queues: "Approval queue",
     level: "Level",
@@ -178,15 +212,24 @@ const rules: Widen<typeof pt> = {
   },
   ceiling: {
     title: "Campaign ceiling",
-    intro: "The most any class of the campaign may have. The ceiling is widened only by decree.",
+    intro:
+      "The most any class of the campaign may have of permission and cost. It only goes up by decree.",
+    stripOk: "Ceiling in force",
+    stripNone: "The campaign has no ceiling of its own",
+    stripBad: "The ceiling file is not valid",
+    stripWidenings_one: "{{count}} widening by decree in force.",
+    stripWidenings_other: "{{count}} widenings by decree in force.",
+    emptyTitle: "No ceiling file",
+    details: "Details: the ceiling file",
     inForce: "The ceiling in force",
-    noFile: "This campaign has no ceiling file: only the fixed rules apply.",
+    noFile:
+      "This campaign has no ceiling file: only the fixed rules apply. To allow more, ask for a bigger ceiling; it becomes a decree request.",
     invalid: "The ceiling file is not valid and Mestre refuses it: {{reason}}",
     fileLabel: "Ceiling file, read only",
     readOnly: "Here the ceiling is only read. To widen it, open a request for a decree.",
     widenings: "Widenings by decree in force",
     widened: "Ceiling widened by the decree.",
-    widen: "Widen the ceiling",
+    widen: "Ask for a bigger ceiling",
     widenTitle: "Widen the ceiling",
     widenHint:
       "This does not change the ceiling: it opens a request for a decree that you confirm with your PIN. The ceiling in force only changes after it.",
@@ -198,7 +241,10 @@ const rules: Widen<typeof pt> = {
   policy: {
     title: "Approval policy",
     intro:
-      "The file that says what the Grand Master decides alone, what goes to the people and how soon. Mestre checks the whole file before saving.",
+      "The file that says what the Mestre approves alone and what always asks a person. The Mestre checks the whole file before saving.",
+    stripOk: "Valid policy",
+    stripDirty: "Changes not saved yet",
+    stripHint: "It holds from the next request after saving.",
     saved: "Policy saved. It holds from the next request.",
     default:
       "This campaign has no file of its own yet: the content below is the default and becomes the file when you save.",
@@ -212,7 +258,10 @@ const rules: Widen<typeof pt> = {
   instructions: {
     title: "Extra instructions",
     intro:
-      "Your text for the Grand Master and for the Table Masters of each campaign. It adds to the system instructions and never replaces them.",
+      "Notes of yours for the Grand Master and the Table Masters of each campaign. They add to the system instructions and never replace them.",
+    stripNone: "No extra instructions",
+    stripSome_one: "{{count}} extra instruction written",
+    stripSome_other: "{{count}} extra instructions written",
     adds: "It holds from the next turn. If something conflicts with the system instructions, the system ones win.",
     grandMaster: "Instructions for the Grand Master",
     tableMasters: "Instructions for the Table Masters",

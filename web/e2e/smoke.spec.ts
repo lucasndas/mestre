@@ -181,7 +181,7 @@ test("the Owner makes a decree and revokes it", async ({ page }) => {
   await page.getByRole("button", { name: "Entrar" }).click();
   await openSetting(page, /^Decretos/);
   await expect(page.getByRole("heading", { name: "Decretos", level: 1 })).toBeVisible();
-  await expect(page.getByText("Nenhum decreto em vigor nesta campanha.").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Para que serve um decreto?" })).toBeVisible();
 
   await page.getByRole("button", { name: "Novo decreto" }).click();
   await page.getByLabel("Nome", { exact: true }).fill("dev");
@@ -203,7 +203,7 @@ test("the Owner makes a decree and revokes it", async ({ page }) => {
   await card.getByRole("button", { name: "Revogar" }).click();
   await card.getByRole("button", { name: "Sim, revogar" }).click();
   await expect(page.getByText("Decreto 1 revogado.")).toBeVisible();
-  await expect(page.getByText("Nenhum decreto em vigor nesta campanha.").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Para que serve um decreto?" })).toBeVisible();
 });
 
 // The classes and presets step of the smoke: the approved class of the throwaway Guild is
