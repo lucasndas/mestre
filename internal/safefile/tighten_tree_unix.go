@@ -7,7 +7,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // TightenRules takes the write of the group and of the others off .mestre/, its regras/
@@ -40,19 +41,26 @@ func TightenRules(mestre string) error {
 	return first
 }
 
-// tightenEntry chmods a regular file or folder owned by this account; a link and what
-// belongs to someone else are left alone.
+// tightenEntry takes the write bits of the group and the others off a regular file or folder
+// owned by this account. It works on the open descriptor (O_NOFOLLOW, then fstat and
+// fchmod), so a link or an entry swapped after the walk listed it is never followed and the
+// mode is taken from what was really opened: bits are only ever removed, never given.
 func tightenEntry(p string) error {
-	st, err := os.Lstat(p)
+	fd, err := unix.Open(p, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC|unix.O_NOCTTY, 0)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
+		if errors.Is(err, unix.ENOENT) || errors.Is(err, unix.ELOOP) {
+			return nil // gone, or a link: not followed
 		}
 		return err
 	}
-	sys, ok := st.Sys().(*syscall.Stat_t)
-	if !ok || int(sys.Uid) != os.Geteuid() || (!st.Mode().IsRegular() && !st.IsDir()) || st.Mode().Perm()&0o022 == 0 {
+	defer unix.Close(fd)
+	var st unix.Stat_t
+	if err := unix.Fstat(fd, &st); err != nil {
+		return err
+	}
+	kind := st.Mode & unix.S_IFMT
+	if int(st.Uid) != os.Geteuid() || (kind != unix.S_IFREG && kind != unix.S_IFDIR) || st.Mode&0o022 == 0 {
 		return nil
 	}
-	return os.Chmod(p, st.Mode().Perm()&^0o022)
+	return unix.Fchmod(fd, st.Mode&0o7777&^0o022)
 }

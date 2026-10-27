@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/mestre-ia/mestre/internal/gitx"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
@@ -65,7 +66,11 @@ func (s *Service) openPR(ctx context.Context, w workspaces.Workspace) error {
 			return fmt.Errorf("list .mestre/: %w", err)
 		}
 		for _, rel := range list {
-			data, _, err := safefile.Read(filepath.Join(principal, filepath.FromSlash(rel)), maxMestreFile)
+			read := safefile.Read
+			if strings.HasPrefix(rel, ".mestre/regras/") {
+				read = safefile.ReadTrusted // a policy the agents wrote does not go into a pull request signed by the Mestre
+			}
+			data, _, err := read(filepath.Join(principal, filepath.FromSlash(rel)), maxMestreFile)
 			if err != nil {
 				return fmt.Errorf("read %s: %w", rel, err)
 			}

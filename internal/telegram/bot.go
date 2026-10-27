@@ -389,8 +389,9 @@ func (b *Bot) PollOnce(ctx context.Context) error {
 			return nil // recorded, it waits for the Citadel that may act
 		}
 		b.handle(ctx, up)
+		err = b.st.Done(ctx, up.UpdateID) // marked while the gate is held: the new Citadel does not replay it
 		release()
-		if err := b.st.Done(ctx, up.UpdateID); err != nil {
+		if err != nil {
 			return err
 		}
 	}
@@ -450,15 +451,16 @@ func (b *Bot) processPending(ctx context.Context) error {
 			return nil // what is left waits for the Citadel that may act
 		}
 		var up Update
+		release := func() {}
 		if err := json.Unmarshal(p.Body, &up); err == nil {
 			switch {
 			case !up.Redacted:
-				release, held := b.admit(ctx)
+				rel, held := b.admit(ctx)
 				if !held {
 					return nil // what is left waits for the Citadel that may act
 				}
+				release = rel
 				b.handle(ctx, up)
-				release()
 			case up.Secret != "":
 				// the text had a secret and was never handled: the message is
 				// still in the chat, so it is deleted, audited and the author told
@@ -467,7 +469,9 @@ func (b *Bot) processPending(ctx context.Context) error {
 			// A copy kept without its text and without a secret (a captured
 			// answer) is not replayed: the user answers again.
 		}
-		if err := b.st.Done(ctx, p.ID); err != nil {
+		err := b.st.Done(ctx, p.ID) // marked while the gate is held: the new Citadel does not replay it
+		release()
+		if err != nil {
 			return err
 		}
 	}

@@ -71,6 +71,12 @@ var (
 	ErrIsFolder = errors.New("is a folder")
 	// ErrPath is a path that is not absolute.
 	ErrPath = errors.New("the path is not absolute")
+	// ErrUntrusted is a file under .mestre/ (or a folder on the way to it) that the
+	// engine did not make: it is not owned by the account of the engine or by root,
+	// or the group or the others can write it. The agents run in a group that writes
+	// the main clone, and a file they made in place of the real one is not the policy
+	// of the Guild (ReadTrusted).
+	ErrUntrusted = errors.New("not made by the engine, or writable by the group or the others")
 )
 
 // Refused reports whether err is one of the refusals of this package (a
