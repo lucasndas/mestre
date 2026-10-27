@@ -26,6 +26,8 @@ import (
 const (
 	fakeGrandMaster = "e2e-grao-mestre"
 	chatWorkspace   = "loja"
+	// askForApproval is what a message must hold for the double to leave a request of cost waiting.
+	askForApproval = "mais orçamento"
 )
 
 type noFiles struct{}
@@ -73,11 +75,17 @@ func startFakeChat(ctx context.Context, guildDB, filesDir string, mask func(stri
 			}
 			if n.Origin != nil && n.Origin.Choice == 0 {
 				answer(ctx, ib, svc, it)
+				// the journey test asks for an approval in words, as a person does; the double raises it
+				if strings.Contains(strings.ToLower(it.Text), askForApproval) {
+					if err := insertCostRequest(ctx, db, clk.Now()); err != nil {
+						return it, err
+					}
+				}
 			}
 			return it, nil
 		},
 		GrandMaster: func(_ context.Context, ws string) (characters.Character, bool, error) {
-			return gm, ws == chatWorkspace, nil
+			return gm, ws == chatWorkspace || ws == fakeWorkspace, nil
 		},
 		Character: func(context.Context, string) (characters.Character, error) { return gm, nil },
 		Pending:   func(context.Context, string) (int, error) { return 0, nil },

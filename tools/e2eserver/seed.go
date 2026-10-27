@@ -33,15 +33,28 @@ func seedRequest(ctx context.Context, guildDB, workspacesDir string) error {
 		VALUES ('loja', 'lucas/loja', 'lucas/loja', 'https://example.test/loja.git', 'main', 'active', '', ?, ?)`, now.UnixMilli(), now.UnixMilli()); err != nil {
 		return fmt.Errorf("the workspace: %w", err)
 	}
+	// the campaign of the workspaces double (workspaces.go) has its row too: the conversation of the
+	// panel is about the current campaign, and the chat lists the rows of the database
+	if _, err := db.Writer().ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+		VALUES (?, 'acme/e2e', 'acme/e2e', 'https://example.test/e2e.git', 'main', 'active', '', ?, ?)`, fakeWorkspace, now.UnixMilli(), now.UnixMilli()); err != nil {
+		return fmt.Errorf("the campaign of the double: %w", err)
+	}
 	if err := seedManage(ctx, db, workspacesDir, now); err != nil {
 		return err
 	}
+	return insertCostRequest(ctx, db, now)
+}
+
+// insertCostRequest leaves a request of extra cost waiting for the people the way the chain does
+// (the request, and the question that asks the PIN). The conversation double also raises one when
+// the user asks for it (chat.go), so the journey test has a request of its own to approve.
+func insertCostRequest(ctx context.Context, db *store.DB, now time.Time) error {
 	r := chain.Request{
 		Workspace: "loja", Type: classes.RequestExtraCost, State: chain.Open, Level: chain.Level{Kind: chain.LevelPeople},
 		About: "mais US$ 20 de uso este mês", Risk: classes.RiskResult{Risk: classes.RiskMedium, Rule: "custo extra", TableVersion: 1},
 		CreatedAt: now, Deadline: now.Add(24 * time.Hour),
 	}
-	r, err = (&chain.Store{DB: db}).Insert(ctx, r)
+	r, err := (&chain.Store{DB: db}).Insert(ctx, r)
 	if err != nil {
 		return err
 	}

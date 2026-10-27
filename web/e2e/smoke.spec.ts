@@ -26,7 +26,7 @@ test("the Owner creates the Guild, signs out and signs in again", async ({ page 
   await page.getByLabel("PIN (6 números)").fill("123456");
   await page.getByLabel("Repita o PIN").fill("123456");
   await page.getByRole("button", { name: "Criar a Guilda" }).click();
-  await expect(page.getByRole("heading", { name: "Sua Guilda está pronta" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Início" })).toBeVisible();
 
   // the request the throwaway Guild has waiting (tools/e2eserver/seed.go): the counter says
   // so, the central shows it, and it is approved with the PIN
@@ -64,7 +64,7 @@ test("the Owner creates the Guild, signs out and signs in again", async ({ page 
   await expect(page.getByRole("alert")).toHaveText("Usuário ou senha inválidos.");
   await page.getByLabel("Senha").fill("uma senha bem longa");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page.getByRole("heading", { name: "Sua Guilda está pronta" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Início" })).toBeVisible();
 
   // the terminal of a character whose agent is the fake one shows its replay: what the
   // agent printed before the browser opened the terminal, which the Citadel asked of the
@@ -109,7 +109,7 @@ test("the canvas of a table draws its nodes and the terminal of a character", as
   await page.getByLabel("Nome de login").fill("maria");
   await page.getByLabel("Senha").fill("uma senha bem longa");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page.getByRole("heading", { name: "Sua Guilda está pronta" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Início" })).toBeVisible();
   await page.goto("/workspaces/e2e/mesas/mesa-e2e");
   const canvas = page.getByRole("region", { name: "Canvas da mesa mesa-e2e" });
   await expect(canvas).toBeVisible();
@@ -142,7 +142,7 @@ test("the workspace view shows the Grand Master and a table block, and a click o
   await page.getByLabel("Nome de login").fill("maria");
   await page.getByLabel("Senha").fill("uma senha bem longa");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page.getByRole("heading", { name: "Sua Guilda está pronta" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Início" })).toBeVisible();
   // Campanhas, then Abrir on the card, leads to the view of the workspace
   await page
     .getByRole("navigation", { name: "Navegação principal" })
@@ -176,7 +176,7 @@ test("the Owner makes a decree and revokes it", async ({ page }) => {
   await page.getByRole("button", { name: "Entrar" }).click();
   await openSetting(page, /^Decretos/);
   await expect(page.getByRole("heading", { name: "Decretos", level: 1 })).toBeVisible();
-  await expect(page.getByText("Nenhum decreto em vigor nesta campanha.")).toBeVisible();
+  await expect(page.getByText("Nenhum decreto em vigor nesta campanha.").first()).toBeVisible();
 
   await page.getByRole("button", { name: "Novo decreto" }).click();
   await page.getByLabel("Nome", { exact: true }).fill("dev");
@@ -198,7 +198,7 @@ test("the Owner makes a decree and revokes it", async ({ page }) => {
   await card.getByRole("button", { name: "Revogar" }).click();
   await card.getByRole("button", { name: "Sim, revogar" }).click();
   await expect(page.getByText("Decreto 1 revogado.")).toBeVisible();
-  await expect(page.getByText("Nenhum decreto em vigor nesta campanha.")).toBeVisible();
+  await expect(page.getByText("Nenhum decreto em vigor nesta campanha.").first()).toBeVisible();
 });
 
 // The classes and presets step of the smoke: the approved class of the throwaway Guild is

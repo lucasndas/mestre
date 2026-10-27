@@ -9,6 +9,7 @@ import common from "./common";
 import errors from "./errors";
 import github from "./github";
 import guild from "./guild";
+import home from "./home";
 import presets from "./presets";
 import profiles from "./profiles";
 import rules from "./rules";
@@ -34,6 +35,7 @@ export const ptBR = {
   github,
   rules,
   guild,
+  home,
   errors,
   terminal,
   canvas,
