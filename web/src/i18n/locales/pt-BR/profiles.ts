@@ -1,13 +1,34 @@
 export default {
   title: "Perfis de conta",
   intro:
-    "As contas que os agentes usam nesta máquina. A configuração guiada leva cada perfil da instalação do programa até a conferência final.",
+    "As contas de IA (Claude, Codex, Antigravity) que os agentes usam para trabalhar nesta máquina. Sem uma conta entrada, nenhum agente roda.",
+  what: "os perfis de conta",
   loading: "Carregando os perfis…",
-  machine: "Máquina: {{machine}}",
-  empty: "Ainda não há nenhum perfil de conta nesta máquina. Crie o primeiro abaixo.",
-  noSetup:
-    "A configuração guiada ainda não está disponível nesta máquina. Os perfis podem ser criados e removidos, mas o login é feito à mão.",
+  machineNote:
+    "Esta lista é a da máquina {{machine}}, onde o painel roda. As contas das outras máquinas aparecem na ficha de cada uma, na Guilda; aqui entram em breve.",
+  strip: {
+    none: "Nenhuma conta de IA entrou ainda",
+    noneHint: "Escolha um provedor abaixo para entrar na primeira conta.",
+    ready: "{{ready}} de {{total}} contas prontas",
+    readyHint: "Cada conta é um perfil. Uma conta pronta já passou na conferência.",
+    manual: "{{total}} contas cadastradas",
+    manualHint:
+      "A configuração guiada ainda não está disponível: o login é feito à mão em cada conta.",
+    action: "Entrar em outra conta",
+  },
+  empty: {
+    title: "Escolha o provedor da primeira conta",
+    why: "Um perfil guarda o login de um provedor nesta máquina. Cada agente usa um perfil para trabalhar.",
+    pick: "Entrar com {{provider}}",
+  },
+  providers: { "claude-code": "Claude", codex: "Codex", antigravity: "Antigravity" },
   default: "padrão",
+  badge: { ready: "pronto", missing: "falta um passo", unchecked: "login não conferido" },
+  manual: {
+    title: "Login feito à mão",
+    body: "Abra o terminal da máquina {{machine}} e entre na conta do provedor ({{provider}}).",
+    codex: "No Codex, aprove também os hooks do Mestre em /hooks.",
+  },
   steps: {
     title: "Etapas da configuração",
     install: "Instalar o programa do provedor",
@@ -26,13 +47,17 @@ export default {
   notConformant: "Ainda não passou na conferência: {{reason}}",
   makeDefault: "Tornar {{name}} o padrão",
   defaultDone: "O padrão agora é {{name}}.",
+  removeTitle: "Remover este perfil",
+  removeNote: "A pasta com o login fica na máquina; só o perfil sai do Mestre.",
   remove: "Remover {{name}}",
   removed: "Perfil {{name}} removido. A pasta com o login fica na máquina.",
   add: {
-    title: "Novo perfil",
+    title: "Entrar em outra conta",
+    hint: "Escolha o nome do perfil e o provedor; o PIN confirma.",
     name: "Nome do perfil",
     provider: "Provedor",
     submit: "Criar perfil",
     done: "Perfil {{name}} criado.",
+    close: "Fechar",
   },
 } as const;

@@ -3,71 +3,154 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SensitiveButton } from "../../components/PinField";
-import { Term } from "../../components/Term";
 import { Alert, Button, Field } from "../../components/ui";
-import type { ProfileRow, ProfileSetupStatus } from "../../gen/panel";
+import type { ProfileRow, ProfileSetupStatus, ProfilesPage } from "../../gen/panel";
 import { api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
-import { Badge, NativeSelect, PageHeader } from "./kit";
-import { profilesQuery, type Say } from "./manage";
+import {
+  Badge,
+  EmptyState,
+  LevelGate,
+  LoadError,
+  NativeSelect,
+  PageHeader,
+  StatusStrip,
+  useReaches,
+  VocabLine,
+} from "./kit";
+import { labelOr, profilesQuery, type Say } from "./manage";
 
 const STEPS = ["install", "login", "hooks", "conformance", "done"] as const;
 
-/** Account profiles of this machine, with the guided setup: a checklist and one button that goes on. */
+/** A profile is ready when the guided setup finished it (or the server recorded the end of it). */
+const isReady = (p: ProfileRow) => p.step === "done" || Boolean(p.setup_done_at);
+
+/** `claude-code` in `claude-2`: the short name of the provider and the next free number. */
+function suggestName(provider: string, profiles: ProfileRow[]): string {
+  const short = provider.split("-")[0] || provider;
+  const used = new Set(profiles.map((p) => p.name));
+  let n = 1;
+  while (used.has(`${short}-${n}`)) n++;
+  return `${short}-${n}`;
+}
+
+/** Account profiles of this machine: the state, a card each with its next step, and the form to add one. */
 export function Profiles() {
   const { t } = useTranslation("profiles");
-  const { t: te } = useTranslation("errors");
+  const say = t as unknown as Say;
   const qc = useQueryClient();
-  const { data, error } = useQuery(profilesQuery);
+  const { data, error, refetch } = useQuery(profilesQuery);
   const [notice, setNotice] = useState<string | null>(null);
+  // the provider whose form is open ("" when closed)
+  const [adding, setAdding] = useState("");
+  const reaches = useReaches("owner");
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin"] });
 
   return (
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
-      <p className="mb-6 max-w-2xl text-sm text-muted">
-        <Term name="Perfil de conta" />
-        {data ? ` · ${t("machine", { machine: data.machine })}` : null}
-      </p>
-      <div className="flex max-w-4xl flex-col gap-6">
-        {notice ? <Alert tone="ok">{notice}</Alert> : null}
-        {error ? <Alert>{errorText(te, error)}</Alert> : null}
-        {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
-        {data && !data.setup ? <p className="text-sm text-muted">{t("noSetup")}</p> : null}
-        {data && data.profiles.length === 0 ? <p className="text-muted">{t("empty")}</p> : null}
-        <ul className="flex flex-col gap-4">
-          {data?.profiles.map((p) => (
-            <ProfileItem
-              key={p.name}
-              p={p}
-              setup={data.setup}
-              onChanged={async (text) => {
-                setNotice(text);
+      <VocabLine terms={["Perfil de conta"]} />
+      {error ? <LoadError what={t("what")} error={error} onRetry={() => void refetch()} /> : null}
+      {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
+      {data && !error ? (
+        <div className="flex max-w-4xl flex-col gap-6">
+          <Strip data={data} onAdd={() => setAdding(data.providers[0] ?? "")} />
+          <p className="max-w-2xl text-sm text-muted">
+            {t("machineNote", { machine: data.machine })}
+          </p>
+          {notice ? <Alert tone="ok">{notice}</Alert> : null}
+          {data.profiles.length === 0 ? (
+            <EmptyState title={t("empty.title")} why={t("empty.why")}>
+              {data.providers.map((p) => (
+                <Button
+                  key={p}
+                  variant="secondary"
+                  isDisabled={!reaches}
+                  onPress={() => setAdding(p)}
+                >
+                  {t("empty.pick", { provider: labelOr(say, `providers.${p}`, p) })}
+                </Button>
+              ))}
+            </EmptyState>
+          ) : null}
+          <ul className="flex flex-col gap-4">
+            {data.profiles.map((p) => (
+              <ProfileItem
+                key={p.name}
+                p={p}
+                machine={data.machine}
+                setup={data.setup}
+                onChanged={async (text) => {
+                  setNotice(text);
+                  await refresh();
+                }}
+              />
+            ))}
+          </ul>
+          {adding ? (
+            <AddProfile
+              key={adding}
+              providers={data.providers}
+              initialProvider={adding}
+              profiles={data.profiles}
+              onClose={() => setAdding("")}
+              onAdded={async (name) => {
+                setAdding("");
+                setNotice(t("add.done", { name }));
                 await refresh();
               }}
             />
-          ))}
-        </ul>
-        {data ? (
-          <AddProfile
-            providers={data.providers}
-            onAdded={async (name) => {
-              setNotice(t("add.done", { name }));
-              await refresh();
-            }}
-          />
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+function Strip({ data, onAdd }: { data: ProfilesPage; onAdd: () => void }) {
+  const { t } = useTranslation("profiles");
+  const total = data.profiles.length;
+  const ready = data.profiles.filter(isReady).length;
+  const action = (
+    <LevelGate need="owner" label={t("strip.action")}>
+      <Button onPress={onAdd}>{t("strip.action")}</Button>
+    </LevelGate>
+  );
+  if (total === 0)
+    return (
+      <StatusStrip
+        tone="warn"
+        title={t("strip.none")}
+        hint={data.setup ? t("strip.noneHint") : `${t("strip.noneHint")} ${t("strip.manualHint")}`}
+      >
+        {action}
+      </StatusStrip>
+    );
+  if (!data.setup)
+    return (
+      <StatusStrip title={t("strip.manual", { total })} hint={t("strip.manualHint")}>
+        {action}
+      </StatusStrip>
+    );
+  return (
+    <StatusStrip
+      tone={ready === total ? "ok" : "warn"}
+      title={t("strip.ready", { ready, total })}
+      hint={t("strip.readyHint")}
+    >
+      {action}
+    </StatusStrip>
   );
 }
 
 function ProfileItem({
   p,
+  machine,
   setup,
   onChanged,
 }: {
   p: ProfileRow;
+  machine: string;
   setup: boolean;
   onChanged: (text: string) => Promise<void>;
 }) {
@@ -80,51 +163,69 @@ function ProfileItem({
   const step = status?.step ?? p.step;
   const at = STEPS.indexOf(step as (typeof STEPS)[number]);
   const waiting = status ? status.waiting : p.detail;
+  const provider = labelOr(say, `providers.${p.provider}`, p.provider);
 
   return (
     <li className="rounded-field border border-line bg-surface p-4">
       <p className="flex flex-wrap items-center gap-2 text-lg font-semibold">
         {p.name}
-        <Badge>{p.provider}</Badge>
+        <Badge>{provider}</Badge>
         {p.default ? <Badge tone="ok">{t("default")}</Badge> : null}
+        {setup ? (
+          step === "done" ? (
+            <Badge tone="ok">{t("badge.ready")}</Badge>
+          ) : (
+            <Badge tone="warn">{t("badge.missing")}</Badge>
+          )
+        ) : (
+          <Badge tone="warn">{t("badge.unchecked")}</Badge>
+        )}
       </p>
-      <ol aria-label={t("steps.title")} className="mt-3 flex flex-col gap-1">
-        {STEPS.map((s, i) => {
-          const state =
-            at < 0
-              ? "pending"
-              : i < at || step === "done"
-                ? "done"
-                : i === at
-                  ? "current"
-                  : "pending";
-          return (
-            <li
-              key={s}
-              aria-current={state === "current" ? "step" : undefined}
-              className="flex flex-wrap items-center gap-2"
-            >
-              <span aria-hidden="true" className="w-5 text-center">
-                {state === "done" ? "✓" : state === "current" ? "▸" : "·"}
-              </span>
-              <span className={state === "pending" ? "text-muted" : "font-semibold"}>
-                {say(`steps.${s}`)}
-              </span>
-              <span className="text-sm text-muted">
-                (
-                {say(
-                  state === "done"
-                    ? "steps.stateDone"
-                    : state === "current"
-                      ? "steps.stateCurrent"
-                      : "steps.statePending",
-                )}
-                )
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+      {setup ? (
+        <ol aria-label={t("steps.title")} className="mt-3 flex flex-col gap-1">
+          {STEPS.map((s, i) => {
+            const state =
+              at < 0
+                ? "pending"
+                : i < at || step === "done"
+                  ? "done"
+                  : i === at
+                    ? "current"
+                    : "pending";
+            return (
+              <li
+                key={s}
+                aria-current={state === "current" ? "step" : undefined}
+                className="flex flex-wrap items-center gap-2"
+              >
+                <span aria-hidden="true" className="w-5 text-center">
+                  {state === "done" ? "✓" : state === "current" ? "▸" : "·"}
+                </span>
+                <span className={state === "pending" ? "text-muted" : "font-semibold"}>
+                  {say(`steps.${s}`)}
+                </span>
+                <span className="text-sm text-muted">
+                  (
+                  {say(
+                    state === "done"
+                      ? "steps.stateDone"
+                      : state === "current"
+                        ? "steps.stateCurrent"
+                        : "steps.statePending",
+                  )}
+                  )
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <div className="mt-3 text-sm">
+          <p className="font-semibold">{t("manual.title")}</p>
+          <p>{t("manual.body", { machine, provider })}</p>
+          {p.provider.includes("codex") ? <p>{t("manual.codex")}</p> : null}
+        </div>
+      )}
       {waiting && step !== "done" ? (
         <p className="mt-2 text-sm">{t("waiting", { what: waiting })}</p>
       ) : null}
@@ -141,7 +242,7 @@ function ProfileItem({
           <Link
             to="/terminal/$character"
             params={{ character: status.terminal }}
-            className="font-semibold text-accent underline underline-offset-2"
+            className="inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-2"
           >
             {t("terminal")}
           </Link>
@@ -189,15 +290,24 @@ function ProfileItem({
             {t("makeDefault", { name: p.name })}
           </SensitiveButton>
         )}
-        <SensitiveButton
-          variant="danger"
-          onConfirm={async (pin) => {
-            await api("DELETE", `/api/profiles/${encodeURIComponent(p.name)}`, undefined, { pin });
-            await onChanged(t("removed", { name: p.name }));
-          }}
-        >
-          {t("remove", { name: p.name })}
-        </SensitiveButton>
+      </div>
+      <div className="mt-4 flex flex-col gap-2 border-t border-line pt-3">
+        <p className="text-sm text-muted">
+          <span className="font-semibold">{t("removeTitle")}.</span> {t("removeNote")}
+        </p>
+        <div>
+          <SensitiveButton
+            variant="danger"
+            onConfirm={async (pin) => {
+              await api("DELETE", `/api/profiles/${encodeURIComponent(p.name)}`, undefined, {
+                pin,
+              });
+              await onChanged(t("removed", { name: p.name }));
+            }}
+          >
+            {t("remove", { name: p.name })}
+          </SensitiveButton>
+        </div>
       </div>
     </li>
   );
@@ -205,43 +315,56 @@ function ProfileItem({
 
 function AddProfile({
   providers,
+  initialProvider,
+  profiles,
+  onClose,
   onAdded,
 }: {
   providers: string[];
+  initialProvider: string;
+  profiles: ProfileRow[];
+  onClose: () => void;
   onAdded: (name: string) => Promise<void>;
 }) {
   const { t } = useTranslation("profiles");
-  const [name, setName] = useState("");
-  const [provider, setProvider] = useState(providers[0] ?? "");
+  const say = t as unknown as Say;
+  const [provider, setProvider] = useState(initialProvider);
+  const [name, setName] = useState(suggestName(initialProvider, profiles));
   return (
     <section
       aria-labelledby="add-profile"
-      className="flex max-w-xl flex-col gap-3 border-t border-line pt-6"
+      className="flex max-w-xl flex-col gap-3 rounded-field border border-accent p-4"
     >
       <h2 id="add-profile" className="text-2xl">
         {t("add.title")}
       </h2>
+      <p className="text-sm text-muted">{t("add.hint")}</p>
       <Field label={t("add.name")} value={name} onChange={setName} autoComplete="off" />
       {providers.length > 0 ? (
         <NativeSelect
           label={t("add.provider")}
           value={provider}
-          onChange={setProvider}
-          options={providers.map((x) => ({ value: x, label: x }))}
+          onChange={(v) => {
+            // the suggestion follows the provider while the name is still the suggested one
+            if (name === suggestName(provider, profiles)) setName(suggestName(v, profiles));
+            setProvider(v);
+          }}
+          options={providers.map((x) => ({ value: x, label: labelOr(say, `providers.${x}`, x) }))}
         />
       ) : null}
-      <div>
+      <div className="flex flex-wrap items-start gap-3">
         <SensitiveButton
           isDisabled={name.trim() === "" || provider === ""}
           onConfirm={async (pin) => {
             await api("POST", "/api/profiles", { name: name.trim(), provider }, { pin });
-            const added = name.trim();
-            setName("");
-            await onAdded(added);
+            await onAdded(name.trim());
           }}
         >
           {t("add.submit")}
         </SensitiveButton>
+        <Button variant="quiet" onPress={onClose}>
+          {t("add.close")}
+        </Button>
       </div>
     </section>
   );

@@ -4,79 +4,131 @@ import { useTranslation } from "react-i18next";
 import { useCan, useFormatDateTime } from "../../app/session";
 import { SensitiveButton } from "../../components/PinField";
 import { Alert, Button, Field } from "../../components/ui";
-import type { AppCount, AppLinkResponse, AppRow } from "../../gen/panel";
+import type { AppCount, AppLinkResponse, AppRequestRow, AppRow, AppsPage } from "../../gen/panel";
 import { api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
 import { appTone } from "./Classes";
-import { Badge, PageHeader, ShownOnce } from "./kit";
+import {
+  Badge,
+  EmptyState,
+  LevelGate,
+  LoadError,
+  PageHeader,
+  ShownOnce,
+  StatusStrip,
+  VocabLine,
+} from "./kit";
 import { appsQuery, labelOr, type Say } from "./manage";
 
-/** The Apps screen: "N de 100 Apps na conta", the Apps with their state, and (the Owner) the creation links. */
+/** The Apps screen: where the Apps stand, the next step of each and (the Guildmaster) the creation links. */
 export function GitHubApps() {
   const { t } = useTranslation("apps");
-  const { t: te } = useTranslation("errors");
   const fmt = useFormatDateTime();
   const owner = useCan("github_apps");
   const qc = useQueryClient();
-  const { data, error } = useQuery(appsQuery);
+  const { data, error, refetch } = useQuery(appsQuery);
   const [link, setLink] = useState<AppLinkResponse | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin"] });
 
+  const onLink = async (name: string, pin: string) => {
+    const r = await api<AppLinkResponse>(
+      "POST",
+      `/api/github/apps/${encodeURIComponent(name)}/link`,
+      undefined,
+      { pin },
+    );
+    setLink(r);
+    setNotice(null);
+    await refresh();
+  };
+
   return (
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
-      <div className="flex max-w-5xl flex-col gap-6">
-        {notice ? <Alert tone="ok">{notice}</Alert> : null}
-        {error ? <Alert>{errorText(te, error)}</Alert> : null}
-        {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
-        {data ? (
-          <>
-            <Count count={data.count} />
-            {owner ? (
-              <Others
-                value={data.count.others}
-                onSaved={async () => {
-                  setNotice(t("others.saved"));
-                  await refresh();
-                }}
-              />
-            ) : (
-              <p className="text-sm text-muted">{t("ownerOnly")}</p>
-            )}
-            {owner && !data.creation ? (
-              <p className="text-sm text-muted">{t("unavailable")}</p>
-            ) : null}
-            {link ? (
-              <ShownOnce
-                title={t("link.title", { name: link.app })}
-                secret={link.url}
-                detail={t("link.detail", { when: fmt(link.expires_at) })}
-                note={t("link.once")}
-                doneLabel={t("link.done")}
-                onDone={() => setLink(null)}
-              />
-            ) : null}
-            <AppList
-              apps={data.apps}
-              owner={owner}
-              onLink={async (name, pin) => {
-                const r = await api<AppLinkResponse>(
-                  "POST",
-                  `/api/github/apps/${encodeURIComponent(name)}/link`,
-                  undefined,
-                  { pin },
-                );
-                setLink(r);
-                setNotice(null);
+      <VocabLine terms={["App do GitHub", "Classe"]} />
+      {error ? <LoadError what={t("what")} error={error} onRetry={() => void refetch()} /> : null}
+      {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
+      {data && !error ? (
+        <div className="flex max-w-4xl flex-col gap-6">
+          <Strip page={data} owner={owner} onLink={onLink} />
+          {notice ? <Alert tone="ok">{notice}</Alert> : null}
+          {link ? (
+            <ShownOnce
+              title={t("link.title", { name: link.app })}
+              secret={link.url}
+              detail={t("link.detail", { when: fmt(link.expires_at) })}
+              note={t("link.once")}
+              doneLabel={t("link.done")}
+              onDone={() => setLink(null)}
+            />
+          ) : null}
+          {!owner ? <p className="text-sm text-muted">{t("readOnly")}</p> : null}
+          {owner && !data.creation ? (
+            <p className="text-sm text-muted">{t("unavailable")}</p>
+          ) : null}
+          <Count count={data.count} />
+          {data.apps.length === 0 ? (
+            <EmptyState
+              title={t("empty.title")}
+              why={t("empty.why")}
+              steps={[t("empty.step1"), t("empty.step2"), t("empty.step3")]}
+            />
+          ) : (
+            <AppList apps={data.apps} requests={data.requests} owner={owner} onLink={onLink} />
+          )}
+          {owner ? (
+            <Others
+              value={data.count.others}
+              onSaved={async () => {
+                setNotice(t("others.saved"));
                 await refresh();
               }}
             />
-            {owner ? <Requests requests={data.requests} /> : null}
-          </>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+function Strip({
+  page,
+  owner,
+  onLink,
+}: {
+  page: AppsPage;
+  owner: boolean;
+  onLink: (name: string, pin: string) => Promise<void>;
+}) {
+  const { t } = useTranslation("apps");
+  if (page.apps.length === 0)
+    return <StatusStrip tone="warn" title={t("strip.none")} hint={t("strip.noneHint")} />;
+  const pending = page.apps.filter((a) => a.state_label !== "pronto").length;
+  const target =
+    page.apps.find((a) => a.can_link) ??
+    (owner ? undefined : page.apps.find((a) => a.state_label !== "pronto"));
+  const action = target ? (
+    <LevelGate need="owner" label={t("strip.action", { name: target.name })}>
+      <SensitiveButton onConfirm={(pin) => onLink(target.name, pin)}>
+        {t("strip.action", { name: target.name })}
+      </SensitiveButton>
+    </LevelGate>
+  ) : null;
+  if (pending === 0)
+    return (
+      <StatusStrip tone="ok" title={t("strip.allReady")} hint={t("strip.allReadyHint")}>
+        {action}
+      </StatusStrip>
+    );
+  return (
+    <StatusStrip
+      tone="warn"
+      title={pending === 1 ? t("strip.waitingOne") : t("strip.waiting", { count: pending })}
+      hint={t("strip.waitingHint")}
+    >
+      {action}
+    </StatusStrip>
   );
 }
 
@@ -84,23 +136,23 @@ function Count({ count }: { count: AppCount }) {
   const { t } = useTranslation("apps");
   return (
     <div>
-      <p className="text-2xl font-semibold">
+      <p className="text-xl font-semibold">
         {t("count", { total: count.total, limit: count.limit })}
         {count.near ? (
           <>
             {" "}
-            <Badge tone="warn">{t("near", { limit: count.limit })}</Badge>
+            <Badge tone="danger">{t("near", { limit: count.limit })}</Badge>
           </>
         ) : null}
       </p>
       <p className="text-sm text-muted">
-        {t("countDetail", { mine: count.mine, others: count.others })}
+        {t("countDetail", { mine: count.mine, others: count.others, limit: count.limit })}
       </p>
       <progress
-        className="mt-2 h-2 w-full max-w-md accent-accent"
+        className={`mt-2 h-2 w-full max-w-md ${count.near ? "accent-danger" : "accent-accent"}`}
         max={count.limit}
         value={Math.min(count.total, count.limit)}
-        aria-label={t("count", { total: count.total, limit: count.limit })}
+        aria-label={t("meterTitle")}
       />
     </div>
   );
@@ -115,159 +167,127 @@ function Others({ value, onSaved }: { value: number; onSaved: () => Promise<void
   const n = Number(text);
   const valid = text.trim() !== "" && Number.isInteger(n) && n >= 0;
   return (
-    <form
-      className="flex max-w-xl flex-col gap-2"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setBusy(true);
-        setError(null);
-        try {
-          await api("PUT", "/api/github/apps/others", { count: n });
-          await onSaved();
-        } catch (err) {
-          setError(err);
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      <div className="flex flex-wrap items-end gap-3">
-        <Field
-          label={t("others.label")}
-          description={t("others.hint")}
-          type="number"
-          inputMode="numeric"
-          value={text}
-          onChange={setText}
-          className="w-full"
-        />
-        <Button type="submit" variant="secondary" isDisabled={busy || !valid}>
-          {t("others.save")}
-        </Button>
-      </div>
-      {error ? <Alert>{errorText(te, error)}</Alert> : null}
-    </form>
+    <details className="max-w-xl text-sm">
+      <summary className="min-h-11 cursor-pointer py-2 font-semibold">
+        {t("others.summary")}
+      </summary>
+      <form
+        className="flex flex-col gap-2"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError(null);
+          try {
+            await api("PUT", "/api/github/apps/others", { count: n });
+            await onSaved();
+          } catch (err) {
+            setError(err);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <div className="flex flex-wrap items-end gap-3">
+          <Field
+            label={t("others.label")}
+            description={t("others.hint")}
+            type="number"
+            inputMode="numeric"
+            value={text}
+            onChange={setText}
+            className="w-full"
+          />
+          <Button type="submit" variant="secondary" isDisabled={busy || !valid}>
+            {t("others.save")}
+          </Button>
+        </div>
+        {error ? <Alert>{errorText(te, error)}</Alert> : null}
+      </form>
+    </details>
   );
 }
 
 function AppList({
   apps,
+  requests,
   owner,
   onLink,
 }: {
   apps: AppRow[];
+  requests: AppRequestRow[];
   owner: boolean;
   onLink: (name: string, pin: string) => Promise<void>;
 }) {
   const { t } = useTranslation("apps");
-  const say = t as unknown as Say;
   return (
     <section aria-labelledby="apps-title" className="flex flex-col gap-3">
       <h2 id="apps-title" className="text-2xl">
         {t("list.title")}
       </h2>
-      {apps.length === 0 ? <p className="text-muted">{t("list.empty")}</p> : null}
-      {apps.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] border-collapse text-left">
-            <caption className="sr-only">{t("list.caption")}</caption>
-            <thead>
-              <tr className="border-b border-line text-sm text-muted">
-                <th scope="col" className="py-2 pr-4">
-                  {t("list.name")}
-                </th>
-                <th scope="col" className="py-2 pr-4">
-                  {t("list.class")}
-                </th>
-                <th scope="col" className="py-2 pr-4">
-                  {t("list.state")}
-                </th>
-                <th scope="col" className="py-2 pr-4">
-                  {t("list.repos")}
-                </th>
-                {owner ? (
-                  <th scope="col" className="py-2">
-                    {t("list.actions")}
-                  </th>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody>
-              {apps.map((a) => (
-                <tr key={a.name} className="border-b border-line align-top">
-                  <th scope="row" className="py-2 pr-4 font-semibold">
-                    {a.name}
-                    <span className="block text-sm font-normal text-muted">{a.role}</span>
-                  </th>
-                  <td className="py-2 pr-4">
-                    {a.class || <span className="text-muted">{t("list.fixed")}</span>}
-                  </td>
-                  <td className="py-2 pr-4">
-                    <Badge tone={appTone(a.state_label)}>{a.state_label}</Badge>
-                    {a.request ? (
-                      <span className="mt-1 block text-sm text-muted">
-                        {labelOr(say, `requests.status.${a.request}`, a.request)}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="py-2 pr-4">
-                    {a.repos.length > 0 ? (
-                      a.repos.join(", ")
-                    ) : (
-                      <span className="text-muted">{t("list.noRepos")}</span>
-                    )}
-                  </td>
-                  {owner ? (
-                    <td className="py-2">
-                      {a.can_link ? (
-                        <SensitiveButton
-                          variant="secondary"
-                          onConfirm={(pin) => onLink(a.name, pin)}
-                        >
-                          {t(a.request ? "link.new" : "link.make", { name: a.name })}
-                        </SensitiveButton>
-                      ) : null}
-                    </td>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
+      <ul aria-label={t("list.caption")} className="flex flex-col gap-3">
+        {apps.map((a) => (
+          <AppItem
+            key={a.name}
+            a={a}
+            request={requests.find((r) => r.app === a.name)}
+            owner={owner}
+            onLink={onLink}
+          />
+        ))}
+      </ul>
     </section>
   );
 }
 
-function Requests({
-  requests,
+/** What to do with this App now, from its state and its open request ([estados](docs/github/criacao-de-apps.md)). */
+function AppItem({
+  a,
+  request,
+  owner,
+  onLink,
 }: {
-  requests: { app: string; status: string; expires_at: string; expired: boolean }[];
+  a: AppRow;
+  request: AppRequestRow | undefined;
+  owner: boolean;
+  onLink: (name: string, pin: string) => Promise<void>;
 }) {
   const { t } = useTranslation("apps");
   const say = t as unknown as Say;
   const fmt = useFormatDateTime();
+  const ready = a.state_label === "pronto";
+  const status = a.request || request?.status || "";
+  let next = "";
+  if (ready) next = a.repos.length > 0 ? "" : t("list.notInstalled");
+  else if (request && !request.expired && (status === "link" || status === "opened"))
+    next = t("next.link", { when: fmt(request.expires_at) });
+  else if (status === "exchanging") next = t("next.exchanging");
+  else if (status === "failed") next = t("next.failed");
+  else if (request?.expired || status === "expired") next = t("next.expired");
+  else if (a.can_link) next = t("next.noLink");
+  else if (!owner) next = t("next.waitingOwner");
   return (
-    <section aria-labelledby="requests-title" className="flex flex-col gap-2">
-      <h2 id="requests-title" className="text-2xl">
-        {t("requests.title")}
-      </h2>
-      {requests.length === 0 ? <p className="text-muted">{t("requests.empty")}</p> : null}
-      <ul className="flex flex-col gap-2">
-        {requests.map((r) => (
-          <li key={r.app} className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold">{r.app}</span>
-            <Badge tone={r.expired ? "danger" : "plain"}>
-              {labelOr(say, `requests.status.${r.status}`, r.status)}
-            </Badge>
-            <span className="text-sm text-muted">
-              {r.expired
-                ? t("requests.expired")
-                : t("requests.expires", { when: fmt(r.expires_at) })}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <li className="rounded-field border border-line bg-surface p-4">
+      <p className="flex flex-wrap items-center gap-2 text-lg font-semibold">
+        {a.name}
+        <Badge tone={appTone(a.state_label)}>{a.state_label}</Badge>
+        {status && !ready ? (
+          <Badge>{labelOr(say, `requests.status.${status}`, status)}</Badge>
+        ) : null}
+      </p>
+      <p className="text-sm text-muted">
+        {a.class ? t("list.class", { class: a.class }) : t("list.fixed")} · {a.role}
+      </p>
+      {a.repos.length > 0 ? (
+        <p className="mt-2 text-sm">{t("list.installed", { repos: a.repos.join(", ") })}</p>
+      ) : null}
+      {next ? <p className="mt-2">{next}</p> : null}
+      {owner && a.can_link ? (
+        <div className="mt-3">
+          <SensitiveButton variant="secondary" onConfirm={(pin) => onLink(a.name, pin)}>
+            {t(request ? "link.new" : "link.make")}
+          </SensitiveButton>
+        </div>
+      ) : null}
+    </li>
   );
 }

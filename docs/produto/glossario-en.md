@@ -43,6 +43,7 @@ Este documento é lido por máquina, como o [glossário](glossario.md): cada lin
 | Base | Base | The setup of how a terminal starts: command, folder and which machines it can run on. | the template for how to open a command window |
 | Ficha | Sheet | A ready-made kind of character: uses a base and sets agent, class, account and limits. | a ready-made assistant template with a defined job and limits |
 | Perfil de conta | Account profile | Which provider subscription (Claude, Codex, Antigravity) a character uses on that machine. | the AI subscription the assistant uses to work |
+| App do GitHub | GitHub App | Mestre's robot on GitHub: agent actions show under an App's name, and you can cut its access anytime. | a robot user on GitHub that Mestre uses to open PRs and comment |
 | Operador do PC | PC Operator | An agent that uses your Windows PC and account, only with Guildmaster approval, briefly, with an on-screen notice. | an assistant that uses your Windows computer, with your OK and briefly |
 | Classe | Class | A character's role (e.g. Dev, QA): its own instructions, permissions, hooks and skills. | the assistant's job on the team, such as programmer or tester |
 | Classe sugerida | Suggested class | A development-team class that ships turned off; an Administrator enables the ones they want. | a ready-made programming-team job that starts switched off |

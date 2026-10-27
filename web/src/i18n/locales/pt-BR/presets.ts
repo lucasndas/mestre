@@ -2,12 +2,21 @@ export default {
   title: "Bases e fichas",
   intro:
     "As bases dizem qual programa cada terminal roda; as fichas descrevem cada personagem. Crie, edite, apague, exporte e importe em YAML ou JSON.",
+  what: "as bases e fichas",
   loading: "Carregando as bases e fichas…",
+  strip: {
+    action: "Criar uma ficha",
+    title: "{{bases}} bases e {{sheets}} fichas",
+    hint: "As fichas são os tipos de personagem que o Mestre sabe abrir.",
+    noSheets: "Sem ficha, o Mestre não tem tipo de personagem para abrir numa mesa.",
+  },
   saved: "{{name}} salvo.",
   deleted: "{{name}} apagado.",
   bases: {
     title: "Bases",
-    empty: "Ainda não há nenhuma base.",
+    emptyTitle: "Nenhuma base ainda",
+    empty:
+      "Uma base diz qual programa abre um terminal, em que pasta e em quais máquinas. Crie uma para poder escrever fichas.",
     caption: "Bases de terminais",
     name: "Base",
     command: "Comando",
@@ -19,7 +28,9 @@ export default {
   },
   sheets: {
     title: "Fichas",
-    empty: "Ainda não há nenhuma ficha.",
+    emptyTitle: "Nenhuma ficha ainda",
+    empty:
+      "Uma ficha é um tipo de personagem pronto: usa uma base e define agente, classe, conta e limites. Crie a primeira, ou importe um arquivo mais abaixo.",
     caption: "Fichas de personagens",
     name: "Ficha",
     base: "Base",

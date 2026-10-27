@@ -1,11 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert } from "../../components/ui";
 import type { UsageLimit, UsagePage, UsageTotals } from "../../gen/panel";
-import { errorText } from "../../lib/errors";
 import { formatNumber } from "../../lib/format";
-import { NativeSelect, PageHeader } from "./kit";
+import { EmptyState, LoadError, NativeSelect, PageHeader, StatusStrip, VocabLine } from "./kit";
 import { type Say, usageQuery } from "./manage";
 
 // Recharts is heavy: the charts load when the screen opens.
@@ -18,15 +16,17 @@ const GROUPS = ["workspaces", "tables", "quests", "characters", "accounts"] as c
 /** Usage by day, workspace, table, mission, character and account, and the limits with what is left. */
 export function Usage() {
   const { t, i18n } = useTranslation("usage");
-  const { t: te } = useTranslation("errors");
   const [days, setDays] = useState(14);
-  const { data, error } = useQuery(usageQuery(days));
+  const { data, error, refetch } = useQuery(usageQuery(days));
   const lang = i18n.language;
 
   return (
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
+      <VocabLine terms={["Campanha", "Companhia"]} />
+      {error ? <LoadError what={t("what")} error={error} onRetry={() => void refetch()} /> : null}
       <div className="flex max-w-5xl flex-col gap-8">
+        {data && !error ? <Strip page={data} lang={lang} /> : null}
         <div className="max-w-xs">
           <NativeSelect
             label={t("period")}
@@ -35,11 +35,38 @@ export function Usage() {
             options={PERIODS.map((d) => ({ value: String(d), label: t("days", { count: d }) }))}
           />
         </div>
-        {error ? <Alert>{errorText(te, error)}</Alert> : null}
         {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
-        {data ? <Body page={data} lang={lang} /> : null}
+        {data && !error ? <Body page={data} lang={lang} /> : null}
       </div>
     </section>
+  );
+}
+
+/** The limit that is closest to being reached, as the sentence the screen opens with. */
+function Strip({ page, lang }: { page: UsagePage; lang: string }) {
+  const { t } = useTranslation("usage");
+  const say = t as unknown as Say;
+  const empty = GROUPS.every((g) => page[g].length === 0) && page.days.length === 0;
+  const withData = page.limits.filter((l) => l.has_data);
+  const nearest = withData.reduce<UsageLimit | undefined>(
+    (best, l) => (best === undefined || l.percent > best.percent ? l : best),
+    undefined,
+  );
+  if (nearest === undefined)
+    return (
+      <StatusStrip
+        title={empty ? t("strip.nothing") : t("strip.noLimit")}
+        hint={empty ? t("strip.nothingHint") : t("strip.noLimitHint")}
+      />
+    );
+  const pct = Math.round(nearest.percent);
+  const name = `${say(`limits.scope.${nearest.scope}`)}${nearest.key ? ` ${nearest.key}` : ""}`;
+  return (
+    <StatusStrip
+      tone={pct >= 100 ? "danger" : pct >= 80 ? "warn" : "ok"}
+      title={t("strip.used", { percent: new Intl.NumberFormat(lang).format(pct) })}
+      hint={t("strip.nearest", { name })}
+    />
   );
 }
 
@@ -63,7 +90,13 @@ function Body({ page, lang }: { page: UsagePage; lang: string }) {
   return (
     <>
       <p className="text-sm text-muted">{t("noDataNote")}</p>
-      {empty ? <p className="text-muted">{t("empty")}</p> : null}
+      {empty ? (
+        <EmptyState
+          title={t("emptyTitle")}
+          why={t("empty")}
+          steps={[t("emptyStep1"), t("emptyStep2")]}
+        />
+      ) : null}
       <Limits limits={page.limits} lang={lang} />
       <Daily days={page.days} usd={usd} duration={duration} hours={hours} lang={lang} />
       {GROUPS.map((g) =>

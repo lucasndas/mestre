@@ -5,12 +5,21 @@ const presets: Widen<typeof pt> = {
   title: "Bases and sheets",
   intro:
     "Bases say which program each terminal runs; sheets describe each character. Create, edit, delete, export and import in YAML or JSON.",
+  what: "the bases and sheets",
   loading: "Loading the bases and sheets…",
+  strip: {
+    action: "Create a sheet",
+    title: "{{bases}} bases and {{sheets}} sheets",
+    hint: "Sheets are the kinds of character Mestre knows how to open.",
+    noSheets: "With no sheet, Mestre has no kind of character to open on a table.",
+  },
   saved: "{{name}} saved.",
   deleted: "{{name}} deleted.",
   bases: {
     title: "Bases",
-    empty: "There are no bases yet.",
+    emptyTitle: "No base yet",
+    empty:
+      "A base says which program opens a terminal, in which folder and on which machines. Create one to be able to write sheets.",
     caption: "Terminal bases",
     name: "Base",
     command: "Command",
@@ -22,7 +31,9 @@ const presets: Widen<typeof pt> = {
   },
   sheets: {
     title: "Sheets",
-    empty: "There are no sheets yet.",
+    emptyTitle: "No sheet yet",
+    empty:
+      "A sheet is a ready-made kind of character: it uses a base and sets agent, class, account and limits. Create the first one, or import a file below.",
     caption: "Character sheets",
     name: "Sheet",
     base: "Base",
