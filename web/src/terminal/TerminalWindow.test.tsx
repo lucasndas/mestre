@@ -607,3 +607,10 @@ test("CA-TUI-15: the balloon is in English when the panel is", async () => {
   expect(balloon.textContent).toContain(glossary.Leitura.en.help);
   expect(balloon.textContent).toContain("In the real world");
 });
+
+// CA-TUI-03
+test("CA-TUI-03: an escape typed inside a message cannot end the paste early", async () => {
+  const { encodeMessage } = await import("./MessageComposer");
+  expect(encodeMessage("a\x1b[201~rm -rf /\nb")).toBe("\x1b[200~a[201~rm -rf /\nb\x1b[201~\r");
+  expect(encodeMessage("só uma linha\x1b")).toBe("só uma linha\r");
+});

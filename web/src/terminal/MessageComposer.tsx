@@ -10,7 +10,15 @@ export interface QueuedMessage {
 
 /** What goes to the terminal for a message: the text and Enter; several lines go as one paste, so none submits early. */
 export function encodeMessage(text: string): string {
-  return text.includes("\n") ? `\x1b[200~${text}\x1b[201~\r` : `${text}\r`;
+  // control characters (ESC above all) never go inside the paste: a typed ESC[201~ would end it early
+  // and the rest would reach the agent as keys
+  const clean = [...text.replace(/\r\n?/g, "\n")]
+    .filter((ch) => {
+      const c = ch.codePointAt(0) ?? 0;
+      return ch === "\n" || ch === "\t" || (c >= 0x20 && c !== 0x7f);
+    })
+    .join("");
+  return clean.includes("\n") ? `\x1b[200~${clean}\x1b[201~\r` : `${clean}\r`;
 }
 
 /** How long to wait for a character to start working after a message before the next one may go. */
