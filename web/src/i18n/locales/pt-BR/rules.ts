@@ -2,6 +2,19 @@ export default {
   loading: "Carregando…",
   noWorkspace:
     "Ainda não há nenhuma campanha. Quando você conectar um repositório, as regras dela aparecem aqui.",
+  noWorkspaceTitle: "Nenhuma campanha ainda",
+  noWorkspaceStep1: "Peça ao Grão-Mestre para criar a primeira campanha.",
+  noWorkspaceStep2: "Volte aqui: as regras dela aparecem sozinhas.",
+  talk: "Falar com o Grão-Mestre",
+  loadWhat: {
+    workspaces: "as campanhas",
+    chain: "a supervisão da cadeia",
+    delegations: "as delegações",
+    decrees: "os decretos",
+    ceiling: "o teto",
+    policy: "a política de aprovação",
+    instructions: "as instruções extras",
+  },
   workspace: "Campanha",
   cancel: "Cancelar",
   levels: {
@@ -37,7 +50,16 @@ export default {
   decrees: {
     title: "Decretos",
     intro:
-      "As ordens das pessoas autorizadas que valem acima das regras: as que estão em vigor, as suspensas, o que cada uma liberou e quem a deu.",
+      "Ordens suas que valem acima das regras: liberar algo uma única vez, ou criar uma regra que vale até você cancelar.",
+    strip_one: "{{count}} decreto em vigor",
+    strip_other: "{{count}} decretos em vigor",
+    stripToday_one: "{{count}} vence hoje.",
+    stripToday_other: "{{count}} vencem hoje.",
+    emptyTitle: "Para que serve um decreto?",
+    emptyWhy:
+      "Um decreto é uma ordem sua que o Mestre cumpre acima das regras. Exemplo: “pode rodar npm test sem pedir”.",
+    emptyStep1: "Escolha o tipo e escreva a ordem com as suas palavras.",
+    emptyStep2: "Leia o “Entendi: …” do Mestre antes de confirmar; só o seu clique cria o decreto.",
     made: "Decreto feito.",
     new: "Novo decreto",
     showEnded: "Mostrar também os que já acabaram",
@@ -53,7 +75,7 @@ export default {
       revoked: "Revogado",
     },
     frozen: "Mestre travado",
-    text: "Ordem original",
+    text: "Você disse",
     author: "Autor",
     scope: "Alcance",
     wholeWorkspace: "a campanha inteira",
@@ -118,7 +140,13 @@ export default {
   delegations: {
     title: "Delegações e regras temporárias",
     intro:
-      "O que o Grão-Mestre e os Mestres de mesa podem decidir no lugar das pessoas, e por quanto tempo. Revogar tira a permissão na hora.",
+      "Permissão para o Grão-Mestre ou o Mestre da mesa decidirem pedidos no seu lugar, por tempo limitado. Revogar corta na hora.",
+    strip_one: "{{count}} delegação ativa",
+    strip_other: "{{count}} delegações ativas",
+    stripSoonest: "A que vence antes acaba em {{when}}.",
+    emergency: "Emergência",
+    emptyTitle: "Ninguém decide por você",
+    toDecrees: "Delegar é um decreto: ir para Decretos",
     renewed: "Delegação renovada.",
     revokeAllHint:
       "Para uma emergência: encerra todas as delegações e regras temporárias de todas as campanhas.",
@@ -128,7 +156,8 @@ export default {
     revokeAll: "Revogar todas as delegações",
     revokedAll:
       "Revogado: {{delegations}} delegação(ões), {{subdelegations}} subdelegação(ões) e {{rules}} regra(s) temporária(s).",
-    empty: "Nenhuma delegação nem regra temporária em vigor.",
+    empty:
+      "Hoje nenhuma delegação nem regra temporária está em vigor: todo pedido espera por uma pessoa.",
     delegations: "Delegações",
     subdelegations: "Subdelegações",
     rules: "Regras temporárias de mesa",
@@ -150,7 +179,12 @@ export default {
   chain: {
     title: "Supervisão da cadeia",
     intro:
-      "Por mesa: se a autonomia do Mestre da mesa está pausada, quem pausou e por quê, e como anda a fila de aprovações.",
+      "Quando um agente pede permissão, o pedido passa por uma fila de quem aprova. Aqui você vê se a fila anda. Pausar autonomia só tira do Mestre da mesa o poder de decidir sozinho: os pedidos sobem ao Grão-Mestre e o trabalho continua. Para parar a mesa de vez, use Pausar mesa, dentro dela.",
+    strip_one: "{{count}} pedido na fila, {{paused}} mesa(s) com autonomia pausada",
+    strip_other: "{{count}} pedidos na fila, {{paused}} mesa(s) com autonomia pausada",
+    stripOldest: "O pedido mais antigo espera há {{age}}.",
+    stripNone: "Nenhum pedido espera nas filas.",
+    emptyTitle: "A fila aparece com a primeira mesa",
     noTables: "Nenhuma mesa aberta nesta campanha.",
     queues: "Fila de aprovações",
     level: "Nível",
@@ -181,15 +215,23 @@ export default {
   ceiling: {
     title: "Teto da campanha",
     intro:
-      "O máximo que qualquer classe da campanha pode ter. Ampliar o teto só se faz por decreto.",
+      "O máximo que qualquer classe da campanha pode ter de permissão e de custo. Só sobe por decreto.",
+    stripOk: "Teto em vigor",
+    stripNone: "A campanha não tem teto próprio",
+    stripBad: "O arquivo do teto não vale",
+    stripWidenings_one: "{{count}} ampliação por decreto em vigor.",
+    stripWidenings_other: "{{count}} ampliações por decreto em vigor.",
+    emptyTitle: "Sem arquivo de teto",
+    details: "Detalhes: o arquivo do teto",
     inForce: "O teto em vigor",
-    noFile: "Esta campanha não tem arquivo de teto: valem só as regras fixas.",
+    noFile:
+      "Esta campanha não tem arquivo de teto: valem só as regras fixas. Para dar mais, peça um teto maior; ele vira um pedido de decreto.",
     invalid: "O arquivo do teto não é válido e o Mestre o recusa: {{reason}}",
     fileLabel: "Arquivo do teto, somente leitura",
     readOnly: "Aqui o teto só se lê. Para ampliá-lo, abra um pedido de decreto.",
     widenings: "Ampliações por decreto em vigor",
     widened: "Teto ampliado pelo decreto.",
-    widen: "Ampliar o teto",
+    widen: "Pedir um teto maior",
     widenTitle: "Ampliar o teto",
     widenHint:
       "Isto não muda o teto: abre um pedido de decreto que você confirma com o PIN. O teto em vigor só muda depois dele.",
@@ -201,7 +243,10 @@ export default {
   policy: {
     title: "Política de aprovação",
     intro:
-      "O arquivo que diz o que o Grão-Mestre decide sozinho, o que vai às pessoas e em quanto tempo. O Mestre confere o arquivo inteiro antes de salvar.",
+      "O arquivo que diz o que o Mestre aprova sozinho e o que sempre pede uma pessoa. O Mestre confere o arquivo inteiro antes de salvar.",
+    stripOk: "Política válida",
+    stripDirty: "Mudanças ainda não salvas",
+    stripHint: "Vale a partir do próximo pedido depois de salvar.",
     saved: "Política salva. Vale a partir do próximo pedido.",
     default:
       "Esta campanha ainda não tem o próprio arquivo: o conteúdo abaixo é o padrão e vira o arquivo quando você salvar.",
@@ -215,7 +260,10 @@ export default {
   instructions: {
     title: "Instruções extras",
     intro:
-      "O seu texto para o Grão-Mestre e para os Mestres de mesa de cada campanha. Ele soma às instruções do sistema, nunca as substitui.",
+      "Recados seus para o Grão-Mestre e para os Mestres de mesa de cada campanha. Eles somam às instruções do sistema, nunca as substituem.",
+    stripNone: "Sem instruções extras",
+    stripSome_one: "{{count}} instrução extra escrita",
+    stripSome_other: "{{count}} instruções extras escritas",
     adds: "Vale a partir do próximo turno. Se algo conflitar com as instruções do sistema, valem as do sistema.",
     grandMaster: "Instruções para o Grão-Mestre",
     tableMasters: "Instruções para os Mestres de mesa",

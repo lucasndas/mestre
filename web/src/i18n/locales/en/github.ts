@@ -6,6 +6,7 @@ const github: Widen<typeof pt> = {
   intro:
     "To act on GitHub as you (approve and decide on your behalf), the Mestre keeps a personal credential in the vault. The token goes straight from GitHub to the vault and never passes through this screen.",
   loading: "Loading…",
+  loadWhat: "your GitHub connection",
   state: {
     none: "You have not connected your GitHub yet.",
     connected:

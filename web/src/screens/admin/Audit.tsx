@@ -2,9 +2,17 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormatDateTime, useMe } from "../../app/session";
-import { Alert, Button, Field } from "../../components/ui";
-import { errorText } from "../../lib/errors";
-import { type AuditFilters, auditFetch, NativeSelect, noAuditFilters, PageHeader } from "./kit";
+import { Button, Field } from "../../components/ui";
+import {
+  type AuditFilters,
+  auditFetch,
+  EmptyState,
+  LoadError,
+  NativeSelect,
+  noAuditFilters,
+  PageHeader,
+  StatusStrip,
+} from "./kit";
 
 type Say = (k: string, o?: object) => string;
 
@@ -27,7 +35,6 @@ const CATEGORIES: [key: string, prefix: string][] = [
 
 export function Audit() {
   const { t } = useTranslation("audit");
-  const { t: te } = useTranslation("errors");
   const say = t as unknown as Say;
   const fmt = useFormatDateTime();
   const { timezone } = useMe();
@@ -46,6 +53,12 @@ export function Audit() {
   return (
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
+      {q.data ? (
+        <StatusStrip
+          title={t("strip", { count: entries.length })}
+          hint={q.hasNextPage ? t("stripMore") : t("stripAll")}
+        />
+      ) : null}
       <form
         aria-label={t("filters.title")}
         className="mb-6 grid max-w-4xl gap-4 sm:grid-cols-2 lg:grid-cols-3"
@@ -97,9 +110,23 @@ export function Audit() {
         </div>
       </form>
       <div className="flex max-w-4xl flex-col gap-3">
-        {q.error ? <Alert>{errorText(te, q.error)}</Alert> : null}
+        {q.error ? (
+          <LoadError what={t("loadWhat")} error={q.error} onRetry={() => void q.refetch()} />
+        ) : null}
         {q.isPending ? <p className="text-muted">{t("loading")}</p> : null}
-        {q.data && entries.length === 0 ? <p className="text-muted">{t("empty")}</p> : null}
+        {q.data && entries.length === 0 ? (
+          <EmptyState title={t("emptyTitle")} why={t("empty")}>
+            <Button
+              variant="secondary"
+              onPress={() => {
+                setDraft(noAuditFilters);
+                setApplied(noAuditFilters);
+              }}
+            >
+              {t("filters.clear")}
+            </Button>
+          </EmptyState>
+        ) : null}
         <ul className="flex flex-col gap-2">
           {entries.map((e) => {
             const label = actionLabel(say, e.action);

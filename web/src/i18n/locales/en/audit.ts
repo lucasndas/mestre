@@ -4,9 +4,16 @@ import type pt from "../pt-BR/audit";
 const audit: Widen<typeof pt> = {
   title: "Audit",
   intro:
-    "The trail of everything that changed, with who did it and when. Secrets never show up here, only what changed around them.",
+    "The record of who changed what and when. Secrets never show up here, only what changed around them.",
   loading: "Loading the trail…",
-  empty: "No records with these filters.",
+  loadWhat: "the record",
+  strip_one: "{{count}} record in view",
+  strip_other: "{{count}} records in view",
+  stripMore: "There are older records: use Load more at the end of the list.",
+  stripAll: "These are all the records that match the filters.",
+  emptyTitle: "Nothing to show",
+  empty:
+    "No record matches the filters. When someone changes something in the panel, the record shows up here; if you filtered, clear the filters to see everything.",
   filters: {
     title: "Filters",
     who: "Who",

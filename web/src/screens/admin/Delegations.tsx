@@ -1,8 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormatDateTime } from "../../app/session";
-import { Term } from "../../components/Term";
 import { Alert, Button } from "../../components/ui";
 import type {
   DecreeProposal,
@@ -13,7 +13,7 @@ import type {
 } from "../../gen/panel";
 import { api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
-import { Badge, PageHeader } from "./kit";
+import { Badge, EmptyState, LevelGate, LoadError, PageHeader, StatusStrip, VocabLine } from "./kit";
 import { ConfirmButton, delegationsQuery, ProposalCard, useWords } from "./rulesKit";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -27,9 +27,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export function Delegations() {
   const { t } = useTranslation("rules");
-  const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
-  const { data, error } = useQuery(delegationsQuery);
+  const fmt = useFormatDateTime();
+  const { data, error, refetch } = useQuery(delegationsQuery);
   const [notice, setNotice] = useState<string | null>(null);
   const [renewing, setRenewing] = useState<DecreeProposal | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin"] });
@@ -38,16 +38,33 @@ export function Delegations() {
     0,
   );
 
+  const ends = (data?.workspaces ?? []).flatMap((w) => [
+    ...w.delegations.map((d) => d.until),
+    ...w.subdelegations.map((x) => x.until),
+    ...w.rules.map((x) => x.until),
+  ]);
+  const soonest = ends.filter(Boolean).sort()[0];
+
   return (
     <section>
       <PageHeader title={t("delegations.title")} intro={t("delegations.intro")} />
-      <p className="mb-6 max-w-2xl text-sm text-muted">
-        <Term name="Delegação" /> · <Term name="Regra temporária de mesa" /> ·{" "}
-        <Term name="Grão-Mestre" />
-      </p>
+      <VocabLine terms={["Delegação", "Regra temporária de mesa", "Grão-Mestre"]} />
+      {data ? (
+        <StatusStrip
+          tone={total > 0 ? "ok" : "neutral"}
+          title={t("delegations.strip", { count: total })}
+          hint={soonest ? t("delegations.stripSoonest", { when: fmt(soonest) }) : undefined}
+        />
+      ) : null}
       <div className="flex max-w-3xl flex-col gap-5">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
-        {error ? <Alert>{errorText(te, error)}</Alert> : null}
+        {error ? (
+          <LoadError
+            what={t("loadWhat.delegations")}
+            error={error}
+            onRetry={() => void refetch()}
+          />
+        ) : null}
         {renewing ? (
           <ProposalCard
             proposal={renewing}
@@ -59,9 +76,84 @@ export function Delegations() {
             }}
           />
         ) : null}
+        {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
+        {data && (data.workspaces.length === 0 || total === 0) ? (
+          <EmptyState title={t("delegations.emptyTitle")} why={t("delegations.empty")}>
+            <Link
+              to="/decretos"
+              className="inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-2"
+            >
+              {t("delegations.toDecrees")}
+            </Link>
+          </EmptyState>
+        ) : null}
+        {data?.workspaces
+          .filter((g) => g.delegations.length + g.subdelegations.length + g.rules.length > 0)
+          .map((g) => (
+            <section
+              key={g.workspace}
+              aria-labelledby={`dl-${g.workspace}`}
+              className="flex flex-col gap-4"
+            >
+              <h2 id={`dl-${g.workspace}`} className="text-2xl">
+                {g.workspace}
+              </h2>
+              <Group title={t("delegations.delegations")} items={g.delegations.length}>
+                {g.delegations.map((d) => (
+                  <DelegationCard
+                    key={d.number}
+                    d={d}
+                    canRenew={data.can_revoke_all}
+                    onRenew={async () => {
+                      setNotice(null);
+                      setRenewing(
+                        await api<DecreeProposal>("POST", `/api/decrees/${d.number}/renew`),
+                      );
+                    }}
+                    onRevoked={async () => {
+                      setNotice(t("delegations.revoked"));
+                      await refresh();
+                    }}
+                  />
+                ))}
+              </Group>
+              <Group title={t("delegations.subdelegations")} items={g.subdelegations.length}>
+                {g.subdelegations.map((s) => (
+                  <SubCard
+                    key={s.id}
+                    s={s}
+                    canRevoke={data.can_revoke}
+                    onRevoked={async () => {
+                      setNotice(t("delegations.revoked"));
+                      await refresh();
+                    }}
+                  />
+                ))}
+              </Group>
+              <Group title={t("delegations.rules")} items={g.rules.length}>
+                {g.rules.map((r) => (
+                  <RuleCard
+                    key={r.id}
+                    r={r}
+                    canRevoke={data.can_revoke}
+                    onRevoked={async () => {
+                      setNotice(t("delegations.revoked"));
+                      await refresh();
+                    }}
+                  />
+                ))}
+              </Group>
+            </section>
+          ))}
         {data?.can_revoke_all ? (
-          <div className="rounded-field border border-danger/40 bg-danger-wash p-4">
-            <p className="mb-2 text-sm">{t("delegations.revokeAllHint")}</p>
+          <section
+            aria-labelledby="dl-emergency"
+            className="rounded-field border border-danger/40 bg-danger-wash p-4"
+          >
+            <h2 id="dl-emergency" className="mb-1 text-xl">
+              {t("delegations.emergency")}
+            </h2>
+            <p className="mb-3 text-sm">{t("delegations.revokeAllHint")}</p>
             <ConfirmButton
               warning={t("delegations.revokeAllWarning", { count: total })}
               confirmLabel={t("delegations.revokeAllConfirm")}
@@ -79,71 +171,8 @@ export function Delegations() {
             >
               {t("delegations.revokeAll")}
             </ConfirmButton>
-          </div>
-        ) : null}
-        {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
-        {data && data.workspaces.length === 0 ? (
-          <p className="text-muted">{t("noWorkspace")}</p>
-        ) : null}
-        {data?.workspaces.map((g) => (
-          <section
-            key={g.workspace}
-            aria-labelledby={`dl-${g.workspace}`}
-            className="flex flex-col gap-4"
-          >
-            <h2 id={`dl-${g.workspace}`} className="text-2xl">
-              {g.workspace}
-            </h2>
-            {g.delegations.length + g.subdelegations.length + g.rules.length === 0 ? (
-              <p className="text-muted">{t("delegations.empty")}</p>
-            ) : null}
-            <Group title={t("delegations.delegations")} items={g.delegations.length}>
-              {g.delegations.map((d) => (
-                <DelegationCard
-                  key={d.number}
-                  d={d}
-                  canRenew={data.can_revoke_all}
-                  onRenew={async () => {
-                    setNotice(null);
-                    setRenewing(
-                      await api<DecreeProposal>("POST", `/api/decrees/${d.number}/renew`),
-                    );
-                  }}
-                  onRevoked={async () => {
-                    setNotice(t("delegations.revoked"));
-                    await refresh();
-                  }}
-                />
-              ))}
-            </Group>
-            <Group title={t("delegations.subdelegations")} items={g.subdelegations.length}>
-              {g.subdelegations.map((s) => (
-                <SubCard
-                  key={s.id}
-                  s={s}
-                  canRevoke={data.can_revoke}
-                  onRevoked={async () => {
-                    setNotice(t("delegations.revoked"));
-                    await refresh();
-                  }}
-                />
-              ))}
-            </Group>
-            <Group title={t("delegations.rules")} items={g.rules.length}>
-              {g.rules.map((r) => (
-                <RuleCard
-                  key={r.id}
-                  r={r}
-                  canRevoke={data.can_revoke}
-                  onRevoked={async () => {
-                    setNotice(t("delegations.revoked"));
-                    await refresh();
-                  }}
-                />
-              ))}
-            </Group>
           </section>
-        ))}
+        ) : null}
       </div>
     </section>
   );
@@ -205,21 +234,23 @@ function DelegationCard({
       </dl>
       {error ? <Alert>{errorText(te, error)}</Alert> : null}
       <div className="mt-3 flex flex-wrap items-start gap-3">
-        {canRenew ? (
-          <Button
-            variant="secondary"
-            onPress={async () => {
-              setError(null);
-              try {
-                await onRenew();
-              } catch (err) {
-                setError(err);
-              }
-            }}
-          >
-            {t("delegations.renew")}
-          </Button>
-        ) : null}
+        <LevelGate need="owner" label={t("delegations.renew")}>
+          {canRenew ? (
+            <Button
+              variant="secondary"
+              onPress={async () => {
+                setError(null);
+                try {
+                  await onRenew();
+                } catch (err) {
+                  setError(err);
+                }
+              }}
+            >
+              {t("delegations.renew")}
+            </Button>
+          ) : null}
+        </LevelGate>
         {d.can_revoke ? (
           <ConfirmButton
             warning={t("delegations.revokeOneWarning")}
@@ -265,20 +296,22 @@ function SubCard({
         {s.reason ? <Row label={t("delegations.reason")}>{s.reason}</Row> : null}
         <Row label={t("delegations.decisions")}>{s.decisions}</Row>
       </dl>
-      {canRevoke ? (
-        <div className="mt-3">
-          <ConfirmButton
-            warning={t("delegations.revokeOneWarning")}
-            confirmLabel={t("decrees.revokeConfirm")}
-            onConfirm={async () => {
-              await api("POST", `/api/subdelegations/${s.id}/revoke`);
-              await onRevoked();
-            }}
-          >
-            {t("decrees.revoke")}
-          </ConfirmButton>
-        </div>
-      ) : null}
+      <div className="mt-3">
+        <LevelGate need="administrator" label={t("decrees.revoke")}>
+          {canRevoke ? (
+            <ConfirmButton
+              warning={t("delegations.revokeOneWarning")}
+              confirmLabel={t("decrees.revokeConfirm")}
+              onConfirm={async () => {
+                await api("POST", `/api/subdelegations/${s.id}/revoke`);
+                await onRevoked();
+              }}
+            >
+              {t("decrees.revoke")}
+            </ConfirmButton>
+          ) : null}
+        </LevelGate>
+      </div>
     </li>
   );
 }
@@ -318,20 +351,22 @@ function RuleCard({
         </Row>
         <Row label={t("delegations.decisions")}>{r.decisions}</Row>
       </dl>
-      {canRevoke ? (
-        <div className="mt-3">
-          <ConfirmButton
-            warning={t("delegations.revokeOneWarning")}
-            confirmLabel={t("decrees.revokeConfirm")}
-            onConfirm={async () => {
-              await api("POST", `/api/table-rules/${r.id}/revoke`);
-              await onRevoked();
-            }}
-          >
-            {t("decrees.revoke")}
-          </ConfirmButton>
-        </div>
-      ) : null}
+      <div className="mt-3">
+        <LevelGate need="administrator" label={t("decrees.revoke")}>
+          {canRevoke ? (
+            <ConfirmButton
+              warning={t("delegations.revokeOneWarning")}
+              confirmLabel={t("decrees.revokeConfirm")}
+              onConfirm={async () => {
+                await api("POST", `/api/table-rules/${r.id}/revoke`);
+                await onRevoked();
+              }}
+            >
+              {t("decrees.revoke")}
+            </ConfirmButton>
+          ) : null}
+        </LevelGate>
+      </div>
     </li>
   );
 }

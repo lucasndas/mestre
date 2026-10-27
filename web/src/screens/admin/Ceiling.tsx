@@ -1,13 +1,20 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Term } from "../../components/Term";
 import { Alert, Button, Field } from "../../components/ui";
 import type { DecreeProposal } from "../../gen/panel";
 import { api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
 import { DecreeCard } from "./Decrees";
-import { NativeSelect, PageHeader } from "./kit";
+import {
+  EmptyState,
+  LevelGate,
+  LoadError,
+  NativeSelect,
+  PageHeader,
+  StatusStrip,
+  VocabLine,
+} from "./kit";
 import { Area, ceilingQuery, ProposalCard, WorkspacePicker } from "./rulesKit";
 
 type Say = (k: string, o?: object) => string;
@@ -18,9 +25,7 @@ export function Ceiling() {
   return (
     <section>
       <PageHeader title={t("ceiling.title")} intro={t("ceiling.intro")} />
-      <p className="mb-6 max-w-2xl text-sm text-muted">
-        <Term name="Teto da campanha" /> · <Term name="Decreto" />
-      </p>
+      <VocabLine terms={["Teto da campanha", "Decreto"]} />
       <WorkspacePicker>
         {(ws, picker) => <CeilingOf key={ws} workspace={ws} picker={picker} />}
       </WorkspacePicker>
@@ -33,7 +38,7 @@ function CeilingOf({ workspace, picker }: { workspace: string; picker: React.Rea
   const { t: te } = useTranslation("errors");
   const say = t as unknown as Say;
   const qc = useQueryClient();
-  const { data, error } = useQuery(ceilingQuery(workspace));
+  const { data, error, refetch } = useQuery(ceilingQuery(workspace));
   const [widening, setWidening] = useState(false);
   const [proposal, setProposal] = useState<DecreeProposal | null>(null);
   const [field, setField] = useState<(typeof FIELDS)[number]>("domains");
@@ -44,32 +49,72 @@ function CeilingOf({ workspace, picker }: { workspace: string; picker: React.Rea
   const [notice, setNotice] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin"] });
 
+  const widenButton = data?.can_widen ? (
+    !widening && !proposal ? (
+      <Button onPress={() => setWidening(true)}>{t("ceiling.widen")}</Button>
+    ) : null
+  ) : null;
+
   return (
     <div className="flex max-w-3xl flex-col gap-5">
       {picker}
+      {data ? (
+        <StatusStrip
+          tone={!data.present ? "neutral" : data.valid ? "ok" : "danger"}
+          title={
+            !data.present
+              ? t("ceiling.stripNone")
+              : data.valid
+                ? t("ceiling.stripOk")
+                : t("ceiling.stripBad")
+          }
+          hint={
+            data.widenings.length > 0
+              ? t("ceiling.stripWidenings", { count: data.widenings.length })
+              : undefined
+          }
+        >
+          {data.present ? (
+            <LevelGate need="administrator" label={t("ceiling.widen")}>
+              {widenButton}
+            </LevelGate>
+          ) : null}
+        </StatusStrip>
+      ) : null}
       {notice ? <Alert tone="ok">{notice}</Alert> : null}
-      {error ? <Alert>{errorText(te, error)}</Alert> : null}
+      {error ? (
+        <LoadError what={t("loadWhat.ceiling")} error={error} onRetry={() => void refetch()} />
+      ) : null}
       {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
       {data ? (
         <>
-          <div>
-            <h2 className="mb-2 text-2xl">{t("ceiling.inForce")}</h2>
-            {!data.present ? <p className="text-muted">{t("ceiling.noFile")}</p> : null}
-            {data.present && !data.valid ? (
-              <Alert>{t("ceiling.invalid", { reason: data.error ?? "" })}</Alert>
-            ) : null}
-            {data.present ? (
-              <figure>
-                <figcaption className="mb-1 text-sm text-muted">
-                  {t("ceiling.fileLabel")}
-                </figcaption>
-                <pre className="rounded-field border border-line bg-surface p-3 font-mono text-sm break-words whitespace-pre-wrap">
-                  {data.text}
-                </pre>
-              </figure>
-            ) : null}
-            <p className="mt-2 text-sm text-muted">{t("ceiling.readOnly")}</p>
-          </div>
+          {!data.present ? (
+            <EmptyState title={t("ceiling.emptyTitle")} why={t("ceiling.noFile")}>
+              <LevelGate need="administrator" label={t("ceiling.widen")}>
+                {widenButton}
+              </LevelGate>
+            </EmptyState>
+          ) : (
+            <div>
+              {!data.valid ? (
+                <Alert>{t("ceiling.invalid", { reason: data.error ?? "" })}</Alert>
+              ) : null}
+              <details className="mt-2">
+                <summary className="min-h-11 cursor-pointer py-2 font-semibold">
+                  {t("ceiling.details")}
+                </summary>
+                <figure>
+                  <figcaption className="mb-1 text-sm text-muted">
+                    {t("ceiling.fileLabel")}
+                  </figcaption>
+                  <pre className="overflow-x-auto rounded-field border border-line bg-surface p-3 font-mono text-sm break-words whitespace-pre-wrap">
+                    {data.text}
+                  </pre>
+                </figure>
+              </details>
+              <p className="mt-2 text-sm text-muted">{t("ceiling.readOnly")}</p>
+            </div>
+          )}
           {data.widenings.length > 0 ? (
             <div>
               <h2 className="mb-2 text-2xl">{t("ceiling.widenings")}</h2>
@@ -165,13 +210,7 @@ function CeilingOf({ workspace, picker }: { workspace: string; picker: React.Rea
                   </Button>
                 </div>
               </form>
-            ) : (
-              <div>
-                <Button variant="secondary" onPress={() => setWidening(true)}>
-                  {t("ceiling.widen")}
-                </Button>
-              </div>
-            )
+            ) : null
           ) : null}
         </>
       ) : null}

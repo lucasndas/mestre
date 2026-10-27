@@ -367,7 +367,7 @@ test("the audit shows who did what and when, in the Guild time zone, and filters
   await user.selectOptions(screen.getByLabelText("O quê"), "panel.user.");
   await user.selectOptions(screen.getByLabelText("Campanha"), "loja");
   await user.click(screen.getByRole("button", { name: "Filtrar" }));
-  expect(await screen.findByText("Nenhum registro com esses filtros.")).toBeTruthy();
+  expect(await screen.findByText("Nada para mostrar")).toBeTruthy();
   expect(calls.some((c) => c.path === "/api/audit?user=u2&action=panel.user.&workspace=loja")).toBe(
     true,
   );
@@ -492,4 +492,169 @@ test("the user asked to take the post of Owner sees the banner and accepts with 
   // the sessions end with the change: the panel goes to the login
   await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
   expect(within(document.body).queryByText(/quer passar o posto/)).toBeNull();
+});
+
+// the status strip of the screen: the one status that opens with a tone symbol
+const strips = () =>
+  screen.queryAllByRole("status").filter((el) => el.querySelector("p > span[aria-hidden]"));
+
+// CA-ADM-17
+test("an empty vault says what a site credential is and how to register one, beside where each key goes", async () => {
+  fakeServer({
+    ...base,
+    "GET /api/users": () => ({ body: list }),
+    "GET /api/secrets": () => ({ body: { secrets: [] } }),
+  });
+  renderApp("/segredos");
+  const empty = await screen.findByRole("heading", { name: "Nenhuma credencial de site ainda" });
+  expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  expect(screen.getByText("Vocabulário:")).toBeTruthy();
+  expect(strips()).toHaveLength(1);
+  expect(
+    within(empty.closest("section") as HTMLElement).getByRole("button", {
+      name: "Cadastrar credencial de site",
+    }),
+  ).toBeTruthy();
+  // one button only: the strip does not repeat the way out
+  expect(screen.getAllByRole("button", { name: "Cadastrar credencial de site" })).toHaveLength(1);
+});
+
+// CA-ADM-17
+test("an empty audit says when records appear and offers to clear the filters", async () => {
+  fakeServer({
+    ...base,
+    "GET /api/audit": () => ({ body: { entries: [], people: [], workspaces: [], next: "" } }),
+  });
+  renderApp("/auditoria");
+  const empty = await screen.findByRole("heading", { name: "Nada para mostrar" });
+  expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  expect(strips()).toHaveLength(1);
+  expect(
+    within(empty.closest("section") as HTMLElement).getByRole("button", { name: "Limpar" }),
+  ).toBeTruthy();
+});
+
+// CA-ADM-17
+test("Conectar GitHub opens with the state of the connection and the one action", async () => {
+  fakeServer({
+    ...base,
+    "GET /api/me/github": () => ({
+      body: { login: "maria-gh", may: true, github: { state: "", login: "" } },
+    }),
+  });
+  renderApp("/github");
+  await screen.findByRole("heading", { name: "Conectar GitHub", level: 1 });
+  await waitFor(() => expect(strips()).toHaveLength(1));
+  expect(strips()[0]?.textContent).toContain("Você ainda não conectou o seu GitHub.");
+  expect(screen.getAllByRole("button", { name: "Conectar GitHub" })).toHaveLength(1);
+});
+
+// CA-ADM-18
+test.each([
+  ["/segredos", "GET /api/secrets"],
+  ["/auditoria", "GET /api/audit"],
+  ["/github", "GET /api/me/github"],
+])(
+  "%s with a failed read shows what, why, a retry and the raw answer folded",
+  async (path, route) => {
+    fakeServer({
+      ...base,
+      "GET /api/users": () => ({ body: list }),
+      [route]: () => ({
+        status: 500,
+        body: { error: { code: "internal", message: "db locked: boom" } },
+      }),
+    });
+    renderApp(path);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Não foi possível carregar");
+    expect(strips()).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeTruthy();
+    const details = screen.getByText("Detalhes técnicos").closest("details") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(details.textContent).toContain("db locked: boom");
+  },
+);
+
+// CA-ADM-21
+test("the vault says where each key goes, keeps the Mestre's own secrets apart and shows no value", async () => {
+  fakeServer({
+    ...base,
+    "GET /api/users": () => ({ body: list }),
+    "GET /api/secrets": () => ({
+      body: {
+        secrets: [
+          secret({}),
+          secret({
+            name: "guild_ca_key",
+            type: "ca_key",
+            managed: true,
+            site: undefined,
+            fingerprint: "ffff0000",
+          }),
+        ],
+      },
+    }),
+  });
+  renderApp("/segredos");
+  const where = await screen.findByRole("region", { name: "Onde cada chave vai" });
+  expect(where.textContent).toContain("Cadastrar credencial de site");
+  expect(within(where).getByRole("link", { name: "Ir para Apps do GitHub" })).toBeTruthy();
+  expect(within(where).getByRole("link", { name: "Ir para Perfis de conta" })).toBeTruthy();
+  expect(where.textContent).toContain("Telegram");
+  // the key of a provider has no button: the screen says it cannot be done here yet
+  expect(where.textContent).toContain("ainda não dá para cadastrar por aqui");
+  const mine = screen.getByRole("region", { name: "Guardados pelo Mestre" });
+  expect(mine.textContent).toContain("Chave da autoridade da Guilda");
+  expect(mine.textContent).toContain("guild_ca_key");
+  expect(within(mine).queryByRole("button")).toBeNull();
+  expect(screen.getByRole("heading", { name: "Credenciais de site" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Mostrar|Revelar|Ver valor/ })).toBeNull();
+});
+
+// CA-ADM-24
+test("the vault form keeps the rare fields under More options and every button is tall enough", async () => {
+  fakeServer({
+    ...base,
+    "GET /api/users": () => ({ body: list }),
+    "GET /api/secrets": () => ({ body: { secrets: [secret({})] } }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/segredos");
+  await user.click(await screen.findByRole("button", { name: "Cadastrar credencial de site" }));
+  const more = screen.getByText("Mais opções").closest("details") as HTMLDetailsElement;
+  expect(more.open).toBe(false);
+  expect(more.contains(screen.getByLabelText("Validade (opcional)"))).toBe(true);
+  expect(more.querySelector("textarea")).toBeTruthy();
+  const main = within(screen.getByRole("main"));
+  for (const b of main.getAllByRole("button")) {
+    if (!b.getAttribute("aria-label")?.startsWith("Ajuda sobre"))
+      expect(b.className).toContain("min-h-11");
+  }
+});
+
+// CA-ADM-25
+test("an Administrator sees the vault buttons off, with the level they need", async () => {
+  fakeServer({
+    ...base,
+    "GET /api/me": () => ({
+      body: {
+        ...ME,
+        user: { ...ME.user, level: "administrator" },
+        capabilities: ["activate_classes", "status"],
+      },
+    }),
+    "GET /api/users": () => ({ body: list }),
+    "GET /api/secrets": () => ({ body: { secrets: [secret({})] } }),
+  });
+  renderApp("/segredos");
+  const replace = await screen.findByRole("button", { name: "Substituir" });
+  expect((replace as HTMLButtonElement).disabled).toBe(true);
+  expect(
+    screen.getAllByText("Exige o nível Senhor da Guilda; o seu é Administrador.").length,
+  ).toBeGreaterThan(0);
+  expect(
+    (screen.getByRole("button", { name: "Cadastrar credencial de site" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
 });

@@ -6,7 +6,7 @@ import { Alert, Button } from "../../components/ui";
 import type { GitHubChallenge, GitHubPoll } from "../../gen/panel";
 import { api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
-import { githubMeQuery, PageHeader } from "./kit";
+import { githubMeQuery, LoadError, PageHeader, StatusStrip } from "./kit";
 
 /**
  * "Conectar GitHub": the device flow of the personal credential. The panel shows the
@@ -19,7 +19,7 @@ export function GitHubConnect() {
   const { t: te } = useTranslation("errors");
   const fmt = useFormatDateTime();
   const qc = useQueryClient();
-  const { data, error } = useQuery(githubMeQuery);
+  const { data, error, refetch } = useQuery(githubMeQuery);
   const [challenge, setChallenge] = useState<GitHubChallenge | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
   const [connected, setConnected] = useState(false);
@@ -81,22 +81,27 @@ export function GitHubConnect() {
   return (
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
+      {data ? (
+        <StatusStrip
+          tone={g?.state === "connected" ? "ok" : "warn"}
+          title={stateText}
+          hint={data.login ? t("registered", { login: data.login }) : t("noLogin")}
+        >
+          {!challenge && data.may && data.login ? (
+            <Button onPress={() => void begin()} isDisabled={busy}>
+              {g?.state === "" ? t("connect") : t("reconnect")}
+            </Button>
+          ) : null}
+        </StatusStrip>
+      ) : null}
       <div className="flex max-w-2xl flex-col gap-4">
-        {error ? <Alert>{errorText(te, error)}</Alert> : null}
+        {error ? (
+          <LoadError what={t("loadWhat")} error={error} onRetry={() => void refetch()} />
+        ) : null}
         {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
         {failure ? <Alert>{errorText(te, failure)}</Alert> : null}
         {connected ? <Alert tone="ok">{t("done")}</Alert> : null}
-        {data ? (
-          <>
-            <p className="font-semibold">{stateText}</p>
-            {data.login ? (
-              <p className="text-sm text-muted">{t("registered", { login: data.login })}</p>
-            ) : (
-              <p className="text-sm text-muted">{t("noLogin")}</p>
-            )}
-            {!data.may ? <p className="text-sm text-muted">{t("mayNot")}</p> : null}
-          </>
-        ) : null}
+        {data && !data.may ? <p className="text-sm text-muted">{t("mayNot")}</p> : null}
         {challenge ? (
           <div
             className="flex flex-col gap-3 rounded-field border border-accent bg-accent-wash p-5"
@@ -127,12 +132,6 @@ export function GitHubConnect() {
                 {t("steps.cancel")}
               </Button>
             </div>
-          </div>
-        ) : data?.may && data.login ? (
-          <div>
-            <Button onPress={() => void begin()} isDisabled={busy}>
-              {g?.state === "" ? t("connect") : t("reconnect")}
-            </Button>
           </div>
         ) : null}
       </div>

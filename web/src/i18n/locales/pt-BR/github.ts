@@ -3,6 +3,7 @@ export default {
   intro:
     "Para agir no GitHub como você (aprovar e decidir em seu nome), o Mestre guarda uma credencial pessoal no cofre. O token vai direto do GitHub para o cofre e nunca passa por esta tela.",
   loading: "Carregando…",
+  loadWhat: "a sua conexão com o GitHub",
   state: {
     none: "Você ainda não conectou o seu GitHub.",
     connected:

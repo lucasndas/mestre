@@ -4,9 +4,30 @@ import type pt from "../pt-BR/secrets";
 const secrets: Widen<typeof pt> = {
   title: "Secrets",
   intro:
-    "What the vault keeps: name, type, short fingerprint, dates and metadata. No value is ever shown again, not even to the Guildmaster: you can only replace or delete, with your PIN.",
+    "The passwords and keys the Mestre keeps in the vault. The value is never shown again, not even to the Guildmaster: you can only replace or delete, with your PIN.",
   loading: "Loading the secrets…",
-  empty: "The vault has no secrets yet.",
+  loadWhat: "the vault",
+  strip_one: "{{count}} site credential, {{expiring}} close to expiring",
+  strip_other: "{{count}} site credentials, {{expiring}} close to expiring",
+  stripNone_one: "The vault only has {{count}} secret of the Mestre itself",
+  stripNone_other: "The vault only has {{count}} secrets of the Mestre itself",
+  stripHint: "Site credentials are the passwords agents use to sign in to pages for you.",
+  emptyTitle: "No site credential yet",
+  empty:
+    "When an agent needs to sign in to a page (a hosting panel, an email service), its password lives here, in the vault, never in the chat. Register one when you need it.",
+  sitesTitle: "Site credentials",
+  managedTitle: "Kept by the Mestre",
+  technicalName: "technical name",
+  where: {
+    title: "Where each key goes",
+    site: "Password or key of a site: here, in Register site credential (prefer an app password, token or API key).",
+    github: "Key of a GitHub App: goes into the vault by itself when the App is created.",
+    githubLink: "Go to GitHub Apps",
+    ai: "Claude, Codex or Antigravity account: signed in by login, in the machine's terminal.",
+    aiLink: "Go to Account profiles",
+    telegram: "Telegram bot token: the Mestre keeps it at install time.",
+    provider: "API key of an AI provider: it cannot be registered here yet.",
+  },
   types: {
     site_credential: "Site credential",
     provider_api_key: "Provider API key",
@@ -35,7 +56,8 @@ const secrets: Widen<typeof pt> = {
   kind: "Kind",
   expiresAt: "Expires",
   noExpiry: "no expiry",
-  managed: "Kept by the Mestre itself: shown here, but not changed here.",
+  managed:
+    "The Mestre keeps these on its own: they are shown only so you know they exist, and are not changed here.",
   notice: {
     expired: "Expired {{count}} day(s) ago. Replace the credential.",
     expiring: "Expires in {{count}} day(s).",
@@ -43,6 +65,7 @@ const secrets: Widen<typeof pt> = {
   },
   site: {
     open: "Register site credential",
+    more: "More options",
     close: "Close",
     title: "New site credential",
     hint: "This is the only place to register one: never send passwords over Telegram or in the chat with the Grand Master.",
@@ -79,7 +102,7 @@ const secrets: Widen<typeof pt> = {
     done: "Secret deleted.",
   },
   recovery: {
-    title: "Recovery key",
+    title: "Vault backup",
     intro:
       "The recovery key opens the vault backup. The Mestre does not keep it: whoever loses it and loses the machines is left without the secrets.",
     open: "Create new recovery key",

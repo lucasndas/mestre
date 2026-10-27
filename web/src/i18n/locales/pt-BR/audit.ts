@@ -1,9 +1,16 @@
 export default {
   title: "Auditoria",
   intro:
-    "A trilha de tudo que mudou, com quem fez e quando. Segredos nunca aparecem aqui, só o que mudou ao redor deles.",
+    "O registro de quem mudou o quê e quando. Segredos nunca aparecem aqui, só o que mudou ao redor deles.",
   loading: "Carregando a trilha…",
-  empty: "Nenhum registro com esses filtros.",
+  loadWhat: "o registro",
+  strip_one: "{{count}} registro à vista",
+  strip_other: "{{count}} registros à vista",
+  stripMore: "Há registros mais antigos: use Carregar mais no fim da lista.",
+  stripAll: "Estes são todos os registros que combinam com os filtros.",
+  emptyTitle: "Nada para mostrar",
+  empty:
+    "Nenhum registro combina com os filtros. Quando alguém mudar algo no painel, o registro aparece aqui; se você filtrou, limpe os filtros para ver tudo.",
   filters: {
     title: "Filtros",
     who: "Quem",

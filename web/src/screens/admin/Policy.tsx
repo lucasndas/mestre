@@ -1,12 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Term } from "../../components/Term";
 import { Alert, Button } from "../../components/ui";
 import type { PolicyFile } from "../../gen/panel";
 import { ApiError, api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
-import { PageHeader } from "./kit";
+import { LevelGate, LoadError, PageHeader, StatusStrip, VocabLine } from "./kit";
 import { Area, policyQuery, WorkspacePicker } from "./rulesKit";
 
 export function Policy() {
@@ -14,9 +13,7 @@ export function Policy() {
   return (
     <section>
       <PageHeader title={t("policy.title")} intro={t("policy.intro")} />
-      <p className="mb-6 max-w-2xl text-sm text-muted">
-        <Term name="Cadeia de aprovação" /> · <Term name="Delegação" />
-      </p>
+      <VocabLine terms={["Cadeia de aprovação", "Delegação"]} />
       <WorkspacePicker>
         {(ws, picker) => <PolicyOf key={ws} workspace={ws} picker={picker} />}
       </WorkspacePicker>
@@ -37,7 +34,7 @@ function PolicyOf({ workspace, picker }: { workspace: string; picker: React.Reac
   const { t } = useTranslation("rules");
   const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
-  const { data, error } = useQuery(policyQuery(workspace));
+  const { data, error, refetch } = useQuery(policyQuery(workspace));
   const [draft, setDraft] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -74,12 +71,36 @@ function PolicyOf({ workspace, picker }: { workspace: string; picker: React.Reac
   return (
     <div className="flex max-w-3xl flex-col gap-4">
       {picker}
+      {data ? (
+        <StatusStrip
+          tone={dirty ? "warn" : "ok"}
+          title={dirty ? t("policy.stripDirty") : t("policy.stripOk")}
+          hint={data.default ? t("policy.default") : t("policy.stripHint")}
+        >
+          <LevelGate need="owner" label={t("policy.save")}>
+            <Button isDisabled={busy || !dirty} onPress={() => void save()}>
+              {t("policy.save")}
+            </Button>
+            <Button
+              variant="quiet"
+              isDisabled={busy || !dirty}
+              onPress={() => {
+                setDraft(null);
+                setSaveError(null);
+              }}
+            >
+              {t("policy.revert")}
+            </Button>
+          </LevelGate>
+        </StatusStrip>
+      ) : null}
       {notice ? <Alert tone="ok">{notice}</Alert> : null}
-      {error ? <Alert>{errorText(te, error)}</Alert> : null}
+      {error ? (
+        <LoadError what={t("loadWhat.policy")} error={error} onRetry={() => void refetch()} />
+      ) : null}
       {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
       {data ? (
         <>
-          {data.default ? <Alert tone="ok">{t("policy.default")}</Alert> : null}
           <Area
             label={t("policy.fileLabel")}
             description={t("policy.fileHint")}
@@ -106,21 +127,6 @@ function PolicyOf({ workspace, picker }: { workspace: string; picker: React.Reac
               <span className="block text-sm">{t("policy.nothingSaved")}</span>
             </Alert>
           ) : null}
-          <div className="flex gap-3">
-            <Button isDisabled={busy || !dirty} onPress={() => void save()}>
-              {t("policy.save")}
-            </Button>
-            <Button
-              variant="quiet"
-              isDisabled={busy || !dirty}
-              onPress={() => {
-                setDraft(null);
-                setSaveError(null);
-              }}
-            >
-              {t("policy.revert")}
-            </Button>
-          </div>
         </>
       ) : null}
     </div>

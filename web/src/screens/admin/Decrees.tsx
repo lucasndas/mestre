@@ -4,12 +4,21 @@ import { Checkbox } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { useCan, useFormatDateTime } from "../../app/session";
 import { SensitiveButton } from "../../components/PinField";
-import { Term } from "../../components/Term";
 import { Alert, Button, Field } from "../../components/ui";
 import type { DecreeInput, DecreeProposal, DecreeRow } from "../../gen/panel";
 import { api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
-import { Badge, ChoiceGroup, NativeSelect, PageHeader } from "./kit";
+import {
+  Badge,
+  ChoiceGroup,
+  EmptyState,
+  LevelGate,
+  LoadError,
+  NativeSelect,
+  PageHeader,
+  StatusStrip,
+  VocabLine,
+} from "./kit";
 import {
   Area,
   ConfirmButton,
@@ -23,39 +32,54 @@ type Say = (k: string, o?: object) => string;
 
 export function Decrees() {
   const { t } = useTranslation("rules");
-  const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
   const canPropose = useCan("one_off_exception");
   const [all, setAll] = useState(false);
   const [creating, setCreating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const { data, error } = useQuery(decreesQuery(all));
+  const { data, error, refetch } = useQuery(decreesQuery(all));
+  const decrees = data?.workspaces.flatMap((g) => g.decrees) ?? [];
+  const inForce = decrees.filter((d) => d.state === "active");
+  const today = new Date().toDateString();
+  const endsToday = inForce.filter((d) => d.until && new Date(d.until).toDateString() === today);
+  const create = (
+    <LevelGate need="approver" label={t("decrees.new")}>
+      {canPropose && !creating ? (
+        <Button onPress={() => setCreating(true)}>{t("decrees.new")}</Button>
+      ) : null}
+    </LevelGate>
+  );
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin"] });
 
   return (
     <section>
       <PageHeader title={t("decrees.title")} intro={t("decrees.intro")} />
-      <p className="mb-6 max-w-2xl text-sm text-muted">
-        <Term name="Decreto" /> · <Term name="Regra permanente" /> · <Term name="Exceção pontual" />
-      </p>
+      <VocabLine terms={["Decreto", "Regra permanente", "Exceção pontual"]} />
+      {data ? (
+        <StatusStrip
+          tone={inForce.length > 0 ? "ok" : "neutral"}
+          title={t("decrees.strip", { count: inForce.length })}
+          hint={
+            endsToday.length > 0 ? t("decrees.stripToday", { count: endsToday.length }) : undefined
+          }
+        >
+          {decrees.length > 0 ? create : null}
+        </StatusStrip>
+      ) : null}
       <div className="flex max-w-3xl flex-col gap-5">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
-        {error ? <Alert>{errorText(te, error)}</Alert> : null}
-        {canPropose ? (
-          creating ? (
-            <DecreeForm
-              onClose={() => setCreating(false)}
-              onMade={async () => {
-                setCreating(false);
-                setNotice(t("decrees.made"));
-                await refresh();
-              }}
-            />
-          ) : (
-            <div>
-              <Button onPress={() => setCreating(true)}>{t("decrees.new")}</Button>
-            </div>
-          )
+        {error ? (
+          <LoadError what={t("loadWhat.decrees")} error={error} onRetry={() => void refetch()} />
+        ) : null}
+        {canPropose && creating ? (
+          <DecreeForm
+            onClose={() => setCreating(false)}
+            onMade={async () => {
+              setCreating(false);
+              setNotice(t("decrees.made"));
+              await refresh();
+            }}
+          />
         ) : null}
         <Checkbox
           isSelected={all}
@@ -71,34 +95,43 @@ export function Decrees() {
           {t("decrees.showEnded")}
         </Checkbox>
         {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
-        {data && data.workspaces.length === 0 ? (
-          <p className="text-muted">{t("noWorkspace")}</p>
-        ) : null}
-        {data?.workspaces.map((g) => (
-          <section
-            key={g.workspace}
-            aria-labelledby={`ws-${g.workspace}`}
-            className="flex flex-col gap-3"
+        {data && decrees.length === 0 && !creating ? (
+          <EmptyState
+            title={t("decrees.emptyTitle")}
+            why={t("decrees.emptyWhy")}
+            steps={[t("decrees.emptyStep1"), t("decrees.emptyStep2")]}
           >
-            <h2 id={`ws-${g.workspace}`} className="text-2xl">
-              {g.workspace}
-            </h2>
-            {g.decrees.length === 0 ? <p className="text-muted">{t("decrees.empty")}</p> : null}
-            <ul className="flex flex-col gap-3">
-              {g.decrees.map((d) => (
-                <li key={d.number}>
-                  <DecreeCard
-                    d={d}
-                    onDone={async () => {
-                      setNotice(t("decrees.revoked", { number: d.number }));
-                      await refresh();
-                    }}
-                  />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
+            {canPropose ? (
+              <Button onPress={() => setCreating(true)}>{t("decrees.new")}</Button>
+            ) : null}
+          </EmptyState>
+        ) : null}
+        {data?.workspaces
+          .filter((g) => g.decrees.length > 0)
+          .map((g) => (
+            <section
+              key={g.workspace}
+              aria-labelledby={`ws-${g.workspace}`}
+              className="flex flex-col gap-3"
+            >
+              <h2 id={`ws-${g.workspace}`} className="text-2xl">
+                {g.workspace}
+              </h2>
+              <ul className="flex flex-col gap-3">
+                {g.decrees.map((d) => (
+                  <li key={d.number}>
+                    <DecreeCard
+                      d={d}
+                      onDone={async () => {
+                        setNotice(t("decrees.revoked", { number: d.number }));
+                        await refresh();
+                      }}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
       </div>
     </section>
   );
@@ -136,7 +169,7 @@ export function DecreeCard({ d, onDone }: { d: DecreeRow; onDone: () => Promise<
       </p>
       <p className="mt-1">{d.summary}</p>
       <blockquote className="mt-2 border-l-2 border-line pl-3 text-muted">
-        <span className="sr-only">{t("decrees.text")}: </span>“{d.text}”
+        <span className="block text-sm font-semibold">{t("decrees.text")}:</span>“{d.text}”
       </blockquote>
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
         <Row label={t("decrees.author")}>
