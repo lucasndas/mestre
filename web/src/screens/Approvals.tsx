@@ -57,12 +57,28 @@ function useAccumulated(values: string[]): string[] {
  * A request answered somewhere else is told by /ws/ui and stays on the screen, with
  * no buttons, saying who answered.
  */
-export function Approvals({ request, notice }: { request?: number; notice?: number }) {
+export function Approvals({
+  request,
+  notice,
+  table,
+  workspace,
+}: {
+  request?: number;
+  notice?: number;
+  /** Opens the central already filtered by a table (the card of a table that waits for a decision). */
+  table?: string;
+  /** The campaign of that table: two campaigns may have a table with the same name. */
+  workspace?: string;
+}) {
   const { t } = useTranslation("approvals");
   const tx = useDynamicT("approvals");
   const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
-  const [filters, setFilters] = useState<ApprovalFilters>({ workspace: "", table: "", type: "" });
+  const [filters, setFilters] = useState<ApprovalFilters>({
+    workspace: workspace ?? "",
+    table: table ?? "",
+    type: "",
+  });
   const { data, error } = useQuery(approvalsQuery(filters));
 
   // what the screen showed, so that a request that ended meanwhile does not vanish

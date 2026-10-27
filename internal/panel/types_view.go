@@ -131,6 +131,16 @@ type ViewLayoutRequest struct {
 	Items []CanvasItem `json:"items"`
 }
 
+// PauseTableRequest is the body of POST /api/workspaces/{slug}/tables/{table}/pause: the
+// Reason is required (a sentence, at most MaxPauseReason characters), and goes to the audit
+// and to the wait the block shows.
+type PauseTableRequest struct {
+	Reason string `json:"reason"`
+}
+
+// MaxPauseReason is the most characters of the reason to pause a table.
+const MaxPauseReason = 300
+
 // PauseTableResponse is POST /api/workspaces/{slug}/tables/{table}/pause: Changed
 // is false when the table was paused already.
 type PauseTableResponse struct {

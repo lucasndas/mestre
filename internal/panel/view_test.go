@@ -35,10 +35,10 @@ func (f *fakeView) SaveLayout(_ context.Context, _ string, items []panel.CanvasI
 	return nil
 }
 
-func (f *fakeView) PauseTable(_ context.Context, by users.User, ws, table string) (bool, error) {
+func (f *fakeView) PauseTable(_ context.Context, by users.User, ws, table, reason string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.paused = append(f.paused, by.ID+" "+ws+"/"+table)
+	f.paused = append(f.paused, by.ID+" "+ws+"/"+table+" "+reason)
 	return true, nil
 }
 
@@ -87,11 +87,18 @@ func TestPausingATableNeedsAnApproverWhoActsInTheWorkspace(t *testing.T) {
 	if len(fv.paused) != 0 {
 		t.Fatalf("paused by who must not: %v (%s)", fv.paused, obsUser.ID)
 	}
-	w := r.call("POST", "/api/workspaces/loja/tables/42-login/pause", nil, opts{cookie: apr})
+	// the reason is required: none, blank or unknown fields are a bad request and nothing is paused
+	for _, body := range []any{nil, panel.PauseTableRequest{}, panel.PauseTableRequest{Reason: " \n\t "}, map[string]string{"why": "x"}} {
+		r.wantErr(r.call("POST", "/api/workspaces/loja/tables/42-login/pause", body, opts{cookie: apr}), 400, panel.CodeBadRequest)
+	}
+	if len(fv.paused) != 0 {
+		t.Fatalf("paused without a reason: %v", fv.paused)
+	}
+	w := r.call("POST", "/api/workspaces/loja/tables/42-login/pause", panel.PauseTableRequest{Reason: "  refazendo\na mesma   tela  "}, opts{cookie: apr})
 	if w.Code != 200 || !decodeInto[panel.PauseTableResponse](t, w).Changed {
 		t.Fatalf("pause = %d %s", w.Code, w.Body)
 	}
-	if len(fv.paused) != 1 || fv.paused[0] != appUser.ID+" loja/42-login" {
+	if len(fv.paused) != 1 || fv.paused[0] != appUser.ID+" loja/42-login refazendo a mesma tela" {
 		t.Errorf("paused = %v", fv.paused)
 	}
 	if r.audited("panel.workspace.table_paused") != 1 {

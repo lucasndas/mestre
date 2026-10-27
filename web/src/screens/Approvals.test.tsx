@@ -505,12 +505,13 @@ test("the bell shows the unread count, the notices with their place and hour, an
   const bell = await screen.findByRole("button", { name: "Avisos, 2 não lidos" });
   await user.click(bell);
   const dialog = await screen.findByRole("dialog", { name: "Avisos" });
-  expect(within(dialog).getByText(/loja · mesa 42-login/)).toBeTruthy();
+  expect(within(dialog).getByText(/loja › 42-login/)).toBeTruthy();
   expect(within(dialog).getAllByText(/14:32/)).toHaveLength(2);
-  expect(within(dialog).getByText(/Sistema/)).toBeTruthy();
+  // the kind and the place both say "Sistema"
+  expect(within(dialog).getAllByText(/Sistema/)).toHaveLength(2);
   expect(within(dialog).getByText("O PIN de Ana foi bloqueado")).toBeTruthy();
-  // only the notice with a link has "Abrir"
-  expect(within(dialog).getAllByRole("button", { name: "Abrir" })).toHaveLength(1);
+  // only the notice with a link has "Abrir mesa"
+  expect(within(dialog).getAllByRole("button", { name: "Abrir mesa" })).toHaveLength(1);
   await user.click(within(dialog).getByRole("button", { name: "Marcar todos como lidos" }));
   await waitFor(() =>
     expect(calls.find((c) => c.path === "/api/notices/read")?.body).toEqual({ ids: [] }),
@@ -535,7 +536,7 @@ test("a notice of the bell leads to its place and is marked as read; a new one r
   notices = [notice(2, { text: "Outra coisa aconteceu." }), ...notices];
   act(() => emit(openSocket(), "notices:u1", "unread", { unread: 2 }));
   expect(await within(dialog).findByText("Outra coisa aconteceu.")).toBeTruthy();
-  await user.click(within(dialog).getAllByRole("button", { name: "Abrir" })[1] as HTMLElement);
+  await user.click(within(dialog).getAllByRole("button", { name: "Abrir mesa" })[1] as HTMLElement);
   await waitFor(() =>
     expect(calls.find((c) => c.path === "/api/notices/read")?.body).toEqual({ ids: [1] }),
   );

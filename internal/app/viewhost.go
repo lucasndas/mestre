@@ -15,6 +15,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 	"github.com/mestre-ia/mestre/internal/orchestration/usage"
 	"github.com/mestre-ia/mestre/internal/panel"
+	"github.com/mestre-ia/mestre/internal/secretscreen"
 	"github.com/mestre-ia/mestre/internal/users"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
@@ -260,7 +261,7 @@ func (h viewHost) SaveLayout(ctx context.Context, workspace string, items []pane
 // PauseTable implements panel.ViewSource: the supervision pauses the table
 // itself (nothing is interrupted, no PIN: it only restricts) and checks the
 // level of the user again.
-func (h viewHost) PauseTable(ctx context.Context, by users.User, workspace, table string) (bool, error) {
+func (h viewHost) PauseTable(ctx context.Context, by users.User, workspace, table, reason string) (bool, error) {
 	o, err := h.orc()
 	if err != nil {
 		return false, err
@@ -272,7 +273,7 @@ func (h viewHost) PauseTable(ctx context.Context, by users.User, workspace, tabl
 		return false, panel.ErrCanvasNotFound
 	}
 	changed, err := o.Supervisor.PauseStalled(ctx, chain.PauseRequest{Workspace: workspace, Table: table,
-		Reason: "pausada pelo painel por " + by.Name,
+		Reason: reason,
 		By:     chain.Actor{User: by.ID, UserLevel: characters.UserLevel(by.Level)}})
 	switch {
 	case errors.Is(err, chain.ErrLevelDenied):
@@ -281,4 +282,24 @@ func (h viewHost) PauseTable(ctx context.Context, by users.User, workspace, tabl
 		return false, &panel.Refusal{Reason: "table_over", Message: fmt.Sprintf("a mesa %s já terminou", table)}
 	}
 	return changed, err
+}
+
+// screenedViewHost is the view host with the filter of secrets in front of the reason of a pause: the
+// reason is text a user wrote, and it is shown to everyone who sees the campaign, audited and told to
+// the agents, so it goes through the filter like any channel where a user writes.
+type screenedViewHost struct {
+	viewHost
+	mask func(string) string
+}
+
+var _ panel.ViewSource = screenedViewHost{}
+
+// PauseTable implements panel.ViewSource: a passphrase is refused, a secret of a known format is
+// replaced, and the rest goes to the pause.
+func (h screenedViewHost) PauseTable(ctx context.Context, by users.User, workspace, table, reason string) (bool, error) {
+	kind, clean := secretscreen.Screen(h.mask, reason)
+	if kind.Held() || strings.TrimSpace(clean) == "" {
+		return false, &panel.Refusal{Reason: "secret", Message: "não escreva senhas no motivo; diga só por que pausar"}
+	}
+	return h.viewHost.PauseTable(ctx, by, workspace, table, clean)
 }

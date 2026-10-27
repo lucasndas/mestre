@@ -2,7 +2,7 @@ import type { Widen } from "../../shape";
 import type pt from "../pt-BR/chat";
 
 const chat: Widen<typeof pt> = {
-  toggle: "Grand Master",
+  toggle: "Talk to the Grand Master",
   toggleUnread: "Chat with the Grand Master, {{count}} new",
   toggleOpen: "Open the chat with the Grand Master",
   title: "Chat with the Grand Master",

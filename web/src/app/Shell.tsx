@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { ChatPanel } from "../components/ChatPanel";
 import { NoticesBell } from "../components/TopBarSlots";
 import type { ChatConversation, ChatStatusEvent } from "../gen/panel";
+import { approvalCountQuery } from "../lib/approvalQueries";
 import { chatOverviewQuery, chatQuery } from "../lib/chatQueries";
 import { type Live, LiveContext, useLiveEvents } from "../lib/live";
 import { type SocketState, UiSocket } from "../lib/ws";
@@ -135,6 +136,8 @@ function TopBar({ chatOpen, onChat }: { chatOpen: boolean; onChat: () => void })
   );
 }
 
+const TITLE = "Mestre";
+
 export function Shell() {
   const { t } = useTranslation("shell");
   const { i18n } = useTranslation();
@@ -173,6 +176,12 @@ export function Shell() {
     const l = me.user.language;
     if ((l === "pt-BR" || l === "en") && l !== i18n.language) void i18n.changeLanguage(l);
   }, [me.user.language, i18n]);
+  // "(N) Mestre": the approvals that wait for the user show in the tab, too (docs/painel/vida-da-mesa.md)
+  const { data: count } = useQuery({ ...approvalCountQuery, enabled: canDecide });
+  const waiting = canDecide ? (count?.pending ?? 0) : 0;
+  useEffect(() => {
+    document.title = waiting > 0 ? `(${waiting}) ${TITLE}` : TITLE;
+  }, [waiting]);
   useEffect(() => {
     document.documentElement.lang = i18n.language;
   }, [i18n.language]);

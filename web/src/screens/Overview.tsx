@@ -41,7 +41,7 @@ export function Overview() {
         {guildmaster ? <FirstSteps /> : null}
         <TalkButton />
         {none ? null : <Now tables={tables.open} failed={isError ? [] : tables.failed} />}
-        <Waiting />
+        <Waiting tables={tables.open} />
         <Deliveries tables={tables.delivered} />
         <p className="mt-10 text-sm text-muted">{t("times", { zone: me.timezone })}</p>
       </section>

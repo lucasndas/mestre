@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"unicode"
 
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -22,8 +23,9 @@ type ViewSource interface {
 	// SaveLayout keeps the place of the elements that moved.
 	SaveLayout(ctx context.Context, workspace string, items []CanvasItem) error
 	// PauseTable is the button **Pausar mesa**: the engine checks the level of by
-	// again. It answers false when the table was paused already.
-	PauseTable(ctx context.Context, by users.User, workspace, table string) (bool, error)
+	// again. reason is the sentence the user wrote (already trimmed, never empty). It
+	// answers false when the table was paused already.
+	PauseTable(ctx context.Context, by users.User, workspace, table, reason string) (bool, error)
 }
 
 type viewHolder struct{ src ViewSource }
@@ -132,14 +134,44 @@ func (a *workspaceArea) handlePauseTable(w http.ResponseWriter, r *http.Request)
 		WriteError(w, Err(CodeUnavailable, "a visão da campanha não está disponível agora", nil))
 		return
 	}
+	var in PauseTableRequest
+	if !decode(w, r, &in) {
+		return
+	}
+	reason := cleanReason(in.Reason)
+	if reason == "" {
+		WriteError(w, Err(CodeBadRequest, "diga por que pausar a mesa", nil))
+		return
+	}
 	table := r.PathValue("table")
-	changed, err := vs.PauseTable(r.Context(), UserOf(r), slug, table)
+	changed, err := vs.PauseTable(r.Context(), UserOf(r), slug, table, reason)
 	if err != nil {
 		a.fail(w, err)
 		return
 	}
-	a.audit(r, "table_paused", map[string]any{"workspace": slug, "table": table, "changed": changed})
+	a.audit(r, "table_paused", map[string]any{"workspace": slug, "table": table, "changed": changed, "reason": reason})
 	WriteJSON(w, http.StatusOK, PauseTableResponse{Changed: changed})
+}
+
+// cleanReason is the reason of a pause as it is kept: one line, no control characters,
+// at most MaxPauseReason characters; "" when nothing is left.
+func cleanReason(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case unicode.Is(unicode.Cf, r):
+			// invisible format characters (bidi marks, zero width): not kept
+		case unicode.IsControl(r) || unicode.IsSpace(r):
+			b.WriteRune(' ')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	out := strings.Join(strings.Fields(b.String()), " ")
+	if rs := []rune(out); len(rs) > MaxPauseReason {
+		out = string(rs[:MaxPauseReason])
+	}
+	return out
 }
 
 // viewKey says the key names the Grand Master or a table: the only elements of the view.

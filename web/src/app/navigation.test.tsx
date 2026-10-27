@@ -191,7 +191,7 @@ test("the top bar has the brand, the bell, the Grão-Mestre and the account, and
     "Menu da conta",
   ]);
   // the label of the Grão-Mestre only shows from the computer width: on the phone it is the icon
-  expect(within(bar).getByText("Grão-Mestre").className).toMatch(/hidden md:inline/);
+  expect(within(bar).getByText("Falar com o Grão-Mestre").className).toMatch(/hidden md:inline/);
   // the menu is fixed at the bottom of the phone, four equal tabs
   expect(nav.className).toMatch(/fixed/);
   expect(nav.className).toMatch(/bottom-0/);

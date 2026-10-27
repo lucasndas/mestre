@@ -45,7 +45,7 @@ test("the Guildmaster walks the Home: first steps, tables, the request, the appr
 
   // the request waits in the Home, with a link that leads to it, and the PIN approves it
   await page.goto("/");
-  const waiting = page.getByRole("region", { name: "Esperam por você" });
+  const waiting = page.getByRole("region", { name: "Precisa de você" });
   await waiting
     .getByRole("link", { name: /Decidir o pedido/ })
     .first()
@@ -59,7 +59,7 @@ test("the Guildmaster walks the Home: first steps, tables, the request, the appr
 
   // answered, it leaves the Home; the table opens from there
   await page.goto("/");
-  await expect(page.getByRole("region", { name: "Esperam por você" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Precisa de você" })).toHaveCount(0);
   await page
     .getByRole("region", { name: "Acontecendo agora" })
     .getByRole("link", { name: /Abrir a mesa Login com Google/ })

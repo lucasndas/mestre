@@ -27,6 +27,7 @@ import { socketFeed } from "../terminal/feed";
 import { TerminalView } from "../terminal/TerminalView";
 import {
   type BlockData,
+  type BuildOptions,
   buildEdges,
   buildNodes,
   type GmData,
@@ -110,7 +111,8 @@ function TableNodeView({ data }: NodeProps<ViewNode>) {
         workspace={d.workspace}
         repo={d.repo}
         canPause={d.canPause}
-        ended={d.ended}
+        situation={d.situation}
+        newNotices={d.newNotices}
       />
     </>
   );
@@ -119,27 +121,43 @@ function TableNodeView({ data }: NodeProps<ViewNode>) {
 const nodeTypes = { gm: GmNodeView, table: TableNodeView };
 
 /** The canvas of the workspace: the Grand Master at the center and a block for each table around it. */
-export function WorkspaceCanvas({ view, showEnded }: { view: WorkspaceView; showEnded: boolean }) {
+export function WorkspaceCanvas({
+  view,
+  showEnded,
+  build,
+}: {
+  view: WorkspaceView;
+  showEnded: boolean;
+  build?: BuildOptions;
+}) {
   return (
     <ReactFlowProvider>
-      <Canvas view={view} showEnded={showEnded} />
+      <Canvas view={view} showEnded={showEnded} build={build} />
     </ReactFlowProvider>
   );
 }
 
-function Canvas({ view, showEnded }: { view: WorkspaceView; showEnded: boolean }) {
+function Canvas({
+  view,
+  showEnded,
+  build,
+}: {
+  view: WorkspaceView;
+  showEnded: boolean;
+  build?: BuildOptions;
+}) {
   const { t } = useTranslation("workspace");
   const navigate = useNavigate();
   const slug = view.workspace.slug;
   const [nodes, setNodes] = useState<ViewNode[]>([]);
   // the server is the truth: the nodes follow it, keeping what the screen holds (selection)
   useEffect(() => {
-    const built = buildNodes(view, showEnded);
+    const built = buildNodes(view, showEnded, build);
     setNodes((prev) => {
       const sel = new Set(prev.filter((n) => n.selected).map((n) => n.id));
       return built.map((n) => ({ ...n, selected: sel.has(n.id) }));
     });
-  }, [view, showEnded]);
+  }, [view, showEnded, build]);
   const edges = useMemo(() => buildEdges(nodes), [nodes]);
 
   const save = (list: ViewNode[]) => {
@@ -166,7 +184,8 @@ function Canvas({ view, showEnded }: { view: WorkspaceView; showEnded: boolean }
         onNodeClick={(e, node) => {
           if (node.type !== "table") return;
           // a link or a button inside the block does its own thing
-          if ((e.target as HTMLElement).closest("a, button")) return;
+          if ((e.target as HTMLElement).closest("a, button, summary, textarea, input, label"))
+            return;
           void navigate({
             to: "/workspaces/$workspace/mesas/$table",
             params: { workspace: slug, table: node.id.replace(/^table:/, "") },

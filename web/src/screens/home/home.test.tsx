@@ -279,7 +279,10 @@ test("the tables and the request show with their links, and a new table appears 
   expect(link.getAttribute("href")).toBe("/workspaces/loja/mesas/1-a");
   expect(within(now).getAllByRole("link").length).toBe(3);
   expect(now.textContent).toContain("3 personagens (Cidadela)");
-  const waiting = await screen.findByRole("region", { name: "Esperam por você" });
+  // the rows say the situation in the words of the vocabulary of states
+  expect(now.textContent).toContain("Trabalhando");
+  expect(now.textContent).toContain("Em revisão");
+  const waiting = await screen.findByRole("region", { name: "Precisa de você" });
   const req = within(waiting).getByRole("link", { name: /Decidir o pedido 5/ });
   expect(req.getAttribute("href")).toContain("/aprovacoes");
   expect(req.getAttribute("href")).toContain("pedido=5");
@@ -292,6 +295,32 @@ test("the tables and the request show with their links, and a new table appears 
   expect(
     await screen.findByRole("link", { name: "Abrir a mesa Mesa D da campanha loja" }),
   ).toBeTruthy();
+});
+
+// CA-JORN-05 and R5: the tables that are stuck or deliver nothing are in "Precisa de você", the approvals only for who decides
+test("a stuck table and one without delivery are in Precisa de você, even for an Observer", async () => {
+  server({
+    ...done,
+    level: "observer",
+    caps: ["status"],
+    tables: [
+      table({
+        id: "1-a",
+        epic_title: "Mesa A",
+        waits: [{ kind: "same_failure", reason: "x", fingerprint: "ab", where: "a.go:1" }],
+      }),
+      table({ id: "2-b", epic_title: "Mesa B", stalled: true, quiet_seconds: 4 * 3600 }),
+      table({ id: "3-c", epic_title: "Mesa C" }),
+    ],
+    requests: [request()],
+  });
+  renderApp("/");
+  const need = await screen.findByRole("region", { name: "Precisa de você" });
+  expect(need.textContent).toContain("Mesa A");
+  expect(need.textContent).toContain("Mesa B");
+  expect(need.textContent).not.toContain("Mesa C");
+  expect(need.textContent).toContain("Travada");
+  expect(need.textContent).not.toContain("Decidir");
 });
 
 test("closed tables with a merged PR show as recent deliveries, not as work", async () => {
@@ -328,7 +357,7 @@ test("an Administrator sees no first steps, and an Observer sees no requests eit
     requests: [request()],
   });
   const admin = renderApp("/");
-  await screen.findByRole("region", { name: "Esperam por você" });
+  await screen.findByRole("region", { name: "Precisa de você" });
   expect(screen.queryByRole("heading", { name: "Primeiros passos" })).toBeNull();
   admin.unmount();
 
@@ -336,7 +365,7 @@ test("an Administrator sees no first steps, and an Observer sees no requests eit
   renderApp("/");
   await screen.findByRole("region", { name: "Acontecendo agora" });
   expect(screen.queryByRole("heading", { name: "Primeiros passos" })).toBeNull();
-  expect(screen.queryByRole("region", { name: "Esperam por você" })).toBeNull();
+  expect(screen.queryByRole("region", { name: "Precisa de você" })).toBeNull();
   expect(
     s.calls.some((c) => c.path.startsWith("/api/approvals?") || c.path === "/api/approvals"),
   ).toBe(false);
