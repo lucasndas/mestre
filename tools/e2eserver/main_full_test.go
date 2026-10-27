@@ -32,14 +32,16 @@ func TestTheE2EServerServesTheEmbeddedPanelAndStops(t *testing.T) {
 	defer cancel()
 	pr, pw := io.Pipe()
 	errc := make(chan error, 1)
+	var stderr lockedBuffer
 	go func() {
-		err := run(ctx, pw, io.Discard, nil)
+		err := run(ctx, pw, &stderr, nil)
 		pw.Close()
 		errc <- err
 	}()
 	line, err := bufio.NewReader(pr).ReadString('\n')
 	if err != nil {
-		t.Fatalf("no ready line: %v", err)
+		cancel()
+		t.Fatalf("no ready line: %v; run = %v; stderr: %s", err, <-errc, stderr.String())
 	}
 	url, code, ok := parseReady(line)
 	if !ok {
@@ -84,6 +86,24 @@ func TestTheE2EServerServesTheEmbeddedPanelAndStops(t *testing.T) {
 	}
 }
 
+// lockedBuffer is a buffer the server writes to while the test reads it.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
+}
+
 // serve runs the server over a folder and returns its address, the setup code and what
 // stops it (and waits for the engine to end).
 func serve(t *testing.T, o runOptions) (url, code string, stop func()) {
@@ -91,15 +111,16 @@ func serve(t *testing.T, o runOptions) (url, code string, stop func()) {
 	ctx, cancel := context.WithCancel(t.Context())
 	pr, pw := io.Pipe()
 	errc := make(chan error, 1)
+	var stderr lockedBuffer
 	go func() {
-		err := runWith(ctx, pw, io.Discard, nil, o)
+		err := runWith(ctx, pw, &stderr, nil, o)
 		pw.Close()
 		errc <- err
 	}()
 	line, err := bufio.NewReader(pr).ReadString('\n')
 	if err != nil {
 		cancel()
-		t.Fatalf("no ready line: %v", err)
+		t.Fatalf("no ready line: %v; run = %v; stderr: %s", err, <-errc, stderr.String())
 	}
 	url, code, ok := parseReady(line)
 	if !ok {

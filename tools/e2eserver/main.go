@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -207,12 +209,39 @@ func waitForPanel(ctx context.Context, url string, engine <-chan error) error {
 	}
 }
 
-// freePort finds a free TCP port on the loopback.
+// The engine port comes from a range below the ones the system hands out for outgoing
+// connections and for ":0" (32768 and up on Linux, 49152 and up on Windows): a port taken from
+// ":0" and released may be taken by any other connection of the machine before the Citadel binds
+// it ("address already in use"). The Citadel config takes a port number, not a listener, so the
+// port cannot be handed over open.
+const (
+	portLow  = 20000
+	portSpan = 10000
+)
+
+var (
+	portsMu   sync.Mutex
+	portsUsed = map[int]bool{}
+)
+
+// freePort finds a free TCP port on the loopback, out of the range of the system, and keeps it
+// from being handed out again in this process (the servers of parallel tests).
 func freePort() (int, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return 0, err
+	for range 10000 {
+		port := portLow + rand.IntN(portSpan)
+		portsMu.Lock()
+		taken := portsUsed[port]
+		portsUsed[port] = true
+		portsMu.Unlock()
+		if taken {
+			continue
+		}
+		ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		if err != nil {
+			continue // in use by something else
+		}
+		ln.Close()
+		return port, nil
 	}
-	defer ln.Close()
-	return ln.Addr().(*net.TCPAddr).Port, nil
+	return 0, fmt.Errorf("no free port in %d..%d", portLow, portLow+portSpan)
 }
