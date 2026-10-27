@@ -88,7 +88,7 @@ func newRunner(fsys fstest.MapFS, clk clock.Clock, ex Exec) (*Runner, *bytes.Buf
 		fsys = fstest.MapFS{}
 	}
 	mkTemp := func() (string, func(), error) { return "/bins", func() {}, nil }
-	return &Runner{Exec: ex, Clock: clk, FS: fsys, Out: &out, MkTemp: mkTemp}, &out
+	return &Runner{Exec: ex, Clock: clk, FS: fsys, Out: &out, MkTemp: mkTemp, GOOS: "linux"}, &out
 }
 
 // isMainRun is the run of the test binary of the suite (not the solo re-run of

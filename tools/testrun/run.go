@@ -98,6 +98,8 @@ type Runner struct {
 	// Remove deletes a file relative to the root (the Vitest reports); nil keeps it.
 	Remove func(path string) error
 	Only   string // "go" or "web": run one side only ("" runs both)
+	// GOOS picks the budget of the web side; empty means runtime.GOOS.
+	GOOS string
 	// MkTemp makes the directory of the test binaries and returns its
 	// cleanup; nil uses a temporary directory.
 	MkTemp func() (string, func(), error)

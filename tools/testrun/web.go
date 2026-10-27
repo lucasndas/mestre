@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -19,6 +20,23 @@ import (
 // only the execution of the tests, never the preparation of Vitest
 // (docs/qualidade/testes.md#executor-testrun).
 const WebBudget = 30 * time.Second
+
+// WebBudgetWindows is the budget of the web side on Windows, where the same
+// tests take about 1.5 times longer than on Linux; the owner set it on
+// 2026-10-27. Every other OS keeps WebBudget.
+const WebBudgetWindows = 45 * time.Second
+
+// webBudget is the budget of one run of the web side on the Runner's OS.
+func (r *Runner) webBudget() time.Duration {
+	goos := r.GOOS
+	if goos == "" {
+		goos = runtime.GOOS
+	}
+	if goos == "windows" {
+		return WebBudgetWindows
+	}
+	return WebBudget
+}
 
 // webSuite is the quarantine suite name of the entries that name a Vitest
 // test file instead of a Go test.
@@ -268,7 +286,7 @@ func (r *Runner) RunWeb(ctx context.Context, s Suite, q []QuarantineEntry) int {
 	if count == 1 && !r.Race {
 		r.flagWebSlow(last)
 	}
-	budget := WebBudget * time.Duration(count)
+	budget := r.webBudget() * time.Duration(count)
 	if measured > budget {
 		r.printf("FAIL web side of %s took %v, budget %v. The %d slowest tests:\n", s.Name, measured.Round(time.Millisecond), budget, slowestShown)
 		sort.SliceStable(last, func(i, j int) bool { return last[i].Elapsed > last[j].Elapsed })
