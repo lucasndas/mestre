@@ -79,9 +79,14 @@ type AsyncRunner struct {
 
 	cmu sync.Mutex
 	ctx context.Context
-	wg  sync.WaitGroup
 	mu  sync.Mutex
 	q   map[string]*asyncQueue
+	// workers counts the goroutines that run a queue and idle wakes Wait when it
+	// reaches zero. A sync.WaitGroup does not serve: OnEvent adds to it while Wait
+	// may run, and the race detector (rightly) reports an Add from zero that meets a
+	// Wait.
+	workers int
+	idle    *sync.Cond
 }
 
 type asyncQueue struct {
@@ -129,9 +134,11 @@ func (a *AsyncRunner) OnEvent(ev providers.Event, _ Answer) {
 	q.events = append(q.events, ev)
 	start := !q.running
 	q.running = true
+	if start {
+		a.workers++
+	}
 	a.mu.Unlock()
 	if start {
-		a.wg.Add(1)
 		go a.work(ev.AgentID, q)
 	}
 }
@@ -146,7 +153,16 @@ func hookable(k providers.EventKind) bool {
 }
 
 // Wait returns when every queue is empty and no hook is running.
-func (a *AsyncRunner) Wait() { a.wg.Wait() }
+func (a *AsyncRunner) Wait() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.idle == nil {
+		a.idle = sync.NewCond(&a.mu)
+	}
+	for a.workers > 0 {
+		a.idle.Wait()
+	}
+}
 
 func (a *AsyncRunner) log() *slog.Logger {
 	if a.Logger == nil {
@@ -156,12 +172,15 @@ func (a *AsyncRunner) log() *slog.Logger {
 }
 
 func (a *AsyncRunner) work(agent string, q *asyncQueue) {
-	defer a.wg.Done()
 	for {
 		a.mu.Lock()
 		if len(q.events) == 0 || a.context().Err() != nil {
 			q.running = false
 			q.events = nil
+			a.workers--
+			if a.workers == 0 && a.idle != nil {
+				a.idle.Broadcast()
+			}
 			a.mu.Unlock()
 			return
 		}
