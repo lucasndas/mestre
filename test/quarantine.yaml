@@ -25,3 +25,7 @@ tests:
     issue: https://github.com/mestre-ia/mestre/issues/369
     added: 2026-10-27
     reason: "on the Windows full suite of the merge queue of a PR that touched no winsvc code the sweep counted 2 processes for the one helper, the same as TestTheSweepEndsTheProcessesOfTheSession"
+  - test: TestTheReplayTheCitadelRelaysIsTheBufferOfTheMachineByteForByte
+    issue: https://github.com/mestre-ia/mestre/issues/397
+    added: 2026-10-27
+    reason: "on the Linux full suite of the merge queue of a PR that touched only web/ the browser got 235 bytes of live output while the buffer of the machine had 231"
