@@ -67,7 +67,7 @@ O sino é o de [avisos](conversa-e-aprovacoes.md#avisos) e diz sempre o **nome h
 
 ### A casca e a conversa
 
-A barra de cima é a da [jornada](design.md#estrutura-da-tela): marca, sino, **Falar com o Grão-Mestre** (botão cheio) e avatar com o menu da conta. O botão abre a **conversa lateral** (coluna à direita no computador, tela cheia no celular), a mesma em toda tela, com o cartão de andamento único: a conversa e esse cartão são da [conversa e aprovações](conversa-e-aprovacoes.md#conversa-com-o-grão-mestre), não desta unidade. Os termos (Campanha, Mesa, Companhia) levam o balão "No mundo real:" do componente `Term`.
+A barra de cima é a da [jornada](design.md#estrutura-da-tela): marca, sino, **Falar com o Grão-Mestre** (botão cheio) e avatar com o menu da conta. O botão abre a **conversa lateral** (coluna à direita no computador, tela cheia no celular), a mesma em toda tela, com o cartão de andamento único: a conversa e esse cartão são da [conversa e aprovações](conversa-e-aprovacoes.md#conversa-com-o-grão-mestre), não desta unidade. Os termos (Campanha, Mesa, Companhia) são a própria palavra sublinhada com pontos, do componente `Term`: o mouse mostra o balão "No mundo real:", e tocar, clicar ou Enter o fixa; não há "?" ao lado ([design](design.md#ajuda-dos-termos)).
 
 ### Erros
 
