@@ -116,6 +116,9 @@ test("the canvas of a table draws its nodes and the terminal of a character", as
   await page.goto("/workspaces/e2e/mesas/mesa-e2e");
   const canvas = page.getByRole("region", { name: "Canvas da mesa mesa-e2e" });
   await expect(canvas).toBeVisible();
+  // the header of the table: the title with the identifier, and the two parts it has
+  await expect(page.getByRole("button", { name: "Conversar sobre esta mesa" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Quadro" })).toHaveAttribute("aria-selected", "true");
   const dev = canvas.getByRole("article", { name: "Personagem Dev-1" });
   await expect(dev).toBeVisible();
   await expect(dev.getByText("Máquina e2e")).toBeVisible();
@@ -132,6 +135,10 @@ test("the canvas of a table draws its nodes and the terminal of a character", as
   // an action goes to the engine and the canvas shows its answer: pin Dev-1
   await dev.getByRole("button", { name: "Fixar Dev-1" }).click();
   await expect(dev.getByRole("button", { name: "Desafixar Dev-1" })).toBeVisible();
+  // the terminal of Dev-1 is also the Terminal tab of the table, in the same window
+  await page.getByRole("tab", { name: "Terminal" }).click();
+  await expect(page).toHaveURL(/aba=terminal/);
+  await expect(page.getByRole("region", { name: "Terminal de Dev-1" })).toBeVisible();
 });
 
 // The workspace view step of the smoke: the Grand Master of the double is the center, with its

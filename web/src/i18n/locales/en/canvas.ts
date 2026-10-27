@@ -6,6 +6,21 @@ const canvas = {
   controls: "Canvas zoom",
   minimap: "Canvas map",
   dismiss: "Dismiss",
+  zoomIn: "Zoom in",
+  zoomOut: "Zoom out",
+  zoomReset: "Back to 100%",
+  head: {
+    talk: "Talk about this table",
+    tabs: "Parts of the table",
+    board: "Board",
+    terminal: "Terminal",
+    branch: "Branch",
+    lastDelivery: "Last delivery",
+    noDelivery: "no delivery yet",
+    pick: "Whose terminal",
+    noTerminal: "No character of this table has a terminal right now.",
+    identifier: "Table identifier",
+  },
   fit: "Fit to screen",
   zoomNote: "Zoom 100%: the text opens readable.",
   plain: {
@@ -49,6 +64,7 @@ const canvas = {
   deadlock:
     "Deadlock: {{cycle}}. Nobody moves until one of them is released. Ask the Grand Master to unblock it.",
   side: {
+    tabs: { missions: "Missions", rituals: "Rituals", grimoires: "Grimoires" },
     title: "Missions, rituals and grimoires",
     what: {
       missions:

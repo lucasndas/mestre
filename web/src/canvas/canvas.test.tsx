@@ -418,7 +418,9 @@ test("with nothing selected there is a hint and no loose group or grimoire butto
   ).toBe(false);
   expect(within(bar).getByRole("button", { name: "Guardar como grimório" })).toBeTruthy();
   await user.click(within(bar).getByRole("button", { name: "Soltar" }));
-  await waitFor(() => expect(screen.queryByRole("toolbar")).toBeNull());
+  await waitFor(() =>
+    expect(screen.queryByRole("toolbar", { name: "O que fazer com a seleção" })).toBeNull(),
+  );
 });
 
 // CA-CANVAS-14: group and undo it; only the layout is touched.
@@ -446,6 +448,17 @@ test("Juntar em grupo draws a group with a name and Desfazer grupo frees the car
 });
 
 // CA-CANVAS-15: each tab says what it is; the restore plan is said before it is confirmed.
+test("the zoom shows its number and a press on it goes back to 100%", async () => {
+  fakeServer({ [`GET ${path}`]: () => ({ body: tableState() }) });
+  const { Wrapper } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  await screen.findByRole("article", { name: "Personagem Dev-1" });
+  const zoom = screen.getByRole("toolbar", { name: "Zoom do canvas" });
+  expect(within(zoom).getByRole("button", { name: "Afastar" })).toBeTruthy();
+  expect(within(zoom).getByRole("button", { name: "Aproximar" })).toBeTruthy();
+  expect(within(zoom).getByRole("button", { name: "Voltar a 100%" }).textContent).toMatch(/^\d+%$/);
+});
+
 test("the side panel says what each tab is, and a restore tells the renamed names and the missing class first", async () => {
   fakeServer({
     [`GET ${path}`]: () => ({ body: tableState() }),
@@ -485,9 +498,9 @@ test("the side panel says what each tab is, and a restore tells the renamed name
   );
   const side = await screen.findByRole("complementary", { name: "Missões, rituais e grimórios" });
   expect(side.textContent).toContain("Uma missão é uma sequência de personagens");
-  await user.click(within(side).getByRole("tab", { name: /Ritual/ }));
+  await user.click(within(side).getByRole("tab", { name: /Rituais/ }));
   expect(side.textContent).toContain("Um ritual é uma tarefa que se repete sozinha");
-  await user.click(within(side).getByRole("tab", { name: /Grimório/ }));
+  await user.click(within(side).getByRole("tab", { name: /Grimórios/ }));
   expect(side.textContent).toContain("Um grimório é um modelo guardado de parte de uma mesa");
   await user.click(await within(side).findByRole("button", { name: "Restaurar nesta mesa" }));
   expect(await within(side).findByText("Dev-1 → Dev-1 (2)")).toBeTruthy();

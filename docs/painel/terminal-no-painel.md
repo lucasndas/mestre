@@ -10,8 +10,8 @@ O terminal da mesa tem de parecer um terminal e ser mais que um: a tela do agent
 
 ### Uma janela de terminal, com uma camada do Mestre
 
-- A janela tem três partes: **barra de identidade** (em cima), **tela do PTY** (o resto) e **linha de status** (embaixo). Nada se desenha sobre a tela, a não ser o rótulo "retrato" e o botão **Ir ao fim**.
-- O componente continua sendo `web/src/terminal/TerminalView`, o mesmo nas três situações; só o tamanho muda ([cartão](#cartão-do-canvas), [celular](#celular)). A tela própria vive dentro da casca do painel ([design](design.md#estrutura-da-tela)): barra de cima com marca, sino, **Falar com o Grão-Mestre** e menu da conta, menu de quatro itens e migalhas; a conversa abre no painel lateral, como em toda tela ([conversa](conversa-e-aprovacoes.md)).
+- A janela tem três partes: **barra de identidade** (em cima), **tela do PTY** (o resto) e **linha de status** (embaixo). Nada se desenha sobre a tela, a não ser o rótulo "retrato" e o botão **Ir ao fim**. É **uma peça escura só**: barra, tela, linha de status e caixa de mensagem usam os tokens `--color-term-*` (fundo da tela, `chrome`, `chrome-2`, `line`, `dim`), não o pergaminho do painel. A altura é `clamp(460px, 100dvh − 300px, 860px)` (a aba da mesa desconta o cabeçalho dela): a janela cabe na tela e é a tela do PTY que rola.
+- O componente continua sendo `web/src/terminal/TerminalView`, o mesmo nas três situações (a página `/terminal/<personagem>` de quem está numa mesa leva à **aba Terminal da mesa** ([canvas](canvas.md#canvas-infinito)); sem mesa, o terminal fica sozinho nela); só o tamanho muda ([cartão](#cartão-do-canvas), [celular](#celular)). A tela própria vive dentro da casca do painel ([design](design.md#estrutura-da-tela)): barra de cima com marca, sino, **Falar com o Grão-Mestre** e menu da conta, menu de quatro itens e migalhas; a conversa abre no painel lateral, como em toda tela ([conversa](conversa-e-aprovacoes.md)).
 - Tudo na camada do Mestre vem de dados e ações que já existem ([tabela](#o-que-já-existe-e-o-que-não)). Um dado que falta some da linha; nunca é inventado.
 
 ### A tela
@@ -26,7 +26,7 @@ O terminal da mesa tem de parecer um terminal e ser mais que um: a tela do agent
 ### Barra de identidade
 
 - Ponto de conexão (verde ao vivo, âmbar pulsando ao reconectar, cinza sem sinal ou encerrado; sempre com o texto no `title` e no estado), nome em fonte de título, **estado em palavras**, o vocabulário de [design](design.md#estados) (Trabalhando, Ocioso, Espera a sua decisão, Esperando <quem ou o quê>, Sem sinal, Encerrado; nunca o identificador `idle`), classe ([Terminal simples](../produto/glossario.md) quando não tem) e a máquina.
-- Ações à direita, com nome acessível e alvo de 44 px: **Fixar**, **Copiar tela**, **A−/A+/Ajustar**, **Pausar mesa** (vira **Retomar mesa**) e **Focar** (esconde o menu para dar largura; só layout). Fixar é de quem edita o canvas e Pausar mesa de Aprovador ou acima ([visão da campanha](visao-do-workspace.md)); para os outros o botão não aparece.
+- Classe e máquina são fichas (sem classe, "Terminal simples"). Ações à direita, **só o ícone**, com nome acessível e alvo de 44 px, e a letra com o tamanho entre **A−** e **A+**: **Fixar**, **Copiar tela**, **A−/A+/Ajustar**, **Pausar mesa** (vira **Retomar mesa**) e **Focar** (esconde o menu para dar largura; só layout). Fixar é de quem edita o canvas e Pausar mesa de Aprovador ou acima ([visão da campanha](visao-do-workspace.md)); para os outros o botão não aparece.
 - **Pausar mesa** pergunta antes, num balão sob o botão (sem janela), com **motivo obrigatório** (o botão só habilita com o motivo escrito; retomar também pede motivo), usa a rota que já existe e a auditoria dela, e diz numa frase a diferença: Pausar mesa para o trabalho da mesa; **Pausar autonomia** (em Configurações) só muda quem decide os pedidos. A mesa pausada mostra o motivo numa faixa. Não existe pausar um personagem sozinho. **Fixar** e **Desafixar** avisam com o aviso padrão (embaixo à direita, com **Desfazer**).
 
 ### Linha de status
@@ -64,7 +64,7 @@ O terminal da mesa tem de parecer um terminal e ser mais que um: a tela do agent
 
 ### Celular
 
-- Até 700 px de largura da própria janela (consulta de contêiner, não só do aparelho): a barra mostra nome e estado em cima e classe e máquina embaixo; as ações secundárias vão para **Mais**. A linha de status ocupa a largura e o **Digitar** tem 48 px de altura, logo acima da barra de baixo do painel.
+- Até 700 px de largura da própria janela (consulta de contêiner, não só do aparelho): a barra mostra nome e estado em cima e classe e máquina embaixo; as ações secundárias vão para o menu **Mais** (ícone e nome, sem empilhar na barra). A linha de status ocupa a largura e o **Digitar** tem 48 px de altura, logo acima da barra de baixo do painel.
 - **As 200 colunas não cabem em 390 px** (a 12 px, o mínimo legível, pedem cerca de 1.440 px). O terminal não encolhe a letra: a tela rola para o lado e uma tira no alto avisa "200 colunas: role para o lado", com **Quebrar linhas**, que troca a rolagem por linhas que quebram (muda só a leitura; o PTY segue 200 × 50). A página nunca rola de lado.
 - **Ajustar à largura** (só onde há zoom) nunca passa de 11 px: se as colunas não cabem, diz quanto pedem e deixa a rolagem.
 

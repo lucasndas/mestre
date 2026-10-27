@@ -94,7 +94,7 @@ Quando o canal `/ws/ui` cai, uma faixa âmbar "Reconectando à Cidadela…" fica
 
 ## Terminal
 
-- Tela escura com cores de terminal, a única que foge do papel (tokens `--color-term-*` e `--font-mono`, no `@theme`), no tamanho fixo do PTY (200 × 50), com rolagem; o navegador nunca redimensiona. A janela leva uma barra de identidade e uma linha de status do Mestre; o cursor sem teclado é oco, e o resto (fonte, cores, estados, cartão, celular) está em [terminal no painel](terminal-no-painel.md).
+- Tela escura com cores de terminal, a única que foge do papel (tokens `--color-term-*`, com o cromo `chrome`, `chrome-2`, `line` e `dim` da barra e da linha de status, e `--font-mono`, no `@theme`), no tamanho fixo do PTY (200 × 50), com rolagem; o navegador nunca redimensiona. A janela leva uma barra de identidade e uma linha de status do Mestre; o cursor sem teclado é oco, e o resto (fonte, cores, estados, cartão, celular) está em [terminal no painel](terminal-no-painel.md).
 - Só leitura é o padrão; o botão "Digitar" aparece só para quem pode. A recusa do servidor diz quem recusou e por quê. Máquina sem sinal: o terminal fica cinza, com "máquina sem sinal desde HH:MM" em `role="status"`, e a tela continua visível. A tela também existe como texto para o leitor de tela.
 
 ## Idioma, datas e números

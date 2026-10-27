@@ -20,6 +20,8 @@ export interface CanvasEnv {
   ungroup: (id: string) => void;
   /** Gives a group its name. */
   renameGroup: (id: string, label: string) => void;
+  /** Where the terminal of a character opens: the terminal tab of this table. */
+  terminalPath: (character: string) => string;
 }
 
 export const CanvasEnvContext = createContext<CanvasEnv | null>(null);

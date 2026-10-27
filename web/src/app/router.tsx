@@ -264,9 +264,21 @@ const terminalRoute = createRoute({
 const tableRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/workspaces/$workspace/mesas/$table",
+  validateSearch: (s: Record<string, unknown>): { aba?: string; personagem?: string } => ({
+    ...(s.aba === "terminal" ? { aba: "terminal" } : {}),
+    ...(typeof s.personagem === "string" && s.personagem ? { personagem: s.personagem } : {}),
+  }),
   component: function TablePage() {
     const { workspace, table } = tableRoute.useParams();
-    return <TableScreen workspace={workspace} table={table} />;
+    const { aba, personagem } = tableRoute.useSearch();
+    return (
+      <TableScreen
+        workspace={workspace}
+        table={table}
+        tab={aba === "terminal" ? "terminal" : "board"}
+        character={personagem}
+      />
+    );
   },
 });
 

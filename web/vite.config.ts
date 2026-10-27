@@ -9,7 +9,7 @@ const outDir = fileURLToPath(new URL("../internal/panel/webdist", import.meta.ur
 
 // Files that use vi.mock: vi.mock does not reach a module another file already loaded in the
 // same worker, so these keep a worker of their own.
-const isolated = ["src/terminal/factory.test.ts"];
+const isolated = ["src/terminal/factory.test.ts", "src/screens/TableScreen.test.tsx"];
 
 export default defineConfig({
   plugins: [tailwindcss(), react(), keepGitkeep(outDir)],
