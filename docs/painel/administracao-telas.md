@@ -10,7 +10,9 @@ Documento de referência da M6, etapa 4 (unidades 4G1 e 4G2 da [ordem de impleme
 
 ## Telas de quem chega agora
 
-Cada linha diz o que muda; "igual" é o que não muda.
+Os nomes e os grupos são os do índice de Configurações que a 4B pôs na `main` (`settingsMap.ts` e o catálogo `shell`): **Supervisão da cadeia**, **Delegações**, **Consumo de uso**, e assim por diante.
+
+
 
 | Tela | Para que serve (frase da tela) | Faixa de situação e botão principal | Vazio e próximo passo |
 |---|---|---|---|
@@ -18,12 +20,11 @@ Cada linha diz o que muda; "igual" é o que não muda.
 | Apps do GitHub | "Os robôs do Mestre no GitHub: cada ação dos agentes aparece com o nome de um deles, e você pode cortar o acesso quando quiser." | "N Apps esperando um passo seu" ou "Todos prontos"; sem App, **Gerar o link do App Grão-Mestre** | explica o que é um App e os três passos (gerar o link com PIN, abrir no navegador logado no GitHub, instalar nos repositórios) |
 | Segredos | "As senhas e chaves que o Mestre guarda no cofre… o valor nunca volta a aparecer." | "N credenciais de site, M perto de vencer"; **Cadastrar credencial de site** | a tabela "Onde cada chave vai" aparece sempre; sem credencial de site, a faixa diz que só há os do Mestre |
 | Classes | "As funções dos agentes (Dev, QA, Revisor): o que cada uma pode fazer e qual App do GitHub ela usa." | "N propostas esperando a sua aprovação" ou "N classes em vigor"; sem classe, **Falar com o Grão-Mestre** | explica o que é uma classe e como nasce: o Grão-Mestre propõe, você aprova, o App é preparado |
-| Guilda e máquinas | "Os computadores onde o Mestre roda e se estão bem…" | "N máquinas, M sem sinal"; com uma só, "1 máquina, e é a Cidadela" | o modo máquina única vira um cartão com o próximo passo (instalar numa segunda máquina e aceitar o pedido aqui) |
-| Usuários | "Quem usa o Mestre, com que nível e em quais campanhas. Só o Senhor da Guilda mexe aqui." | "N pessoas" e quem ainda não entrou; **Cadastrar usuário** | só o Senhor da Guilda: a sequência de convidar (cadastrar, código de primeiro acesso, pessoa entra, Telegram opcional) |
 
 ### Perfis de conta (o que cresce no M7)
 
-- **Hoje (sem configuração guiada, `advance` responde `unavailable`):** cada perfil é um cartão com nome, provedor, "padrão" e o selo "login não conferido", e um texto "Login feito à mão": abrir o terminal da máquina e entrar na conta do provedor (no Codex, aprovar também os hooks do Mestre em `/hooks`). Tornar padrão e **Remover** (que diz que a pasta com o login fica) pedem PIN. Máquina: só a da Cidadela.
+- **Máquinas:** a tela lista os perfis da máquina onde o painel roda (a Cidadela) e diz isso; os provedores logados de cada máquina estão na ficha dela, na Guilda (4I). Os perfis das outras máquinas entram aqui "em breve", quando a configuração guiada chegar às Torres.
+- **Hoje (sem configuração guiada, `advance` responde `unavailable`):** cada perfil é um cartão com nome, provedor, "padrão" e o selo "login não conferido", e um texto "Login feito à mão": abrir o terminal da máquina e entrar na conta do provedor (no Codex, aprovar também os hooks do Mestre em `/hooks`). Tornar padrão e **Remover** (que diz que a pasta com o login fica) pedem PIN. 
 - **Com a configuração guiada (M7, [ligação de produção](../desenvolvimento/ligacao-de-producao.md)):** o **mesmo cartão** ganha as etapas (instalar o programa, entrar na conta, aprovar os hooks só no Codex, conferir; cada uma "feita", "agora" ou "depois"), a linha "Esperando: …", **Abrir o terminal** e **Continuar a configuração**, e o selo passa a "pronto" ou "falta um passo". A falha da conferência diz o motivo e o que fazer. Nada muda de lugar; o texto à mão sai quando a guiada está disponível.
 - Igual: campos (nome, provedor), PIN para criar, padrão e remover, rotas de `/api/profiles`.
 
@@ -36,7 +37,7 @@ Cada linha diz o que muda; "igual" é o que não muda.
 ### Segredos
 
 - **"Onde cada chave vai":** site (aqui, **Cadastrar credencial de site**, preferindo senha de app, token ou chave de API); chave de App do GitHub (entra no cofre sozinha na criação, link para Apps); conta de Claude, Codex ou Antigravity (por login, link para Perfis de conta); token do bot do Telegram (guardado pelo Mestre na instalação); chave de API de provedor ([pendência](#o-que-pede-backend-novo)).
-- Os segredos do próprio Mestre (`guild_ca_key`, `telegram_bot_token`, `github_app_key`…) saem da lista de credenciais e vão para "Guardados pelo Mestre": nome legível, [impressão](../plataforma/cofre.md) e o nome técnico ao lado, sem edição. As credenciais de site são cartões (página, tipo, classes, domínios, dono do segundo fator, último uso, aviso de validade) com **Substituir** e **Apagar**, com PIN.
+- Os segredos do próprio Mestre (`guild_ca_key`, `telegram_bot_token`, `github_app_key`…) saem da lista de credenciais e vão para "Guardados pelo Mestre": nome legível, [impressão](../plataforma/cofre.md) e o nome técnico ao lado, sem edição. As credenciais de site são cartões (página, tipo, classes, domínios, quem responde ao segundo fator, último uso, aviso de validade) com **Substituir** e **Apagar**, com PIN.
 - O formulário mantém todos os campos de hoje; dono, validade, seletores e texto de sucesso ficam em "Mais opções". A chave de recuperação vira a seção "Cópia de segurança do cofre", com o mesmo aviso, PIN e `ShownOnce`.
 
 ### Classes
@@ -44,10 +45,9 @@ Cada linha diz o que muda; "igual" é o que não muda.
 - Cartões por escopo ("Valem em toda a Guilda", "Da campanha X", "Das mesas") em vez de uma tabela: nome, estado, selo do App e versão. "App novo · em criação" vira "O App desta classe ainda não está pronto. Sem ele, QA não consegue abrir PRs", com o link **Gerar o link em Apps do GitHub**.
 - As propostas ficam em cima, com a origem (do Grão-Mestre ou alterada fora do Mestre), "não testada" e, havendo problemas, a lista deles e o caminho ("peça ao Grão-Mestre ou veja o teto da campanha"), sem **Aprovar**. **Aprovar** continua levando o hash visto e pedindo PIN. A faixa de 90 Apps continua. Do M7 e do M8 entram nos cartões **Testar de novo** e as classes sugeridas.
 
-### Guilda e máquinas, Usuários
+### Guilda e Usuários
 
-- Guilda: pedidos para entrar primeiro (decisão pendente), depois um cartão por máquina com papel, estado, carga e prioridade; a ficha completa (motor, contas logadas, Operador do PC, transcrição, réplica) recolhida; **Passar a Cidadela** no cartão e as ações raras (excluir, tirar exclusão, prioridade, remover) em "Mais…", todas com PIN e com a recusa dita no botão. O fuso e o aviso do que chega no M7 ficam no fim.
-- Usuários: um cartão por pessoa com nível, estado, campanhas, GitHub e Telegram; **Gerenciar** abre no cartão três grupos (Códigos, Acesso, Posto de Senhor da Guilda), cada ação com a frase do efeito. O texto de cada nível fica numa linha recolhida.
+Fora desta unidade: o desenho é o da unidade 4I (a Guilda cresce), que segue o mesmo padrão e constrói as duas telas (convidar, entrar na Guilda, trocar a Cidadela e o posto de Senhor da Guilda). O índice de Configurações já as lista como **Guilda** e **Usuários**.
 
 ## Regras e consumo, auditoria e bases e fichas
 

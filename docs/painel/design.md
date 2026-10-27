@@ -39,7 +39,7 @@ Toda tela de Configurações segue a mesma ordem, de cima para baixo ([desenho d
 6. **Erro de leitura:** o que não carregou, o motivo no idioma do usuário, **Tentar de novo** e "Detalhes técnicos" com o código do servidor; a faixa de situação some, porque não se sabe o estado.
 7. **Ações:** alvo de 44 px; a que exige PIN abre o campo no lugar ([PIN](login.md#pin-em-ações-sensíveis)); a que o nível do usuário não alcança aparece desligada com "Exige o nível X; o seu é Y" ([recusa](#recusa-e-desfazer)); a perigosa (revogar tudo, remover) fica em seção própria no fim, nunca como botão principal; o que só se mostra uma vez usa `ShownOnce`.
 
-No celular a faixa e os cartões empilham em uma coluna, sem rolagem horizontal da página.
+Nenhum texto de tela cita marco ("M7"): o que ainda não existe diz "em breve", e o limite fica nos documentos. No celular a faixa e os cartões empilham em uma coluna, sem rolagem horizontal da página.
 
 ## Estados
 

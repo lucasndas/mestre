@@ -37,8 +37,8 @@ Cada tela segue o [padrão de tela de administração](design.md#tela-de-adminis
 | Tela | Para que serve (frase da tela) | Faixa de situação | Vazio, com saída |
 |---|---|---|---|
 | Decretos | "Ordens suas que valem acima das regras: liberar algo uma única vez, ou criar uma regra que vale até você cancelar." | "N decretos em vigor", e o que vence hoje; **Criar decreto** | "Para que serve um decreto?": o exemplo "pode rodar npm test sem pedir" e o passo de ler o "Entendi: …" antes de confirmar |
-| Delegações e regras temporárias | "Permissão para o Grão-Mestre ou o Mestre da mesa decidirem pedidos no seu lugar, por tempo limitado. Revogar corta na hora." | "N delegações ativas", a que vence antes | "Ninguém decide por você": delegar é um decreto, com link para Decretos |
-| Supervisão da cadeia | "Quando um agente pede permissão, o pedido passa por uma fila de quem aprova. Aqui você vê se a fila anda e pode segurar uma mesa até alguém olhar." | "N mesas com fila, M pausadas" e o pedido mais antigo | "A fila aparece com a primeira mesa", com **Falar com o Grão-Mestre** |
+| Delegações | "Permissão para o Grão-Mestre ou o Mestre da mesa decidirem pedidos no seu lugar, por tempo limitado. Revogar corta na hora." | "N delegações ativas", a que vence antes | "Ninguém decide por você": delegar é um decreto, com link para Decretos |
+| Supervisão da cadeia | "Quando um agente pede permissão, o pedido passa por uma fila de quem aprova. Aqui você vê se a fila anda. **Pausar autonomia** só tira do Mestre da mesa o poder de decidir sozinho: os pedidos sobem ao Grão-Mestre e o trabalho continua. Para parar a mesa de vez, use **Pausar mesa**, dentro dela." | "N mesas com fila, M pausadas" e o pedido mais antigo | "A fila aparece com a primeira mesa", com **Falar com o Grão-Mestre** |
 | Teto da campanha | "O máximo que qualquer classe da campanha pode ter de permissão e de custo. Só sobe por decreto." | "Teto em vigor" ou "A campanha não tem teto próprio" | sem arquivo: valem só as regras fixas; **Pedir um teto maior** abre o decreto |
 | Política de aprovação | "O arquivo que diz o que o Mestre aprova sozinho e o que sempre pede uma pessoa." | "Política válida", última gravação | sempre há arquivo; o editor ganha **Validar** antes de **Salvar** |
 | Instruções extras | "Recados seus para o Grão-Mestre e para os Mestres de mesa…" | "Sem instruções extras" | um exemplo de recado no campo |
@@ -51,7 +51,7 @@ Cada tela segue o [padrão de tela de administração](design.md#tela-de-adminis
 
 ## Provas
 
-Os critérios são os da [administração](administracao.md#critérios-de-aceite): CA-ADM-04 (teto), CA-ADM-07 (política), CA-ADM-12 (delegações), CA-ADM-13 (supervisão da cadeia) e, para a apresentação, CA-ADM-17, 18, 24 e 25, provados em `internal/panel/rules_test.go` e `web/src/screens/admin/rules.test.tsx`. O smoke do navegador faz e revoga um decreto. Que os pedidos abertos sobem ao Grão-Mestre na pausa é do motor (CA-SUPCAD-02); a tela só pede a pausa e mostra o resultado.
+Os critérios são os da [administração](administracao.md#critérios-de-aceite): CA-ADM-04 (teto), CA-ADM-07 (política), CA-ADM-12 (delegações), CA-ADM-13 (supervisão da cadeia) e, para a apresentação, CA-ADM-17, 18, 23, 24 e 25, provados em `internal/panel/rules_test.go` e `web/src/screens/admin/rules.test.tsx`. O smoke do navegador faz e revoga um decreto. Que os pedidos abertos sobem ao Grão-Mestre na pausa é do motor (CA-SUPCAD-02); a tela só pede a pausa e mostra o resultado.
 
 ## Depende de
 
