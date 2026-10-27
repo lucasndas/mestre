@@ -45,7 +45,7 @@ test("the Owner creates the Guild, signs out and signs in again", async ({ page 
   // shows in Markdown in the side panel
   await page.getByRole("button", { name: "Abrir a conversa com o Grão-Mestre" }).click();
   const chat = page.getByRole("complementary", { name: "Conversa com o Grão-Mestre" });
-  await expect(chat.getByText("Grão-Mestre livre")).toBeVisible();
+  await expect(chat.getByText("Pronto para ouvir")).toBeVisible();
   await chat.getByLabel("Mensagem para o Grão-Mestre").fill("abra a mesa do login");
   await chat.getByRole("button", { name: "Enviar" }).click();
   await expect(chat.getByText("Mensagem enviada.")).toBeVisible();

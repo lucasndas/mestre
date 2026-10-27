@@ -11,12 +11,33 @@ export default {
   loadError: "Não consegui carregar a conversa.",
   noWorkspace:
     "Você não atua em nenhuma campanha ainda. Peça ao Senhor da Guilda para incluí-lo em uma.",
-  empty: "Nada por aqui ainda. Escreva abaixo para falar com o Grão-Mestre desta campanha.",
+  empty: {
+    title: "Peça o que você quer ver pronto",
+    text: "O Grão-Mestre desta campanha abre as mesas, chama os personagens e traz de volta só o que precisa da sua decisão. Diga o que você quer, do seu jeito.",
+  },
+  emptyReadOnly: {
+    title: "Você ainda não escreveu aqui",
+    text: "Esta é a sua conversa com o Grão-Mestre da campanha: as conversas dos outros usuários não aparecem aqui. Com o seu nível você lê as respostas que receber, mas não escreve.",
+  },
+  suggestion: {
+    one: { text: "Adicione login com Google ao app", hint: "Um pedido de funcionalidade" },
+    two: { text: "Corrija o erro de pagamento que aparece no carrinho", hint: "Um conserto" },
+    three: {
+      text: "Me explique o que está pronto e o que falta",
+      hint: "Só uma pergunta, sem abrir mesa",
+    },
+  },
+  working:
+    "O Grão-Mestre está trabalhando no seu pedido. Pode fechar a conversa: a resposta fica guardada e aparece aqui.",
+  last200: "Mostrando as últimas {{count}} mensagens.",
+  jump_one: "↓ {{count}} nova",
+  jump_other: "↓ {{count}} novas",
   privacy: "Só você vê esta conversa.",
+  privacyReader: "Só você vê esta conversa (a sua, não a dos outros).",
   log: "Mensagens da conversa",
   status: {
-    idle: "Grão-Mestre livre",
-    busy: "Grão-Mestre ocupado",
+    idle: "Pronto para ouvir",
+    busy: "Trabalhando no seu pedido",
     unavailable: "Grão-Mestre indisponível: {{reason}}",
     unavailableNoReason: "Grão-Mestre indisponível",
     none: "Esta campanha não tem Grão-Mestre agora.",
@@ -26,6 +47,13 @@ export default {
   progress: {
     tables: "Mesas",
     title: "Andamento da campanha",
+    tablesCount_one: "{{count}} mesa",
+    tablesCount_other: "{{count}} mesas",
+    needCount_one: "{{count}} precisa de você",
+    needCount_other: "{{count}} precisam de você",
+    noneNeed: "nada precisa de você",
+    needTitle: "Precisa de você: aprovações ou mesas paradas esperam a sua decisão.",
+    seeApprovals: "Ver aprovações",
     updated: "Atualizado às {{time}}",
   },
   entry: {
@@ -56,10 +84,11 @@ export default {
   composer: {
     label: "Mensagem para o Grão-Mestre",
     placeholder: "Escreva ao Grão-Mestre…",
-    hint: "Ctrl+Enter envia. Arraste arquivos para anexar.",
+    hint: "Ctrl+Enter envia.",
     send: "Enviar",
     sending: "Enviando…",
-    attach: "Anexar arquivo",
+    attach: "Anexar",
+    remove: "remover",
     drop: "Solte aqui para anexar",
     removeFile: "Remover {{name}}",
     quoting: "Respondendo a {{who}}: {{excerpt}}",

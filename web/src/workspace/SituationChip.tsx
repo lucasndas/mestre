@@ -21,13 +21,22 @@ const PATHS: Record<Icon, string> = {
   x: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM8.5 8.5l7 7M15.5 8.5l-7 7",
 };
 
-/** One word of the vocabulary of states, with an icon of its own shape and a tone: the color is never the only sign. */
-export function SituationChip({ s }: { s: Situation }) {
-  const { t } = useTranslation("workspace");
-  const say = t as unknown as (k: string) => string;
+/** A word with an icon of its own shape and a tone: the color is never the only sign. */
+export function ToneChip({
+  tone,
+  icon,
+  large = false,
+  children,
+}: {
+  tone: Tone;
+  icon: Icon;
+  /** The size of the text of a card of the board (17 px), where the small chip text does not go. */
+  large?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <span
-      className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 text-sm font-semibold ${TONE[s.tone]}`}
+      className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 ${large ? "text-base" : "text-sm"} font-semibold ${TONE[tone]}`}
     >
       <svg
         viewBox="0 0 24 24"
@@ -40,9 +49,20 @@ export function SituationChip({ s }: { s: Situation }) {
         strokeLinejoin="round"
         aria-hidden="true"
       >
-        <path d={PATHS[s.icon]} />
+        <path d={PATHS[icon]} />
       </svg>
-      {say(`life.situation.label.${s.label}`)}
+      {children}
     </span>
+  );
+}
+
+/** One word of the vocabulary of states for a table. */
+export function SituationChip({ s }: { s: Situation }) {
+  const { t } = useTranslation("workspace");
+  const say = t as unknown as (k: string) => string;
+  return (
+    <ToneChip tone={s.tone} icon={s.icon}>
+      {say(`life.situation.label.${s.label}`)}
+    </ToneChip>
   );
 }

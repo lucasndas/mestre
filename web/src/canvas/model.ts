@@ -37,6 +37,8 @@ export interface CharacterData extends Record<string, unknown> {
   workspace: string;
   table: string;
   character: CanvasCharacter;
+  /** What the card needs of the table around it: who waits for whom and the mission it is in. */
+  state: Pick<CanvasState, "characters" | "waits" | "quests">;
   canEdit: boolean;
 }
 export interface ScrollData extends Record<string, unknown> {
@@ -122,6 +124,7 @@ export function buildNodes(st: CanvasState): CanvasNode[] {
     add(keyOf("character", c.id), "character", "character", {
       kind: "character",
       character: c,
+      state: { characters: st.characters, waits: st.waits, quests: st.quests },
       ...base,
     });
   }

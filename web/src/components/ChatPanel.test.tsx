@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { ChatConversation, ChatEntry, ChatOverview } from "../gen/panel";
 import { emit, installFakeSocket, openSocket } from "../test-socket";
 import { fakeServer, fill, ME, renderApp } from "../test-utils";
+import { table, view } from "../workspace/test-fixtures";
 
 beforeEach(() => installFakeSocket());
 afterEach(() => vi.unstubAllGlobals());
@@ -97,7 +98,7 @@ test("the panel shows the state, the history of both channels and the Markdown o
   renderApp("/");
   const panel = await openPanel(user);
   online();
-  expect(await within(panel).findByText("Grão-Mestre ocupado")).toBeTruthy();
+  expect(await within(panel).findByText("Trabalhando no seu pedido")).toBeTruthy();
   expect(within(panel).getByText("Na fila: 2")).toBeTruthy();
   // the icons of the channel are the text a screen reader gets
   expect(within(panel).getAllByRole("img", { name: "pelo Telegram" })).toHaveLength(2);
@@ -154,7 +155,7 @@ test("a message is sent with its files, the field is cleared and the conversatio
     "abra a mesa",
   );
   const pdf = new File(["%PDF-1.4"], "plano.pdf", { type: "application/pdf" });
-  await user.upload(within(panel).getByLabelText("Anexar arquivo"), pdf);
+  await user.upload(within(panel).getByLabelText("Anexar"), pdf);
   expect(within(panel).getByText(/plano\.pdf · 8 B/)).toBeTruthy();
   await user.click(within(panel).getByRole("button", { name: "Enviar" }));
   expect(await within(panel).findByText("Mensagem enviada.")).toBeTruthy();
@@ -178,9 +179,10 @@ test("a file over the limit is refused before sending, with the limit", async ()
   const panel = await openPanel(user);
   online();
   await within(panel).findByLabelText("Mensagem para o Grão-Mestre");
-  expect(within(panel).getByText(/Cada arquivo, até 10 B; no máximo 5 por mensagem/)).toBeTruthy();
+  // the limit is said when it is passed, not before
+  expect(within(panel).queryByText(/Cada arquivo, até/)).toBeNull();
   await user.upload(
-    within(panel).getByLabelText("Anexar arquivo"),
+    within(panel).getByLabelText("Anexar"),
     new File(["x".repeat(11)], "grande.bin"),
   );
   expect((await within(panel).findByRole("alert")).textContent).toBe(
@@ -413,14 +415,14 @@ test("the progress is one card at the top, updated in place", async () => {
   renderApp("/");
   const panel = await openPanel(user);
   const sock = online();
-  const card = await within(panel).findByRole("region", { name: "Andamento da campanha" });
+  const card = await within(panel).findByRole("group", { name: "Andamento da campanha" });
   expect(card.textContent).toContain("2 mesas, 1 trabalhando");
   expect(within(card).getByText("Mesa 42: aguardando você")).toBeTruthy();
   c = conv({ progress: { lines: ["2 mesas, 2 trabalhando"], updated_at: "2026-10-26T17:00:00Z" } });
   act(() => emit(sock, "chat:u1", "changed", { workspace: "loja" }));
   await waitFor(() => expect(within(panel).getByText("2 mesas, 2 trabalhando")).toBeTruthy());
   expect(within(panel).queryByText("2 mesas, 1 trabalhando")).toBeNull();
-  expect(within(panel).getAllByRole("region", { name: "Andamento da campanha" })).toHaveLength(1);
+  expect(within(panel).getAllByRole("group", { name: "Andamento da campanha" })).toHaveLength(1);
 });
 
 // The state of the Grão-Mestre follows the events, with no new read.
@@ -430,7 +432,7 @@ test("the state at the top follows the events of the channel", async () => {
   renderApp("/");
   const panel = await openPanel(user);
   const sock = online();
-  expect(await within(panel).findByText("Grão-Mestre livre")).toBeTruthy();
+  expect(await within(panel).findByText("Pronto para ouvir")).toBeTruthy();
   const reads = calls.filter((x) => x.path === "/api/chat/loja").length;
   act(() =>
     emit(sock, "chat:u1", "status", {
@@ -520,9 +522,9 @@ test("the panel speaks English with the same screens", async () => {
     await screen.findByRole("button", { name: "Open the chat with the Grand Master" }),
   );
   const panel = await screen.findByRole("complementary", { name: "Chat with the Grand Master" });
-  expect(await within(panel).findByText("Grand Master is free")).toBeTruthy();
+  expect(await within(panel).findByText("Ready to listen")).toBeTruthy();
   expect(within(panel).getByRole("button", { name: "Send" })).toBeTruthy();
-  expect(within(panel).getByText(/Each file up to 20 MB; at most 5 per message/)).toBeTruthy();
+  expect(within(panel).getByText("Ask for what you want done")).toBeTruthy();
 });
 
 // The filter of secrets acted on the server: the message went (as a notice or without the piece) and
@@ -546,4 +548,173 @@ test("when the filter held the message the user is told to change the secret", a
   );
   await user.click(within(panel).getByRole("button", { name: "Enviar" }));
   expect((await within(panel).findByRole("alert")).textContent).toMatch(/troque essa senha/);
+});
+
+// The design of the conversation (docs/painel/conversa-e-aprovacoes.md#desenho-da-conversa-m6-unidade-4f).
+
+// CA-CONV-14: the first message: what to ask, in words, with three requests that only fill the field.
+test("an empty conversation says what to ask and three requests fill the field without sending", async () => {
+  const { calls } = fakeServer(base());
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/");
+  const panel = await openPanel(user);
+  online();
+  expect(await within(panel).findByText("Peça o que você quer ver pronto")).toBeTruthy();
+  const picks = within(panel).getAllByRole("button", {
+    name: /Adicione login com Google|Corrija o erro|Me explique/,
+  });
+  expect(picks).toHaveLength(3);
+  await user.click(picks[0] as HTMLElement);
+  const field = within(panel).getByLabelText("Mensagem para o Grão-Mestre") as HTMLTextAreaElement;
+  expect(field.value).toBe("Adicione login com Google ao app");
+  expect(calls.some((c) => c.method === "POST")).toBe(false);
+});
+
+// CA-CONV-15: the Grão-Mestre is working: the state, the queue and the sentence that the answer is kept.
+test("while the Grão-Mestre works the state, the queue and the kept-answer sentence show, and go with the answer", async () => {
+  let c = conv({
+    status: { state: "busy", ahead: 1, locked: false },
+    entries: [entry({ id: "in-1", text: "abra a mesa" })],
+  });
+  fakeServer({ ...base(c), "GET /api/chat/loja": () => ({ body: c }) });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/");
+  const panel = await openPanel(user);
+  const sock = online();
+  expect(await within(panel).findByText("Trabalhando no seu pedido")).toBeTruthy();
+  expect(within(panel).getByText("Na fila: 1")).toBeTruthy();
+  expect(within(panel).getByText(/Pode fechar a conversa: a resposta fica guardada/)).toBeTruthy();
+  c = conv({
+    status: { state: "idle", ahead: 0, locked: false },
+    entries: [
+      entry({ id: "in-1", text: "abra a mesa" }),
+      entry({ id: "out-2", from: "grand_master", text: "aberta" }),
+    ],
+  });
+  act(() => emit(sock, "chat:u1", "changed", { workspace: "loja" }));
+  await within(panel).findByText("aberta");
+  expect(within(panel).queryByText(/Pode fechar a conversa/)).toBeNull();
+});
+
+// CA-CONV-16: the one progress card: closed in a line, open with the tables and their situation; a reader
+// who cannot write gets his own conversation, empty, and the field off with his level.
+test("the progress card is closed in one line and opens to the tables with their situation; a reader sees his own conversation", async () => {
+  const admin = {
+    ...ANA,
+    user: { ...ANA.user, level: "administrator", level_name: "Administrador" },
+    capabilities: ["talk_to_grand_master", "status", "decide_approvals"],
+  };
+  const progress = { lines: ["2 mesas abertas"], updated_at: "2026-10-26T15:00:00Z" };
+  fakeServer({
+    ...base(conv({ progress })),
+    "GET /api/me": () => ({ body: admin }),
+    "GET /api/workspaces/loja/view": () => ({
+      body: view([
+        table({ id: "42-login", epic_title: "Login com Google" }),
+        table({
+          id: "43-carrinho",
+          epic_title: "Carrinho",
+          waits: [{ kind: "approval", reason: "pr", since: "2026-10-26T14:00:00Z" } as never],
+        }),
+      ]),
+    }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/");
+  const panel = await openPanel(user);
+  online();
+  const card = await within(panel).findByRole("group", { name: "Andamento da campanha" });
+  expect((card as HTMLDetailsElement).open).toBe(false);
+  await waitFor(() => expect(card.textContent).toContain("2 mesas"));
+  await user.click(card.querySelector("summary") as HTMLElement);
+  expect((card as HTMLDetailsElement).open).toBe(true);
+  expect(within(card).getByRole("link", { name: "Login com Google" })).toBeTruthy();
+  expect(within(card).getByRole("link", { name: "Carrinho" })).toBeTruthy();
+  expect(card.textContent).toContain("Trabalhando");
+  expect(card.textContent).toContain("Espera a sua decisão");
+  expect(within(card).getByText(/Precisa de você/)).toBeTruthy();
+  expect(within(card).getByRole("link", { name: "Ver aprovações" })).toBeTruthy();
+});
+
+test("a reader who cannot write sees his own empty conversation, said not to be anyone else's, with the field off", async () => {
+  fakeServer({
+    ...base(conv({ can_talk: false })),
+    "GET /api/chat": () => ({
+      body: { ...overview(), workspaces: [{ slug: "loja", can_talk: false, unread: 0 }] },
+    }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/");
+  const panel = await openPanel(user);
+  online();
+  expect(await within(panel).findByText("Você ainda não escreveu aqui")).toBeTruthy();
+  expect(panel.textContent).toContain("as conversas dos outros usuários não aparecem aqui");
+  expect(panel.textContent).toContain("(a sua, não a dos outros)");
+  expect(within(panel).queryByRole("group", { name: "Andamento da campanha" })).toBeNull();
+  expect(
+    (within(panel).getByLabelText("Mensagem para o Grão-Mestre") as HTMLTextAreaElement).disabled,
+  ).toBe(true);
+});
+
+// CA-CONV-17: the filter of secrets: each answer says what happened and what to do; the field stays usable.
+test("a held and a stripped message each say what happened and what to do, and the field stays usable", async () => {
+  let secret: "held" | "removed" = "held";
+  fakeServer({
+    ...base(),
+    "POST /api/chat/loja/messages": () => ({
+      status: 201,
+      body: { id: "in-5", held: false, secret },
+    }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/");
+  const panel = await openPanel(user);
+  online();
+  const field = (await within(panel).findByLabelText(
+    "Mensagem para o Grão-Mestre",
+  )) as HTMLTextAreaElement;
+  await fill(user, field, "minha frase de senha");
+  await user.click(within(panel).getByRole("button", { name: "Enviar" }));
+  expect((await within(panel).findByRole("alert")).textContent).toMatch(
+    /não foi entregue.*troque essa senha/,
+  );
+  expect(field.disabled).toBe(false);
+  expect(field.value).toBe("");
+  secret = "removed";
+  await fill(user, field, "o token é ghp_x");
+  await user.click(within(panel).getByRole("button", { name: "Enviar" }));
+  await waitFor(() =>
+    expect(within(panel).getByRole("alert").textContent).toMatch(
+      /sem o trecho.*Troque esse segredo/,
+    ),
+  );
+});
+
+// CA-CONV-18: a long history: day separators, the "Novas" line and the window of the last 200; the field and
+// the buttons are the size of a finger.
+test("a long history has day separators, the Novas line and the note of the last 200; the buttons are 44 px", async () => {
+  const entries: ChatEntry[] = [];
+  for (let i = 0; i < 200; i++)
+    entries.push(
+      entry({
+        id: i % 2 ? `out-${i}` : `in-${i}`,
+        from: i % 2 ? "grand_master" : "user",
+        text: `mensagem ${i}`,
+        at: `2026-10-${i < 100 ? "25" : "26"}T15:00:00Z`,
+        unread: i >= 198,
+      }),
+    );
+  fakeServer(base(conv({ entries, unread: 2 }), 2));
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/");
+  const toggle = await screen.findByRole("button", { name: /Conversa com o Grão-Mestre, 2 novas/ });
+  await user.click(toggle);
+  const panel = await screen.findByRole("complementary", { name: "Conversa com o Grão-Mestre" });
+  expect(await within(panel).findByText("Mostrando as últimas 200 mensagens.")).toBeTruthy();
+  expect(await within(panel).findByText("Novas")).toBeTruthy();
+  expect(within(panel).getAllByText(/domingo|segunda/).length).toBeGreaterThanOrEqual(2);
+  expect(within(panel).getByRole("button", { name: "Enviar" }).className).toContain("min-h-11");
+  expect(within(panel).getByLabelText("Mensagem para o Grão-Mestre").className).toContain(
+    "min-h-20",
+  );
 });
