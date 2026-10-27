@@ -199,7 +199,9 @@ export function Shell() {
             >
               {t("top.skip")}
             </a>
-            <div className="md:col-span-full">
+            {/* placed by hand: the chat holds column 3 of both rows, and an auto-placed bar
+                that spans every column would drop below it */}
+            <div className="md:col-start-1 md:col-end-3 md:row-start-1">
               <TopBar chatOpen={chatOpen} onChat={() => setChatOpen((o) => !o)} />
               <ReconnectingBand state={state} />
               <TransferBanner />

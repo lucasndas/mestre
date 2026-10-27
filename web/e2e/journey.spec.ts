@@ -36,6 +36,14 @@ test("the Guildmaster walks the Home: first steps, tables, the request, the appr
   // the first request, in the words of the person; the Grão-Mestre of the double raises an approval
   await page.getByRole("button", { name: "Falar com o Grão-Mestre" }).click();
   const chat = page.getByRole("complementary", { name: "Conversa com o Grão-Mestre" });
+  await expect(chat).toBeVisible();
+  // the open conversation sits beside the page: at the top of it, the top bar is at the top too
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const bar = await page.getByRole("banner").boundingBox();
+  const side = await chat.boundingBox();
+  expect(bar?.y).toBe(0);
+  expect(side?.y).toBe(0);
+  expect((bar?.x ?? 0) + (bar?.width ?? 0)).toBeLessThanOrEqual((side?.x ?? 0) + 1);
   await chat
     .getByLabel("Mensagem para o Grão-Mestre")
     .fill("preciso de mais orçamento para o login");
