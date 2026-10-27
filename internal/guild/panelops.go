@@ -79,6 +79,11 @@ func (c *Citadel) PassTarget(ctx context.Context, machineID string, local []*net
 // Tower (the Owner, in the panel). guild.config carries it: sending it belongs
 // to the caller.
 func (c *Citadel) SetPriority(ctx context.Context, machineID string, priority int) error {
+	leave, ok := c.enter()
+	if !ok {
+		return ErrSuspended
+	}
+	defer leave()
 	if priority < MinPriority || priority > MaxPriority {
 		return fmt.Errorf("%w: %d", ErrBadPriority, priority)
 	}
@@ -104,6 +109,11 @@ func (c *Citadel) Timezone(ctx context.Context) (string, error) {
 // SetTimezone changes the time zone of the Guild (the Owner, in the panel). It
 // does not change with a switch of the Citadel; guild.config carries it.
 func (c *Citadel) SetTimezone(ctx context.Context, name string) error {
+	leave, ok := c.enter()
+	if !ok {
+		return ErrSuspended
+	}
+	defer leave()
 	if name == "" || strings.EqualFold(name, "local") {
 		return fmt.Errorf("%w: %q", ErrBadTimezone, name)
 	}

@@ -44,7 +44,7 @@ func (p CeilingPath) Read(context.Context) ([]byte, error) {
 
 // Write replaces the file whole: a temporary file renamed over it.
 func (p CeilingPath) Write(_ context.Context, data []byte) error {
-	return safefile.Write(string(p), data, safefile.Options{Mode: 0o644, Sync: true})
+	return safefile.Write(string(p), data, safefile.Options{Mode: safefile.RulesMode, Sync: true})
 }
 
 // CeilingRecord is the approved version of the ceiling of a workspace, as the

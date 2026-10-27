@@ -107,7 +107,7 @@ var errChangedOnDisk = errors.New("the file changed on disk since it was read")
 // unchangedSince stops the write when the file is not the version that was read, checked
 // right before the rename: an edit made by hand in between is never overwritten.
 func unchangedSince(read safefile.Info) safefile.Options {
-	return safefile.Options{Sync: true, Guard: func(cur safefile.Info) error {
+	return safefile.Options{Sync: true, Mode: safefile.RulesMode, Guard: func(cur safefile.Info) error {
 		if !cur.Same(read) {
 			return errChangedOnDisk
 		}
