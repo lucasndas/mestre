@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -102,7 +103,8 @@ func TestTheWizardMakesTheOwnerAndTheTowerSendsTheBrowserToTheCitadel(t *testing
 	}
 	for _, path := range []string{"/api/status", "/github/apps/novo/abc?origem=telegram", "/"} {
 		got := panelDo(t, b, "GET", path, nil, "")
-		if got.status != http.StatusTemporaryRedirect || !strings.HasPrefix(got.location, "https://mestre.local:") || !strings.HasSuffix(got.location, path) || len(got.body) != 0 {
+		// the address of the panel (mestre.local, which only the Citadel publishes) and the same path
+		if want := "https://mestre.local:" + strconv.Itoa(b.cfg.EnginePort) + path; got.status != http.StatusTemporaryRedirect || got.location != want || len(got.body) != 0 {
 			t.Fatalf("GET %s on the Tower = %d %q body %q", path, got.status, got.location, got.body)
 		}
 	}
@@ -143,7 +145,7 @@ func TestTheWizardMakesTheOwnerAndTheTowerSendsTheBrowserToTheCitadel(t *testing
 		return ok && st.Role == app.RoleTower && st.Connected && st.Epoch == 2
 	})
 	got = panelDo(t, a, "GET", "/api/status?x=1", nil, "")
-	if got.status != http.StatusTemporaryRedirect || !strings.HasSuffix(got.location, "/api/status?x=1") || len(got.body) != 0 {
+	if want := "https://mestre.local:" + strconv.Itoa(a.cfg.EnginePort) + "/api/status?x=1"; got.status != http.StatusTemporaryRedirect || got.location != want || len(got.body) != 0 {
 		t.Fatalf("the old Citadel = %d %q %q", got.status, got.location, got.body)
 	}
 	// the new Citadel serves what the old one made: the Owner, with no wizard
