@@ -345,6 +345,7 @@ func New(cfg Config, paths Paths, deps Deps) (*Engine, error) {
 	if deps.RenewEvery <= 0 {
 		deps.RenewEvery = renewCheck
 	}
+	lockRulesFromAgents(cfg.Instance)
 	edits := classes.NewEditTracker()
 	deps.UseEdits(edits, nil)
 	e := &Engine{

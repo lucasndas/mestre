@@ -285,7 +285,7 @@ func (e *Engine) hostChain(o *OrchestrationOptions, people chainPeople, layout w
 			return sessionzero.CharacterTmp(agents, character), nil
 		}
 	}
-	o.ChainPolicy = policyFileFor(layout, people, e.log)
+	o.ChainPolicy = policyFileFor(layout, people, e.log, o.Guild)
 	if o.ChainAlerts == nil {
 		o.ChainAlerts = chainOwnerAlerts{people}
 	}
