@@ -675,6 +675,9 @@ test("the progress card is closed in one line and opens to the tables with their
 test("a reader who cannot write sees his own empty conversation, said not to be anyone else's, with the field off", async () => {
   fakeServer({
     ...base(conv({ can_talk: false })),
+    "GET /api/me": () => ({
+      body: { ...ANA, user: { ...ANA.user, level: "observer", level_name: "Observador" } },
+    }),
     "GET /api/chat": () => ({
       body: { ...overview(), workspaces: [{ slug: "loja", can_talk: false, unread: 0 }] },
     }),
@@ -690,6 +693,9 @@ test("a reader who cannot write sees his own empty conversation, said not to be 
   expect(
     (within(panel).getByLabelText("Mensagem para o Grão-Mestre") as HTMLTextAreaElement).disabled,
   ).toBe(true);
+  expect(panel.textContent).toContain(
+    "O seu nível (Observador) não permite falar com o Grão-Mestre. Você vê a conversa, mas não escreve.",
+  );
 });
 
 // CA-CONV-17: the filter of secrets: each answer says what happened and what to do; the field stays usable.
