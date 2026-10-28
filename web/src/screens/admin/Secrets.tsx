@@ -295,15 +295,6 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <>
-      <dt className="text-muted">{label}</dt>
-      <dd>{children}</dd>
-    </>
-  );
-}
-
 function DeleteSecret({ s, onDone }: { s: SecretRow; onDone: () => Promise<void> }) {
   const { t } = useTranslation("secrets");
   return (
