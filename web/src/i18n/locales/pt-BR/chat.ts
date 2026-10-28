@@ -43,6 +43,8 @@ export default {
     none: "Esta campanha não tem Grão-Mestre agora.",
     ahead: "Na fila: {{count}}",
     locked: "Sistema travado: o que você enviar fica guardado até destravar.",
+    lockedShort: "Sistema travado",
+    lockedHeld: "envio guardado",
   },
   progress: {
     tables: "Mesas",
@@ -67,6 +69,14 @@ export default {
     replyTo: "Responder a esta mensagem de {{who}}",
     waiting: "Na fila do Grão-Mestre",
     held: "Guardada até destravar",
+    heldText: "Mensagem com uma senha. Ela não ficou guardada.",
+    notDelivered: "Não entregue.",
+    notDeliveredWhy:
+      "Parecia uma senha. O Grão-Mestre recebeu só um aviso. Troque essa senha: ela já passou por aqui, e cadastre credenciais em",
+    secrets: "Segredos",
+    sentWithout: "Enviada sem o segredo.",
+    sentWithoutWhy:
+      "O trecho foi trocado por [segredo removido] e os anexos não foram. Troque o token.",
     newDivider: "Novas",
     quote: "Em resposta a {{who}}",
   },

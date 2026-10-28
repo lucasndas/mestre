@@ -18,7 +18,8 @@ export default {
     noCode: "Esperando a máquina mostrar o código dela. Não dá para aceitar antes disso.",
     cardTitle: "{{name}} quer entrar na Guilda",
     cardMeta: "pediu às {{when}}",
-    instruction: "Olhe a tela da máquina nova e digite o código de entrada que aparece nela.",
+    instructionBefore: "Olhe a tela da máquina nova e digite o",
+    instructionAfter: "que aparece nela.",
     placeholder: "000 000",
     moreHint:
       "Chegou mais de um pedido ao mesmo tempo? Recuse todos e peça para tentarem de novo: um pedido que você não esperava pode ser de outra pessoa na rede.",
