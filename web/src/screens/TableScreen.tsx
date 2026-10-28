@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { type CSSProperties, lazy, Suspense } from "react";
+import { type CSSProperties, lazy, Suspense, useEffect, useRef } from "react";
 import { Button as AriaButton, Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { useChatControl } from "../app/chatControl";
@@ -49,6 +49,25 @@ function TerminalTab({
   const { t } = useTranslation("canvas");
   const router = useRouter();
   const { data: state, error } = useQuery(canvasQuery(workspace, table));
+  const pane = useRef<HTMLDivElement>(null);
+  const ready = Boolean(state);
+  // on a phone the header of the table fills the screen: once the window of the terminal has its height it
+  // comes into view, with its Digitar
+  useEffect(() => {
+    const el = pane.current;
+    if (!ready || !el || !window.matchMedia?.("(max-width: 767px)").matches) return;
+    if (typeof ResizeObserver === "undefined") {
+      el.scrollIntoView?.({ block: "start" });
+      return;
+    }
+    const watch = new ResizeObserver((entries) => {
+      if ((entries[0]?.contentRect.height ?? 0) < 300) return;
+      el.scrollIntoView?.({ block: "start" });
+      watch.disconnect();
+    });
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [ready]);
   if (error) return <Alert>{t("notFound")}</Alert>;
   if (!state)
     return (
@@ -60,7 +79,11 @@ function TerminalTab({
   if (!chosen) return <p className="text-muted">{t("head.noTerminal")}</p>;
   return (
     // the header of the table is above the window: the window gives it that much of the height of the screen
-    <div className="flex flex-col gap-3" style={{ "--term-offset": "470px" } as CSSProperties}>
+    <div
+      ref={pane}
+      className="flex scroll-mt-16 flex-col gap-3"
+      style={{ "--term-offset": "470px" } as CSSProperties}
+    >
       {withTerminal.length > 1 ? (
         <div role="toolbar" aria-label={t("head.pick")} className="flex flex-wrap gap-2">
           {withTerminal.map((c) => (
