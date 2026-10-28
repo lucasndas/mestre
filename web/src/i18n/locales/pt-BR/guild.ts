@@ -4,6 +4,7 @@ export default {
     "Uma linha por máquina da Guilda, ao vivo. Só o Senhor da Guilda muda algo aqui, e cada mudança pede o seu PIN.",
   loading: "Carregando a Guilda…",
   loadWhat: "a Guilda",
+  loadWhy: "A Guilda não respondeu. Nada foi alterado.",
   more: "Mais…",
   epoch: "Época {{epoch}}",
   single: {

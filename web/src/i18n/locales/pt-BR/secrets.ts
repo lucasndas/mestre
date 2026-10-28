@@ -4,6 +4,7 @@ export default {
     "As senhas e chaves que o Mestre guarda no cofre. O valor nunca volta a aparecer, nem para o Senhor da Guilda: só dá para substituir ou apagar, com o seu PIN.",
   loading: "Carregando os segredos…",
   loadWhat: "o cofre",
+  loadWhy: "A Cidadela não abriu o cofre agora. Nenhum segredo foi mostrado nem alterado.",
   strip_one: "{{count}} credencial de site, {{expiring}} perto de vencer",
   strip_other: "{{count}} credenciais de site, {{expiring}} perto de vencer",
   stripNone: "Nenhum segredo seu no cofre ainda",

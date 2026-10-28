@@ -47,7 +47,12 @@ export function Invite() {
       <PageHeader title={t("create.pageTitle")} intro={t("create.pageIntro")} />
       <VocabLine terms={["Nível"]} />
       {error ? (
-        <LoadError what={t("loadWhat")} error={error} onRetry={() => void refetch()} />
+        <LoadError
+          what={t("loadWhat")}
+          why={t("loadWhy")}
+          error={error}
+          onRetry={() => void refetch()}
+        />
       ) : null}
       {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
       {data ? (

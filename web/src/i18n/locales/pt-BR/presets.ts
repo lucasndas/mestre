@@ -3,6 +3,7 @@ export default {
   intro:
     "As bases dizem qual programa cada terminal roda; as fichas descrevem cada personagem. Crie, edite, apague, exporte e importe em YAML ou JSON.",
   what: "as bases e fichas",
+  why: "Não deu para ler as bases e fichas. Nada foi alterado.",
   loading: "Carregando as bases e fichas…",
   editShort: "Editar",
   deleteShort: "Apagar",

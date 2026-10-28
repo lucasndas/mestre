@@ -90,6 +90,43 @@ test("a failed read shows what, why in the language, a retry and the raw answer 
   expect(retry).toHaveBeenCalledOnce();
 });
 
+// CA-ADM-18: a read that failed inside says what did not answer and what did not change; a code the
+// server knows keeps its own text
+test("a failed read says the reason of the screen for an internal error or no network, and the text of a known code otherwise", () => {
+  const why = "A supervisão não respondeu. Nada foi pausado.";
+  const { unmount } = show(
+    <LoadError
+      what="a cadeia"
+      why={why}
+      error={new ApiError(500, "internal", "boom")}
+      onRetry={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("alert").textContent).toContain(why);
+  expect(screen.getByRole("alert").textContent).not.toContain("Algo deu errado na Cidadela");
+  unmount();
+  const second = show(
+    <LoadError
+      what="a cadeia"
+      why={why}
+      error={new ApiError(0, "network", "")}
+      onRetry={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("alert").textContent).toContain(why);
+  second.unmount();
+  show(
+    <LoadError
+      what="a cadeia"
+      why={why}
+      error={new ApiError(503, "citadel_in_failover", "")}
+      onRetry={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("alert").textContent).not.toContain(why);
+  expect(screen.getByRole("alert").textContent).toContain("Nada foi alterado.");
+});
+
 // CA-ADM-25
 test("a button that needs a level is shown off with the level it needs and the user's own", () => {
   show(

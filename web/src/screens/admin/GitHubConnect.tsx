@@ -96,7 +96,12 @@ export function GitHubConnect() {
       ) : null}
       <div className="flex max-w-2xl flex-col gap-4">
         {error ? (
-          <LoadError what={t("loadWhat")} error={error} onRetry={() => void refetch()} />
+          <LoadError
+            what={t("loadWhat")}
+            why={t("loadWhy")}
+            error={error}
+            onRetry={() => void refetch()}
+          />
         ) : null}
         {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
         {failure ? <Alert>{errorText(te, failure)}</Alert> : null}

@@ -69,7 +69,12 @@ export function Secrets() {
       <div className="flex max-w-4xl flex-col gap-4">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
         {error ? (
-          <LoadError what={t("loadWhat")} error={error} onRetry={() => void refetch()} />
+          <LoadError
+            what={t("loadWhat")}
+            why={t("loadWhy")}
+            error={error}
+            onRetry={() => void refetch()}
+          />
         ) : null}
         {!data && !error ? <p className="text-muted">…</p> : null}
         {data && creating ? (

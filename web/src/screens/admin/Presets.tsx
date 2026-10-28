@@ -44,7 +44,9 @@ export function Presets() {
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
       <VocabLine terms={["Base", "Ficha"]} />
-      {error ? <LoadError what={t("what")} error={error} onRetry={() => void refetch()} /> : null}
+      {error ? (
+        <LoadError what={t("what")} why={t("why")} error={error} onRetry={() => void refetch()} />
+      ) : null}
       {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
       <div className="flex max-w-4xl flex-col gap-8">
         {data && !error ? (

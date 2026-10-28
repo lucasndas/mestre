@@ -73,7 +73,12 @@ export function Decrees() {
       <div className="flex max-w-4xl flex-col gap-5">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
         {error ? (
-          <LoadError what={t("loadWhat.decrees")} error={error} onRetry={() => void refetch()} />
+          <LoadError
+            what={t("loadWhat.decrees")}
+            why={t("loadWhy.decrees")}
+            error={error}
+            onRetry={() => void refetch()}
+          />
         ) : null}
         {canPropose && creating ? (
           <DecreeForm

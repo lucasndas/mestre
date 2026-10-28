@@ -113,7 +113,12 @@ export function Audit() {
       </form>
       <div className="flex max-w-4xl flex-col gap-3">
         {q.error ? (
-          <LoadError what={t("loadWhat")} error={q.error} onRetry={() => void q.refetch()} />
+          <LoadError
+            what={t("loadWhat")}
+            why={t("loadWhy")}
+            error={q.error}
+            onRetry={() => void q.refetch()}
+          />
         ) : null}
         {q.isPending ? <p className="text-muted">{t("loading")}</p> : null}
         {q.data && entries.length === 0 ? (

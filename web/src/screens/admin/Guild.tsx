@@ -103,7 +103,12 @@ export function Guild() {
       <div className="flex max-w-4xl flex-col gap-6">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
         {error ? (
-          <LoadError what={t("loadWhat")} error={error} onRetry={() => void refetch()} />
+          <LoadError
+            what={t("loadWhat")}
+            why={t("loadWhy")}
+            error={error}
+            onRetry={() => void refetch()}
+          />
         ) : null}
         {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
         {data ? <HandoverTimeline machines={data.machines} /> : null}

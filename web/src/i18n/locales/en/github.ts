@@ -7,6 +7,7 @@ const github: Widen<typeof pt> = {
     "To act on GitHub as you (approve and decide on your behalf), the Mestre keeps a personal credential in the vault. The token goes straight from GitHub to the vault and never passes through this screen.",
   loading: "Loading…",
   loadWhat: "your GitHub connection",
+  loadWhy: "The Citadel did not answer. Nothing was connected or disconnected.",
   state: {
     none: "You have not connected your GitHub yet.",
     connected:

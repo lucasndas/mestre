@@ -24,7 +24,9 @@ export function Usage() {
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
       <VocabLine terms={["Campanha", "Companhia"]} />
-      {error ? <LoadError what={t("what")} error={error} onRetry={() => void refetch()} /> : null}
+      {error ? (
+        <LoadError what={t("what")} why={t("why")} error={error} onRetry={() => void refetch()} />
+      ) : null}
       <div className="flex max-w-4xl flex-col gap-8">
         {data && !error ? <Strip page={data} lang={lang} /> : null}
         <div className="max-w-xs">

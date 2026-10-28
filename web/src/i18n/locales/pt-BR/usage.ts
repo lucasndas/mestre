@@ -3,6 +3,7 @@ export default {
   intro:
     "Quanto custou e quanto tempo trabalharam os personagens, por dia, campanha, mesa, missão e conta, e quanto falta para cada limite.",
   what: "o consumo",
+  why: "O servidor não conseguiu somar o consumo.",
   loading: "Carregando o consumo…",
   strip: {
     used: "{{percent}}% usado",

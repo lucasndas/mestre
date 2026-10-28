@@ -15,6 +15,15 @@ export default {
     policy: "a política de aprovação",
     instructions: "as instruções extras",
   },
+  loadWhy: {
+    workspaces: "Não deu para ler as campanhas. Nada foi alterado.",
+    chain: "A supervisão não respondeu. Nada foi pausado.",
+    delegations: "Não deu para ler as delegações. Nada foi revogado.",
+    decrees: "O serviço de decretos não respondeu. Nada foi criado nem revogado.",
+    ceiling: "Não deu para ler o arquivo do teto.",
+    policy: "O arquivo da política não pôde ser lido com segurança.",
+    instructions: "Não deu para ler os arquivos de instruções.",
+  },
   workspace: "Campanha",
   cancel: "Cancelar",
   levels: {

@@ -17,6 +17,15 @@ const rules: Widen<typeof pt> = {
     policy: "the approval policy",
     instructions: "the extra instructions",
   },
+  loadWhy: {
+    workspaces: "Could not read the campaigns. Nothing was changed.",
+    chain: "The supervision did not answer. Nothing was paused.",
+    delegations: "Could not read the delegations. Nothing was revoked.",
+    decrees: "The decrees service did not answer. Nothing was created or revoked.",
+    ceiling: "Could not read the ceiling file.",
+    policy: "The policy file could not be read safely.",
+    instructions: "Could not read the instruction files.",
+  },
   workspace: "Campaign",
   cancel: "Cancel",
   levels: {

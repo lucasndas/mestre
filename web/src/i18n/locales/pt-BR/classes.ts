@@ -3,6 +3,7 @@ export default {
   intro:
     "As funções dos agentes (Dev, QA, Revisor): o que cada uma pode fazer e qual App do GitHub ela usa.",
   what: "as classes",
+  why: "O motor não leu a biblioteca de classes. Nada foi alterado.",
   loading: "Carregando as classes…",
   strip: {
     proposals: "{{count}} propostas esperando a sua aprovação",

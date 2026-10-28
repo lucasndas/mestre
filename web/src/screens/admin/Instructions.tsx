@@ -91,7 +91,12 @@ function InstructionsOf({ workspace, picker }: { workspace: string; picker: Reac
       {notice ? <Alert tone="ok">{notice}</Alert> : null}
       {saveError ? <Alert>{errorText(te, saveError)}</Alert> : null}
       {error ? (
-        <LoadError what={t("loadWhat.instructions")} error={error} onRetry={() => void refetch()} />
+        <LoadError
+          what={t("loadWhat.instructions")}
+          why={t("loadWhy.instructions")}
+          error={error}
+          onRetry={() => void refetch()}
+        />
       ) : null}
       {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
       {data

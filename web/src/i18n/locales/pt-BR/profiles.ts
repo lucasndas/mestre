@@ -3,6 +3,7 @@ export default {
   intro:
     "As contas de IA (Claude, Codex, Antigravity) que os agentes usam para trabalhar nesta máquina. Sem uma conta entrada, nenhum agente roda.",
   what: "os perfis de conta",
+  why: "O motor não respondeu. Nada foi alterado.",
   loading: "Carregando os perfis…",
   machineNote:
     "Esta lista é a da máquina onde o painel roda (a Cidadela). As contas das outras máquinas aparecem na ficha de cada uma, na Guilda; aqui entram em breve.",

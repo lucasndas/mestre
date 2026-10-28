@@ -50,7 +50,9 @@ export function Profiles() {
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
       <VocabLine terms={["Perfil de conta"]} />
-      {error ? <LoadError what={t("what")} error={error} onRetry={() => void refetch()} /> : null}
+      {error ? (
+        <LoadError what={t("what")} why={t("why")} error={error} onRetry={() => void refetch()} />
+      ) : null}
       {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
       {data && !error ? (
         <div className="flex max-w-4xl flex-col gap-6">

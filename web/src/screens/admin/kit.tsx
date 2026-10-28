@@ -175,15 +175,21 @@ export function EmptyState({
  */
 export function LoadError({
   what,
+  why,
   error,
   onRetry,
 }: {
   what: string;
+  /** What the screen says when the read failed inside (a 500 or no network): what did not answer and what did not change. */
+  why?: string;
   error: unknown;
   onRetry: () => void;
 }) {
   const { t } = useTranslation("common");
   const { t: te } = useTranslation("errors");
+  // an error of the engine itself or no network has no text of its own: the screen says what did not answer
+  const inside =
+    !(error instanceof ApiError) || error.code === "internal" || error.code === "network";
   const raw =
     error instanceof ApiError ? [error.code, error.message].filter(Boolean).join(": ") : "";
   // a screen above the level of the user is a refusal that says the level, not a read that failed
@@ -204,9 +210,7 @@ export function LoadError({
       className="flex max-w-4xl flex-col gap-3 rounded-field border border-danger/40 bg-danger-wash p-4 text-danger"
     >
       <p className="font-semibold">{t("admin.loadFailed", { what })}</p>
-      <p>
-        {errorText(te, error)} {t("admin.nothingChanged")}
-      </p>
+      <p>{inside && why ? why : `${errorText(te, error)} ${t("admin.nothingChanged")}`}</p>
       <div>
         <Button variant="secondary" onPress={onRetry}>
           {t("admin.retry")}

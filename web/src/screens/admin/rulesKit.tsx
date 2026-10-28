@@ -80,7 +80,12 @@ export function WorkspacePicker({
   const [picked, setPicked] = useState("");
   if (error)
     return (
-      <LoadError what={t("loadWhat.workspaces")} error={error} onRetry={() => void refetch()} />
+      <LoadError
+        what={t("loadWhat.workspaces")}
+        why={t("loadWhy.workspaces")}
+        error={error}
+        onRetry={() => void refetch()}
+      />
     );
   if (!data) return <p className="text-muted">{t("loading")}</p>;
   if (data.workspaces.length === 0)

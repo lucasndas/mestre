@@ -6,6 +6,7 @@ const apps: Widen<typeof pt> = {
   intro:
     "Mestre's robots on GitHub: every agent action shows under the name of one of them, and you can cut the access whenever you want.",
   what: "the GitHub Apps",
+  why: "GitHub did not answer Mestre. What was already created still stands.",
   loading: "Loading the Apps…",
   strip: {
     none: "No App created yet",

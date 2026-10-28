@@ -6,6 +6,7 @@ const classes: Widen<typeof pt> = {
   intro:
     "The roles of the agents (Dev, QA, Reviewer): what each one may do and which GitHub App it uses.",
   what: "the classes",
+  why: "The engine did not read the library of classes. Nothing was changed.",
   loading: "Loading the classes…",
   strip: {
     proposals: "{{count}} proposals waiting for your approval",

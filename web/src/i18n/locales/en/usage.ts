@@ -6,6 +6,7 @@ const usage: Widen<typeof pt> = {
   intro:
     "What the characters cost and how long they worked, by day, campaign, table, mission and account, and how much is left for each limit.",
   what: "the usage",
+  why: "The server could not add up the usage.",
   loading: "Loading the usage…",
   strip: {
     used: "{{percent}}% used",

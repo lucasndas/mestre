@@ -553,6 +553,24 @@ test.each(Object.entries(EMPTY))(
   },
 );
 
+// CA-ADM-18: each screen says what did not answer, in its own words
+test.each([
+  ["/cadeia", "GET /api/chain", "A supervisão não respondeu. Nada foi pausado."],
+  [
+    "/decretos",
+    "GET /api/decrees",
+    "O serviço de decretos não respondeu. Nada foi criado nem revogado.",
+  ],
+  ["/delegacoes", "GET /api/delegations", "Não deu para ler as delegações. Nada foi revogado."],
+])("%s with an internal error says the reason of its own", async (path, route, why) => {
+  fakeServer({
+    ...OWNER,
+    [route]: () => ({ status: 500, body: { error: { code: "internal", message: "boom" } } }),
+  });
+  renderApp(path);
+  expect((await screen.findByRole("alert")).textContent).toContain(why);
+});
+
 // CA-ADM-18
 test.each([
   ["/decretos", "GET /api/decrees"],
