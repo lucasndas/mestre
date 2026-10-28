@@ -393,7 +393,7 @@ test("Passar a Cidadela is off with the reason for an excluded, an outside and a
   const fit = await screen.findByRole("listitem", { name: "apta" });
   await user.click(within(fit).getByRole("button", { name: "Passar a Cidadela para apta" }));
   const summary = within(fit).getByRole("group", { name: "Passar a Cidadela para apta" });
-  expect(within(summary).getByText(/casa vira Torre/)).toBeTruthy();
+  expect(within(summary).getByText(/casa para de agir para fora e vira Torre/)).toBeTruthy();
   expect(within(summary).getByText(/Os 1 agentes de casa ficam interrompidos/)).toBeTruthy();
   expect(within(summary).getByText(/60 segundos/)).toBeTruthy();
   expect(within(fit).queryByLabelText("PIN")).toBeNull(); // the summary comes before the PIN

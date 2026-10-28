@@ -159,6 +159,10 @@ func runWith(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, o r
 		HostOrchestration: true, Integration: app.StandardIntegration{GitHubBase: "http://127.0.0.1:1", GitHubWeb: "http://127.0.0.1:1", TelegramBase: "http://127.0.0.1:1"},
 		PanelAssets: panel.Assets(), PanelTerminals: terms, PanelCanvas: newFakeCanvas(), PanelView: newFakeView(filepath.Join(dir, "surpresa")), PanelChat: chat, PanelWorkspaces: newFakeWorkspaces(),
 	}
+	if o.Rich {
+		// the Guild of the rich seed: a Tower that is connected and a request that can be accepted
+		deps.PanelGuild = newFakeGuild()
+	}
 	e, err := app.New(cfg, paths, deps)
 	if err != nil {
 		return err

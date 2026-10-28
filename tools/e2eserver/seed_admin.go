@@ -13,9 +13,8 @@ import (
 
 // seedAdmin gives the screens of the administration the states a fresh Guild never has, for
 // who looks at them in a browser (the `-rich` flag): the Apps ready, installed, waiting for
-// their creation and with the link expired, two proposals of class waiting for the approval (one
-// with a problem), the second machine of the Guild online-less but active and a request to join
-// the Guild. It is off in the smoke and the journey tests, which count on the fresh Guild
+// their creation and with the link expired, and two proposals of class waiting for the approval (one
+// with a problem). The Guild of the screen (a Tower, a request to join) is guild.go. It is off in the smoke and the journey tests, which count on the fresh Guild
 // (one machine, no App).
 func seedAdmin(ctx context.Context, db *store.DB, now time.Time) error {
 	apps := &github.Registry{DB: db, Clock: clock.Real{}}
@@ -66,14 +65,5 @@ func seedAdmin(ctx context.Context, db *store.DB, now time.Time) error {
 		return fmt.Errorf("the proposal with a problem: %w", err)
 	}
 
-	// the second machine is part of the Guild now, with no signal, and another asks to join
-	if _, err := db.Writer().ExecContext(ctx, `UPDATE machines SET state = 'active' WHERE machine_id = 'e2e-torre'`); err != nil {
-		return fmt.Errorf("the second machine: %w", err)
-	}
-	if _, err := db.Writer().ExecContext(ctx, `INSERT INTO join_requests (join_id, state, remote_ip, name, request, csr_motor, csr_guard, commitment, nonce_c, fingerprint, code, created_at, expires_at)
-		VALUES ('e2e-join', 'pending', '192.168.1.60', 'pc-da-sala', '{}', X'00', X'00', X'00', X'00', zeroblob(32), '482917', ?, ?)`,
-		now.UnixMilli(), now.Add(30*time.Minute).UnixMilli()); err != nil {
-		return fmt.Errorf("the request to join: %w", err)
-	}
 	return nil
 }

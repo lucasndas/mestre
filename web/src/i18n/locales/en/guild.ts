@@ -73,12 +73,13 @@ export default {
   },
   pass: {
     title: "Pass the Citadel to {{name}}",
-    becomesTower: "{{from}} becomes a Tower.",
+    becomesTower: "{{from}} stops acting outward and becomes a Tower.",
     waits:
-      "{{name}} waits 60 seconds before talking to GitHub and Telegram; whatever arrives in that time is queued.",
-    panel: "The panel moves to the other machine and reconnects by itself.",
+      "{{name}} waits 60 seconds for safety before talking to GitHub and Telegram. Whatever arrives in that time is queued and goes out later.",
+    panel:
+      "The panel moves to the other machine: its address now points to the new Citadel. This page reconnects by itself.",
     agents: "The {{count}} agents of {{from}} are interrupted, and the new Citadel resumes them.",
-    noUndo: "There is no undo: to go back, it is another switch.",
+    noUndo: "There is no “undo”: to go back, it is another identical switch.",
     cancel: "Not now",
   },
   timeline: {
