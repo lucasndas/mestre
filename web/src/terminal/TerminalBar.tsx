@@ -230,7 +230,7 @@ export function TerminalBar(p: BarProps) {
     <div
       role="toolbar"
       aria-label={t("bar.actions")}
-      className="relative flex min-h-[52px] flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-term-line bg-term-chrome px-2.5 py-1.5 text-term-fg"
+      className="relative flex min-h-[52px] shrink-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-term-line bg-term-chrome px-2.5 py-1.5 text-term-fg"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
         <div className="flex min-w-0 items-center gap-2.5">
