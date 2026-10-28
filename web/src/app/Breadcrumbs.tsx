@@ -28,13 +28,13 @@ function Trail({ items }: { items: ReactNode[] }) {
           // the trail is rebuilt whole from the address, in a fixed order
           // biome-ignore lint/suspicious/noArrayIndexKey: no item has an id of its own
           <li key={i} className="flex items-center gap-1">
-            {/* the mark leads the item, so a line never ends on a lone mark */}
-            {i > 0 ? (
+            {it}
+            {/* the mark follows the item it separates, so a line never begins with it */}
+            {i < items.length - 1 ? (
               <span aria-hidden="true" className="text-muted">
                 ›
               </span>
             ) : null}
-            {it}
           </li>
         ))}
       </ol>

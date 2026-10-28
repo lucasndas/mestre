@@ -7,6 +7,7 @@ export default {
     create: "Crie a primeira para poder falar com o Grão-Mestre.",
     ask: "Peça ao Senhor da Guilda para dar acesso a uma campanha.",
   },
+  more: "Mais",
   open: "Abrir",
   openNamed: "Abrir a campanha {{slug}}",
   openWaiting: "Disponível quando a preparação terminar (agora: {{stage}}).",

@@ -326,6 +326,8 @@ test("a stuck table and one without delivery are in Precisa de você, even for a
   expect(need.textContent).toContain("Mesa B");
   expect(need.textContent).not.toContain("Mesa C");
   expect(need.textContent).toContain("Travada");
+  // each row says why, in the words of the campaign
+  expect(need.textContent).toContain("nada foi entregue há 4 h");
   expect(need.textContent).not.toContain("Decidir");
 });
 

@@ -18,7 +18,7 @@ Dar, numa tela só, o estado de todas as mesas de uma campanha e o caminho para 
 
 ### Layout
 
-- Canvas do mesmo tipo do [canvas da mesa](canvas.md) (React Flow), só que com elementos da campanha, abrindo num zoom em que o texto é legível (17 px ou mais, como no [canvas](canvas.md#canvas-infinito)); no celular, em vez do canvas, cartões em lista, o do Grão-Mestre primeiro.
+- Canvas do mesmo tipo do [canvas da mesa](canvas.md) (React Flow), só que com elementos da campanha, abrindo num zoom em que o texto é legível (17 px ou mais, como no [canvas](canvas.md#canvas-infinito)), com o Grão-Mestre e a primeira fileira de mesas à vista (o zoom inicial não passa de 60% para caber todas: o resto se alcança arrastando ou pela Lista); no celular, em vez do canvas, cartões em lista, o do Grão-Mestre primeiro.
 - **Grão-Mestre no alto**, como personagem com terminal ao vivo (mesmas regras de leitura e digitação do [canvas](canvas.md#digitar-no-terminal)).
 - **Cada mesa é um bloco**, com o botão **Abrir mesa**, ligado ao Grão-Mestre por uma linha. Posição inicial automática (as mesas em fileira abaixo do Grão-Mestre, quebrando linha); o usuário pode arrastar, e a posição fica salva.
 - Não há outros elementos: pergaminhos existem só dentro das mesas ([pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md)).

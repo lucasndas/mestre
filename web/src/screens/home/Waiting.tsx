@@ -8,6 +8,7 @@ import { useLiveEvents } from "../../lib/live";
 import { useFormatTime } from "../../lib/time";
 import { SituationChip } from "../../workspace/SituationChip";
 import { situationOf } from "../../workspace/situation";
+import { useSituationLine } from "../../workspace/useSituationLine";
 import { Badge } from "../admin/kit";
 import type { HomeTable } from "./reads";
 
@@ -21,6 +22,7 @@ export function Waiting({ tables }: { tables: HomeTable[] }) {
   const { t, i18n } = useTranslation("home");
   const ta = useDynamicT("approvals");
   const requestTitle = useRequestTitle();
+  const line = useSituationLine();
   const fmt = useFormatTime();
   const can = useCan("decide_approvals");
   const qc = useQueryClient();
@@ -54,7 +56,9 @@ export function Waiting({ tables }: { tables: HomeTable[] }) {
             >
               <span className="min-w-0">
                 <strong>{it.block.epic_title || it.block.id}</strong>
-                <span className="block text-sm text-muted">{it.workspace}</span>
+                <span className="block text-sm text-muted">
+                  {it.workspace} · {line(it.block, s)}
+                </span>
               </span>
               <SituationChip s={s} />
             </Link>
@@ -63,9 +67,10 @@ export function Waiting({ tables }: { tables: HomeTable[] }) {
         {(can ? pending : []).map((r) => {
           // the words of the catalog, as on the card of the central; the `about` only for a type it lacks
           const known = i18n.exists(`approvals:readable.${r.type}.title`);
+          const titled = tables.find((x) => x.workspace === r.workspace && x.block.id === r.table);
           const where = [
             r.workspace,
-            r.table,
+            titled?.block.epic_title || r.table,
             ta(`riskBand.${r.risk}`, { defaultValue: r.risk }).toLowerCase(),
             r.deadline ? ta("card.timeLeft", { time: fmt(r.deadline) }) : "",
           ]

@@ -168,6 +168,10 @@ test("pausing and resuming ask the server and show the refusal", async () => {
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/workspaces");
+  // the card shows Abrir and Conversar; Pausar and the verification commands wait behind "Mais"
+  expect(await screen.findByRole("button", { name: "Mais" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Pausar campanha" })).toBeNull();
+  await user.click(await screen.findByRole("button", { name: "Mais" }));
   await user.click(await screen.findByRole("button", { name: "Pausar campanha" }));
   expect((await screen.findByRole("alert")).textContent).toBe(
     "O estado da campanha não permite isso agora.",
@@ -239,6 +243,7 @@ test("an Administrator edits and confirms the verification commands, and an outs
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/workspaces");
+  await user.click(await screen.findByRole("button", { name: "Mais" }));
   await user.click(await screen.findByRole("button", { name: "Comandos de verificação" }));
   expect(await screen.findByText("Nenhuma versão confirmada")).toBeTruthy();
   const editor = screen.getByLabelText("verificacao.yaml");
@@ -278,6 +283,7 @@ test("a verification file that the engine refuses is not confirmed and says why"
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/workspaces");
+  await user.click(await screen.findByRole("button", { name: "Mais" }));
   await user.click(await screen.findByRole("button", { name: "Comandos de verificação" }));
   expect(await screen.findByText(/O arquivo foi mudado fora do painel/)).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Confirmar estes comandos" }));
@@ -299,6 +305,7 @@ test("an Approver reads the verification commands but cannot confirm them", asyn
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/workspaces");
+  await user.click(await screen.findByRole("button", { name: "Mais" }));
   await user.click(await screen.findByRole("button", { name: "Comandos de verificação" }));
   expect(await screen.findByText("Um Administrador confirma os comandos.")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Confirmar estes comandos" })).toBeNull();
