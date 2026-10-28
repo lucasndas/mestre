@@ -221,7 +221,7 @@ func TestAReplyAboutAMesaCarriesTheMesaInTheHeaderAndInTheOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "[Mestre · user · de Ana (Administrador) · via Telegram · mesa 42-checkout · " + item.ID + "]"; item.Header() != want {
+	if want := "[Mestre · user · de Ana (Administrador) · via Telegram · mesa 42-checkout · idioma pt-BR · " + item.ID + "]"; item.Header() != want {
 		t.Fatalf("header %q, want %q", item.Header(), want)
 	}
 	if item.Origin == nil || item.Origin.Table != "42-checkout" || item.Origin.Channel != inbox.ChannelTelegram {
@@ -437,5 +437,57 @@ func TestTheApprovalOfAMesaTheBlockNoticeTheQuotaNoticeAndTheProgressStartWithTh
 	}
 	if replies != 1 {
 		t.Errorf("%d replies to the stranger, want 1", replies)
+	}
+}
+
+// CA-IDIOMA-08 (the Telegram side; the panel side is in internal/panelchat)
+func TestAMessageToTheGrandMasterCarriesTheLanguageOfWhoWroteIt(t *testing.T) {
+	t.Parallel()
+	w := routingWorld(t)
+	chose, choseTG := w.user("Ana", users.Administrator, "loja")
+	if err := w.users.SetLanguage(w.ctx, chose.ID, "en"); err != nil {
+		t.Fatal(err)
+	}
+	_, hintEN := w.user("Bia", users.Administrator, "loja")
+	hintEN.LanguageCode = "en-US"
+	_, hintDE := w.user("Caio", users.Administrator, "loja")
+	hintDE.LanguageCode = "de"
+	_, none := w.user("Duda", users.Administrator, "loja")
+	choseTG.LanguageCode = "pt-BR" // the choice beats the hint
+	for _, tg := range []faketelegram.User{choseTG, hintEN, hintDE, none} {
+		w.say(tg, "oi")
+	}
+	w.drain()
+	got := w.delivered.all()
+	if len(got) != 4 {
+		t.Fatalf("delivered %d", len(got))
+	}
+	want := map[string]string{"Ana": "en", "Bia": "en", "Caio": "pt-BR", "Duda": "pt-BR"}
+	for _, d := range got {
+		n := telegram.NewItem(d, "gm")
+		if n.Origin.Language != want[d.User.Name] {
+			t.Errorf("%s: language %q, want %q", d.User.Name, n.Origin.Language, want[d.User.Name])
+		}
+	}
+	// the hint is kept with the link, and the choice stays where it was
+	bia, err := w.users.ByTelegram(w.ctx, hintEN.ID)
+	if err != nil || bia.TelegramLanguage != "en-US" || bia.Language != "" {
+		t.Fatalf("user %+v, %v", bia, err)
+	}
+	// the header the Grand Master reads says it
+	if _, err := w.db.Writer().ExecContext(w.ctx, `INSERT OR IGNORE INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+		VALUES ('loja', 'lucas/loja', 'lucas/loja', 'https://example.test/x.git', 'main', 'active', '', 1, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	item, err := (&inbox.Store{DB: w.db}).Insert(w.ctx, telegram.NewItem(got[1], "gm"), w.clk.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(item.Header(), " · idioma en · ") {
+		t.Fatalf("header %q", item.Header())
+	}
+	// the answer of a question carries it too
+	if o := telegram.AnswerItem(telegram.ChoiceQuestion{ID: 3, Question: "q"}, bia, "sim").Origin; o.Language != "en" {
+		t.Fatalf("the answer of a question: language %q", o.Language)
 	}
 }

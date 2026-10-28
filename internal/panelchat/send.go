@@ -356,7 +356,7 @@ func (d *draft) Send(ctx context.Context) (panel.ChatSent, error) {
 	}
 	n := inbox.NewItem{Workspace: d.in.Workspace, Target: d.gm.ID, Kind: inbox.KindUser, Sender: d.u.Name, Text: strings.Join(lines, "\n"), Attachments: paths,
 		Origin: &inbox.Origin{Channel: inbox.ChannelPanel, User: d.u.ID, UserName: d.u.Name, Level: characters.UserLevel(d.u.Level),
-			Conversation: d.in.Session, Message: d.in.ClientID, RepliedTo: d.in.Quote, Table: d.table},
+			Conversation: d.in.Session, Message: d.in.ClientID, RepliedTo: d.in.Quote, Table: d.table, Language: d.u.LanguageFor(d.in.Language)},
 		Refs: inbox.Refs{Key: "panel:" + d.u.ID + ":" + d.in.Workspace + ":" + d.in.ClientID}}
 	it, err := d.s.enqueue(ctx, n)
 	switch {

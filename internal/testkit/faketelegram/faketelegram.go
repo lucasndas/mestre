@@ -31,6 +31,8 @@ type User struct {
 	ID        int64
 	FirstName string
 	Username  string
+	// LanguageCode is the IETF tag the Telegram sends in `from` (empty: not sent).
+	LanguageCode string
 }
 
 // Chat is where a message is sent. A private chat has the user id.
@@ -144,6 +146,9 @@ func (s *Server) userSendsText(u User, chat Chat, text string, replyTo int64) (i
 			"from": map[string]any{"id": int64(1), "is_bot": true, "first_name": "Mestre"}, "text": "."}
 	}
 	from["id"], from["first_name"], from["username"] = u.ID, u.FirstName, u.Username
+	if u.LanguageCode != "" {
+		from["language_code"] = u.LanguageCode
+	}
 	ch["id"] = chat.ID
 	if chat.Type == "private" {
 		ch["first_name"], ch["username"] = u.FirstName, u.Username
@@ -501,6 +506,9 @@ func (s *Server) UserSendsSticker(u User) (int64, error) {
 	s.nextMsg++
 	msg["date"] = s.clk.Now().Unix()
 	from["id"], from["first_name"], from["username"] = u.ID, u.FirstName, u.Username
+	if u.LanguageCode != "" {
+		from["language_code"] = u.LanguageCode
+	}
 	ch["id"] = u.ID
 	s.push(upd)
 	return id, nil
@@ -545,6 +553,9 @@ func (s *Server) userSendsMediaCaption(u User, key string, media any, caption st
 	s.nextMsg++
 	msg["date"] = s.clk.Now().Unix()
 	from["id"], from["first_name"], from["username"] = u.ID, u.FirstName, u.Username
+	if u.LanguageCode != "" {
+		from["language_code"] = u.LanguageCode
+	}
 	ch["id"] = u.ID
 	s.push(upd)
 	return id, nil
@@ -569,6 +580,9 @@ func (s *Server) UserClicks(u User, messageID int64, data string) (callbackID st
 	callbackID = fmt.Sprintf("cb%d", id)
 	cq["id"], cq["data"] = callbackID, data
 	from["id"], from["first_name"], from["username"] = u.ID, u.FirstName, u.Username
+	if u.LanguageCode != "" {
+		from["language_code"] = u.LanguageCode
+	}
 	msg["message_id"] = messageID
 	ch["id"] = u.ID
 	s.push(upd)

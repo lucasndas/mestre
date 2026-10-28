@@ -125,6 +125,20 @@ func (m *Machines) Delivered(c characters.Character) []string {
 	return out
 }
 
+// Headers lists the headers of the items typed into the terminal of a character,
+// in the order of Delivered.
+func (m *Machines) Headers(c characters.Character) []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []string
+	for _, d := range m.typed {
+		if d.TerminalID == c.TerminalID {
+			out = append(out, d.Header)
+		}
+	}
+	return out
+}
+
 // StoppedIDs lists the characters the machines were told to end.
 func (m *Machines) StoppedIDs() []string {
 	m.mu.Lock()
