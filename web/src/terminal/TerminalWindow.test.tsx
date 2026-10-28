@@ -122,6 +122,11 @@ test("CA-TUI-01: the window is one dark piece, bar and status line in the chrome
   ])
     expect(within(bar).getByRole("button", { name }).textContent).toBe("");
   expect(section.querySelector("[data-renderer]")?.className).toContain("h-full");
+  // the mode is a block with its icon and in capitals (the words are the term, the capitals are a style)
+  const mode = within(section)
+    .getByRole("button", { name: /Ajuda sobre Leitura/ })
+    .closest(".uppercase");
+  expect(mode?.querySelector("svg")).not.toBeNull();
   const css = readFileSync("src/index.css", "utf8");
   for (const token of ["chrome", "chrome-2", "line", "dim"])
     expect(css).toContain(`--color-term-${token}:`);

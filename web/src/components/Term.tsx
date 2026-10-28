@@ -67,8 +67,9 @@ export function Term({
       >
         <Dialog aria-label={text.name} className="outline-none">
           <p>{text.help}</p>
-          <p className="mt-2 text-[0.7rem] tracking-wider text-muted uppercase">{t("help.real")}</p>
-          <p>{text.real}</p>
+          <p className="mt-2">
+            <strong>{t("help.real")}:</strong> {text.real}
+          </p>
         </Dialog>
       </Popover>
     </span>

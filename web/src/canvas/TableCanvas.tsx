@@ -5,7 +5,6 @@ import {
   applyNodeChanges,
   Background,
   ConnectionMode,
-  MiniMap,
   type NodeChange,
   type OnBeforeDelete,
   Panel,
@@ -26,6 +25,7 @@ import { ApiError } from "../lib/api";
 import { errorText } from "../lib/errors";
 import { socketFeed } from "../terminal/feed";
 import { tableTerminalPath } from "../terminal/TerminalPane";
+import { viewQuery } from "../workspace/queries";
 import { actions, canvasQuery, canvasTopic } from "./api";
 import { CharacterList, PlainWords } from "./BoardWords";
 import { CanvasEnvContext } from "./context";
@@ -84,6 +84,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
   const { data: state, error, isPending } = useQuery(canvasQuery(workspace, table));
   const feed = useMemo(() => (sock ? socketFeed(sock) : null), [sock]);
   const act = useMemo(() => actions(workspace, table), [workspace, table]);
+  const { data: view } = useQuery(viewQuery(workspace));
 
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [notice, setNotice] = useState("");
@@ -108,7 +109,12 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
       width: box?.width ?? 0,
       height: box?.height ?? 0,
     });
-    void flow.fitView({ ...view, minZoom: 1, maxZoom: 1, padding: 0.05 });
+    // the room of the controls (bottom-left) is left free so that they never hide the card
+    void flow.fitView({
+      ...view,
+      maxZoom: 1,
+      padding: { top: "16px", right: "16px", bottom: "124px", left: "16px" },
+    });
   }, [ready, state, nodes, flow]);
 
   // live: the snapshot opens the state, and each "changed" reads it again
@@ -322,7 +328,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
 
   return (
     <CanvasEnvContext.Provider value={env}>
-      <div className="relative flex w-full flex-col border border-line bg-paper md:h-[calc(100dvh-20rem)] md:min-h-[28rem] md:flex-row">
+      <div className="relative flex w-full flex-col border border-line bg-paper md:h-[calc(100dvh-19rem)] md:min-h-[28rem] md:flex-row">
         <section
           aria-label={t("region", { table })}
           className="hidden min-h-[18rem] min-w-0 flex-1 md:flex md:flex-col"
@@ -372,53 +378,12 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
               proOptions={{ hideAttribution: false }}
             >
               <Background gap={32} color="var(--color-line)" />
-              <ZoomControls />
-              <MiniMap
-                pannable
-                zoomable
-                ariaLabel={t("minimap")}
-                className="!m-3 !hidden !h-24 !w-36 md:!block"
+              <BoardControls
+                legend={legend}
+                toggleLegend={() => setLegend(!legend)}
+                side={side}
+                toggleSide={() => setSide(!side)}
               />
-              <Panel
-                position="top-left"
-                className="pointer-events-none flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-2 *:pointer-events-auto"
-              >
-                <Button
-                  variant="secondary"
-                  onPress={() => void flow.fitView({ padding: 0.12, minZoom: 0.05, maxZoom: 1 })}
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="18"
-                    height="18"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.75"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
-                  </svg>
-                  {t("fit")}
-                </Button>
-                <Button
-                  variant="secondary"
-                  onPress={() => setLegend(!legend)}
-                  aria-expanded={legend}
-                >
-                  {t("legend.open")}
-                </Button>
-                <Button
-                  variant="secondary"
-                  onPress={() => {
-                    setSide(!side);
-                  }}
-                  aria-expanded={side}
-                >
-                  {side ? t("toolbar.hideSide") : t("toolbar.showSide")}
-                </Button>
-              </Panel>
               {draft ? (
                 <Panel position="bottom-center">
                   <p
@@ -471,7 +436,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
             </Button>
           </div>
         </div>
-        <PlainWords state={state} />
+        <PlainWords state={state} block={view?.tables.find((b) => b.id === table)} />
         {side || draft ? (
           <SidePanel
             state={state}
@@ -518,47 +483,86 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
   );
 }
 
-/** Zoom with the number in view: smaller, the zoom now (a press goes back to 100%) and larger. */
-function ZoomControls() {
+const controlIcon = (d: string) => (
+  <svg
+    viewBox="0 0 24 24"
+    width="20"
+    height="20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d={d} />
+  </svg>
+);
+
+/**
+ * The controls of the board, at its bottom-left like the prototype: zoom smaller, the zoom now (a press
+ * goes back to 100%), larger and "Ajustar à tela"; below it, "Como ler o quadro" and the side panel.
+ */
+function BoardControls({
+  legend,
+  toggleLegend,
+  side,
+  toggleSide,
+}: {
+  legend: boolean;
+  toggleLegend: () => void;
+  side: boolean;
+  toggleSide: () => void;
+}) {
   const { t } = useTranslation("canvas");
   const flow = useReactFlow();
   const zoom = useStore((s) => s.transform[2]);
+  const box =
+    "flex items-stretch divide-x divide-line rounded-field border border-line bg-surface shadow-pop";
   const btn =
-    "inline-grid size-11 place-items-center rounded-field text-ink hover:bg-accent-wash data-pressed:bg-accent-wash";
-  const icon = (d: string) => (
-    <svg
-      viewBox="0 0 24 24"
-      width="20"
-      height="20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d={d} />
-    </svg>
-  );
+    "inline-flex min-h-11 items-center justify-center gap-2 px-3 text-ink first:rounded-l-field last:rounded-r-field hover:bg-accent-wash data-pressed:bg-accent-wash";
   return (
-    <Panel position="bottom-left">
-      <div
-        role="toolbar"
-        aria-label={t("controls")}
-        className="flex items-center rounded-field border border-line bg-surface shadow-pop"
-      >
-        <AriaButton className={btn} aria-label={t("zoomOut")} onPress={() => void flow.zoomOut()}>
-          {icon("M6 12h12")}
+    <Panel position="bottom-left" className="flex flex-col items-start gap-2">
+      <div role="toolbar" aria-label={t("controls")} className={box}>
+        <AriaButton
+          className={`${btn} !px-0 size-11`}
+          aria-label={t("zoomOut")}
+          onPress={() => void flow.zoomOut()}
+        >
+          {controlIcon("M6 12h12")}
         </AriaButton>
         <AriaButton
-          className="min-h-11 min-w-[4.5rem] rounded-field px-2 font-mono text-base hover:bg-accent-wash"
+          className={`${btn} min-w-[4.5rem] font-mono text-base`}
           aria-label={t("zoomReset")}
           onPress={() => void flow.zoomTo(1)}
         >
           {Math.round(zoom * 100)}%
         </AriaButton>
-        <AriaButton className={btn} aria-label={t("zoomIn")} onPress={() => void flow.zoomIn()}>
-          {icon("M12 6v12M6 12h12")}
+        <AriaButton
+          className={`${btn} !px-0 size-11`}
+          aria-label={t("zoomIn")}
+          onPress={() => void flow.zoomIn()}
+        >
+          {controlIcon("M12 6v12M6 12h12")}
+        </AriaButton>
+        <AriaButton
+          className={btn}
+          onPress={() => void flow.fitView({ padding: 0.12, minZoom: 0.05, maxZoom: 1 })}
+        >
+          {controlIcon("M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5")}
+          {t("fit")}
+        </AriaButton>
+      </div>
+      <div className={box}>
+        <AriaButton className={btn} onPress={toggleLegend} aria-expanded={legend}>
+          {controlIcon(
+            "M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
+          )}
+          {t("legend.open")}
+        </AriaButton>
+        <AriaButton className={btn} onPress={toggleSide} aria-expanded={side}>
+          {controlIcon("M4 5h16v14H4zM15 5v14")}
+          {side ? t("toolbar.hideSide") : t("toolbar.showSide")}
         </AriaButton>
       </div>
     </Panel>
