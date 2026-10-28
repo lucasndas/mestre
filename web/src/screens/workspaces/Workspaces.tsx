@@ -202,6 +202,7 @@ function Workspace({ w, tables }: { w: WorkspaceRow; tables: HomeTable[] }) {
   const canConfigure = useCan("configure_workspace") && w.can_act;
   const canPause = useCan("pause") && w.can_act;
   const [showVerification, setShowVerification] = useState(false);
+  const [more, setMore] = useState(false);
   const question = w.versioning_asked && w.versioning === "";
   return (
     <article className="rounded-field border border-line bg-surface p-5" aria-label={w.slug}>
@@ -249,8 +250,15 @@ function Workspace({ w, tables }: { w: WorkspaceRow; tables: HomeTable[] }) {
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Open w={w} />
         {w.state === "active" ? <Talk slug={w.slug} /> : null}
-        {w.state !== "preparing" && canPause ? <PauseButton w={w} /> : null}
         {w.state !== "preparing" ? (
+          <Button variant="quiet" aria-expanded={more} onPress={() => setMore((v) => !v)}>
+            {t("more")}
+          </Button>
+        ) : null}
+      </div>
+      {more ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {canPause ? <PauseButton w={w} /> : null}
           <Button
             variant="quiet"
             aria-expanded={showVerification}
@@ -258,8 +266,8 @@ function Workspace({ w, tables }: { w: WorkspaceRow; tables: HomeTable[] }) {
           >
             {t("verification.toggle")}
           </Button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       {showVerification ? (
         <div className="mt-4 border-t border-line pt-4">
           <h3 className="mb-2 text-lg">{t("verification.title")}</h3>

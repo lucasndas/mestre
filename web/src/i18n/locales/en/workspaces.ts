@@ -7,6 +7,7 @@ export default {
     create: "Create the first one to be able to talk to the Grand Master.",
     ask: "Ask the Guildmaster to give you access to a campaign.",
   },
+  more: "More",
   open: "Open",
   openNamed: "Open the campaign {{slug}}",
   openWaiting: "Available when the preparation ends (now: {{stage}}).",

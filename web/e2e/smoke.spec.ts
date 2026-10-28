@@ -324,6 +324,7 @@ test("the workspaces list shows a workspace and the Owner confirms its verificat
   const card = page.getByRole("article", { name: "e2e" });
   await expect(card.getByText("acme/e2e")).toBeVisible();
   await expect(card.getByText("Ativa", { exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "Mais" }).click();
   await card.getByRole("button", { name: "Comandos de verificação" }).click();
   await expect(card.getByText("Nenhuma versão confirmada")).toBeVisible();
   await card.getByRole("button", { name: "Confirmar estes comandos" }).click();
