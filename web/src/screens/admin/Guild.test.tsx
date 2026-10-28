@@ -105,6 +105,8 @@ test("with a Tower in the Guild the band is gone and the row shows the replica a
   expect(screen.queryByText("1 máquina, e é a Cidadela")).toBeNull();
   expect(screen.getByText(/2 máquinas; a Cidadela é casa/)).toBeTruthy();
   expect(within(row).getByText("Torre")).toBeTruthy();
+  // how the machine stands is a chip beside its role, not words in the line below
+  expect(within(row).getByText("Conectada")).toBeTruthy();
   expect(within(row).getByText(/em dia/)).toBeTruthy();
   expect(within(row).getByText("protocolo 1")).toBeTruthy();
   expect(within(row).getByText(/Disco livre: 50 GB/)).toBeTruthy();
@@ -215,6 +217,21 @@ const joinView = (o: Record<string, unknown> = {}) =>
   });
 const typeCode = async (user: ReturnType<typeof userEvent.setup>, code: string) =>
   fill(user, await screen.findByLabelText(/Código que a máquina nova/), code);
+
+// CA-CRESC-09: the request is the news of the screen, in the strip and in its own card
+test("a request to join is announced by the strip and the card says who, when and what to do", async () => {
+  fakeServer({ ...base, "GET /api/guild": () => ({ body: joinView() }) });
+  renderApp("/guilda");
+  const card = (
+    await screen.findByRole("heading", { name: "notebook quer entrar na Guilda" })
+  ).closest("li") as HTMLElement;
+  expect(screen.getAllByText("notebook quer entrar na Guilda").length).toBe(2);
+  expect(screen.getByText("Compare o código de entrada e decida.")).toBeTruthy();
+  expect(within(card).getByText(/Olhe a tela da máquina nova/)).toBeTruthy();
+  expect(within(card).getByPlaceholderText("000 000")).toBeTruthy();
+  expect(within(card).getByText(/Chegou mais de um pedido ao mesmo tempo/)).toBeTruthy();
+  expect(within(card).getByText(/No Telegram a pergunta é a mesma/)).toBeTruthy();
+});
 
 // CA-CRESC-09
 test("a request without a code (the machine did not reveal it yet) has no accept button and says it waits", async () => {

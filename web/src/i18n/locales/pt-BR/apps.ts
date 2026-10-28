@@ -43,6 +43,7 @@ export default {
       mestre: "App Mestre: abre os PRs dos agentes.",
     },
     descClass: "Dá à classe {{class}} uma identidade própria nos PRs.",
+    expiredChip: "link vencido",
     installedLabel: "Instalado em",
     notInstalledShort: "nenhuma campanha ainda",
   },

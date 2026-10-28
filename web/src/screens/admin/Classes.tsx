@@ -22,7 +22,7 @@ import { classesQuery, labelOr, type Say } from "./manage";
 /** The tone of the label of an App state ("em criação", "pronto", "com erro"). */
 export function appTone(state: string): "plain" | "ok" | "warn" | "danger" {
   if (state === "pronto") return "ok";
-  if (state === "com erro" || state === "link vencido") return "danger";
+  if (state === "com erro") return "danger";
   return "warn";
 }
 
@@ -152,7 +152,8 @@ function ProposalItem({ p, onApproved }: { p: ProposalRow; onApproved: (text: st
       </p>
       <p className="mt-1 text-sm text-muted">
         {p.workspace ? p.workspace : t("proposals.global")}
-        {p.table ? ` / ${p.table}` : ""} · {t("proposals.by", { name: p.by })} · {fmt(p.created_at)}
+        {p.table ? ` / ${p.table}` : ""} · {p.by ? `${t("proposals.by", { name: p.by })} · ` : ""}
+        {fmt(p.created_at)}
       </p>
       {blocked ? (
         <div className="mt-3 text-sm">

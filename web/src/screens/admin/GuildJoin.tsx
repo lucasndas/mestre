@@ -2,12 +2,12 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Checkbox } from "react-aria-components";
 import { useTranslation } from "react-i18next";
-import { useFormatDateTime } from "../../app/session";
 import { SensitiveButton } from "../../components/PinField";
 import { Term } from "../../components/Term";
 import { Alert, Field } from "../../components/ui";
 import type { GuildMachineRow, GuildPendingJoin } from "../../gen/panel";
 import { api } from "../../lib/api";
+import { useFormatTime } from "../../lib/time";
 import { Badge } from "./kit";
 
 const DIGITS = /\D/g;
@@ -68,11 +68,8 @@ export function PendingJoins({
   const { t } = useTranslation("guild");
   return (
     <section aria-label={t("pending.title")} className="flex flex-col gap-3">
-      <h2 className="text-xl">{t("pending.title")}</h2>
+      <h2 className="sr-only">{t("pending.title")}</h2>
       {joins.length > 1 ? <Alert>{t("pending.many", { count: joins.length })}</Alert> : null}
-      <p className="text-sm text-muted">
-        <Term name="Código de entrada" />: {t("pending.source")}
-      </p>
       <ul className="flex flex-col gap-3">
         {joins.map((j) => (
           <PendingJoin key={j.id} j={j} say={say} describeError={describeError} onDone={onDone} />
@@ -94,7 +91,7 @@ function PendingJoin({
   onDone: () => Promise<unknown>;
 }) {
   const { t } = useTranslation("guild");
-  const fmt = useFormatDateTime();
+  const fmtTime = useFormatTime();
   const [typed, setTyped] = useState("");
   const [excluded, setExcluded] = useState(false);
   const digits = typed.replace(DIGITS, "");
@@ -114,14 +111,17 @@ function PendingJoin({
   };
   return (
     <li className="flex flex-col gap-3 rounded-field border border-accent bg-accent-wash p-4">
-      <p className="font-semibold">
-        {j.name} <span className="text-sm font-normal">· {fmt(j.created_at)}</span>
-      </p>
+      <h3 className="text-xl">{t("pending.cardTitle", { name: j.name })}</h3>
+      <p className="text-sm text-muted">{t("pending.cardMeta", { when: fmtTime(j.created_at) })}</p>
       {j.code ? (
         <>
+          <p>
+            {t("pending.instruction")} <Term name="Código de entrada" />
+          </p>
           <Field
             label={t("pending.typeLabel", { name: j.name })}
             description={t("pending.typeHint")}
+            placeholder={t("pending.placeholder")}
             inputMode="numeric"
             autoComplete="off"
             value={typed}
@@ -167,6 +167,8 @@ function PendingJoin({
           {t("pending.refuse")}
         </SensitiveButton>
       </div>
+      <p className="rounded-field border border-line bg-surface p-3">{t("pending.moreHint")}</p>
+      <p className="text-sm text-muted">{t("pending.telegram", { name: j.name })}</p>
     </li>
   );
 }

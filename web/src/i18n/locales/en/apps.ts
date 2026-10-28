@@ -46,6 +46,7 @@ const apps: Widen<typeof pt> = {
       mestre: "Mestre App: opens the PRs of the agents.",
     },
     descClass: "Gives the class {{class}} an identity of its own on the PRs.",
+    expiredChip: "link expired",
     installedLabel: "Installed on",
     notInstalledShort: "no campaign yet",
   },

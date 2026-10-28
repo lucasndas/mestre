@@ -38,10 +38,18 @@ export interface FieldProps extends Omit<AriaTextFieldProps, "children"> {
   label: string;
   description?: string;
   error?: string;
+  placeholder?: string;
 }
 
 /** A labelled text field; the error shows under it, tied to it for screen readers. */
-export function Field({ label, description, error, className = "", ...props }: FieldProps) {
+export function Field({
+  label,
+  description,
+  error,
+  placeholder,
+  className = "",
+  ...props
+}: FieldProps) {
   return (
     <AriaTextField
       {...props}
@@ -49,7 +57,10 @@ export function Field({ label, description, error, className = "", ...props }: F
       className={`flex flex-col gap-1 ${className as string}`}
     >
       <Label className="text-[0.95em] font-semibold tracking-wide">{label}</Label>
-      <Input className="min-h-11 rounded-field border border-line bg-paper px-3 text-ink outline-none transition-shadow placeholder:text-muted focus:border-accent focus:ring-3 focus:ring-accent/25 invalid:border-danger" />
+      <Input
+        placeholder={placeholder}
+        className="min-h-11 rounded-field border border-line bg-paper px-3 text-ink outline-none transition-shadow placeholder:text-muted focus:border-accent focus:ring-3 focus:ring-accent/25 invalid:border-danger"
+      />
       {description ? (
         <Text slot="description" className="text-sm text-muted">
           {description}
