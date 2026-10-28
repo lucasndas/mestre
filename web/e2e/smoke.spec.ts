@@ -142,7 +142,7 @@ test("the Owner invites a person, who does the first access once with the code",
   await other.getByLabel("Repita a senha").fill("uma senha bem longa");
   await other.getByLabel("PIN (6 a 12 números)").fill("654321");
   await other.getByLabel("Repita o PIN").fill("654321");
-  await other.getByRole("button", { name: "Entrar" }).click();
+  await other.getByRole("button", { name: "Criar meu acesso" }).click();
   await expect(other.getByRole("alert")).toContainText("Esse código não vale mais");
   await again.close();
 });
