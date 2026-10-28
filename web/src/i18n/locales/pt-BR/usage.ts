@@ -14,7 +14,7 @@ export default {
     noLimitHint:
       "O gasto aparece abaixo; os limites mostram quanto falta quando o provedor informa o uso.",
   },
-  emptyTitle: "Nada gasto ainda",
+  emptyTitle: "Como o consumo começa a aparecer",
   emptyStep1: "Peça algo ao Grão-Mestre para uma mesa começar a trabalhar.",
   emptyStep2: "Volte aqui: o custo e o tempo de cada personagem entram por dia.",
   period: "Período",

@@ -99,7 +99,7 @@ test("the classes screen lists the classes, warns at 90 Apps and approves a prop
   const user = userEv();
   renderApp("/classes");
   expect(await screen.findByText(/90 de 100 Apps na conta/)).toBeTruthy();
-  expect(screen.getByText(/mestre-revisor · pronto/)).toBeTruthy();
+  expect(screen.getByText(/App mestre-revisor pronto/)).toBeTruthy();
   expect(screen.getAllByText("não testada").length).toBe(2);
   expect(screen.getByText("falta o prompt")).toBeTruthy();
   // a proposal with problems has no Approve button at all
@@ -477,7 +477,7 @@ test("Apps do GitHub with no App explains what an App is and the three steps", a
     }),
   });
   renderApp("/apps");
-  expect(await screen.findByRole("heading", { name: "O que é um App do GitHub" })).toBeTruthy();
+  expect(await screen.findByRole("heading", { name: "Nenhum App criado ainda" })).toBeTruthy();
   expect(statusText()).toContain("Nenhum App do GitHub ainda");
   expect(screen.getByText(/Abra o link no navegador em que você está logado/)).toBeTruthy();
   expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
@@ -502,7 +502,7 @@ test("Consumo de uso and Bases e fichas with no data explain the empty and say w
     "GET /api/presets": () => ({ body: { bases: [], sheets: [] } }),
   });
   const first = renderApp("/consumo");
-  expect((await screen.findAllByText("Nada gasto ainda")).length).toBeGreaterThan(1);
+  expect((await screen.findAllByText("Nada gasto ainda")).length).toBeGreaterThan(0);
   expect(statusText()).toContain("Nada gasto ainda");
   first.unmount();
   renderApp("/bases-e-fichas");
@@ -531,7 +531,7 @@ test("a read that fails shows what, why, Tentar de novo and the raw answer folde
   expect(screen.queryByText(/em vigor/)).toBeNull(); // no strip: the state is not known
   ok = true;
   await user.click(within(alert).getByRole("button", { name: "Tentar de novo" }));
-  expect(await screen.findByText(/mestre-revisor · pronto/)).toBeTruthy();
+  expect(await screen.findByText(/App mestre-revisor pronto/)).toBeTruthy();
   expect(screen.queryByRole("alert")).toBeNull();
 });
 

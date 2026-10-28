@@ -13,7 +13,16 @@ import type {
 } from "../../gen/panel";
 import { api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
-import { Badge, EmptyState, LevelGate, LoadError, PageHeader, StatusStrip, VocabLine } from "./kit";
+import {
+  Badge,
+  EmptyState,
+  LevelGate,
+  LoadError,
+  linkButton,
+  PageHeader,
+  StatusStrip,
+  VocabLine,
+} from "./kit";
 import { ConfirmButton, delegationsQuery, ProposalCard, useWords } from "./rulesKit";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -53,10 +62,20 @@ export function Delegations() {
         <StatusStrip
           tone={total > 0 ? "ok" : "neutral"}
           title={t("delegations.strip", { count: total })}
-          hint={soonest ? t("delegations.stripSoonest", { when: fmt(soonest) }) : undefined}
-        />
+          hint={
+            soonest
+              ? t("delegations.stripSoonest", { when: fmt(soonest) })
+              : total === 0
+                ? t("delegations.stripNone")
+                : undefined
+          }
+        >
+          <Link to="/decretos" className={linkButton}>
+            {t("delegations.toDecrees")}
+          </Link>
+        </StatusStrip>
       ) : null}
-      <div className="flex max-w-3xl flex-col gap-5">
+      <div className="flex max-w-4xl flex-col gap-5">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
         {error ? (
           <LoadError
@@ -78,14 +97,7 @@ export function Delegations() {
         ) : null}
         {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
         {data && (data.workspaces.length === 0 || total === 0) ? (
-          <EmptyState title={t("delegations.emptyTitle")} why={t("delegations.empty")}>
-            <Link
-              to="/decretos"
-              className="inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-2"
-            >
-              {t("delegations.toDecrees")}
-            </Link>
-          </EmptyState>
+          <EmptyState title={t("delegations.emptyTitle")} why={t("delegations.empty")} />
         ) : null}
         {data?.workspaces
           .filter((g) => g.delegations.length + g.subdelegations.length + g.rules.length > 0)
@@ -148,7 +160,7 @@ export function Delegations() {
         {data?.can_revoke_all ? (
           <section
             aria-labelledby="dl-emergency"
-            className="rounded-field border border-danger/40 bg-danger-wash p-4"
+            className="max-w-4xl rounded-field border border-line bg-surface p-4"
           >
             <h2 id="dl-emergency" className="mb-1 text-xl">
               {t("delegations.emergency")}

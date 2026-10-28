@@ -10,7 +10,7 @@ export default {
     proposalsHint: "Uma classe só entra em vigor depois que você aprova a proposta.",
     inForce: "{{count}} classes em vigor",
     inForceOne: "1 classe em vigor",
-    inForceApp: "Alguma classe espera o App do GitHub dela; veja abaixo o que fazer.",
+    inForceApp: "{{count}} sem App pronto: sem ele a classe não age no GitHub.",
     inForceHint: "Os agentes já podem assumir essas funções.",
     none: "Nenhuma classe ainda",
     noneHint: "Sem classe, o Grão-Mestre não tem função para dar aos agentes.",
@@ -46,6 +46,10 @@ export default {
     noApp: "sem App",
     appNotReady:
       "O App desta classe ainda não está pronto. Sem ele, a classe não consegue abrir PRs.",
+    appReady: "App {{name}} pronto",
+    appPending: "App em criação",
+    appState: { "em criação": "App em criação", "com erro": "App com erro" },
+    appliesTo: "Vale em: {{where}}",
     appLink: "Gerar o link em Apps do GitHub",
   },
   groups: {

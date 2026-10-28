@@ -77,7 +77,25 @@ test("with the Citadel alone the strip says one machine, and the card to add a s
     .getByText(/Instalar o Mestre na máquina nova/)
     .closest("li");
   expect(within(step as HTMLElement).getByText("em breve")).toBeTruthy();
+  // only the installer is coming soon; the other three steps are doable now
+  expect(within(card).getAllByText("em breve")).toHaveLength(1);
+  expect(within(card).getAllByRole("listitem")).toHaveLength(4);
   expect(document.body.textContent).not.toMatch(/\bM7\b/);
+});
+
+// CA-ADM-08
+test("the machine opens as one line and keeps the sheet of the machine folded", async () => {
+  fakeServer({
+    ...base,
+    "GET /api/guild": () => ({ body: view({ single: true, machines: [machine({})] }) }),
+  });
+  renderApp("/guilda");
+  const row = await screen.findByRole("listitem", { name: "casa" });
+  expect(row.textContent).toContain("você está aqui");
+  const details = row.querySelector("details") as HTMLDetailsElement;
+  expect(details.open).toBe(false);
+  expect(within(details).getByText("Detalhes da máquina")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Guilda", level: 1 })).toBeTruthy();
 });
 
 test("with a Tower in the Guild the band is gone and the row shows the replica and the load", async () => {

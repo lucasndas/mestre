@@ -5,7 +5,7 @@ export default {
   what: "os perfis de conta",
   loading: "Carregando os perfis…",
   machineNote:
-    "Esta lista é a da máquina {{machine}}, onde o painel roda. As contas das outras máquinas aparecem na ficha de cada uma, na Guilda; aqui entram em breve.",
+    "Esta lista é a da máquina onde o painel roda (a Cidadela). As contas das outras máquinas aparecem na ficha de cada uma, na Guilda; aqui entram em breve.",
   strip: {
     none: "Nenhuma conta de IA entrou ainda",
     noneHint: "Escolha um provedor abaixo para entrar na primeira conta.",
@@ -22,6 +22,11 @@ export default {
     pick: "Entrar com {{provider}}",
   },
   providers: { "claude-code": "Claude", codex: "Codex", antigravity: "Antigravity" },
+  providerHelp: {
+    "claude-code": "Claude Code, da Anthropic",
+    codex: "Codex, da OpenAI",
+    antigravity: "Antigravity, do Google",
+  },
   default: "padrão",
   badge: { ready: "pronto", missing: "falta um passo", unchecked: "login não conferido" },
   manual: {

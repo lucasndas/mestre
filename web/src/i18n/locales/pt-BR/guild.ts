@@ -1,5 +1,5 @@
 export default {
-  title: "Guilda e máquinas",
+  title: "Guilda",
   intro:
     "Uma linha por máquina da Guilda, ao vivo. Só o Senhor da Guilda muda algo aqui, e cada mudança pede o seu PIN.",
   loading: "Carregando a Guilda…",
@@ -44,8 +44,8 @@ export default {
     soon: "em breve",
     steps: {
       install: "Instalar o Mestre na máquina nova e pedir para entrar na Guilda.",
-      accept: "Aqui, digitar o código que a máquina nova mostra e aceitar com o seu PIN.",
-      conclude: "A máquina nova conclui a entrada sozinha e vira Torre.",
+      code: "A máquina nova mostra um código de 6 dígitos.",
+      accept: "Você compara os 6 dígitos aqui e aceita com o seu PIN.",
       check: "Conferir a Torre aqui e configurar as contas de IA dela.",
     },
     where: "Os pedidos de entrada aparecem no alto desta tela, sozinhos.",
@@ -135,7 +135,11 @@ export default {
   },
   load: "Carga",
   disk: "Disco livre",
-  running: "{{count}} agente(s) rodando",
+  running_zero: "nenhum agente rodando",
+  running_one: "1 agente rodando",
+  running_other: "{{count}} agentes rodando",
+  youAreHere: "você está aqui",
+  details: "Detalhes da máquina",
   agents: "Agentes",
   noAgents: "nenhum agente rodando",
   agentLink: "Abrir a mesa {{table}}",
@@ -180,6 +184,8 @@ export default {
     cancel: "Cancelar",
   },
   timezone: {
+    line: "Fuso da Guilda: {{zone}}",
+    change: "Mudar o fuso",
     title: "Fuso da Guilda",
     intro:
       "Vale para o backup diário, a virada do dia dos limites de uso, as validades dos decretos e os rituais sem fuso próprio. Não muda numa troca de Cidadela.",

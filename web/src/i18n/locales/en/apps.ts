@@ -18,8 +18,8 @@ const apps: Widen<typeof pt> = {
     action: "Generate the link of the App {{name}}",
   },
   empty: {
-    title: "What a GitHub App is",
-    why: "It is the identity Mestre acts with on GitHub. You create each App once, and Mestre keeps its key in the vault.",
+    title: "No App created yet",
+    why: "A GitHub App is the identity Mestre acts with on GitHub. You create each App once, and Mestre keeps its key in the vault.",
     step1: "Generate the creation link of the App (the PIN confirms).",
     step2: "Open the link in the browser where you are logged in to GitHub and confirm.",
     step3: "Install the App on the repositories of your campaigns.",

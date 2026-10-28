@@ -67,16 +67,17 @@ export function GitHubApps() {
           {owner && !data.creation ? (
             <p className="text-sm text-muted">{t("unavailable")}</p>
           ) : null}
-          <Count count={data.count} />
           {data.apps.length === 0 ? (
             <EmptyState
               title={t("empty.title")}
               why={t("empty.why")}
               steps={[t("empty.step1"), t("empty.step2"), t("empty.step3")]}
             />
-          ) : (
+          ) : null}
+          <Count count={data.count} />
+          {data.apps.length > 0 ? (
             <AppList apps={data.apps} requests={data.requests} owner={owner} onLink={onLink} />
-          )}
+          ) : null}
           {owner ? (
             <Others
               value={data.count.others}
@@ -148,12 +149,20 @@ function Count({ count }: { count: AppCount }) {
       <p className="text-sm text-muted">
         {t("countDetail", { mine: count.mine, others: count.others, limit: count.limit })}
       </p>
-      <progress
-        className={`mt-2 h-2 w-full max-w-md ${count.near ? "accent-danger" : "accent-accent"}`}
-        max={count.limit}
-        value={Math.min(count.total, count.limit)}
+      {/* biome-ignore lint/a11y/useSemanticElements: a native <meter> cannot take the colors of the panel */}
+      <div
+        role="meter"
+        className="mt-2 h-3 w-full max-w-md overflow-hidden rounded-full bg-accent-wash"
+        aria-valuemin={0}
+        aria-valuemax={count.limit}
+        aria-valuenow={Math.min(count.total, count.limit)}
         aria-label={t("meterTitle")}
-      />
+      >
+        <div
+          className={`h-full rounded-full ${count.near ? "bg-danger" : "bg-accent"}`}
+          style={{ width: `${Math.min(100, (count.total / Math.max(1, count.limit)) * 100)}%` }}
+        />
+      </div>
     </div>
   );
 }

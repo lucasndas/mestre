@@ -217,7 +217,7 @@ test("the secrets show name, type, fingerprint, dates and notices, with no value
   expect(await screen.findByText("Vence em 3 dia(s).")).toBeTruthy();
   expect(screen.getByText("a1b2c3d4")).toBeTruthy();
   expect(screen.getByText("Credencial de site")).toBeTruthy();
-  expect(screen.getByText("Chave de um App do GitHub")).toBeTruthy();
+  expect(screen.getAllByText("Chave de um App do GitHub").length).toBeGreaterThan(0);
   // what the Mestre keeps is not changed here; no screen has a button that shows a value
   expect(screen.getAllByRole("button", { name: /Substituir/ })).toHaveLength(1);
   expect(screen.queryByRole("button", { name: /Mostrar|Revelar|Ver valor/ })).toBeNull();
@@ -528,12 +528,13 @@ test("an empty vault says what a site credential is and how to register one, bes
   expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   expect(screen.getByText("Vocabulário:")).toBeTruthy();
   expect(strips()).toHaveLength(1);
+  // the main action is in the strip, and the empty state does not repeat it
   expect(
-    within(empty.closest("section") as HTMLElement).getByRole("button", {
+    within(strips()[0] as HTMLElement).getByRole("button", {
       name: "Cadastrar credencial de site",
     }),
   ).toBeTruthy();
-  // one button only: the strip does not repeat the way out
+  expect(empty.closest("section")?.querySelector("button")).toBeNull();
   expect(screen.getAllByRole("button", { name: "Cadastrar credencial de site" })).toHaveLength(1);
 });
 
@@ -621,7 +622,7 @@ test("the vault says where each key goes, keeps the Mestre's own secrets apart a
   expect(within(where).getByRole("link", { name: "Ir para Perfis de conta" })).toBeTruthy();
   expect(where.textContent).toContain("Telegram");
   // the key of a provider has no button: the screen says it cannot be done here yet
-  expect(where.textContent).toContain("ainda não dá para cadastrar por aqui");
+  expect(where.textContent).toContain("Ainda não dá para cadastrar por aqui");
   const mine = screen.getByRole("region", { name: "Guardados pelo Mestre" });
   expect(mine.textContent).toContain("Chave da autoridade da Guilda");
   expect(mine.textContent).toContain("guild_ca_key");
@@ -675,4 +676,30 @@ test("an Administrator sees the vault buttons off, with the level they need", as
     (screen.getByRole("button", { name: "Cadastrar credencial de site" }) as HTMLButtonElement)
       .disabled,
   ).toBe(true);
+});
+
+// CA-ADM-21
+test("the audit says what changed in words, and an action it does not know keeps its code beside a general name", async () => {
+  fakeServer({
+    ...base,
+    "GET /api/audit": () => ({
+      body: {
+        entries: [
+          entry({ id: "e1", action: "panel.setup", user_name: "", detail: {} }),
+          entry({ id: "e2", action: "vault.use", detail: {} }),
+          entry({ id: "e3", action: "panel.nova_acao", detail: {} }),
+        ],
+        people: [],
+        workspaces: [],
+        next: "",
+      },
+    }),
+  });
+  renderApp("/auditoria");
+  expect(await screen.findByText("Painel configurado pela primeira vez")).toBeTruthy();
+  expect(screen.getByText("Credencial usada por um agente")).toBeTruthy();
+  expect(screen.getByRole("columnheader", { name: "O que mudou" })).toBeTruthy();
+  expect(screen.getByText("Outra ação do painel")).toBeTruthy();
+  expect(screen.getByText("panel.nova_acao")).toBeTruthy();
+  expect(document.body.textContent).not.toContain("panel.setup");
 });

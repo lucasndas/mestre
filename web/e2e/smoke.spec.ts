@@ -127,7 +127,7 @@ test("the Owner invites a person, who does the first access once with the code",
   await ana.getByLabel("Repita a senha").fill("uma senha bem longa");
   await ana.getByLabel("PIN (6 a 12 números)").fill("654321");
   await ana.getByLabel("Repita o PIN").fill("654321");
-  await ana.getByRole("button", { name: "Entrar" }).click();
+  await ana.getByRole("button", { name: "Criar meu acesso" }).click();
   await expect(ana.getByRole("heading", { name: "Início" })).toBeVisible();
   await expect(ana.getByRole("region", { name: "Você entrou como Observador" })).toBeVisible();
   await guest.close();
@@ -142,7 +142,7 @@ test("the Owner invites a person, who does the first access once with the code",
   await other.getByLabel("Repita a senha").fill("uma senha bem longa");
   await other.getByLabel("PIN (6 a 12 números)").fill("654321");
   await other.getByLabel("Repita o PIN").fill("654321");
-  await other.getByRole("button", { name: "Entrar" }).click();
+  await other.getByRole("button", { name: "Criar meu acesso" }).click();
   await expect(other.getByRole("alert")).toContainText("Esse código não vale mais");
   await again.close();
 });
@@ -294,7 +294,7 @@ test("the Guild screen shows the single-machine band and the Citadel", async ({ 
   await page.getByLabel("Senha").fill("uma senha bem longa");
   await page.getByRole("button", { name: "Entrar" }).click();
   await openSetting(page, /^Guilda/);
-  await expect(page.getByRole("heading", { name: "Guilda e máquinas", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Guilda", level: 1 })).toBeVisible();
   await expect(page.getByText("1 máquina, e é a Cidadela")).toBeVisible();
   await expect(page.getByRole("region", { name: "Adicionar uma segunda máquina" })).toBeVisible();
   await expect(page.getByText(/^Época \d+$/)).toBeVisible();

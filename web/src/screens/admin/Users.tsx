@@ -11,7 +11,6 @@ import type {
   UserRow,
 } from "../../gen/panel";
 import { api } from "../../lib/api";
-import { errorText } from "../../lib/errors";
 import { InviteDelivery, InviteForm } from "./Invite";
 import {
   Badge,
@@ -86,7 +85,7 @@ export function Users() {
       ) : null}
       {invite ? <InviteDelivery {...invite} onDone={() => setInvite(null)} /> : null}
       {shown ? <ShownOnce {...shown} onDone={() => setShown(null)} /> : null}
-      <div className="flex max-w-3xl flex-col gap-4">
+      <div className="flex max-w-4xl flex-col gap-4">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
         {error ? (
           <LoadError what={t("loadWhat")} error={error} onRetry={() => void refetch()} />
@@ -130,10 +129,23 @@ export function Users() {
           <EmptyState
             title={t("emptyTitle")}
             why={t("empty")}
-            steps={[t("emptyStep1"), t("emptyStep2"), t("emptyStep3")]}
-          >
-            {openButton}
-          </EmptyState>
+            steps={[t("emptyStep1"), t("emptyStep2"), t("emptyStep3"), t("emptyStep4")]}
+          />
+        ) : null}
+        {data ? (
+          <details className="rounded-field border border-line bg-surface">
+            <summary className="min-h-11 cursor-pointer px-4 py-2 font-semibold">
+              {t("levelsTitle")}
+            </summary>
+            <dl className="flex flex-col gap-2 px-4 pb-3 text-sm">
+              {ASSIGNABLE.map((l) => (
+                <div key={l}>
+                  <dt className="font-semibold">{say(`levels.${l}`)}</dt>
+                  <dd>{say(`levelHints.${l}`)}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
         ) : null}
         <ul className="flex flex-col gap-3">
           {people.map((u) => (
@@ -160,14 +172,16 @@ export function Users() {
                   </p>
                   <p className="text-sm text-muted">{githubText(say, u, fmt)}</p>
                 </div>
-                <Button
-                  variant="secondary"
-                  aria-expanded={managing === u.id}
-                  aria-label={t("manageNamed", { name: u.name })}
-                  onPress={() => setManaging(managing === u.id ? null : u.id)}
-                >
-                  {t("manage")}
-                </Button>
+                {u.level === "owner" && u.id === me.user.id ? null : (
+                  <Button
+                    variant="secondary"
+                    aria-expanded={managing === u.id}
+                    aria-label={t("manageNamed", { name: u.name })}
+                    onPress={() => setManaging(managing === u.id ? null : u.id)}
+                  >
+                    {t("manage")}
+                  </Button>
+                )}
               </div>
               {managing === u.id ? (
                 <ManageUser
@@ -285,7 +299,7 @@ function ManageUser({
         </div>
       </div>
 
-      <div className="flex max-w-xl flex-col gap-3">
+      <div className="flex max-w-3xl flex-col gap-3">
         <h3 className="text-lg">{t("codes.title")}</h3>
         {u.login ? (
           <Action hint={t("codes.resetHint")}>
@@ -314,7 +328,7 @@ function ManageUser({
       </div>
 
       {self ? null : (
-        <div className="flex max-w-xl flex-col gap-3">
+        <div className="flex max-w-3xl flex-col gap-3">
           <h3 className="text-lg">{t("state.title")}</h3>
           {u.state === "active" ? (
             <Action hint={t("state.suspendHint")}>
@@ -383,11 +397,12 @@ function ManageUser({
   );
 }
 
+/** What the action does on the left and the button on the right (below on a phone). */
 function Action({ hint, children }: { hint?: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
-      {children}
-      {hint ? <p className="text-sm text-muted">{hint}</p> : null}
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      {hint ? <p className="text-sm text-muted sm:pt-3">{hint}</p> : <span />}
+      <div className="shrink-0">{children}</div>
     </div>
   );
 }

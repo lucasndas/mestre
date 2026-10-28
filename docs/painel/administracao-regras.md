@@ -23,6 +23,7 @@ Código: `internal/panel/routes_decrees.go`, `routes_delegations.go`, `routes_ch
 | `GET /api/workspaces/{ws}/ceiling` | Observador ou acima | o arquivo do teto (só leitura) e os decretos `ceiling` em vigor |
 | `POST /api/workspaces/{ws}/ceiling/widen` | Administrador ou acima | abre a **proposta** de decreto `ceiling`; nunca edita o arquivo, e o teto em vigor só muda depois da confirmação com PIN |
 | `GET`, `PUT /api/workspaces/{ws}/policy` | Senhor da Guilda | lê e grava `politica-de-aprovacao.yaml` |
+| `POST /api/workspaces/{ws}/policy/validate` | Senhor da Guilda | **Validar**: confere o texto com a mesma regra do `PUT` (mesmo erro, com a linha) e responde `204`; não grava nem escreve auditoria |
 | `GET`, `PUT /api/workspaces/{ws}/instructions` | Administrador ou acima | lê e grava `instrucoes/grao-mestre.md` e `instrucoes/mestre-da-mesa.md` (até 4 KiB cada) |
 
 - **Pausa do Grão-Mestre:** o motor deixa o Grão-Mestre ou um Aprovador retomar a pausa dele ([supervisão](../orquestracao/supervisao-da-cadeia.md#pausa-de-autonomia)); o painel é mais estrito, como pede a [administração](administracao.md#telas): quem usa a tela nunca retoma uma pausa do Grão-Mestre. A recusa é do próprio supervisor, sob o mesmo lock que lê a pausa (`PauseRequest.RefuseCharacterPause`, `chain.ErrCharacterPause`), então uma pausa que muda de dono no meio não escapa.

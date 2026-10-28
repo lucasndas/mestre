@@ -60,13 +60,17 @@ export function Decrees() {
           tone={inForce.length > 0 ? "ok" : "neutral"}
           title={t("decrees.strip", { count: inForce.length })}
           hint={
-            endsToday.length > 0 ? t("decrees.stripToday", { count: endsToday.length }) : undefined
+            endsToday.length > 0
+              ? t("decrees.stripToday", { count: endsToday.length })
+              : inForce.length === 0
+                ? t("decrees.stripNone")
+                : undefined
           }
         >
-          {decrees.length > 0 ? create : null}
+          {create}
         </StatusStrip>
       ) : null}
-      <div className="flex max-w-3xl flex-col gap-5">
+      <div className="flex max-w-4xl flex-col gap-5">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
         {error ? (
           <LoadError what={t("loadWhat.decrees")} error={error} onRetry={() => void refetch()} />
@@ -100,11 +104,7 @@ export function Decrees() {
             title={t("decrees.emptyTitle")}
             why={t("decrees.emptyWhy")}
             steps={[t("decrees.emptyStep1"), t("decrees.emptyStep2")]}
-          >
-            {canPropose ? (
-              <Button onPress={() => setCreating(true)}>{t("decrees.new")}</Button>
-            ) : null}
-          </EmptyState>
+          />
         ) : null}
         {data?.workspaces
           .filter((g) => g.decrees.length > 0)

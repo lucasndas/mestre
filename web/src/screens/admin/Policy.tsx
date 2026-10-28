@@ -43,6 +43,23 @@ function PolicyOf({ workspace, picker }: { workspace: string; picker: React.Reac
   const dirty = data !== undefined && text !== data.text;
   const line = lineOfError(saveError);
 
+  const validate = async () => {
+    setBusy(true);
+    setSaveError(null);
+    setNotice(null);
+    try {
+      await api("POST", `/api/workspaces/${encodeURIComponent(workspace)}/policy/validate`, {
+        text,
+        version: data?.version ?? "",
+      });
+      setNotice(t("policy.validOk"));
+    } catch (err) {
+      setSaveError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const save = async () => {
     if (!data) return;
     setBusy(true);
@@ -69,8 +86,7 @@ function PolicyOf({ workspace, picker }: { workspace: string; picker: React.Reac
   };
 
   return (
-    <div className="flex max-w-3xl flex-col gap-4">
-      {picker}
+    <div className="flex max-w-4xl flex-col gap-4">
       {data ? (
         <StatusStrip
           tone={dirty ? "warn" : "ok"}
@@ -78,6 +94,9 @@ function PolicyOf({ workspace, picker }: { workspace: string; picker: React.Reac
           hint={data.default ? t("policy.default") : t("policy.stripHint")}
         >
           <LevelGate need="owner" label={t("policy.save")}>
+            <Button variant="secondary" isDisabled={busy || !dirty} onPress={() => void validate()}>
+              {t("policy.validate")}
+            </Button>
             <Button isDisabled={busy || !dirty} onPress={() => void save()}>
               {t("policy.save")}
             </Button>
@@ -94,6 +113,7 @@ function PolicyOf({ workspace, picker }: { workspace: string; picker: React.Reac
           </LevelGate>
         </StatusStrip>
       ) : null}
+      {picker}
       {notice ? <Alert tone="ok">{notice}</Alert> : null}
       {error ? (
         <LoadError what={t("loadWhat.policy")} error={error} onRetry={() => void refetch()} />

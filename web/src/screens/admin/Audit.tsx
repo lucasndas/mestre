@@ -12,6 +12,7 @@ import {
   noAuditFilters,
   PageHeader,
   StatusStrip,
+  VocabLine,
 } from "./kit";
 
 type Say = (k: string, o?: object) => string;
@@ -53,6 +54,7 @@ export function Audit() {
   return (
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
+      <VocabLine terms={["Campanha"]} />
       {q.data ? (
         <StatusStrip
           title={t("strip", { count: entries.length })}
@@ -127,36 +129,62 @@ export function Audit() {
             </Button>
           </EmptyState>
         ) : null}
-        <ul className="flex flex-col gap-2">
-          {entries.map((e) => {
-            const label = actionLabel(say, e.action);
-            return (
-              <li key={e.id} className="rounded-field border border-line bg-surface p-3">
-                <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                  <time dateTime={e.at} className="text-sm text-muted">
-                    {fmt(e.at)}
-                  </time>
-                  <span className="font-semibold">{label}</span>
-                  <span className="text-sm">{e.user_name || t("system")}</span>
-                  {e.workspace ? (
-                    <span className="rounded-full bg-accent-wash px-2 text-sm">{e.workspace}</span>
-                  ) : null}
-                </div>
-                {Object.keys(e.detail).length > 0 ? (
-                  <details className="mt-1 text-sm">
-                    <summary className="cursor-pointer text-muted">
-                      <span className="sr-only">{t("detailsNamed", { action: label })}</span>
-                      <span aria-hidden="true">{t("details")}</span>
-                    </summary>
-                    <pre className="mt-1 overflow-x-auto rounded-field bg-paper p-2 text-sm">
-                      {JSON.stringify(e.detail, null, 2)}
-                    </pre>
-                  </details>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+        {entries.length > 0 ? (
+          <div className="overflow-x-auto rounded-field border border-line bg-surface">
+            <table className="w-full text-left">
+              <thead className="text-sm text-muted">
+                <tr className="border-b border-line">
+                  <th scope="col" className="px-3 py-2 font-semibold">
+                    {t("columns.when")}
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-semibold">
+                    {t("columns.who")}
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-semibold">
+                    {t("columns.changed")}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((e) => {
+                  const label = actionLabel(say, e.action);
+                  return (
+                    <tr key={e.id} className="border-b border-line align-top last:border-0">
+                      <td className="px-3 py-2 text-sm whitespace-nowrap text-muted">
+                        <time dateTime={e.at}>{fmt(e.at)}</time>
+                      </td>
+                      <td className="px-3 py-2">{e.user_name || t("system")}</td>
+                      <td className="px-3 py-2">
+                        <span className="font-semibold">{label.text}</span>
+                        {label.code ? (
+                          <span className="ml-2 font-mono text-sm text-muted">{label.code}</span>
+                        ) : null}
+                        {e.workspace ? (
+                          <span className="ml-2 rounded-full bg-accent-wash px-2 text-sm">
+                            {e.workspace}
+                          </span>
+                        ) : null}
+                        {Object.keys(e.detail).length > 0 ? (
+                          <details className="mt-1 text-sm">
+                            <summary className="min-h-11 cursor-pointer py-2 text-muted">
+                              <span className="sr-only">
+                                {t("detailsNamed", { action: label.text })}
+                              </span>
+                              <span aria-hidden="true">{t("details")}</span>
+                            </summary>
+                            <pre className="mt-1 overflow-x-auto rounded-field bg-paper p-2 text-sm">
+                              {JSON.stringify(e.detail, null, 2)}
+                            </pre>
+                          </details>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
         {q.hasNextPage ? (
           <div>
             <Button
@@ -174,9 +202,12 @@ export function Audit() {
   );
 }
 
-/** The name of an action in the language of the panel; the ones it does not know show the code itself. */
-function actionLabel(say: Say, action: string): string {
+/**
+ * The name of an action in the language of the panel. One the panel does not know yet is
+ * named in general terms and keeps its code beside it, so nothing is hidden.
+ */
+function actionLabel(say: Say, action: string): { text: string; code?: string } {
   const k = `actions.${action.replaceAll(".", "_")}`;
   const text = say(k);
-  return text === k ? action : text;
+  return text === k ? { text: say("unknownAction"), code: action } : { text };
 }

@@ -4,7 +4,6 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormatDateTime } from "../../app/session";
 import { SensitiveButton } from "../../components/PinField";
-import { Term } from "../../components/Term";
 import { Alert, Button, Field } from "../../components/ui";
 import type { GuildAgent, GuildMachineRow, GuildRemoval, GuildView } from "../../gen/panel";
 import { ApiError, api } from "../../lib/api";
@@ -52,7 +51,6 @@ function bytes(n: number, language: string): string {
 /** The Guild and the health of the machines (docs/painel/administracao.md): live, one row per machine. */
 export function Guild() {
   const { t } = useTranslation("guild");
-  const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
   const live = useLive();
   const { data, error, refetch } = useQuery(guildQuery);
@@ -73,17 +71,7 @@ export function Guild() {
   return (
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
-      <VocabLine
-        terms={["Guilda", "Cidadela", "Torre", "Máquina excluída"]}
-        extra={
-          data ? (
-            <span className="inline-flex items-center gap-1">
-              <Term name="Época" />
-              <Badge>{t("epoch", { epoch: data.epoch })}</Badge>
-            </span>
-          ) : null
-        }
-      />
+      <VocabLine terms={["Guilda", "Cidadela", "Torre"]} />
       {data ? (
         <StatusStrip
           tone={suspended ? "warn" : silent > 0 ? "warn" : data.single ? "neutral" : "ok"}
@@ -103,7 +91,7 @@ export function Guild() {
           }
         />
       ) : null}
-      <div className="flex max-w-5xl flex-col gap-6">
+      <div className="flex max-w-4xl flex-col gap-6">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
         {error ? (
           <LoadError what={t("loadWhat")} error={error} onRetry={() => void refetch()} />
@@ -126,8 +114,9 @@ export function Guild() {
           </ul>
         ) : null}
         {data ? <AddMachineCard single={data.single} /> : null}
-        {data ? <p className="text-sm text-muted">{t("later")}</p> : null}
-        {data ? <Timezone zone={data.timezone} say={setNotice} onDone={refresh} /> : null}
+        {data ? (
+          <Timezone zone={data.timezone} epoch={data.epoch} say={setNotice} onDone={refresh} />
+        ) : null}
       </div>
     </section>
   );
@@ -207,73 +196,86 @@ function MachineRow({
         {m.github_down ? <Badge tone="warn">{t("badges.githubDown")}</Badge> : null}
         {m.telegram_stopped ? <Badge tone="danger">{t("badges.telegramStopped")}</Badge> : null}
       </header>
-      <dl className="mt-3 grid gap-x-6 gap-y-3 items-start sm:grid-cols-2 lg:grid-cols-4">
-        <Fact label={t("state")}>
-          <Badge tone={m.online ? "ok" : "warn"}>{noSignal}</Badge>
-          {m.outside_network && !m.citadel ? (
-            <Badge tone="warn">{t("states.outside")}</Badge>
-          ) : null}
-        </Fact>
-        <Fact label={t("engine")}>
-          {m.engine_version ? <p>{t("engineVersion", { version: m.engine_version })}</p> : null}
-          {m.protocol ? <p>{t("protocol", { n: m.protocol })}</p> : null}
-          <p className="text-sm text-muted">{t("guardian")}</p>
-        </Fact>
-        <Fact label={t("sheet")} wide>
-          <p>{[sheet.os, sheet.gui ? t("gui") : t("noGui")].filter(Boolean).join(" · ")}</p>
-          <p className="text-sm">
-            {t("providers")}:{" "}
-            {sheet.providers.length ? sheet.providers.join("; ") : t("noProviders")}
-          </p>
-          {sheet.browser ? (
+      <p className="mt-1 text-muted">
+        {[
+          sheet.os,
+          m.online ? t("states.connected") : noSignal,
+          t("running", { count: m.load.running }),
+          m.self ? t("youAreHere") : "",
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      </p>
+      <details className="mt-2">
+        <summary className="min-h-11 cursor-pointer py-2 font-semibold">{t("details")}</summary>
+        <dl className="mt-1 grid gap-x-6 gap-y-3 items-start sm:grid-cols-2 lg:grid-cols-4">
+          <Fact label={t("state")}>
+            <Badge tone={m.online ? "ok" : "warn"}>{noSignal}</Badge>
+            {m.outside_network && !m.citadel ? (
+              <Badge tone="warn">{t("states.outside")}</Badge>
+            ) : null}
+          </Fact>
+          <Fact label={t("engine")}>
+            {m.engine_version ? <p>{t("engineVersion", { version: m.engine_version })}</p> : null}
+            {m.protocol ? <p>{t("protocol", { n: m.protocol })}</p> : null}
+            <p className="text-sm text-muted">{t("guardian")}</p>
+          </Fact>
+          <Fact label={t("sheet")} wide>
+            <p>{[sheet.os, sheet.gui ? t("gui") : t("noGui")].filter(Boolean).join(" · ")}</p>
             <p className="text-sm">
-              {t("browser")}: {sheet.browser}
+              {t("providers")}:{" "}
+              {sheet.providers.length ? sheet.providers.join("; ") : t("noProviders")}
             </p>
-          ) : null}
-          <p className="text-sm">
-            {t("operator")}: {t(`operators.${sheet.operator || "off"}` as "operators.off")}
-            {sheet.operator_reason
-              ? ` (${sayT(`operatorReasons.${sheet.operator_reason}`, { defaultValue: sheet.operator_reason })})`
-              : ""}
-          </p>
-          <p className="text-sm">
-            {t("cpu")}: {t("cores", { count: sheet.cpu_cores })} · {t("memory")}:{" "}
-            {bytes(sheet.mem_bytes, i18n.language)} · {t("gpu")}:{" "}
-            {sheet.gpus.length ? sheet.gpus.join(", ") : t("noGpu")}
-          </p>
-          <p className="text-sm">
-            {t("transcription")}: {sheet.transcribes ? t("transcribes") : t("noTranscribes")}
-          </p>
-        </Fact>
-        <Fact label={t("excluded")}>
-          <p>{m.excluded ? t("excludedYes") : t("excludedNo")}</p>
-          <p className="text-sm">
-            {t("replica.label")}:{" "}
-            {m.replica
-              ? `${sayT(`replica.${m.replica.state}`, { defaultValue: m.replica.state })}${
-                  m.replica.behind > 0
-                    ? ` (${t("replica.behind", { count: m.replica.behind })})`
-                    : ""
-                }`
-              : m.citadel
-                ? "—"
-                : t("replica.none")}
-          </p>
-        </Fact>
-        <Fact label={t("load")}>
-          <p>{t("running", { count: m.load.running })}</p>
-          <p className="text-sm">
-            {t("disk")}: {bytes(m.load.disk_free_bytes, i18n.language)}
-          </p>
-        </Fact>
-        <Fact label={t("agents")} wide>
-          <AgentList agents={m.agents} />
-        </Fact>
-        <Fact label={t("priority")}>
-          <p>{m.priority}</p>
-        </Fact>
-      </dl>
-      <p className="mt-2 text-sm text-muted">{t("transcriptionLater")}</p>
+            {sheet.browser ? (
+              <p className="text-sm">
+                {t("browser")}: {sheet.browser}
+              </p>
+            ) : null}
+            <p className="text-sm">
+              {t("operator")}: {t(`operators.${sheet.operator || "off"}` as "operators.off")}
+              {sheet.operator_reason
+                ? ` (${sayT(`operatorReasons.${sheet.operator_reason}`, { defaultValue: sheet.operator_reason })})`
+                : ""}
+            </p>
+            <p className="text-sm">
+              {t("cpu")}: {t("cores", { count: sheet.cpu_cores })} · {t("memory")}:{" "}
+              {bytes(sheet.mem_bytes, i18n.language)} · {t("gpu")}:{" "}
+              {sheet.gpus.length ? sheet.gpus.join(", ") : t("noGpu")}
+            </p>
+            <p className="text-sm">
+              {t("transcription")}: {sheet.transcribes ? t("transcribes") : t("noTranscribes")}
+            </p>
+          </Fact>
+          <Fact label={t("excluded")}>
+            <p>{m.excluded ? t("excludedYes") : t("excludedNo")}</p>
+            <p className="text-sm">
+              {t("replica.label")}:{" "}
+              {m.replica
+                ? `${sayT(`replica.${m.replica.state}`, { defaultValue: m.replica.state })}${
+                    m.replica.behind > 0
+                      ? ` (${t("replica.behind", { count: m.replica.behind })})`
+                      : ""
+                  }`
+                : m.citadel
+                  ? "—"
+                  : t("replica.none")}
+            </p>
+          </Fact>
+          <Fact label={t("load")}>
+            <p>{t("running", { count: m.load.running })}</p>
+            <p className="text-sm">
+              {t("disk")}: {bytes(m.load.disk_free_bytes, i18n.language)}
+            </p>
+          </Fact>
+          <Fact label={t("agents")} wide>
+            <AgentList agents={m.agents} />
+          </Fact>
+          <Fact label={t("priority")}>
+            <p>{m.priority}</p>
+          </Fact>
+        </dl>
+        <p className="mt-2 text-sm text-muted">{t("transcriptionLater")}</p>
+      </details>
 
       {m.citadel ? null : (
         <div className="mt-4 flex flex-col gap-4 border-t border-line pt-4">
@@ -442,10 +444,12 @@ function Removal({
 
 function Timezone({
   zone,
+  epoch,
   say,
   onDone,
 }: {
   zone: string;
+  epoch: number;
   say: (s: string) => void;
   onDone: () => Promise<unknown>;
 }) {
@@ -460,28 +464,37 @@ function Timezone({
     return list.includes(zone) ? list : [zone, ...list];
   }, [zone]);
   return (
-    <section aria-label={t("timezone.title")} className="flex max-w-xl flex-col gap-3">
-      <h2 className="text-xl">{t("timezone.title")}</h2>
-      <p className="text-sm text-muted">{t("timezone.intro")}</p>
-      <NativeSelect
-        label={t("timezone.label")}
-        value={value}
-        onChange={setValue}
-        options={zones.map((z) => ({ value: z, label: z }))}
-      />
-      <div>
-        <SensitiveButton
-          describeError={errorOf}
-          isDisabled={value === zone}
-          onConfirm={async (pin) => {
-            await api("PUT", "/api/guild/timezone", { timezone: value }, { pin });
-            say(t("timezone.saved", { zone: value }));
-            await onDone();
-          }}
-        >
-          {t("timezone.save")}
-        </SensitiveButton>
-      </div>
+    <section aria-label={t("timezone.title")} className="flex max-w-4xl flex-col gap-2">
+      <p className="text-sm text-muted">
+        <span>{t("epoch", { epoch })}</span> · {t("timezone.line", { zone })}
+      </p>
+      <details>
+        <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">
+          {t("timezone.change")}
+        </summary>
+        <div className="flex max-w-xl flex-col gap-3">
+          <p className="text-sm text-muted">{t("timezone.intro")}</p>
+          <NativeSelect
+            label={t("timezone.label")}
+            value={value}
+            onChange={setValue}
+            options={zones.map((z) => ({ value: z, label: z }))}
+          />
+          <div>
+            <SensitiveButton
+              describeError={errorOf}
+              isDisabled={value === zone}
+              onConfirm={async (pin) => {
+                await api("PUT", "/api/guild/timezone", { timezone: value }, { pin });
+                say(t("timezone.saved", { zone: value }));
+                await onDone();
+              }}
+            >
+              {t("timezone.save")}
+            </SensitiveButton>
+          </div>
+        </div>
+      </details>
     </section>
   );
 }

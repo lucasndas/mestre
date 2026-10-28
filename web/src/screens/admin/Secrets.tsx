@@ -68,10 +68,10 @@ export function Secrets() {
           }
           hint={t("stripHint")}
         >
-          {sites.length > 0 ? openButton : null}
+          {openButton}
         </StatusStrip>
       ) : null}
-      <div className="flex max-w-3xl flex-col gap-4">
+      <div className="flex max-w-4xl flex-col gap-4">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
         {error ? (
           <LoadError what={t("loadWhat")} error={error} onRetry={() => void refetch()} />
@@ -93,9 +93,7 @@ export function Secrets() {
           />
         ) : null}
         {data && sites.length === 0 && !creating ? (
-          <EmptyState title={t("emptyTitle")} why={t("empty")}>
-            {openButton}
-          </EmptyState>
+          <EmptyState title={t("emptyTitle")} why={t("empty")} />
         ) : null}
         {data ? <WhereKeysGo /> : null}
         {sites.length > 0 ? <h2 className="text-2xl">{t("sitesTitle")}</h2> : null}
@@ -174,22 +172,43 @@ export function Secrets() {
               {t("managedTitle")}
             </h2>
             <p className="text-sm text-muted">{t("managed")}</p>
-            <ul className="flex flex-col gap-2">
-              {managed.map((s) => (
-                <li
-                  key={s.name}
-                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-field border border-line bg-surface px-4 py-3 text-sm"
-                >
-                  <span className="font-semibold">{typeLabel(say, s.type)}</span>
-                  <span className="text-muted">
-                    {t("fingerprint")}: <code>{s.fingerprint}</code>
-                  </span>
-                  <span className="text-muted">
-                    {t("technicalName")}: <code>{s.name}</code>
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <details open className="rounded-field border border-line bg-surface">
+              <summary className="min-h-11 cursor-pointer px-3 py-2 text-sm font-semibold">
+                {t("managedCount", { count: managed.length })}
+              </summary>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="text-sm text-muted">
+                    <tr className="border-y border-line">
+                      <th scope="col" className="px-3 py-2 font-semibold">
+                        {t("managedHeader.what")}
+                      </th>
+                      <th scope="col" className="px-3 py-2 font-semibold">
+                        {t("managedHeader.fingerprint")}
+                      </th>
+                      <th scope="col" className="px-3 py-2 font-semibold">
+                        {t("managedHeader.technical")}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {managed.map((s) => (
+                      <tr key={s.name} className="border-b border-line last:border-0">
+                        <th scope="row" className="px-3 py-2 font-semibold">
+                          {typeLabel(say, s.type)}
+                        </th>
+                        <td className="px-3 py-2">
+                          <code>{s.fingerprint}</code>
+                        </td>
+                        <td className="px-3 py-2">
+                          <code>{s.name}</code>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
           </section>
         ) : null}
         {data ? <RecoveryKey /> : null}
@@ -207,23 +226,62 @@ function WhereKeysGo() {
       <h2 id="sec-where" className="text-2xl">
         {t("where.title")}
       </h2>
-      <ul className="flex flex-col gap-2 text-sm">
-        <li>{t("where.site")}</li>
-        <li>
-          {t("where.github")}{" "}
-          <Link to="/apps" className={link}>
-            {t("where.githubLink")}
-          </Link>
-        </li>
-        <li>
-          {t("where.ai")}{" "}
-          <Link to="/perfis" className={link}>
-            {t("where.aiLink")}
-          </Link>
-        </li>
-        <li>{t("where.telegram")}</li>
-        <li>{t("where.provider")}</li>
-      </ul>
+      <div className="overflow-x-auto rounded-field border border-line bg-surface">
+        <table className="w-full text-left">
+          <thead className="text-sm text-muted">
+            <tr className="border-b border-line">
+              <th scope="col" className="px-3 py-2 font-semibold">
+                {t("where.wantHeader")}
+              </th>
+              <th scope="col" className="px-3 py-2 font-semibold">
+                {t("where.doHeader")}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-line align-top">
+              <th scope="row" className="px-3 py-2 font-semibold">
+                {t("where.siteWant")}
+              </th>
+              <td className="px-3 py-2">{t("where.site")}</td>
+            </tr>
+            <tr className="border-b border-line align-top">
+              <th scope="row" className="px-3 py-2 font-semibold">
+                {t("where.githubWant")}
+              </th>
+              <td className="px-3 py-2">
+                {t("where.github")}{" "}
+                <Link to="/apps" className={link}>
+                  {t("where.githubLink")}
+                </Link>
+              </td>
+            </tr>
+            <tr className="border-b border-line align-top">
+              <th scope="row" className="px-3 py-2 font-semibold">
+                {t("where.aiWant")}
+              </th>
+              <td className="px-3 py-2">
+                {t("where.ai")}{" "}
+                <Link to="/perfis" className={link}>
+                  {t("where.aiLink")}
+                </Link>
+              </td>
+            </tr>
+            <tr className="border-b border-line align-top">
+              <th scope="row" className="px-3 py-2 font-semibold">
+                {t("where.telegramWant")}
+              </th>
+              <td className="px-3 py-2">{t("where.telegram")}</td>
+            </tr>
+            <tr className="align-top">
+              <th scope="row" className="px-3 py-2 font-semibold">
+                {t("where.providerWant")}
+              </th>
+              <td className="px-3 py-2">{t("where.provider")}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
@@ -461,7 +519,7 @@ function RecoveryKey() {
   const [ack, setAck] = useState(false);
   const [key, setKey] = useState<string | null>(null);
   return (
-    <section className="mt-6 flex flex-col gap-3 border-t border-line pt-6">
+    <section className="mt-4 flex flex-col gap-3 rounded-field border border-line bg-surface p-5">
       <h2 className="text-2xl">{t("recovery.title")}</h2>
       <p className="max-w-2xl text-muted">{t("recovery.intro")}</p>
       {key ? (
