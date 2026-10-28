@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { NoticeView, TableBlock } from "../gen/panel";
 import { emit, installFakeSocket, openSocket } from "../test-socket";
-import { fakeServer, renderApp } from "../test-utils";
+import { fakeServer, ME, renderApp } from "../test-utils";
 import { byUrgency, CYCLE, matchesFilter, situationOf } from "./situation";
 import { diffToasts } from "./TableToasts";
 import { as, base, block, table, view } from "./test-fixtures";
@@ -371,26 +371,38 @@ const notice = (o: Partial<NoticeView>): NoticeView => ({
 });
 
 // CA-VIDA-13
-test("the bell says the human name of the table, and the approval notice leads to its request", async () => {
+test("the bell counts the new approval notice and its link leads to the central filtered by the table", async () => {
+  let arrived = false;
   const { calls } = fakeServer(
     base(view([table()]), {
       "GET /api/notices": () => ({
-        body: {
-          notices: [
-            notice({
-              id: 3,
-              text: "Nova aprovação: custo extra",
-              link: { kind: "request", ref: "7" },
-            }),
-          ],
-          unread: 1,
-        },
+        body: arrived
+          ? {
+              notices: [
+                notice({
+                  id: 3,
+                  kind: "approval",
+                  text: "Nova aprovação: custo extra",
+                  link: { kind: "request", ref: "7" },
+                }),
+              ],
+              unread: 1,
+            }
+          : { notices: [], unread: 0 },
       }),
       "POST /api/notices/read": () => ({ body: {} }),
     }),
   );
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   const { router } = renderApp("/workspaces/loja");
+  expect(await screen.findByRole("button", { name: /^Avisos/ })).toBeTruthy();
+  const sock = openSocket();
+  await waitFor(() => expect(sock.subscribed()).toContain(`notices:${ME.user.id}`));
+  arrived = true;
+  act(() => emit(sock, `notices:${ME.user.id}`, "unread", {}));
+  await waitFor(() =>
+    expect(calls.filter((c) => c.path === "/api/notices").length).toBeGreaterThan(1),
+  );
   await user.click(await screen.findByRole("button", { name: "Avisos, 1 não lidos" }));
   const pop = await screen.findByRole("dialog", { name: "Avisos" });
   await waitFor(() => expect(pop.textContent).toContain("loja › Login com Google"));
@@ -398,7 +410,11 @@ test("the bell says the human name of the table, and the approval notice leads t
   expect(pop.textContent).toContain("Aprovação");
   await user.click(within(pop).getByRole("button", { name: "Ver o pedido" }));
   await waitFor(() => expect(router.state.location.pathname).toBe("/aprovacoes"));
-  expect(router.state.location.search).toMatchObject({ pedido: 7 });
+  expect(router.state.location.search).toMatchObject({
+    pedido: 7,
+    mesa: "42-login",
+    campanha: "loja",
+  });
   expect(calls.find((c) => c.path === "/api/notices/read")?.body).toEqual({ ids: [3] });
 });
 
