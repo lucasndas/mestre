@@ -42,16 +42,56 @@ func seedRequest(ctx context.Context, guildDB, workspacesDir string) error {
 	if err := seedManage(ctx, db, workspacesDir, now); err != nil {
 		return err
 	}
-	return insertCostRequest(ctx, db, now)
+	if err := insertCostRequest(ctx, db, now); err != nil {
+		return err
+	}
+	// the request of the table that waits for a decision, and one on another type, both with the table
+	if err := insertRequest(ctx, db, now, "loja-decisao", classes.RequestExtraCost, "mais US$ 20 de uso este mês", classes.RiskMedium); err != nil {
+		return err
+	}
+	if err := insertRequest(ctx, db, now, "loja-revisao", classes.RequestMerge, "juntar o PR 21 (avaliações de clientes) ao projeto", classes.RiskHigh); err != nil {
+		return err
+	}
+	return seedPanel(ctx, db, now)
+}
+
+// seedPanel gives the bell its notices (a table that is stuck, the Grand Master, the engine, the
+// system) and the Guild a second machine that went quiet.
+func seedPanel(ctx context.Context, db *store.DB, now time.Time) error {
+	notice := func(kind, table, text, link, ref string, ago time.Duration) error {
+		_, err := db.Writer().ExecContext(ctx, `INSERT INTO panel_notices (kind, workspace, mesa, audience, text, link_kind, link_ref, created_at)
+			VALUES (?, 'loja', ?, 'workspace', ?, ?, ?, ?)`, kind, table, text, link, ref, now.Add(-ago).UnixMilli())
+		return err
+	}
+	if err := notice("alert", "loja-travada", "A mesa Cálculo de frete está travada: o teste falhou 3 vezes igual.", "table", "loja-travada", 20*time.Minute); err != nil {
+		return err
+	}
+	if err := notice("notify", "loja-revisao", "O Grão-Mestre abriu o PR 21 das avaliações e pede a sua palavra.", "table", "loja-revisao", 2*time.Hour); err != nil {
+		return err
+	}
+	if err := notice("system", "", "A Torre notebook-ana ficou sem sinal.", "machine", "notebook-ana", 26*time.Hour); err != nil {
+		return err
+	}
+	_, err := db.Writer().ExecContext(ctx, `INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, joined_at)
+		VALUES ('e2e-torre', 'notebook-ana', 'torre', 1, 0, 'offline', '{"hostname":"notebook-ana.local","ips":["192.168.1.50"],"port":8443}', ?)`, now.Add(-72*time.Hour).UnixMilli())
+	if err != nil {
+		return fmt.Errorf("the second machine: %w", err)
+	}
+	return nil
 }
 
 // insertCostRequest leaves a request of extra cost waiting for the people the way the chain does
 // (the request, and the question that asks the PIN). The conversation double also raises one when
 // the user asks for it (chat.go), so the journey test has a request of its own to approve.
 func insertCostRequest(ctx context.Context, db *store.DB, now time.Time) error {
+	return insertRequest(ctx, db, now, "", classes.RequestExtraCost, "mais US$ 20 de uso este mês", classes.RiskMedium)
+}
+
+// insertRequest is the same for any type, on a table of `loja` (tables.go) or none.
+func insertRequest(ctx context.Context, db *store.DB, now time.Time, table string, typ classes.RequestType, about string, risk classes.Risk) error {
 	r := chain.Request{
-		Workspace: "loja", Type: classes.RequestExtraCost, State: chain.Open, Level: chain.Level{Kind: chain.LevelPeople},
-		About: "mais US$ 20 de uso este mês", Risk: classes.RiskResult{Risk: classes.RiskMedium, Rule: "custo extra", TableVersion: 1},
+		Workspace: "loja", Table: table, Type: typ, State: chain.Open, Level: chain.Level{Kind: chain.LevelPeople},
+		About: about, Risk: classes.RiskResult{Risk: risk, Rule: "e2e", TableVersion: 1},
 		CreatedAt: now, Deadline: now.Add(24 * time.Hour),
 	}
 	r, err := (&chain.Store{DB: db}).Insert(ctx, r)
