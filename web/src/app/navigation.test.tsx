@@ -316,6 +316,11 @@ test("Configurações has four groups with a sentence per entry, and every scree
       .getAllByRole("listitem")
       .map((i) => i.textContent?.replace("›", "").trim()),
   ).toEqual(["Configurações", "Regras e consumo", "Decretos"]);
+  // the mark follows the item it separates: no line of a narrow screen begins with it, and the page has none after it
+  const marks = within(trail)
+    .getAllByRole("listitem")
+    .map((i) => i.lastElementChild?.textContent === "›");
+  expect(marks).toEqual([true, true, false]);
   await user.click(within(trail).getByRole("link", { name: "Configurações" }));
   await waitFor(() => expect(router.state.location.pathname).toBe("/configuracoes"));
 });
