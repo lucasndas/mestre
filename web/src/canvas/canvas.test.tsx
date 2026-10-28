@@ -502,6 +502,7 @@ test("Juntar em grupo draws a group with a name and Desfazer grupo frees the car
   await user.click(screen.getByRole("button", { name: "Selecionar vários" }));
   fireEvent.click(screen.getByRole("article", { name: "Personagem Dev-1" }));
   fireEvent.click(screen.getByRole("article", { name: "Personagem Revisor" }));
+  const before = tableState().layout;
   await user.click(await screen.findByRole("button", { name: "Juntar em grupo" }));
   const name = (await screen.findByRole("textbox", { name: "Nome do grupo" })) as HTMLInputElement;
   expect(name.value).toBe("Grupo");
@@ -511,6 +512,41 @@ test("Juntar em grupo draws a group with a name and Desfazer grupo frees the car
   await waitFor(() => expect(screen.queryByRole("textbox", { name: "Nome do grupo" })).toBeNull());
   const last = calls.filter((c) => c.method === "PUT" && c.path === `${path}/layout`).pop();
   expect(JSON.stringify(last?.body)).toContain('"remove":["group:');
+  // the cards come back to the very place they stood, with no parent
+  const freed =
+    (last?.body as { items: Array<{ key: string; x: number; y: number; parent?: string }> })
+      ?.items ?? [];
+  for (const key of ["character:dev", "character:rev"]) {
+    const was = before.find((i) => i.key === key);
+    const now = freed.find((i) => i.key === key);
+    expect(now?.x).toBe(was?.x);
+    expect(now?.y).toBe(was?.y);
+    expect(now?.parent).toBeUndefined();
+  }
+});
+
+// CA-CANVAS-14: renaming the group saves the new name.
+test("editing the group name and leaving the field saves the new name", async () => {
+  const { calls } = fakeServer({
+    [`GET ${path}`]: () => ({ body: tableState() }),
+    [`PUT ${path}/layout`]: () => ({ body: {} }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  const { Wrapper } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  await screen.findByRole("article", { name: "Personagem Dev-1" });
+  await user.click(screen.getByRole("button", { name: "Selecionar vários" }));
+  fireEvent.click(screen.getByRole("article", { name: "Personagem Dev-1" }));
+  fireEvent.click(screen.getByRole("article", { name: "Personagem Revisor" }));
+  await user.click(await screen.findByRole("button", { name: "Juntar em grupo" }));
+  const name = await screen.findByRole("textbox", { name: "Nome do grupo" });
+  await user.clear(name);
+  await user.type(name, "Entrega");
+  await user.tab();
+  await waitFor(() => {
+    const puts = calls.filter((c) => c.method === "PUT" && c.path === `${path}/layout`);
+    expect(JSON.stringify(puts[puts.length - 1]?.body)).toContain('"label":"Entrega"');
+  });
 });
 
 // CA-CANVAS-15: each tab says what it is; the restore plan is said before it is confirmed.
@@ -596,6 +632,63 @@ test("an observer sees a read-only hint and every editing action is off with the
   const side = await screen.findByRole("complementary", { name: "Missões, rituais e grimórios" });
   expect(within(side).queryByRole("button", { name: "Montar missão" })).toBeNull();
   expect(side.textContent).toContain("Só Administrador ou acima muda isto.");
+});
+
+// CA-CANVAS-16: the rituals and the grimoires tabs say the level and offer no editing.
+test("an observer sees the level sentence and no edit, save or restore button in the Rituals and Grimoires tabs", async () => {
+  fakeServer({
+    [`GET ${path}`]: () => ({ body: tableState({ can_edit: false }) }),
+    [`GET ${path}/rituals`]: () => ({
+      body: {
+        rituals: [
+          {
+            id: "r1",
+            name: "Bom dia",
+            target: "Dev-1",
+            action: "send",
+            content: "Revise o plano",
+            schedule: "todo dia 09:00",
+            enabled: true,
+          },
+        ],
+      },
+    }),
+    "GET /api/grimoires": () => ({
+      body: {
+        grimoires: [
+          {
+            name: "Fluxo de login",
+            workspace: "loja",
+            table: "m0",
+            author: "Maria",
+            saved_at: "2026-10-26T15:00:00Z",
+            characters: 2,
+            scrolls: 1,
+            tomes: 0,
+            quests: 1,
+          },
+        ],
+      },
+    }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  const { Wrapper } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  await screen.findByRole("article", { name: "Personagem Dev-1" });
+  await user.click(
+    screen.getAllByRole("button", { name: "Missões, rituais e grimórios" })[0] as HTMLElement,
+  );
+  const side = await screen.findByRole("complementary", { name: "Missões, rituais e grimórios" });
+  await user.click(within(side).getByRole("tab", { name: /Rituais/ }));
+  expect(await within(side).findByText("Bom dia")).toBeTruthy();
+  expect(side.textContent).toContain("Só Administrador ou acima muda isto.");
+  for (const name of ["Ativar", "Desativar", "Editar", "Salvar"])
+    expect(within(side).queryByRole("button", { name })).toBeNull();
+  await user.click(within(side).getByRole("tab", { name: /Grimórios/ }));
+  expect(await within(side).findByText("Fluxo de login")).toBeTruthy();
+  expect(side.textContent).toContain("Só Administrador ou acima muda isto.");
+  for (const name of ["Restaurar nesta mesa", "Guardar a seleção como grimório", "Salvar"])
+    expect(within(side).queryByRole("button", { name })).toBeNull();
 });
 
 // CA-CANVAS-17: the deadlock is told in words and the legend describes the four lines.
