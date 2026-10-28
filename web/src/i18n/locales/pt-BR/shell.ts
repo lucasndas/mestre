@@ -21,6 +21,8 @@ export default {
   crumbs: {
     label: "Você está em",
     history: "Histórico",
+    invite: "Convidar pessoa",
+    invitation: "Convite",
     terminal: "Terminal de {{name}}",
   },
   settings: {

@@ -20,6 +20,21 @@ export function useDynamicT(ns: "approvals") {
   return t as unknown as (key: string, opts?: object) => string;
 }
 
+/**
+ * The title of a request in the words of the catalog; one that says how much (extra cost) takes the
+ * `about` of the server in it ("Usar mais US$ 20 de uso este mês"). "" when the catalog lacks the type.
+ */
+export function useRequestTitle(): (item: { type: string; about: string }) => string {
+  const { i18n } = useTranslation();
+  const t = useDynamicT("approvals");
+  return (item) => {
+    if (!i18n.exists(`approvals:readable.${item.type}.title`)) return "";
+    if (item.about && i18n.exists(`approvals:readable.${item.type}.titleAbout`))
+      return t(`readable.${item.type}.titleAbout`, { about: item.about });
+    return t(`readable.${item.type}.title`);
+  };
+}
+
 /** "Já respondido por Bia: Aprovado às 14:32." and the other ways a request ends. */
 export function ClosedBanner({ closed }: { closed: ApprovalClosed }) {
   const t = useDynamicT("approvals");
@@ -368,6 +383,7 @@ export function ApprovalCard({
   const { i18n } = useTranslation();
   const [problem, setProblem] = useState<unknown>(null);
   const t = useDynamicT("approvals");
+  const requestTitle = useRequestTitle();
   const fmt = useFormatTime();
   const [details, setDetails] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
@@ -400,9 +416,7 @@ export function ApprovalCard({
         ) : null}
       </div>
       <h3 className="text-xl">
-        {known
-          ? t(`readable.${item.type}.title`)
-          : t(`types.${item.type}`, { defaultValue: item.type })}
+        {known ? requestTitle(item) : t(`types.${item.type}`, { defaultValue: item.type })}
       </h3>
       {item.closed ? <ClosedBanner closed={item.closed} /> : null}
       <dl className="m-0 grid gap-x-4 gap-y-2 sm:grid-cols-[9rem_minmax(0,1fr)]">

@@ -218,6 +218,8 @@ test("the top bar has the brand, the bell, the Grão-Mestre and the account, and
   // one row: nothing wraps, no selector of campaign, no counter of approvals
   expect(bar.className).not.toMatch(/flex-wrap/);
   expect(bar.querySelector("select")).toBeNull();
+  // the bar stays at the top whatever scrolls (the open conversation included)
+  expect(bar.parentElement?.className).toMatch(/\bsticky\b/);
   const names = [...bar.querySelectorAll("a, button")].map((e) => e.getAttribute("aria-label"));
   expect(names).toEqual([
     "Mestre, ir para o Início",

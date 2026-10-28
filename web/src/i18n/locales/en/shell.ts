@@ -24,6 +24,8 @@ const shell: Widen<typeof pt> = {
   crumbs: {
     label: "You are in",
     history: "History",
+    invite: "Invite a person",
+    invitation: "Invitation",
     terminal: "Terminal of {{name}}",
   },
   settings: {

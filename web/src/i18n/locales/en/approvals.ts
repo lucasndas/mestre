@@ -100,6 +100,7 @@ const approvals: Widen<typeof pt> = {
     },
     custo_extra: {
       title: "Use more of the AI limit",
+      titleAbout: "Use {{about}}",
       why: "The usage limit is already reached and the table can only go on by spending more.",
       yes: "Allows extra AI spending. The table goes back to work now.",
       no: "The table waits for the limit to renew. Nothing is spent.",

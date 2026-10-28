@@ -290,9 +290,8 @@ test("the tables and the request show with their links, and a new table appears 
   expect(req.getAttribute("href")).toContain("/aprovacoes");
   expect(req.getAttribute("href")).toContain("pedido=5");
   // the row says it in the words of the catalog, with the place and the risk, not the text of the server
-  expect(req.textContent).toContain("Usar mais do limite de IA");
+  expect(req.textContent).toContain("Usar mais US$ 20 de uso este mês");
   expect(req.textContent).toContain("loja · 42-login · medium");
-  expect(req.textContent).not.toContain("US$ 20");
   expect(screen.queryByText(/Ainda não há nenhuma campanha/)).toBeNull();
 
   const sock = openSocket();

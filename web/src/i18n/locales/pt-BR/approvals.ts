@@ -100,6 +100,7 @@ export default {
     },
     custo_extra: {
       title: "Usar mais do limite de IA",
+      titleAbout: "Usar {{about}}",
       why: "O limite de uso já foi atingido e a mesa só continua gastando mais.",
       yes: "Libera um gasto extra de IA. A mesa volta a trabalhar agora.",
       no: "A mesa espera o limite renovar. Nada é gasto.",

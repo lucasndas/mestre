@@ -335,7 +335,9 @@ test("a custo_extra request of the engine reads in Portuguese and keeps the raw 
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/aprovacoes");
   const card = await screen.findByRole("article", { name: "Pedido #9" });
-  expect(within(card).getByRole("heading", { name: "Usar mais do limite de IA" })).toBeTruthy();
+  expect(
+    within(card).getByRole("heading", { name: "Usar continuar a mesa além do limite do mês" }),
+  ).toBeTruthy();
   expect(within(card).getByText("Risco médio")).toBeTruthy();
   expect(within(card).getByText(/Libera um gasto extra de IA/)).toBeTruthy();
   expect(within(card).getByText(/A mesa espera o limite renovar/)).toBeTruthy();
@@ -612,7 +614,11 @@ test("the card says the about once, the tab counts what waits and the filters fo
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/aprovacoes");
   const card = await screen.findByRole("article", { name: "Pedido #7" });
-  expect(within(card).getAllByText(/mais US\$ 20 de uso este mês/)).toHaveLength(1);
+  // the title says how much; the about is said once more in "O que pedem", never the raw text of the server
+  expect(
+    within(card).getByRole("heading", { name: "Usar mais US$ 20 de uso este mês" }),
+  ).toBeTruthy();
+  expect(within(card).queryByText(/^Sobre:/)).toBeNull();
   expect(await screen.findByRole("link", { name: "Pendentes (1)" })).toBeTruthy();
   const toggle = screen.getByRole("button", { name: "Filtrar" });
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
