@@ -114,7 +114,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
       ...view,
       minZoom: 1,
       maxZoom: 1,
-      padding: { top: "0px", right: "16px", bottom: "124px", left: "16px" },
+      padding: { top: "8px", right: "16px", bottom: "76px", left: "16px" },
     });
   }, [ready, state, nodes, flow]);
 
@@ -329,7 +329,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
 
   return (
     <CanvasEnvContext.Provider value={env}>
-      <div className="relative flex w-full flex-col border border-line bg-paper md:h-[calc(100dvh-19rem)] md:min-h-[28rem] md:flex-row">
+      <div className="relative flex w-full flex-col border border-line bg-paper md:h-[calc(100dvh-19.5rem)] md:min-h-[28rem] md:flex-row">
         <section
           aria-label={t("region", { table })}
           className="hidden min-h-[18rem] min-w-0 flex-1 md:flex md:flex-col"
@@ -523,7 +523,10 @@ function BoardControls({
   const btn =
     "inline-flex min-h-11 items-center justify-center gap-2 px-3 text-ink first:rounded-l-field last:rounded-r-field hover:bg-accent-wash data-pressed:bg-accent-wash";
   return (
-    <Panel position="bottom-left" className="flex flex-col items-start gap-2">
+    <Panel
+      position="bottom-left"
+      className="flex max-w-[calc(100%-1rem)] flex-wrap items-end gap-2"
+    >
       <div role="toolbar" aria-label={t("controls")} className={box}>
         <AriaButton
           className={`${btn} !px-0 size-11`}
