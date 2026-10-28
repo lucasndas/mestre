@@ -11,6 +11,9 @@ export function TableFilters({
   view,
   onView,
   wide,
+  ended,
+  showEnded,
+  onShowEnded,
 }: {
   counts: Record<FilterKey, number>;
   filter: FilterKey;
@@ -18,6 +21,10 @@ export function TableFilters({
   view: ViewMode;
   onView: (v: ViewMode) => void;
   wide: boolean;
+  /** How many ended tables the view has, hidden unless the chip shows them. */
+  ended: number;
+  showEnded: boolean;
+  onShowEnded: (on: boolean) => void;
 }) {
   const { t } = useTranslation("workspace");
   const chip = (on: boolean) =>
@@ -40,6 +47,16 @@ export function TableFilters({
             <span className="font-mono text-xs opacity-75">{counts[f]}</span>
           </button>
         ))}
+        {ended > 0 ? (
+          <button
+            type="button"
+            aria-pressed={showEnded}
+            onClick={() => onShowEnded(!showEnded)}
+            className={chip(showEnded)}
+          >
+            {t("ended.show")} <span className="font-mono text-xs opacity-75">{ended}</span>
+          </button>
+        ) : null}
       </fieldset>
       {wide ? (
         <fieldset className="m-0 ml-auto flex min-w-0 border-0 p-0">

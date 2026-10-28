@@ -85,7 +85,7 @@ function ChatToggle({ open, onToggle }: { open: boolean; onToggle: () => void })
       aria-label={n > 0 ? t("toggleUnread", { count: n }) : t("toggleOpen")}
       aria-expanded={open}
       onPress={onToggle}
-      className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full bg-accent px-3 text-sm font-semibold text-accent-ink hover:bg-accent-strong"
+      className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-field bg-accent px-3 text-sm font-semibold text-accent-ink hover:bg-accent-strong"
     >
       <svg
         viewBox="0 0 24 24"

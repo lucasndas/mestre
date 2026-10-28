@@ -31,6 +31,7 @@ export function Workspaces({ create = false }: { create?: boolean }) {
   const qc = useQueryClient();
   const live = useLive();
   const { data, error } = useQuery(workspacesQuery);
+  const [creating, setCreating] = useState(create);
   useEffect(() => live.subscribe([WORKSPACES_TOPIC]), [live]);
   // the topic says something changed: the list is read again
   useLiveEvents(
@@ -39,14 +40,29 @@ export function Workspaces({ create = false }: { create?: boolean }) {
   );
   return (
     <section>
-      <PageHeader title={t("title")} intro={t("intro")} />
-      <p className="mb-6 max-w-2xl text-sm text-muted">
-        <Term name="Campanha" />
-      </p>
+      <div className="flex max-w-3xl flex-wrap items-start justify-between gap-x-4">
+        <div className="min-w-0 flex-1 basis-80">
+          <PageHeader
+            title={t("title")}
+            intro={
+              <>
+                {t("intro")} <Term name="Campanha" />
+              </>
+            }
+          />
+        </div>
+        {data?.can_create && !creating ? (
+          <Button className="mt-1" onPress={() => setCreating(true)}>
+            {t("create.open")}
+          </Button>
+        ) : null}
+      </div>
       <div className="flex max-w-3xl flex-col gap-4">
         {error ? <Alert>{refusalText(t, te, error)}</Alert> : null}
         {!data && !error ? <p className="text-muted">…</p> : null}
-        {data?.can_create ? <Create sheets={data.sheets} startOpen={create} /> : null}
+        {data?.can_create ? (
+          <Create sheets={data.sheets} open={creating} setOpen={setCreating} />
+        ) : null}
         {data && data.workspaces.length === 0 ? (
           <div className="rounded-field border border-dashed border-line p-5">
             <p className="font-semibold">{t("empty.title")}</p>
@@ -65,11 +81,18 @@ export function Workspaces({ create = false }: { create?: boolean }) {
   );
 }
 
-function Create({ sheets, startOpen }: { sheets: SheetOption[]; startOpen: boolean }) {
+function Create({
+  sheets,
+  open,
+  setOpen,
+}: {
+  sheets: SheetOption[];
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}) {
   const { t } = useTranslation("workspaces");
   const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
-  const [open, setOpen] = useState(startOpen);
   const [repo, setRepo] = useState("");
   const [slug, setSlug] = useState("");
   const [sheet, setSheet] = useState("");
@@ -79,12 +102,7 @@ function Create({ sheets, startOpen }: { sheets: SheetOption[]; startOpen: boole
   const chosen = sheet || sheets[0]?.name || "";
 
   if (!open) {
-    return (
-      <div>
-        {made ? <Alert tone="ok">{t("create.done", { slug: made.slug })}</Alert> : null}
-        <Button onPress={() => setOpen(true)}>{t("create.open")}</Button>
-      </div>
-    );
+    return made ? <Alert tone="ok">{t("create.done", { slug: made.slug })}</Alert> : null;
   }
   return (
     <form
@@ -217,7 +235,7 @@ function Workspace({ w }: { w: WorkspaceRow }) {
         {w.state !== "preparing" && canPause ? <PauseButton w={w} /> : null}
         {w.state !== "preparing" ? (
           <Button
-            variant="secondary"
+            variant="quiet"
             aria-expanded={showVerification}
             onPress={() => setShowVerification((v) => !v)}
           >
@@ -383,7 +401,7 @@ function PauseButton({ w }: { w: WorkspaceRow }) {
   return (
     <>
       <Button
-        variant="secondary"
+        variant="quiet"
         isDisabled={busy}
         onPress={async () => {
           setBusy(true);

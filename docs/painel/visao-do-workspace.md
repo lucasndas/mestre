@@ -41,7 +41,7 @@ O bloco abre com a **situação** da mesa (uma palavra, um ícone e uma frase) e
 | Uso | consumo da mesa em relação ao limite, quando houver limite ([limites de uso](../plataforma/limites-de-uso.md)) |
 
 - **Clicar numa mesa** abre o [canvas da mesa](canvas.md) (rota própria por mesa, que pode ser guardada como favorito).
-- Mesas **encerradas e canceladas** (`closed`, `cancelled`) ficam escondidas por padrão; um filtro "mostrar encerradas" as exibe esmaecidas.
+- Mesas **encerradas e canceladas** (`closed`, `cancelled`) ficam escondidas por padrão; um chip **Mostrar encerradas** (com a contagem), na mesma linha dos filtros por situação, as exibe esmaecidas.
 - Atualização em tempo real pelo WebSocket do painel ([protocolo](../conectividade/protocolo.md)).
 
 ### Atalhos da tela

@@ -46,7 +46,7 @@ test("the list shows the workspaces and the nav links to it", async () => {
   renderApp("/workspaces");
   const article = await screen.findByRole("article", { name: "loja" });
   expect(within(article).getByText("acme/loja")).toBeTruthy();
-  expect(within(article).getByText("ativo")).toBeTruthy();
+  expect(within(article).getByText("Ativa")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Criar campanha" })).toBeNull();
   expect(screen.getByRole("link", { name: "Campanhas" })).toBeTruthy();
 });

@@ -71,7 +71,6 @@ export default {
     openTable: "Abrir a mesa {{table}} da campanha {{workspace}}",
     decide: "Decidir",
     open: "Decidir o pedido {{id}}: {{about}}",
-    item: "Pedido {{id}} · {{where}}",
   },
   deliveries: {
     title: "Entregas recentes",

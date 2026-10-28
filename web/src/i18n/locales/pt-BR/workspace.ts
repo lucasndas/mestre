@@ -14,7 +14,7 @@ export default {
   },
   shortcuts: {
     label: "Atalhos da campanha",
-    chat: "Conversar com o Grão-Mestre",
+    chat: "Falar com o Grão-Mestre",
     approvals_one: "{{count}} aprovação pendente",
     approvals_other: "{{count}} aprovações pendentes",
     approvalsNone: "Nenhuma aprovação pendente",
@@ -36,13 +36,18 @@ export default {
     body: "As mesas são abertas pelo Grão-Mestre a partir dos pedidos que você faz na conversa.",
   },
   ended: {
-    show: "mostrar encerradas",
-    hidden_one: "{{count}} mesa encerrada escondida.",
-    hidden_other: "{{count}} mesas encerradas escondidas.",
+    show: "Mostrar encerradas",
   },
   gm: {
     node: "Grão-Mestre {{name}}",
     machine: "Máquina {{machine}}",
+    states: {
+      none: "Sem Grão-Mestre",
+      idle: "Parado",
+      waiting: "Esperando",
+      busy: "Trabalhando",
+      stopped: "Encerrado",
+    },
     loadingTerminal: "Abrindo o terminal…",
     noTerminal: "Sem terminal aberto.",
     none: "Esta campanha não tem Grão-Mestre agora.",

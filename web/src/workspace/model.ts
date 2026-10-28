@@ -28,26 +28,27 @@ export type ViewEdge = Edge;
 /** closed and cancelled tables are hidden unless the filter shows them. */
 export const isEnded = (b: TableBlock) => b.state === "closed" || b.state === "cancelled";
 
+/** Tables per row below the Grand Master before the row wraps. */
+const PER_ROW = 3;
+const GAP = { x: 40, y: 100 };
+
 /**
- * Where the tables stand at first: in a circle around the Grand Master, in the order of their
- * ids (so a table appearing does not move the others around much). Positions are the top-left
- * corner of the node, in canvas coordinates; the Grand Master stands at the origin.
+ * Where the tables stand at first: in rows below the Grand Master, centered under it and
+ * wrapping after PER_ROW, in the order of their ids (so a table appearing does not move the
+ * others around much). Positions are the top-left corner of the node, in canvas coordinates;
+ * the Grand Master stands at the origin.
  */
-export function circle(ids: string[]): Map<string, { x: number; y: number }> {
+export function rows(ids: string[]): Map<string, { x: number; y: number }> {
   const out = new Map<string, { x: number; y: number }>();
   const sorted = [...ids].sort();
-  const n = sorted.length;
-  // an ellipse wide enough for each block's arc, and far enough from the Grand Master to clear it
-  const arc = Math.ceil(((BLOCK_SIZE.w + 60) * n) / (2 * Math.PI));
-  const rx = Math.max(GM_SIZE.w / 2 + BLOCK_SIZE.w / 2 + 60, arc);
-  const ry = Math.max(GM_SIZE.h / 2 + BLOCK_SIZE.h / 2 + 60, Math.round(arc * 0.8));
-  const cx = GM_SIZE.w / 2;
-  const cy = GM_SIZE.h / 2;
   sorted.forEach((id, i) => {
-    const a = -Math.PI / 2 + (2 * Math.PI * i) / Math.max(n, 1);
+    const row = Math.floor(i / PER_ROW);
+    const inRow = Math.min(PER_ROW, sorted.length - row * PER_ROW);
+    const width = inRow * BLOCK_SIZE.w + (inRow - 1) * GAP.x;
+    const col = i % PER_ROW;
     out.set(id, {
-      x: Math.round(cx + rx * Math.cos(a) - BLOCK_SIZE.w / 2),
-      y: Math.round(cy + ry * Math.sin(a) - BLOCK_SIZE.h / 2),
+      x: Math.round(GM_SIZE.w / 2 - width / 2 + col * (BLOCK_SIZE.w + GAP.x)),
+      y: GM_SIZE.h + GAP.y + row * (BLOCK_SIZE.h + GAP.y),
     });
   });
   return out;
@@ -67,7 +68,7 @@ export function buildNodes(
   opts: BuildOptions = {},
 ): ViewNode[] {
   const saved = new Map(view.layout.map((it) => [it.key, it]));
-  const around = circle(view.tables.map((t) => t.id));
+  const around = rows(view.tables.map((t) => t.id));
   const nodes: ViewNode[] = [];
   const gmAt = saved.get(GM_KEY);
   nodes.push({

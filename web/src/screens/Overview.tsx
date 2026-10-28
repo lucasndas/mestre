@@ -35,19 +35,22 @@ export function Overview() {
   // with no campaign there is nothing to say about tables: the button above says what to do
   const none = ready && list.length === 0;
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-      <section className="max-w-3xl">
-        <h1 className="text-3xl">{t("title")}</h1>
-        <p className="mt-2 text-muted">{t("hello", { name: me.user.name })}</p>
-        {guildmaster ? <FirstSteps /> : <Welcome />}
-        {guildmaster ? <InviteRow /> : null}
-        <TalkButton />
-        {none ? null : <Now tables={tables.open} failed={isError ? [] : tables.failed} />}
-        <Waiting tables={tables.open} />
-        <Deliveries tables={tables.delivered} />
-        <p className="mt-10 text-sm text-muted">{t("times", { zone: me.timezone })}</p>
-      </section>
-      <Health />
+    // the columns follow the width the screen has, which the open conversation takes from the window
+    <div className="@container">
+      <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_20rem] @4xl:items-start">
+        <section className="max-w-3xl">
+          <h1 className="text-3xl">{t("title")}</h1>
+          <p className="mt-2 text-muted">{t("hello", { name: me.user.name })}</p>
+          {guildmaster ? <FirstSteps /> : <Welcome />}
+          {guildmaster ? <InviteRow /> : null}
+          <TalkButton />
+          {none ? null : <Now tables={tables.open} failed={isError ? [] : tables.failed} />}
+          <Waiting tables={tables.open} />
+          <Deliveries tables={tables.delivered} />
+          <p className="mt-10 text-sm text-muted">{t("times", { zone: me.timezone })}</p>
+        </section>
+        <Health />
+      </div>
     </div>
   );
 }

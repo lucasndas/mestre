@@ -13,7 +13,7 @@ export default {
   openPreparing: "Disponível quando a preparação terminar.",
   talk: "Conversar",
   talkNamed: "Conversar com o Grão-Mestre de {{slug}}",
-  state: { preparing: "em preparação", active: "ativo", paused: "pausado" },
+  state: { preparing: "Em preparação", active: "Ativa", paused: "Pausada" },
   grandMasterState: {
     none: "sem Grão-Mestre ainda",
     idle: "parado",

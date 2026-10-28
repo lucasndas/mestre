@@ -214,6 +214,9 @@ test("a new Guildmaster sees 0 of 4, the talk button off with the reason and no 
   server({ workspaces: [] });
   renderApp("/");
   expect(await screen.findByText(/0 de 4 passos feitos/)).toBeTruthy();
+  const bar = screen.getByRole("progressbar", { name: "Primeiros passos feitos" });
+  expect(bar.getAttribute("aria-valuenow")).toBe("0");
+  expect(bar.getAttribute("aria-valuemax")).toBe("4");
   const talk = screen.getAllByRole("button", { name: "Falar com o Grão-Mestre" })[0];
   expect(talk?.hasAttribute("disabled")).toBe(true);
   expect(screen.getAllByText("Disponível depois que você criar a primeira campanha.").length).toBe(
@@ -286,6 +289,10 @@ test("the tables and the request show with their links, and a new table appears 
   const req = within(waiting).getByRole("link", { name: /Decidir o pedido 5/ });
   expect(req.getAttribute("href")).toContain("/aprovacoes");
   expect(req.getAttribute("href")).toContain("pedido=5");
+  // the row says it in the words of the catalog, with the place and the risk, not the text of the server
+  expect(req.textContent).toContain("Usar mais do limite de IA");
+  expect(req.textContent).toContain("loja · 42-login · medium");
+  expect(req.textContent).not.toContain("US$ 20");
   expect(screen.queryByText(/Ainda não há nenhuma campanha/)).toBeNull();
 
   const sock = openSocket();

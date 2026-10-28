@@ -329,8 +329,8 @@ function Answers({
   );
 }
 
-/** The lines of the question that say exactly what will be done: the tool, the command, the URL, the paths. */
-const EXACT = /^(Ferramenta|Comando exato|URL|Caminhos|Ação|Sobre|Missão): /;
+/** The lines of the question that say exactly what will be done: the tool, the command, the URL, the paths. "Sobre" is the `about`, which the card already shows. */
+const EXACT = /^(Ferramenta|Comando exato|URL|Caminhos|Ação|Missão): /;
 const CHAIN = /^Por que chegou a este nível: /;
 
 /** Who asked, in full (class, table, machine), from the line of the engine; "" for a request of the engine. */
@@ -443,7 +443,7 @@ export function ApprovalCard({
       </dl>
       {known ? (
         <div className="flex flex-col gap-2">
-          <p className="m-0 rounded-field bg-accent-wash px-3 py-2">
+          <p className="m-0 rounded-field bg-signal-wash px-3 py-2">
             <strong>{t("card.ifApprove")}</strong>{" "}
             {many
               ? t("card.yesMany", { count: item.members.length })

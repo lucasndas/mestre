@@ -1,7 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { Checkbox } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { useChatControl } from "../app/chatControl";
 import { useCan, useFormatDateTime, useMe } from "../app/session";
@@ -88,7 +87,11 @@ function GmListCard({ view }: { view: WorkspaceView }) {
       className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-field border-2 border-ink bg-surface p-3 shadow-card"
     >
       <h3 className="m-0 text-lg">{gm ? gm.name : <Term name="Grão-Mestre" />}</h3>
-      {gm ? <span className="rounded-full bg-accent-wash px-2 text-sm">{gm.state}</span> : null}
+      {gm ? (
+        <span className="rounded-full bg-accent-wash px-2 text-sm">
+          {t(`gm.states.${gm.state}`, { defaultValue: gm.state })}
+        </span>
+      ) : null}
       {gm ? (
         <span className="text-sm text-muted">{t("gm.machine", { machine: gm.machine_name })}</span>
       ) : null}
@@ -302,29 +305,12 @@ export function WorkspaceScreen({ workspace }: { workspace: string }) {
                 view={mode}
                 onView={setMode}
                 wide={wide}
+                ended={ended}
+                showEnded={showEnded}
+                onShowEnded={setShowEnded}
               />
             </div>
           )}
-          {ended > 0 ? (
-            <div className="mb-3 flex flex-wrap items-center gap-3">
-              <Checkbox
-                isSelected={showEnded}
-                onChange={setShowEnded}
-                className="group flex min-h-11 items-center gap-2"
-              >
-                <span
-                  aria-hidden="true"
-                  className="grid size-5 place-items-center rounded border border-ink bg-surface group-data-[selected]:bg-accent group-data-[selected]:text-accent-ink"
-                >
-                  {showEnded ? "✓" : ""}
-                </span>
-                {t("ended.show")}
-              </Checkbox>
-              {!showEnded ? (
-                <span className="text-sm text-muted">{t("ended.hidden", { count: ended })}</span>
-              ) : null}
-            </div>
-          ) : null}
           {board ? (
             <Suspense
               fallback={
