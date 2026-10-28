@@ -88,6 +88,19 @@ func refusalOf(err error) error {
 	return err
 }
 
+// fenceState is what the Guild screen reads of the fence of the Citadel (guild.Fence).
+type fenceState interface {
+	Acting() bool
+	State() guild.FenceState
+	TelegramStopped() bool
+}
+
+// fenceFlags are the marks of the row of the Citadel: suspended (the fence does not let it act, or
+// it drains), "GitHub fora" (the lock is down) and the Telegram stopped by a 409.
+func fenceFlags(f fenceState, draining bool) (suspended, githubDown, telegramStopped bool) {
+	return !f.Acting() || draining, f.State() == guild.FenceLockDown, f.TelegramStopped()
+}
+
 func (g *guildHost) View(ctx context.Context) (panel.GuildView, error) {
 	c, run, err := g.acting()
 	if err != nil {
@@ -145,10 +158,7 @@ func (g *guildHost) View(ctx context.Context) (panel.GuildView, error) {
 		case row.Citadel:
 			row.Online = true
 			if run != nil && run.fence != nil {
-				f := run.fence
-				row.Suspended = !f.Acting() || run.gate.isDraining()
-				row.GitHubDown = f.State() == guild.FenceLockDown
-				row.TelegramStopped = f.TelegramStopped()
+				row.Suspended, row.GitHubDown, row.TelegramStopped = fenceFlags(run.fence, run.gate.isDraining())
 			}
 		case run != nil && run.srv != nil:
 			link := run.srv.Link(m.ID)

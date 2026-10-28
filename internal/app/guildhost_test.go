@@ -65,3 +65,35 @@ func TestOnlyOnePlannedHandoverRunsAtATime(t *testing.T) {
 		t.Errorf("a refused claim must free the place: %v", err)
 	}
 }
+
+type fakeFence struct {
+	state     guild.FenceState
+	acting    bool
+	tgStopped bool
+}
+
+func (f fakeFence) Acting() bool            { return f.acting }
+func (f fakeFence) State() guild.FenceState { return f.state }
+func (f fakeFence) TelegramStopped() bool   { return f.tgStopped }
+
+// CA-TRAVA-07: the row of the Citadel says "GitHub fora" when the lock is down (the Citadel
+// still acts), the Telegram stopped by a 409, and suspended when the fence does not act or drains.
+func TestTheRowOfTheCitadelFollowsTheStateOfTheFence(t *testing.T) {
+	t.Parallel()
+	for name, c := range map[string]struct {
+		f                     fakeFence
+		draining              bool
+		suspended, down, stop bool
+	}{
+		"confirmed":        {f: fakeFence{state: guild.FenceConfirmed, acting: true}},
+		"lock down":        {f: fakeFence{state: guild.FenceLockDown, acting: true}, down: true},
+		"telegram stopped": {f: fakeFence{state: guild.FenceLockDown, acting: true, tgStopped: true}, down: true, stop: true},
+		"not acting":       {f: fakeFence{state: guild.FenceConfirmed}, suspended: true},
+		"draining":         {f: fakeFence{state: guild.FenceConfirmed, acting: true}, draining: true, suspended: true},
+	} {
+		s, d, st := fenceFlags(c.f, c.draining)
+		if s != c.suspended || d != c.down || st != c.stop {
+			t.Errorf("%s: suspended %v, github down %v, telegram stopped %v; want %v, %v, %v", name, s, d, st, c.suspended, c.down, c.stop)
+		}
+	}
+}
