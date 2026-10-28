@@ -316,7 +316,7 @@ func TestAnAdministratorTypesIntoABusyAgentAndItIsAuditedWithoutTheContent(t *te
 	if code := w.attach(t, bia, "mestre.local", "Dev-1", "--write").exit(t); code != 3 {
 		t.Fatalf("approver --write: exit %d, want 3", code)
 	}
-	if bia.asked("o agente") {
+	if bia.asked("the agent") {
 		t.Fatal("an Approver was asked to confirm typing")
 	}
 	if got := w.audit(t, "panel.terminal_typing_started"); len(got) != 0 {
@@ -329,7 +329,7 @@ func TestAnAdministratorTypesIntoABusyAgentAndItIsAuditedWithoutTheContent(t *te
 	ana := newAttachConsole("ana", "s")
 	run := w.attach(t, ana, "mestre.local", "Dev-1", "--write")
 	w.r.waitFor("the screen of the agent", func() bool { return strings.Contains(ana.screen(), "MARCA01Z") })
-	if !ana.asked("o agente está trabalhando") {
+	if !ana.asked("the agent is working") {
 		t.Fatalf("the warning was not shown; asked %v", ana.asks)
 	}
 	const marker = "DIGITADOZ"
