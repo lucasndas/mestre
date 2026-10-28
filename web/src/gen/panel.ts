@@ -1859,6 +1859,12 @@ export interface AppsPage {
    * Creation says the link of creation is available in this period.
    */
   creation: boolean;
+  /**
+   * NextFixed is the fixed App ("Grão-Mestre" first, then "Mestre") that was never
+   * registered, for the Owner when the creation is available: the empty screen offers the
+   * link of this one. Empty when both fixed Apps are known or the viewer cannot link.
+   */
+  next_fixed?: string;
 }
 /**
  * OthersRequest is the number of Apps of the account that are not the Mestre's.

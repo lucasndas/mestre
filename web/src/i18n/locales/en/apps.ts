@@ -8,8 +8,8 @@ const apps: Widen<typeof pt> = {
   what: "the GitHub Apps",
   loading: "Loading the Apps…",
   strip: {
-    none: "No GitHub App yet",
-    noneHint: "Without the Apps, the agents cannot open PRs or comment on GitHub.",
+    none: "No App created yet",
+    noneHint: "Without the two fixed Apps Mestre cannot act on GitHub.",
     waiting: "{{count}} Apps waiting for a step from you",
     waitingOne: "1 App waiting for a step from you",
     waitingHint: "Each App says below what to do with it.",
@@ -18,8 +18,8 @@ const apps: Widen<typeof pt> = {
     action: "Generate the link of the App {{name}}",
   },
   empty: {
-    title: "No App created yet",
-    why: "A GitHub App is the identity Mestre acts with on GitHub. You create each App once, and Mestre keeps its key in the vault.",
+    title: "The two fixed Apps come first",
+    why: "An App is Mestre's robot badge on GitHub: every agent action shows under its name, and you can cut the access any time. Two are born at the first access: the Grand Master and the Mestre. The class Apps (QA, Reviewer…) come later, when a class asks for one.",
     step1: "Generate the creation link of the App (the PIN confirms).",
     step2: "Open the link in the browser where you are logged in to GitHub and confirm.",
     step3: "Install the App on the repositories of your campaigns.",

@@ -17,8 +17,8 @@ Os nomes e os grupos são os do índice de Configurações que a 4B pôs na `mai
 | Tela | Para que serve (frase da tela) | Faixa de situação e botão principal | Vazio e próximo passo |
 |---|---|---|---|
 | Perfis de conta | "As contas de IA (Claude, Codex, Antigravity) que os agentes usam para trabalhar nesta máquina. Sem uma conta entrada, nenhum agente roda." | "N de M contas prontas"; sem perfil, "Nenhuma conta de IA entrou ainda"; botão **Entrar em outra conta** | três cartões de provedor; escolher um pede o nome (sugerido: `claude-1`) e o PIN |
-| Apps do GitHub | "Os robôs do Mestre no GitHub: cada ação dos agentes aparece com o nome de um deles, e você pode cortar o acesso quando quiser." | "N Apps esperando um passo seu" ou "Todos prontos"; sem App, **Gerar o link do App Grão-Mestre** | explica o que é um App e os três passos (gerar o link com PIN, abrir no navegador logado no GitHub, instalar nos repositórios) |
-| Segredos | "As senhas e chaves que o Mestre guarda no cofre… o valor nunca volta a aparecer." | "N credenciais de site, M perto de vencer"; **Cadastrar credencial de site** | a tabela "Onde cada chave vai" aparece sempre; sem credencial de site, a faixa diz que só há os do Mestre |
+| Apps do GitHub | "Os robôs do Mestre no GitHub: cada ação dos agentes aparece com o nome de um deles, e você pode cortar o acesso quando quiser." | "N Apps esperando um passo seu" ou "Todos prontos"; sem App, **Gerar o link do App Grão-Mestre** (o servidor diz qual App fixo vem agora, `next_fixed`) | explica o que é um App e os três passos (gerar o link com PIN, abrir no navegador logado no GitHub, instalar nos repositórios) |
+| Segredos | "As senhas e chaves que o Mestre guarda no cofre… o valor nunca volta a aparecer." | "N credenciais de site, M perto de vencer"; **Cadastrar credencial de site** | a tabela "Onde cada chave vai" aparece sempre; sem credencial de site, a faixa (neutra) diz "Nenhum segredo seu no cofre ainda" e que só há os do Mestre, sem caixa tracejada repetindo |
 | Classes | "As funções dos agentes (Dev, QA, Revisor): o que cada uma pode fazer e qual App do GitHub ela usa." | "N propostas esperando a sua aprovação" ou "N classes em vigor"; sem classe, **Falar com o Grão-Mestre** | explica o que é uma classe e como nasce: o Grão-Mestre propõe, você aprova, o App é preparado |
 
 ### Perfis de conta (o que cresce no M7)
@@ -38,7 +38,7 @@ Os nomes e os grupos são os do índice de Configurações que a 4B pôs na `mai
 
 - **"Onde cada chave vai":** site (aqui, **Cadastrar credencial de site**, preferindo senha de app, token ou chave de API); chave de App do GitHub (entra no cofre sozinha na criação, link para Apps); conta de Claude, Codex ou Antigravity (por login, link para Perfis de conta); token do bot do Telegram (guardado pelo Mestre na instalação); chave de API de provedor ([pendência](#o-que-pede-backend-novo)).
 - Os segredos do próprio Mestre (`guild_ca_key`, `telegram_bot_token`, `github_app_key`…) saem da lista de credenciais e vão para "Guardados pelo Mestre": nome legível, [impressão](../plataforma/cofre.md) e o nome técnico ao lado, sem edição. As credenciais de site são cartões (página, tipo, classes, domínios, quem responde ao segundo fator, último uso, aviso de validade) com **Substituir** e **Apagar**, com PIN.
-- O formulário mantém todos os campos de hoje; dono, validade, seletores e texto de sucesso ficam em "Mais opções". A chave de recuperação vira a seção "Cópia de segurança do cofre", com o mesmo aviso, PIN e `ShownOnce`.
+- O formulário mantém todos os campos de hoje; dono, validade, seletores e texto de sucesso ficam em "Mais opções". A chave de recuperação vira a seção "Cópia de segurança do cofre", com o mesmo aviso, PIN e `ShownOnce`, e a frase de que os backups que já existem continuam exigindo a chave antiga.
 
 ### Classes
 

@@ -44,16 +44,18 @@ export function Transfer() {
         {data && !tr?.to_me ? <p className="text-muted">{t("accept.none")}</p> : null}
         {tr?.to_me ? (
           <>
-            <section aria-label={t("accept.effectTitle")} className="flex flex-col gap-2">
+            <section
+              aria-label={t("accept.effectTitle")}
+              className="flex flex-col gap-2 rounded-field border border-line bg-surface p-5"
+            >
               <h2 className="text-xl">{t("accept.effectTitle")}</h2>
               <ul className="ml-5 list-disc">
                 <li>{t("accept.effectYou")}</li>
                 <li>{t("accept.effectHim", { name: tr.from_name })}</li>
                 <li>{t("accept.effectSessions")}</li>
               </ul>
-              <p className="text-sm text-muted">{t("accept.ignore")}</p>
             </section>
-            <div>
+            <div className="flex flex-col gap-3 rounded-field border border-line bg-surface p-5">
               <SensitiveButton
                 variant="danger"
                 onConfirm={async (pin) => {
@@ -66,6 +68,7 @@ export function Transfer() {
               >
                 {t("accept.submit")}
               </SensitiveButton>
+              <p className="text-sm text-muted">{t("accept.ignore", { name: tr.from_name })}</p>
             </div>
           </>
         ) : null}

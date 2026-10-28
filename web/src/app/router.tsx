@@ -23,6 +23,7 @@ import { GitHubApps } from "../screens/admin/GitHubApps";
 import { GitHubConnect } from "../screens/admin/GitHubConnect";
 import { Guild } from "../screens/admin/Guild";
 import { Instructions } from "../screens/admin/Instructions";
+import { Invite, InviteDelivery } from "../screens/admin/Invite";
 import { Policy } from "../screens/admin/Policy";
 import { Presets } from "../screens/admin/Presets";
 import { Profiles } from "../screens/admin/Profiles";
@@ -108,6 +109,16 @@ const usersRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/usuarios",
   component: Users,
+});
+const inviteRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/usuarios/convidar",
+  component: Invite,
+});
+const inviteDeliveryRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/usuarios/convite",
+  component: InviteDelivery,
 });
 const secretsRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -327,6 +338,8 @@ const routeTree = rootRoute.addChildren([
     sessionsRoute,
     passwordRoute,
     usersRoute,
+    inviteRoute,
+    inviteDeliveryRoute,
     secretsRoute,
     auditRoute,
     decreesRoute,

@@ -93,6 +93,8 @@ export type Section = "home" | "approvals" | "workspaces" | "settings";
 /** The item of the menu that holds the address: every screen belongs to one. */
 export function sectionOf(path: string): Section {
   if (path === "/" || path === "") return "home";
+  // the page that asks to accept the post is reached from the line over the Início
+  if (path === "/transferencia") return "home";
   if (path === "/aprovacoes" || path.startsWith("/aprovacoes/")) return "approvals";
   if (path === "/workspaces" || path.startsWith("/workspaces/") || path.startsWith("/terminal/"))
     return "workspaces";

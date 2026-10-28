@@ -8,6 +8,10 @@ const shell: Widen<typeof pt> = {
     approvals: "Approvals",
     workspaces: "Campaigns",
     settings: "Settings",
+    guildOk: "Guild: everything connected",
+    guildDown_one: "Guild: {{count}} machine without signal",
+    guildDown_other: "Guild: {{count}} machines without signal",
+    zone: "Times in {{zone}}",
   },
   top: {
     home: "Mestre, go to Home",
@@ -24,8 +28,7 @@ const shell: Widen<typeof pt> = {
   },
   settings: {
     title: "Settings",
-    intro:
-      "Everything you set once and rarely change. Day-to-day work lives in Home, Approvals and Campaigns.",
+    intro: "Everything you can set in Mestre, by subject.",
     none: "Your level has no settings screens besides the ones of your account.",
     groups: {
       account: { name: "Account", blurb: "You and your access" },

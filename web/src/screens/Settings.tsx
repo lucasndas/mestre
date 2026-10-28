@@ -18,27 +18,31 @@ export function Settings() {
   return (
     <section>
       <PageHeader title={t("settings.title")} intro={t("settings.intro")} />
-      <div className="grid max-w-5xl gap-5 lg:grid-cols-2">
+      <div className="grid max-w-6xl gap-x-8 gap-y-10 md:grid-cols-2 xl:grid-cols-3">
         {groups.map((g) => (
           <section
             key={g.key}
             id={`grupo-${g.key}`}
             aria-labelledby={`grupo-${g.key}-h`}
-            className="rounded-field border border-line bg-surface p-4"
+            className="min-w-0"
           >
             <h2 id={`grupo-${g.key}-h`} className="text-xl">
               {say(`settings.groups.${g.key}.name`)}
             </h2>
-            <p className="mb-2 text-sm text-muted">{say(`settings.groups.${g.key}.blurb`)}</p>
+            <p className="border-b border-line pb-2 text-sm text-muted">
+              {say(`settings.groups.${g.key}.blurb`)}
+            </p>
             <ul className="flex flex-col">
               {g.entries.map((e) => (
                 <li key={e.key} className="border-t border-line first:border-t-0">
                   <Link
                     to={e.path}
                     search={e.path === "/sessoes" ? { todas: false } : undefined}
-                    className="block min-h-14 rounded-field px-1 py-2 hover:bg-accent-wash"
+                    className="block min-h-14 rounded-field px-1 py-2.5 hover:bg-accent-wash"
                   >
-                    <strong className="block">{say(`settings.entries.${e.key}.name`)}</strong>
+                    <strong className="block text-accent">
+                      {say(`settings.entries.${e.key}.name`)}
+                    </strong>
                     <span className="block text-sm text-muted">
                       {say(`settings.entries.${e.key}.blurb`)}
                     </span>

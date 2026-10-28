@@ -5,8 +5,8 @@ export default {
   what: "os Apps do GitHub",
   loading: "Carregando os Apps…",
   strip: {
-    none: "Nenhum App do GitHub ainda",
-    noneHint: "Sem os Apps, os agentes não conseguem abrir PRs nem comentar no GitHub.",
+    none: "Nenhum App criado ainda",
+    noneHint: "Sem os dois Apps fixos o Mestre não age no GitHub.",
     waiting: "{{count}} Apps esperando um passo seu",
     waitingOne: "1 App esperando um passo seu",
     waitingHint: "Cada App diz abaixo o que fazer com ele.",
@@ -15,8 +15,8 @@ export default {
     action: "Gerar o link do App {{name}}",
   },
   empty: {
-    title: "Nenhum App criado ainda",
-    why: "Um App do GitHub é a identidade com que o Mestre age no GitHub. Você cria cada App uma vez, e o Mestre guarda a chave dele no cofre.",
+    title: "Os dois Apps fixos vêm primeiro",
+    why: "Um App é o crachá de robô do Mestre no GitHub: toda ação dos agentes aparece com o nome dele, e você pode cortar o acesso a qualquer hora. Dois nascem no primeiro acesso: o Grão-Mestre e o Mestre. Os de classe (QA, Revisor…) vêm depois, quando a classe pede.",
     step1: "Gere o link de criação do App (o PIN confirma).",
     step2: "Abra o link no navegador em que você está logado no GitHub e confirme.",
     step3: "Instale o App nos repositórios das suas campanhas.",

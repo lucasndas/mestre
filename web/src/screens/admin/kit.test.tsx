@@ -62,6 +62,13 @@ test("the vocabulary line gives each word as a term with its help", async () => 
   expect((await screen.findByRole("dialog")).textContent).toContain("No mundo real");
 });
 
+test("the mark of the vocabulary trails its term, so a wrapped line never starts with it", () => {
+  show(<VocabLine terms={["Perfil de conta", "Classe"]} />);
+  const marks = screen.getAllByText("·");
+  expect(marks).toHaveLength(1);
+  expect(marks[0]?.previousElementSibling?.textContent).toContain("Perfil de conta");
+});
+
 // CA-ADM-18
 test("a failed read shows what, why in the language, a retry and the raw answer folded away", async () => {
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });

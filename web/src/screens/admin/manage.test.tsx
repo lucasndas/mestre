@@ -464,6 +464,8 @@ test("Perfis de conta with no data says what it is, shows the state and gives th
   expect(strip.textContent).toContain("Nenhuma conta de IA entrou ainda");
   expect(strip.textContent).toContain("configuração guiada ainda não está disponível");
   // one card per provider: the empty state and the strip speak of the same data
+  for (const help of ["Claude Code, da Anthropic", "Codex, da OpenAI", "Antigravity, do Google"])
+    expect(screen.getByText(help)).toBeTruthy();
   for (const name of ["Entrar com Claude", "Entrar com Codex", "Entrar com Antigravity"])
     expect(screen.getByRole("button", { name })).toBeTruthy();
 });
@@ -477,10 +479,40 @@ test("Apps do GitHub with no App explains what an App is and the three steps", a
     }),
   });
   renderApp("/apps");
-  expect(await screen.findByRole("heading", { name: "Nenhum App criado ainda" })).toBeTruthy();
-  expect(statusText()).toContain("Nenhum App do GitHub ainda");
+  expect(
+    await screen.findByRole("heading", { name: "Os dois Apps fixos vêm primeiro" }),
+  ).toBeTruthy();
+  expect(statusText()).toContain("Nenhum App criado ainda");
   expect(screen.getByText(/Abra o link no navegador em que você está logado/)).toBeTruthy();
   expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  // the server did not say which fixed App is next: no button to guess one
+  expect(screen.queryByRole("button", { name: /Gerar o link do App/ })).toBeNull();
+});
+
+// Part of CA-ADM-17 and CA-GH-APPS-04: the empty strip carries the one main button
+test("the empty Apps screen offers the link of the fixed App the server names, with the PIN", async () => {
+  const { calls } = fakeServer({
+    ...base,
+    "GET /api/github/apps": () => ({
+      body: { count: count(0), creation: true, requests: [], apps: [], next_fixed: "Grão-Mestre" },
+    }),
+    "POST /api/github/apps/Gr%C3%A3o-Mestre/link": () => ({
+      body: {
+        app: "Grão-Mestre",
+        url: "https://x/github/apps/novo/t",
+        expires_at: "2026-10-27T10:00:00Z",
+      },
+    }),
+  });
+  const user = userEv();
+  renderApp("/apps");
+  await user.click(await screen.findByRole("button", { name: "Gerar o link do App Grão-Mestre" }));
+  await fill(user, screen.getByLabelText("PIN"), "123456");
+  await user.click(screen.getByRole("button", { name: "Gerar o link do App Grão-Mestre" }));
+  expect(await screen.findByText("https://x/github/apps/novo/t")).toBeTruthy();
+  const post = calls.find((c) => c.method === "POST");
+  expect(post?.path).toBe("/api/github/apps/Gr%C3%A3o-Mestre/link");
+  expect(post?.headers["X-Mestre-Pin"]).toBe("123456");
 });
 
 // CA-ADM-17

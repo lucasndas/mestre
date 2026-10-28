@@ -18,17 +18,28 @@ const users: Widen<typeof pt> = {
     approver: "Decides approvals and connects their own GitHub.",
     observer: "Only follows along, decides nothing.",
   },
-  levelCan: {
-    administrator: "Will be able to create campaigns, decide approvals and edit the classes.",
-    approver:
-      "Will be able to talk to the Grand Master, decide approvals and connect their own GitHub.",
-    observer: "Will be able to follow the campaigns, the tables and the canvas.",
-  },
-  levelCannot: {
-    administrator: "Will not be able to touch secrets, users or the Guild: those stay with you.",
-    approver:
-      "Will not be able to create campaigns or touch classes, secrets, users and the Guild.",
-    observer: "Will not be able to talk to the Grand Master or decide approvals.",
+  levelLists: {
+    administrator: {
+      can: [
+        "Talk to the Grand Master",
+        "Approve or deny requests in their campaigns",
+        "Create campaigns and permanent rules (decrees)",
+        "Type in the terminal of an agent and edit the canvas",
+      ],
+      not: ["Register people and machines", "Touch the vault and the GitHub Apps"],
+    },
+    approver: {
+      can: [
+        "Talk to the Grand Master",
+        "Approve or deny requests in their campaigns",
+        "Pause a table",
+      ],
+      not: ["Create campaigns", "Create permanent rules", "Register people and machines"],
+    },
+    observer: {
+      can: ["See what the agents are doing", "Receive notices"],
+      not: ["Talk to the Grand Master", "Approve or deny requests"],
+    },
   },
   states: { active: "Active", suspended: "Suspended" },
   you: "You",
@@ -66,10 +77,14 @@ const users: Widen<typeof pt> = {
     pinNote: "The PIN is only the person's. You never see it.",
     open: "Invite a person",
     close: "Close",
-    title: "Invite a person",
-    name: "Name",
-    level: "What the person will be able to do (level)",
-    workspaces: "Campaigns they act in",
+    pageTitle: "Invite a person",
+    pageIntro: "Step 1 of 2. Say who is coming in and what they will be able to do.",
+    can: "Will be able to",
+    cannot: "Will not be able to",
+    name: "Name of the person",
+    level: "What they will be able to do",
+    workspaces: "Campaigns",
+    workspacesHint: "The person only sees the campaigns ticked.",
     more: "More options",
     githubLogin: "GitHub login",
     githubLoginHint: "Optional for now. The account that authorizes GitHub has to be this one.",
@@ -78,25 +93,30 @@ const users: Widen<typeof pt> = {
   },
   invite: {
     title: "Invite for {{name}}",
-    lead: "Hand it over in three parts, each through its own channel. The first two are not secret; the third is, and goes only after the person confirms the certificate step.",
+    pageIntro:
+      "Step 2 of 2. Hand it over in three parts, at different moments or through different channels.",
+    closing:
+      "Mestre does not send the code by Telegram or put it in a link. Whoever has the address and the code creates the account with the level you chose: send it only to the person.",
+    copyInstructions: "Copy instructions",
+    copyCheck: "Copy check code",
     checking: "Computing the certificate check code…",
     checkFailed:
       "I could not compute the certificate check code, so I am not handing out the invite. The first-access code stays only on this screen; try again.",
     retry: "Try again",
-    part1: "1. Instructions",
+    part1: "Part 1 · The instructions",
     part1Hint:
       "They can go through any channel: they carry no code. They carry the rule to not install if the check code differs.",
-    part2: "2. Certificate check code",
+    part2: "Part 2 · The certificate check code",
     part2Hint:
       "Say it aloud, in person or on a call, or send it through a different channel from the instructions. If the address and this code traveled together, whoever altered the message could lead the person to a fake panel. This value was computed just now from {{path}}. Check that it equals what the Citadel installer showed; if not, do not hand out the invite.",
-    part3: "3. First-access code",
+    part3: "Part 3 · The first-access code",
     part3Gate: "The person told me they checked the code and did the certificate step",
     part3Locked: "Tick above when the person confirms. The code only shows after that.",
     part3Hint:
       "Single use, valid for 24 hours, shown once and never sent by Telegram or in a link. Send it through a channel where you recognize the person.",
     copy: "Copy",
     copied: "Copied.",
-    codeDone: "I sent it and wrote it down",
+    codeDone: "Noted, let it go",
     instructions:
       'Hello, {{name}}! You were invited to a Mestre Guild.\n\nPanel address: {{address}}\n\nBefore signing in, make your device trust the Mestre:\n1. Download the certificate at {{address}}{{path}}.\n2. Check the file\'s check code against the one I will give you through another channel (spoken or in a separate message). If it differs, do NOT install it and tell me.\n3. Install the certificate and reopen the browser.\n4. Open the panel address, choose "I have a first-access code" and use the code I will send you later.',
     technical:
@@ -155,15 +175,17 @@ const users: Widen<typeof pt> = {
     needsPin: "Only someone who already has a PIN can receive the post, and {{name}} does not yet.",
   },
   accept: {
-    title: "Guildmaster post",
+    title: "Accept the Guildmaster post",
     none: "No transfer of the post is waiting for you.",
-    ask: "{{name}} wants to pass the Guildmaster post to you. Valid until {{when}}.",
-    effectTitle: "What changes if you accept",
-    effectYou: "You become the Guildmaster: you get to see the secrets, the users and the Guild.",
+    ask: "{{name}} asked to pass the post to you. Valid until {{when}}.",
+    effectTitle: "If you accept",
+    effectYou:
+      "You get to see and change everything: people, machines, the vault and the GitHub Apps.",
     effectHim: "{{name}} becomes Administrator.",
-    effectSessions: "Both sessions end, and each of you needs to sign in again.",
-    ignore: "If you do not want it, ignore it: the request expires by itself.",
-    submit: "Accept the Guildmaster post",
+    effectSessions: "Both sessions end: each of you signs in again.",
+    ignore:
+      "If you do not want it, ignore it: the request expires by itself, or {{name}} cancels it.",
+    submit: "Accept the post",
     banner: "{{name}} wants to pass the Guildmaster post to you.",
     bannerLink: "See the request",
   },

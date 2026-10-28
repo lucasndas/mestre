@@ -9,12 +9,10 @@ const secrets: Widen<typeof pt> = {
   loadWhat: "the vault",
   strip_one: "{{count}} site credential, {{expiring}} close to expiring",
   strip_other: "{{count}} site credentials, {{expiring}} close to expiring",
-  stripNone_one: "The vault only has {{count}} secret of the Mestre itself",
-  stripNone_other: "The vault only has {{count}} secrets of the Mestre itself",
+  stripNone: "No secret of yours in the vault yet",
+  stripNoneHint_one: "Only {{count}} secret, the one Mestre itself keeps.",
+  stripNoneHint_other: "Only {{count}} secrets, the ones Mestre itself keeps.",
   stripHint: "Site credentials are the passwords agents use to sign in to pages for you.",
-  emptyTitle: "No site credential yet",
-  empty:
-    "When an agent needs to sign in to a page (a hosting panel, an email service), its password lives here, in the vault, never in the chat. Register one when you need it.",
   sitesTitle: "Site credentials",
   managedTitle: "Kept by the Mestre",
   technicalName: "technical name",
@@ -112,6 +110,7 @@ const secrets: Widen<typeof pt> = {
     done: "Secret deleted.",
   },
   recovery: {
+    oldBackups: "The backups that already exist still need the old key.",
     title: "Vault backup",
     intro:
       "The recovery key opens the vault backup. The Mestre does not keep it: whoever loses it and loses the machines is left without the secrets.",

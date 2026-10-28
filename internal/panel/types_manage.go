@@ -127,6 +127,10 @@ type AppsPage struct {
 	Requests []AppRequestRow `json:"requests"`
 	// Creation says the link of creation is available in this period.
 	Creation bool `json:"creation"`
+	// NextFixed is the fixed App ("Grão-Mestre" first, then "Mestre") that was never
+	// registered, for the Owner when the creation is available: the empty screen offers the
+	// link of this one. Empty when both fixed Apps are known or the viewer cannot link.
+	NextFixed string `json:"next_fixed,omitempty"`
 }
 
 // OthersRequest is the number of Apps of the account that are not the Mestre's.

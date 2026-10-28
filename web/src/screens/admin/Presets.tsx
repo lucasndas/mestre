@@ -228,25 +228,25 @@ function BaseList({
             <caption className="sr-only">{t("bases.caption")}</caption>
             <thead>
               <tr className="border-b border-line text-sm text-muted">
-                <th scope="col" className="py-2 pr-4">
+                <th scope="col" className="px-3 py-2">
                   {t("bases.name")}
                 </th>
-                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
+                <th scope="col" className="hidden px-3 py-2 sm:table-cell">
                   {t("bases.command")}
                 </th>
-                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
+                <th scope="col" className="hidden px-3 py-2 sm:table-cell">
                   {t("bases.ready")}
                 </th>
-                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
+                <th scope="col" className="hidden px-3 py-2 sm:table-cell">
                   {t("bases.platforms")}
                 </th>
-                <th scope="col" className="py-2" />
+                <th scope="col" className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
               {bases.map((b) => (
                 <tr key={b.name} className="border-b border-line align-top">
-                  <th scope="row" className="px-3 py-2 pr-4 font-semibold">
+                  <th scope="row" className="px-3 py-2 font-semibold">
                     {b.name} {b.builtin ? <Badge>{t("bases.builtin")}</Badge> : null}
                     <span className="mt-1 block font-mono text-sm font-normal text-muted sm:hidden">
                       {b.command} · {b.platforms.join(", ")}
@@ -254,8 +254,8 @@ function BaseList({
                   </th>
                   <td className="hidden py-2 pr-4 font-mono text-sm sm:table-cell">{b.command}</td>
                   <td className="hidden py-2 pr-4 text-sm sm:table-cell">{b.ready}</td>
-                  <td className="hidden py-2 pr-4 sm:table-cell">{b.platforms.join(", ")}</td>
-                  <td className="py-2">
+                  <td className="hidden px-3 py-2 sm:table-cell">{b.platforms.join(", ")}</td>
+                  <td className="px-3 py-2">
                     <Actions
                       name={b.name}
                       builtin={b.builtin}
@@ -304,28 +304,28 @@ function SheetList({
             <caption className="sr-only">{t("sheets.caption")}</caption>
             <thead>
               <tr className="border-b border-line text-sm text-muted">
-                <th scope="col" className="py-2 pr-4">
+                <th scope="col" className="px-3 py-2">
                   {t("sheets.name")}
                 </th>
-                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
+                <th scope="col" className="hidden px-3 py-2 sm:table-cell">
                   {t("sheets.base")}
                 </th>
-                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
+                <th scope="col" className="hidden px-3 py-2 sm:table-cell">
                   {t("sheets.agent")}
                 </th>
-                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
+                <th scope="col" className="hidden px-3 py-2 sm:table-cell">
                   {t("sheets.class")}
                 </th>
-                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
+                <th scope="col" className="hidden px-3 py-2 sm:table-cell">
                   {t("sheets.account")}
                 </th>
-                <th scope="col" className="py-2" />
+                <th scope="col" className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
               {sheets.map((s) => (
                 <tr key={s.name} className="border-b border-line align-top">
-                  <th scope="row" className="py-2 pr-4 font-semibold">
+                  <th scope="row" className="px-3 py-2 font-semibold">
                     {s.name}
                     {s.incomplete ? (
                       <span className="mt-1 block">
@@ -336,13 +336,13 @@ function SheetList({
                       {s.base} · {s.agent}
                     </span>
                   </th>
-                  <td className="hidden py-2 pr-4 sm:table-cell">{s.base}</td>
-                  <td className="hidden py-2 pr-4 sm:table-cell">{s.agent}</td>
-                  <td className="hidden py-2 pr-4 sm:table-cell">{s.class || t("sheets.none")}</td>
-                  <td className="hidden py-2 pr-4 sm:table-cell">
+                  <td className="hidden px-3 py-2 sm:table-cell">{s.base}</td>
+                  <td className="hidden px-3 py-2 sm:table-cell">{s.agent}</td>
+                  <td className="hidden px-3 py-2 sm:table-cell">{s.class || t("sheets.none")}</td>
+                  <td className="hidden px-3 py-2 sm:table-cell">
                     {s.account || t("sheets.none")}
                   </td>
-                  <td className="py-2">
+                  <td className="px-3 py-2">
                     <Actions name={s.name} onEdit={() => onEdit(s)} onDelete={onDelete(s.name)} />
                   </td>
                 </tr>
@@ -368,7 +368,7 @@ function Actions({
 }) {
   const { t } = useTranslation("presets");
   return (
-    <div className="flex flex-col items-start gap-2">
+    <div className="flex flex-wrap items-start gap-2">
       <Button variant="secondary" aria-label={t("edit", { name })} onPress={onEdit}>
         {t("editShort")}
       </Button>

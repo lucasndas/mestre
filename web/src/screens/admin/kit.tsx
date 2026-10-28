@@ -73,6 +73,10 @@ export function PageHeader({ title, intro }: { title: string; intro: ReactNode }
 export const linkButton =
   "inline-flex min-h-11 items-center justify-center rounded-field border border-line bg-surface px-4 font-semibold text-ink hover:bg-accent-wash";
 
+/** The main action of a screen that is a link: it looks like the primary button. */
+export const linkButtonPrimary =
+  "inline-flex min-h-11 items-center justify-center rounded-field bg-accent px-4 font-semibold text-accent-ink hover:bg-accent-strong";
+
 export type Tone = "neutral" | "warn" | "ok" | "danger";
 
 // The tone is told by a symbol and a word as well as by the color (the pattern of the
@@ -224,8 +228,9 @@ export function VocabLine({ terms, extra }: { terms: TermKey[]; extra?: ReactNod
       <span>{t("admin.vocabulary")}:</span>
       {terms.map((name, i) => (
         <span key={name} className="flex items-baseline gap-x-3">
-          {i > 0 ? <span aria-hidden="true">·</span> : null}
           <Term name={name} />
+          {/* the mark trails its term, so a wrapped line never starts with it */}
+          {i < terms.length - 1 || extra ? <span aria-hidden="true">·</span> : null}
         </span>
       ))}
       {extra}
@@ -326,20 +331,27 @@ export function ChoiceGroup({
   value,
   onChange,
   options,
+  cards = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string; hint?: string }[];
+  /** Each option is a bordered card that tints when chosen (the prototype of the invite). */
+  cards?: boolean;
 }) {
   return (
-    <RadioGroup value={value} onChange={onChange} className="flex flex-col gap-1">
+    <RadioGroup
+      value={value}
+      onChange={onChange}
+      className={`flex flex-col ${cards ? "gap-2" : "gap-1"}`}
+    >
       <Label className="text-[0.95em] font-semibold tracking-wide">{label}</Label>
       {options.map((o) => (
         <Radio
           key={o.value}
           value={o.value}
-          className="group flex min-h-11 cursor-pointer items-center gap-3 rounded-field px-2 hover:bg-accent-wash"
+          className={`group flex min-h-11 cursor-pointer gap-3 rounded-field hover:bg-accent-wash ${cards ? CARD_OPTION : "items-center px-2"}`}
         >
           <span className="grid size-5 shrink-0 place-items-center rounded-full border border-muted group-data-selected:border-accent group-data-focus-visible:ring-3 group-data-focus-visible:ring-accent/25">
             <span className="hidden size-2.5 rounded-full bg-accent group-data-selected:block" />
@@ -354,6 +366,9 @@ export function ChoiceGroup({
   );
 }
 
+const CARD_OPTION =
+  "border border-line bg-surface p-3 data-selected:border-accent data-selected:bg-accent-wash";
+
 /** Several choices from a list (the workspaces a user acts in). */
 export function MultiChoice({
   label,
@@ -361,22 +376,28 @@ export function MultiChoice({
   onChange,
   options,
   empty,
+  cards = false,
 }: {
   label: string;
   value: string[];
   onChange: (v: string[]) => void;
   options: string[];
   empty: string;
+  cards?: boolean;
 }) {
   return (
-    <CheckboxGroup value={value} onChange={onChange} className="flex flex-col gap-1">
+    <CheckboxGroup
+      value={value}
+      onChange={onChange}
+      className={`flex flex-col ${cards ? "gap-2" : "gap-1"}`}
+    >
       <Label className="text-[0.95em] font-semibold tracking-wide">{label}</Label>
       {options.length === 0 ? <p className="text-sm text-muted">{empty}</p> : null}
       {options.map((o) => (
         <Checkbox
           key={o}
           value={o}
-          className="group flex min-h-11 cursor-pointer items-center gap-3 rounded-field px-2 hover:bg-accent-wash"
+          className={`group flex min-h-11 cursor-pointer items-center gap-3 rounded-field hover:bg-accent-wash ${cards ? CARD_OPTION : "px-2"}`}
         >
           <span
             aria-hidden="true"
@@ -402,6 +423,7 @@ export function ShownOnce({
   note,
   doneLabel,
   onDone,
+  bare = false,
 }: {
   title: string;
   secret: string;
@@ -410,6 +432,8 @@ export function ShownOnce({
   note?: string;
   doneLabel?: string;
   onDone: () => void;
+  /** Inside a card of its own: no box around it and the title only for assistive technology. */
+  bare?: boolean;
 }) {
   const { t } = useTranslation("users");
   const [copied, setCopied] = useState(false);
@@ -417,9 +441,13 @@ export function ShownOnce({
     <section
       role="status"
       aria-label={title}
-      className="mb-6 flex max-w-2xl flex-col gap-3 rounded-field border border-accent bg-accent-wash p-5"
+      className={
+        bare
+          ? "flex flex-col gap-3"
+          : "mb-6 flex max-w-2xl flex-col gap-3 rounded-field border border-accent bg-accent-wash p-5"
+      }
     >
-      <h2 className="text-xl">{title}</h2>
+      <h2 className={bare ? "sr-only" : "text-xl"}>{title}</h2>
       <p
         className="font-mono text-2xl font-semibold tracking-wider break-all select-all"
         data-testid="shown-once"

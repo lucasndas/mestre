@@ -114,7 +114,7 @@ test("a new decree is only a proposal until the author confirms it with the PIN"
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/decretos");
-  await user.click(await screen.findByRole("button", { name: "Novo decreto" }));
+  await user.click(await screen.findByRole("button", { name: "Criar decreto" }));
   await fill(user, screen.getByLabelText("Nome"), "dev");
   await fill(user, screen.getByLabelText("Padrão"), "npm test*");
   await fill(user, screen.getByLabelText("A ordem, com as suas palavras"), "dev roda npm test");
@@ -463,6 +463,13 @@ test("the extra instructions count their bytes and refuse to save over the limit
   renderApp("/instrucoes");
   const gm = (await screen.findByLabelText("Instruções para o Grão-Mestre")) as HTMLTextAreaElement;
   expect(screen.getByText("13 bytes, até 20 bytes")).toBeTruthy();
+  // the example is the hint inside the box and is not said a second time under it
+  expect(screen.queryAllByText("Vale para todos os Mestres de mesa desta campanha.")).toHaveLength(
+    0,
+  );
+  expect(
+    screen.getByPlaceholderText("Vale para todos os Mestres de mesa desta campanha."),
+  ).toBeTruthy();
   await fill(user, gm, " em revisão de código");
   const save = screen.getByRole("button", { name: "Salvar instruções" }) as HTMLButtonElement;
   expect(save.disabled).toBe(true);
@@ -502,7 +509,7 @@ const EMPTY: Record<string, { path: string; routes: Record<string, unknown>; emp
         can_revoke: true,
       },
     },
-    empty: "Ninguém decide por você",
+    empty: "Delegar ainda não foi preciso",
   },
   chain: {
     path: "/cadeia",
@@ -522,7 +529,7 @@ const EMPTY: Record<string, { path: string; routes: Record<string, unknown>; emp
         can_widen: true,
       },
     },
-    empty: "Sem arquivo de teto",
+    empty: "Sem teto, só as regras fixas",
   },
 };
 

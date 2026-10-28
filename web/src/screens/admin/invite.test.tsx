@@ -66,9 +66,9 @@ const invited = {
 
 async function invite(user: ReturnType<typeof userEvent.setup>) {
   await user.click(
-    (await screen.findAllByRole("button", { name: "Convidar pessoa" }))[0] as HTMLElement,
+    (await screen.findAllByRole("link", { name: "Convidar pessoa" }))[0] as HTMLElement,
   );
-  await fill(user, screen.getByLabelText("Nome"), "Ana Lima");
+  await fill(user, screen.getByLabelText("Nome da pessoa"), "Ana Lima");
   await user.click(screen.getByRole("button", { name: "Criar convite" }));
   await fill(user, screen.getByLabelText("PIN"), "123456");
   await user.click(screen.getByRole("button", { name: "Criar convite" }));
@@ -80,13 +80,17 @@ test("choosing a level says what the person will and will not be able to do", as
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/usuarios");
   await user.click(
-    (await screen.findAllByRole("button", { name: "Convidar pessoa" }))[0] as HTMLElement,
+    (await screen.findAllByRole("link", { name: "Convidar pessoa" }))[0] as HTMLElement,
   );
+  const summary = () => within(screen.getByRole("complementary", { name: "Resumo do convite" }));
   await user.click(screen.getByRole("radio", { name: /Observador/ }));
-  expect(screen.getByText(/Poderá acompanhar as campanhas/)).toBeTruthy();
-  expect(screen.getByText(/Não poderá conversar com o Grão-Mestre/)).toBeTruthy();
+  expect(summary().getByText("Ver o que os agentes estão fazendo")).toBeTruthy();
+  expect(summary().getByText("Aprovar ou negar pedidos")).toBeTruthy();
+  expect(summary().getByText("Poderá")).toBeTruthy();
+  expect(summary().getByText("Não poderá")).toBeTruthy();
   await user.click(screen.getByRole("radio", { name: /Administrador/ }));
-  expect(screen.getByText(/Poderá criar campanhas/)).toBeTruthy();
+  expect(summary().getByText("Criar campanhas e regras permanentes (decretos)")).toBeTruthy();
+  expect(summary().getByText("O PIN é só da pessoa. Você nunca o vê.")).toBeTruthy();
   expect(screen.queryByLabelText("PIN")).toBeNull();
 });
 
@@ -96,14 +100,16 @@ test("the campaigns that were ticked go in the invite", async () => {
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/usuarios");
   await user.click(
-    (await screen.findAllByRole("button", { name: "Convidar pessoa" }))[0] as HTMLElement,
+    (await screen.findAllByRole("link", { name: "Convidar pessoa" }))[0] as HTMLElement,
   );
-  await fill(user, screen.getByLabelText("Nome"), "Ana Lima");
+  await fill(user, screen.getByLabelText("Nome da pessoa"), "Ana Lima");
   await user.click(screen.getByRole("checkbox", { name: "loja" }));
   await user.click(screen.getByRole("button", { name: "Criar convite" }));
   await fill(user, screen.getByLabelText("PIN"), "123456");
   await user.click(screen.getByRole("button", { name: "Criar convite" }));
-  await screen.findByRole("region", { name: "1. Instruções" });
+  // step 2 is a page of its own
+  await screen.findByRole("region", { name: "Parte 1 · As instruções" });
+  expect(screen.getByRole("heading", { level: 1, name: "Convite de Ana Lima" })).toBeTruthy();
   expect(calls.find((c) => c.method === "POST" && c.path === "/api/users")?.body).toMatchObject({
     name: "Ana Lima",
     workspaces: ["loja"],
@@ -117,16 +123,18 @@ test("the invite has three parts with their own copy buttons: no code in the ins
   renderApp("/usuarios");
   await invite(user);
   const check = groupHex(await expectedCheckCode());
-  const p1 = await screen.findByRole("region", { name: "1. Instruções" });
-  const p2 = screen.getByRole("region", { name: "2. Código de conferência do certificado" });
-  const p3 = screen.getByRole("region", { name: "3. Código de primeiro acesso" });
+  const p1 = await screen.findByRole("region", { name: "Parte 1 · As instruções" });
+  const p2 = screen.getByRole("region", {
+    name: "Parte 2 · O código de conferência do certificado",
+  });
+  const p3 = screen.getByRole("region", { name: "Parte 3 · O código de primeiro acesso" });
   expect(p1.textContent).not.toContain("ABCD2345");
   expect(p1.textContent).not.toContain(check);
   expect(p1.textContent).not.toContain(check.replaceAll(" ", ""));
   expect(p2.textContent).toContain(check);
   expect(p1.textContent).toMatch(/NÃO instale/);
-  expect(within(p1).getByRole("button", { name: /Copiar: 1\. Instruções/ })).toBeTruthy();
-  expect(within(p2).getByRole("button", { name: /Copiar: 2\./ })).toBeTruthy();
+  expect(within(p1).getByRole("button", { name: /Copiar: Parte 1/ })).toBeTruthy();
+  expect(within(p2).getByRole("button", { name: /Copiar: Parte 2/ })).toBeTruthy();
   // the secret waits for the word of the person: the checkbox is what shows it
   expect(within(p3).queryByTestId("shown-once")).toBeNull();
   expect(within(p3).getByRole("checkbox", { name: /conferiu o código/ })).toBeTruthy();
@@ -145,7 +153,7 @@ test("without a check code computed from the certificate the invite is not hande
   renderApp("/usuarios");
   await invite(user);
   expect((await screen.findByRole("alert")).textContent).toContain("não entrego o convite");
-  expect(screen.queryByRole("region", { name: "1. Instruções" })).toBeNull();
+  expect(screen.queryByRole("region", { name: "Parte 1 · As instruções" })).toBeNull();
   expect(screen.queryByTestId("shown-once")).toBeNull();
 });
 
@@ -155,7 +163,7 @@ test("SHA-256 and CA appear only under Detalhes técnicos in what the person rea
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/usuarios");
   await invite(user);
-  const p1 = await screen.findByRole("region", { name: "1. Instruções" });
+  const p1 = await screen.findByRole("region", { name: "Parte 1 · As instruções" });
   const pre = p1.querySelector("pre") as HTMLElement;
   expect(pre.textContent).not.toMatch(/SHA-256|\bCA\b/);
   expect(pre.textContent).toMatch(/NÃO instale e me avise/);
@@ -284,7 +292,7 @@ test("on the phone the blocks of command scroll on their own and every control i
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/usuarios");
   await invite(user);
-  const p1 = await screen.findByRole("region", { name: "1. Instruções" });
+  const p1 = await screen.findByRole("region", { name: "Parte 1 · As instruções" });
   for (const pre of document.querySelectorAll("pre")) {
     expect(pre.className).toMatch(/overflow-x-auto/);
     expect(pre.className).toMatch(/max-w-full/);

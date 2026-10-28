@@ -94,7 +94,7 @@ export function InviteRow() {
     >
       <p className="min-w-0 flex-1">{t("welcome.inviteHint")}</p>
       <Link
-        to="/usuarios"
+        to="/usuarios/convidar"
         className="inline-flex min-h-11 items-center justify-center rounded-field border border-line bg-surface px-4 font-semibold hover:bg-accent-wash"
       >
         {t("welcome.invite")}

@@ -89,10 +89,10 @@ test("the Owner invites a person with the PIN and the first-access code is never
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   const { queryClient } = renderApp("/usuarios");
-  await user.click(await screen.findByRole("button", { name: "Convidar pessoa" }));
+  await user.click(await screen.findByRole("link", { name: "Convidar pessoa" }));
   const submit = screen.getByRole("button", { name: "Criar convite" });
   expect((submit as HTMLButtonElement).disabled).toBe(true); // no name yet
-  await fill(user, screen.getByLabelText("Nome"), "Ana Lima");
+  await fill(user, screen.getByLabelText("Nome da pessoa"), "Ana Lima");
   await user.click(screen.getByRole("radio", { name: /Observador/ }));
   await user.click(screen.getByRole("checkbox", { name: "loja" }));
   expect(screen.queryByLabelText("PIN")).toBeNull(); // the PIN field comes after the button
@@ -109,7 +109,9 @@ test("the Owner invites a person with the PIN and the first-access code is never
     workspaces: ["loja"],
     github_login: "",
   });
-  await user.click(screen.getByRole("button", { name: "Já enviei e anotei" }));
+  await user.click(screen.getByRole("button", { name: "Anotei, pode sumir" }));
+  // written down: the page goes back to the list and nothing of the code stays
+  expect(await screen.findByRole("heading", { level: 1, name: "Usuários" })).toBeTruthy();
   expect(screen.queryByTestId("shown-once")).toBeNull();
   // nothing keeps the code once it was written down
   expect(document.body.textContent).not.toContain("ABCD2345");
@@ -491,11 +493,13 @@ test("the user asked to take the post of Owner sees the banner and accepts with 
     await screen.findByText(/Maria Souza quer passar o posto de Senhor da Guilda a você/),
   ).toBeTruthy();
   await user.click(screen.getByRole("link", { name: "Ver o pedido" }));
-  const page = await screen.findByRole("heading", { name: "Posto de Senhor da Guilda" });
+  const page = await screen.findByRole("heading", { name: "Aceitar o posto de Senhor da Guilda" });
+  // it is reached from the line over the Início, so that is the item of the menu that is marked
+  expect(screen.getByRole("link", { name: "Início" }).getAttribute("aria-current")).toBe("page");
   expect(page).toBeTruthy();
-  await user.click(screen.getByRole("button", { name: "Aceitar o posto de Senhor da Guilda" }));
+  await user.click(screen.getByRole("button", { name: "Aceitar o posto" }));
   await fill(user, screen.getByLabelText("PIN"), "654321");
-  await user.click(screen.getByRole("button", { name: "Aceitar o posto de Senhor da Guilda" }));
+  await user.click(screen.getByRole("button", { name: "Aceitar o posto" }));
   await waitFor(() => expect(calls.some((c) => c.path === "/api/transfer/accept")).toBe(true));
   expect(calls.find((c) => c.path === "/api/transfer/accept")?.headers["X-Mestre-Pin"]).toBe(
     "654321",
@@ -517,25 +521,28 @@ const strips = () =>
   screen.queryAllByRole("status").filter((el) => el.querySelector("p > span[aria-hidden]"));
 
 // CA-ADM-17
-test("an empty vault says what a site credential is and how to register one, beside where each key goes", async () => {
+test("an empty vault says in the strip that there is nothing of the user yet and registers one from there, beside where each key goes", async () => {
   fakeServer({
     ...base,
     "GET /api/users": () => ({ body: list }),
     "GET /api/secrets": () => ({ body: { secrets: [] } }),
   });
   renderApp("/segredos");
-  const empty = await screen.findByRole("heading", { name: "Nenhuma credencial de site ainda" });
+  expect(await screen.findByRole("heading", { name: "Onde cada chave vai" })).toBeTruthy();
   expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   expect(screen.getByText("Vocabulário:")).toBeTruthy();
   expect(strips()).toHaveLength(1);
-  // the main action is in the strip, and the empty state does not repeat it
+  expect(strips()[0]?.textContent).toContain("Nenhum segredo seu no cofre ainda");
+  // the strip says it all: no second box repeats it
+  expect(screen.queryByRole("heading", { name: "Nenhuma credencial de site ainda" })).toBeNull();
   expect(
     within(strips()[0] as HTMLElement).getByRole("button", {
       name: "Cadastrar credencial de site",
     }),
   ).toBeTruthy();
-  expect(empty.closest("section")?.querySelector("button")).toBeNull();
   expect(screen.getAllByRole("button", { name: "Cadastrar credencial de site" })).toHaveLength(1);
+  // the old backups are said before anybody asks for a new key
+  expect(screen.getByText(/backups que já existem continuam exigindo a chave antiga/)).toBeTruthy();
 });
 
 // CA-ADM-17
