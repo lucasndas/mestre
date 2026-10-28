@@ -84,12 +84,18 @@ export default {
   },
   timeline: {
     title: "Citadel switch under way",
+    intro:
+      "You can leave this page open. Nothing is lost: whatever arrives from GitHub and Telegram waits in the queue.",
     stopped: "{{name}} stopped acting.",
+    stoppedHint: "It only finishes what it had already started.",
     takes: "The new Citadel takes over.",
+    takesHint: "There is a safety wait before it talks to GitHub and Telegram.",
     panel: "The panel moves to the other machine and reconnects.",
+    panelHint:
+      "This page comes back by itself. If it does not, open the address of the panel again.",
     doneTitle: "Switch done",
     done: "Done. {{name}} has been the Citadel since {{at}}.",
-    check: "Check each agent's state on the canvas.",
+    check: "The panel now lives in it. Check the state of each agent of {{from}} on the canvas.",
   },
   machines: "Machines",
   role: "Role",

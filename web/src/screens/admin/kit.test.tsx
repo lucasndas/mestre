@@ -81,6 +81,8 @@ test("a failed read shows what, why in the language, a retry and the raw answer 
     />,
   );
   expect(screen.getByRole("alert").textContent).toContain("Não foi possível carregar as contas.");
+  // a read changes nothing, and the screen says so
+  expect(screen.getByRole("alert").textContent).toContain("Nada foi alterado.");
   const details = screen.getByText("Detalhes técnicos").closest("details");
   expect(details?.open).toBe(false);
   expect(details?.textContent).toContain("internal: boom: db locked");

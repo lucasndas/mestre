@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
@@ -94,9 +95,17 @@ func TestTheFakeGuildAcceptsARequestAndPassesTheCitadel(t *testing.T) {
 	if err := g.PassCitadel(ctx, users.User{}, "e2e-torre", ""); err != nil {
 		t.Fatal(err)
 	}
+	// the switch takes its time: the Citadel of now is suspended and still the Citadel
 	v, _ = g.View(ctx)
-	if len(v.Machines) != 3 || len(v.Pending) != 0 || v.Machines[0].Citadel || !v.Machines[1].Citadel {
-		t.Errorf("after the accept and the pass = %+v", v)
+	if len(v.Machines) != 3 || len(v.Pending) != 0 || !v.Machines[0].Citadel || !v.Machines[0].Suspended || v.Machines[1].Citadel {
+		t.Errorf("during the switch = %+v", v)
+	}
+	g.mu.Lock()
+	g.handover.until = clock.Real{}.Now().Add(-time.Second)
+	g.mu.Unlock()
+	v, _ = g.View(ctx)
+	if v.Machines[0].Citadel || !v.Machines[1].Citadel || v.Machines[0].Suspended || v.Machines[1].Suspended {
+		t.Errorf("after the switch = %+v", v)
 	}
 	if err := g.Decide(ctx, users.User{}, "nope", true, false); err == nil {
 		t.Error("a request that does not exist was decided")
