@@ -93,15 +93,21 @@ export function Secrets() {
           {sites.map((s) => (
             <li key={s.name} className="rounded-field border border-line bg-surface p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <p className="flex min-w-0 flex-wrap items-center gap-2 text-lg font-semibold">
-                  {s.name}
-                  <Badge>{s.site ? say(`kinds.${s.site.kind}`) : typeLabel(say, s.type)}</Badge>
-                  {s.notice ? (
-                    <Badge tone={s.notice.kind === "expiring" ? "warn" : "danger"}>
-                      {say(`noticeChip.${s.notice.kind}`, { count: s.notice.days })}
-                    </Badge>
+                <div className="min-w-0">
+                  <p className="flex min-w-0 flex-wrap items-center gap-2 text-lg font-semibold">
+                    {s.name}
+                    <Badge>{s.site ? say(`kinds.${s.site.kind}`) : typeLabel(say, s.type)}</Badge>
+                    {s.notice ? (
+                      <Badge tone={s.notice.kind === "expiring" ? "warn" : "danger"}>
+                        {say(`noticeChip.${s.notice.kind}`, { count: s.notice.days })}
+                      </Badge>
+                    ) : null}
+                  </p>
+                  {s.site && s.site.domains.length > 0 ? (
+                    // the page of the login is inside the ciphertext (docs/plataforma/cofre.md): the list says the domains
+                    <p className="text-sm text-muted">{s.site.domains.join(", ")}</p>
                   ) : null}
-                </p>
+                </div>
                 <LevelGate need="owner" label={t("replace.open")}>
                   <div className="flex flex-wrap items-start gap-3">
                     <Button
