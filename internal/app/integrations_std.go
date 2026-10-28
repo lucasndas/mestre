@@ -192,7 +192,9 @@ type stdRun struct {
 	env IntegrationEnv
 
 	users *users.Service
-	flow  *approvals.Flow
+	// analyst replaces the analyst of the stage analysis (a test; nil: the one of this version).
+	analyst sessionzero.Analyst
+	flow    *approvals.Flow
 	// onFlow is what the panel of the period wants to hear when a request changes.
 	onFlow atomic.Pointer[func(context.Context, int64)]
 	// feed is the bell of the panel: the notices the Telegram also gets.

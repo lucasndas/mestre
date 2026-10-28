@@ -655,3 +655,55 @@ func TestAVerificationFileThatIsALinkDoesNotBlockTheScreenOrTheConfirmation(t *t
 		t.Errorf("the confirmation is %+v", c)
 	}
 }
+
+// fakeAnalyst is the Grand Master analysing a Go project.
+type fakeAnalyst struct{}
+
+func (fakeAnalyst) Analyze(context.Context, sessionzero.AnalysisInput) (sessionzero.Analysis, error) {
+	return sessionzero.Analysis{Summary: "Go", ProposedAgentsMD: "# Projeto\n", Verification: []string{"go build ./...", "go test ./..."}}, nil
+}
+
+// CA-SZ-WS-08: when the stage analysis ends, verificacao.yaml of the main clone holds the proposal
+// (go build and go test) and no version is in force until an Administrator confirms it.
+func TestTheAnalysisLeavesTheVerificationProposalAndNothingHoldsBeforeTheConfirmation(t *testing.T) {
+	t.Parallel()
+	w := &szWorld{approvalWorld: newApprovalWorld(t)}
+	w.run.analyst = fakeAnalyst{}
+	var err error
+	w.zero, err = w.run.SessionZero(w.orc, sessionzero.Worktree{Providers: providers.NewRegistry(providers.Options{NoFlush: true}), Binary: "/usr/local/bin/mestre"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := workspaceHost{w.run}
+	w.gh.AddRepo("lucas", "novo")
+	w.installIn(gmSlug, "lucas/novo")
+	w.installIn(mestreSlug, "lucas/novo")
+	if _, err := w.orc.Workspaces.Create(w.ctx, workspaces.CreateRequest{Repo: "lucas/novo"}); err != nil {
+		t.Fatal(err)
+	}
+	_ = w.orc.Workspaces.Prepare(w.ctx, "novo")
+	if _, err := w.orc.Characters.Create(w.ctx, characters.CreateRequest{Sheet: "Grão-Mestre", Workspace: "novo", Role: characters.RoleGrandMaster, Creator: characters.Creator{Kind: characters.CreatedByEngine}}); err != nil {
+		t.Fatal(err)
+	}
+	_ = w.orc.Workspaces.Prepare(w.ctx, "novo")
+	got, _ := w.orc.Workspaces.Get(w.ctx, "novo")
+	if got.StageFailure != nil && got.StageFailure.Code == "analysis_failed" || got.StageFailure != nil && got.StageFailure.Code == "verification_proposal_failed" {
+		t.Fatalf("the analysis failed: %+v", got.StageFailure)
+	}
+	data, err := os.ReadFile(h.file(w.orc, "novo"))
+	if err != nil {
+		t.Fatalf("the proposal was not written (stage %q, failure %+v): %v", got.Stage, got.StageFailure, err)
+	}
+	if !strings.Contains(string(data), "go build ./...") || !strings.Contains(string(data), "go test ./...") {
+		t.Errorf("the proposal is %q", data)
+	}
+	if _, ok, err := h.verifications().Confirmed(w.ctx, "novo"); err != nil || ok {
+		t.Errorf("a version holds before the confirmation: %v, %v", ok, err)
+	}
+	if _, err := h.ConfirmVerification(w.ctx, w.owner, "novo", data); err != nil {
+		t.Fatal(err)
+	}
+	if doc, ok, err := h.verifications().Confirmed(w.ctx, "novo"); err != nil || !ok || len(doc.Commands) != 2 {
+		t.Errorf("after the confirmation: %+v, %v, %v", doc, ok, err)
+	}
+}

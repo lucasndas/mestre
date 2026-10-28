@@ -16,6 +16,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/gitx"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
+	"github.com/mestre-ia/mestre/internal/orchestration/verification"
 	"github.com/mestre-ia/mestre/internal/sessionzero"
 	"github.com/mestre-ia/mestre/internal/telegram"
 )
@@ -54,7 +55,7 @@ func (r *stdRun) SessionZero(orc *Orchestration, worktree sessionzero.Worktree) 
 		Workspaces: orc.Workspaces, DB: r.env.DB, Clock: r.env.Clock,
 		Installations: r.Installations(), AppReview: r.AppReview(),
 		Users: szUsers{r}, Approvals: szApprovals{r: r, orc: orc}, Checklist: szChecklist{log: r.env.Log},
-		GrandMaster: szGrandMaster{r: r, orc: orc}, Analyst: szAnalyst{}, PullRequests: szPullRequests{r: r, orc: orc},
+		GrandMaster: szGrandMaster{r: r, orc: orc}, Analyst: r.analystOr(szAnalyst{}), Verification: r.verificationKeeper(), PullRequests: szPullRequests{r: r, orc: orc},
 		Worktree: worktree, Masker: r.env.Masker, Log: r.env.Log,
 	})
 	if err != nil {
@@ -62,6 +63,26 @@ func (r *stdRun) SessionZero(orc *Orchestration, worktree sessionzero.Worktree) 
 	}
 	r.zero.Store(svc)
 	return svc, nil
+}
+
+// analystOr is the analyst of the stage analysis: the one a test put, or def.
+func (r *stdRun) analystOr(def sessionzero.Analyst) sessionzero.Analyst {
+	if r.analyst != nil {
+		return r.analyst
+	}
+	return def
+}
+
+// verificationKeeper keeps the commands the analysis proposes in verificacao.yaml and tells the
+// Administrators they wait for the confirmation.
+func (r *stdRun) verificationKeeper() verification.Keeper {
+	return verification.Keeper{Log: r.env.Log, Notify: func(ctx context.Context, workspace, text string) error {
+		_, err := r.alert.AdminAlert(ctx, workspace, text)
+		if errors.Is(err, telegram.ErrQueued) {
+			return nil
+		}
+		return err
+	}}
 }
 
 // sessionZeroHost is what an IntegrationRun may also be: the one that composes
