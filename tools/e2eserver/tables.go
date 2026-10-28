@@ -18,7 +18,9 @@ type lojaTable struct {
 	state string
 }
 
-func lojaTables(now time.Time) []lojaTable {
+// lojaTables are the tables of `loja`. `surprise` is the trigger of the notice on the screen
+// (view.go): the table "loja-surpresa" works until the trigger is pulled, then it is stuck.
+func lojaTables(now time.Time, surprise bool) []lojaTable {
 	delivered := now.Add(-26 * time.Hour)
 	recent := now.Add(-40 * time.Minute)
 	party := []panel.ViewMachine{{Machine: "e2e", MachineName: "e2e", Characters: 3}}
@@ -52,13 +54,19 @@ func lojaTables(now time.Time) []lojaTable {
 	paused.Waits = []panel.ViewWait{{Kind: "paused", Reason: "Lucas pausou: esperar a decisão do dono sobre o desconto"}}
 	cancelled := base("loja-cancelada", 29, "newsletter", "cancelled")
 	cancelled.Party, cancelled.PartySize = []panel.ViewMachine{}, 0
+	sudden := base("loja-surpresa", 30, "relatorio", "working")
+	sudden.Quest = quest
+	if surprise {
+		sudden.Waits = []panel.ViewWait{{Kind: "same_failure", Reason: "o relatório falhou 3 vezes igual", Fingerprint: "TestRelatorio: esperado 3, veio 0", Where: "relatorio/soma.go:17"}}
+	}
 	titles := map[string]string{
+		"loja-surpresa":    "Relatório de vendas",
 		"loja-trabalhando": "Login com Apple", "loja-esperando": "Carrinho de compras", "loja-decisao": "Pagamento por Pix",
 		"loja-travada": "Cálculo de frete", "loja-parada": "Busca de produtos", "loja-revisao": "Avaliações de clientes",
 		"loja-entregue": "Página Fale conosco", "loja-pausada": "Cupons de desconto", "loja-cancelada": "Newsletter",
 	}
 	out := []lojaTable{{working, "working"}, {quota, "working"}, {decision, "working"}, {stuck, "working"}, {stalled, "working"},
-		{review, "in_review"}, {closed, "closed"}, {paused, "working"}, {cancelled, "cancelled"}}
+		{review, "in_review"}, {closed, "closed"}, {paused, "working"}, {cancelled, "cancelled"}, {sudden, "working"}}
 	for i := range out {
 		out[i].block.EpicTitle = titles[out[i].block.ID]
 	}
@@ -67,7 +75,7 @@ func lojaTables(now time.Time) []lojaTable {
 
 // lojaState is the state of a table of `loja` for the canvas, "" when there is no such table.
 func lojaState(id string) string {
-	for _, t := range lojaTables(clock.Real{}.Now()) {
+	for _, t := range lojaTables(clock.Real{}.Now(), false) {
 		if t.block.ID == id {
 			return t.state
 		}

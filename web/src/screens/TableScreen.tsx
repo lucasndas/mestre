@@ -117,7 +117,7 @@ export function TableScreen({
           >
             {t("head.back")}
           </Button>
-          <Button variant="secondary" onPress={chat.show}>
+          <Button onPress={chat.show}>
             <svg
               viewBox="0 0 24 24"
               width="18"
@@ -129,7 +129,7 @@ export function TableScreen({
               strokeLinejoin="round"
               aria-hidden="true"
             >
-              <path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5" />
+              <path d="M4 5h16v11H9l-5 4z" />
             </svg>
             {t("head.talk")}
           </Button>
