@@ -13,6 +13,7 @@ const common: Widen<typeof pt> = {
     technical: "Technical details",
     vocabulary: "Vocabulary",
     loadFailed: "Could not load {{what}}.",
+    nothingChanged: "Nothing was changed.",
     refused: "This screen belongs to another level.",
     needLevel: "Needs the level {{need}}; yours is {{have}}.",
     tone: { neutral: "Status", warn: "Something is missing", ok: "Up to date", danger: "Failed" },

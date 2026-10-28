@@ -83,12 +83,17 @@ export default {
   },
   timeline: {
     title: "Troca da Cidadela em andamento",
+    intro:
+      "Pode deixar esta página aberta. Nada se perde: o que chegar do GitHub e do Telegram espera na fila.",
     stopped: "{{name}} parou de agir.",
+    stoppedHint: "Ela só termina o que já tinha começado.",
     takes: "A nova Cidadela assume.",
+    takesHint: "Há uma espera de segurança antes de ela falar com o GitHub e o Telegram.",
     panel: "O painel muda de máquina e reconecta.",
+    panelHint: "Esta página volta sozinha. Se não voltar, abra o endereço do painel de novo.",
     doneTitle: "Troca concluída",
     done: "Pronto. {{name}} é a Cidadela desde {{at}}.",
-    check: "Confira no canvas o estado de cada agente.",
+    check: "O painel agora vive nela. Confira no canvas o estado de cada agente de {{from}}.",
   },
   machines: "Máquinas",
   role: "Papel",

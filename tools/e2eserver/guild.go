@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -18,12 +19,23 @@ type fakeGuild struct {
 	machines []panel.GuildMachineRow
 	pending  []panel.GuildPendingJoin
 	zone     string
+	// handover is the switch of the Citadel under way: the Citadel of now is suspended until
+	// `until`, and then the machine `to` is the Citadel (the screen shows the timeline in between).
+	handover struct {
+		to    string
+		until time.Time
+	}
 }
+
+// handoverFor is how long the switch lasts in the double: enough to see the timeline in a browser.
+const handoverFor = 15 * time.Second
 
 var _ panel.GuildSource = (*fakeGuild)(nil)
 
+func now() time.Time { return clock.Real{}.Now() }
+
 func newFakeGuild() *fakeGuild {
-	now := clock.Real{}.Now().UTC()
+	created := now().UTC()
 	sheet := func(os string) panel.GuildSheet {
 		return panel.GuildSheet{OS: os, Providers: []string{}, GPUs: []string{}, Operator: "off", CPUCores: 8, MemBytes: 16 << 30}
 	}
@@ -34,7 +46,7 @@ func newFakeGuild() *fakeGuild {
 			{ID: "e2e-torre", Name: "notebook-ana", Instance: "torre", Online: true, Protocol: 1, Priority: 1, Sheet: sheet("windows"), Agents: []panel.GuildAgent{},
 				Replica: &panel.GuildReplica{State: "streaming"}, Load: panel.GuildLoad{DiskFreeBytes: 50 << 30}},
 		},
-		pending: []panel.GuildPendingJoin{{ID: "e2e-join", Name: "pc-da-sala", Code: "482 917", CreatedAt: now}},
+		pending: []panel.GuildPendingJoin{{ID: "e2e-join", Name: "pc-da-sala", Code: "482 917", CreatedAt: created}},
 	}
 }
 
@@ -50,7 +62,15 @@ func (g *fakeGuild) find(id string) int {
 func (g *fakeGuild) View(context.Context) (panel.GuildView, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	g.finish()
 	v := panel.GuildView{Epoch: 1, Timezone: g.zone, Machines: append([]panel.GuildMachineRow{}, g.machines...), Pending: append([]panel.GuildPendingJoin{}, g.pending...)}
+	if g.handover.to != "" {
+		for i := range v.Machines {
+			if v.Machines[i].Citadel {
+				v.Machines[i].Suspended = true
+			}
+		}
+	}
 	v.Single = len(v.Machines) == 1
 	return v, nil
 }
@@ -107,17 +127,31 @@ func (g *fakeGuild) SetExcluded(_ context.Context, _ users.User, id string, excl
 	return nil
 }
 
-// PassCitadel makes the machine the Citadel and the old one a Tower; this one still answers.
-func (g *fakeGuild) PassCitadel(_ context.Context, _ users.User, id, _ string) error {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	i := g.find(id)
+// finish ends the switch whose time has passed: the machine becomes the Citadel and the old one a
+// Tower. The caller holds the lock.
+func (g *fakeGuild) finish() {
+	if g.handover.to == "" || now().Before(g.handover.until) {
+		return
+	}
+	i := g.find(g.handover.to)
+	g.handover.to = ""
 	if i < 0 {
-		return panel.ErrGuildNotFound
+		return
 	}
 	for k := range g.machines {
 		g.machines[k].Citadel = k == i
 	}
+}
+
+// PassCitadel starts the switch: for handoverFor the Citadel of now is suspended, and then the machine
+// is the Citadel (View finishes it), the way the real engine suspends, hands over and resumes.
+func (g *fakeGuild) PassCitadel(_ context.Context, _ users.User, id, _ string) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.find(id) < 0 {
+		return panel.ErrGuildNotFound
+	}
+	g.handover.to, g.handover.until = id, now().Add(handoverFor)
 	return nil
 }
 
