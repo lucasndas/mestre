@@ -123,3 +123,41 @@ func TestTheBrowserChannelRefusesWhatIsNotAMessage(t *testing.T) {
 		t.Fatalf("answer = %+v", env)
 	}
 }
+
+// CA-CRESC-14 (the portrait of the Guild): the topic guild:main is refused to an Observer, to an
+// Approver and to an Administrator, who get no portrait of it; the Owner follows it and gets the portrait.
+func TestOnlyTheOwnerFollowsTheGuildTopic(t *testing.T) {
+	t.Parallel()
+	r, _ := guildRig(t)
+	srv := r.wsServer()
+	for name, level := range map[string]users.Level{"observer": users.Observer, "approver": users.Approver, "administrator": users.Administrator} {
+		_, tok := r.member(name, name, level)
+		c, _, err := r.dial(srv, tok, okOrigin(srv))
+		if err != nil {
+			t.Fatal(err)
+		}
+		send(t, c, panel.TypeUISubscribe, "01A", panel.UISubscribe{Topics: []string{panel.GuildTopic}})
+		ack := read(t, c) // a portrait would come before the acknowledgement
+		var sub panel.UISubscribed
+		_ = json.Unmarshal(ack.Payload, &sub)
+		if ack.Type != panel.TypeUISubscribed || len(sub.Topics) != 0 || len(sub.Rejected) != 1 || sub.Rejected[0].Code != panel.CodeForbiddenLevel {
+			t.Errorf("%s: the answer is %s %+v; want the topic refused for the level", name, ack.Type, sub)
+		}
+		if n := r.panel.Hub().Subscribers(panel.GuildTopic); n != 0 {
+			t.Errorf("%s: %d followers of the topic", name, n)
+		}
+		_ = c.CloseNow()
+	}
+	c, _, err := r.dial(srv, r.ownerSession(), okOrigin(srv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.CloseNow() }()
+	send(t, c, panel.TypeUISubscribe, "01B", panel.UISubscribe{Topics: []string{panel.GuildTopic}})
+	var ev panel.UIEvent
+	snap := read(t, c)
+	_ = json.Unmarshal(snap.Payload, &ev)
+	if snap.Type != panel.TypeUIEvent || ev.Topic != panel.GuildTopic || ev.Event != panel.EventSnapshot {
+		t.Fatalf("the Owner got %s %+v; want the portrait", snap.Type, ev)
+	}
+}
