@@ -474,7 +474,8 @@ func (s *Service) inTable(ctx context.Context, workspace, table string, x Ref) e
 			return err
 		case !ok:
 			return notFound(x.ID)
-		case sc.Table != table:
+		// the key is workspace/table/id: a table of the same name in another campaign is another table
+		case sc.Table != table, !strings.HasPrefix(sc.ID, workspace+"/"+table+"/"):
 			return fmt.Errorf("%w: %s", ErrDifferentTables, sc.Name)
 		}
 		return nil
