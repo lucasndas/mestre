@@ -35,6 +35,8 @@ const (
 	System Kind = "system"
 	// Stranger is the alert of a sender the bot does not know.
 	Stranger Kind = "stranger"
+	// Approval is "Nova aprovação": a request waits on the decision of the user.
+	Approval Kind = "approval"
 	// GitHubDown is "GitHub fora" and its return.
 	GitHubDown Kind = "github"
 )

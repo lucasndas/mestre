@@ -11,6 +11,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/notices"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/providers"
 	"github.com/mestre-ia/mestre/internal/store"
@@ -64,6 +65,7 @@ type world struct {
 	flow  *approvals.Flow
 	nextR int64
 	db    *store.DB
+	bell  []notices.Notice
 	locks bool
 	mu    sync.Mutex
 }
@@ -94,6 +96,7 @@ func newWorld(t *testing.T) *world {
 		t.Fatal(err)
 	}
 	w.flow, err = approvals.New(approvals.Options{DB: db, Clock: clk, Chain: w.ch, Users: svc, PINs: svc, Messenger: w.msg, Targets: w.tg,
+		Bell:   func(_ context.Context, n notices.Notice) { w.mu.Lock(); w.bell = append(w.bell, n); w.mu.Unlock() },
 		Locked: func(context.Context) bool { w.mu.Lock(); defer w.mu.Unlock(); return w.locks }})
 	if err != nil {
 		t.Fatal(err)

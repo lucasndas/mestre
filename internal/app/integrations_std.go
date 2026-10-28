@@ -144,7 +144,12 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r.gh = &telegram.GitHubChannel{Users: svc, Personal: r.personal, Clock: env.Clock, Logger: env.Log, Moment: r.decrees.Moment}
 	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
-		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log, OnChange: r.flowChanged})
+		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log, OnChange: r.flowChanged,
+		Bell: func(ctx context.Context, n notices.Notice) {
+			if _, _, err := r.feed.Add(ctx, n); err != nil {
+				env.Log.Warn("app: the bell was not told of a new approval", "err", err)
+			}
+		}})
 	if err != nil {
 		return nil, fmt.Errorf("app: the flow of approval: %w", err)
 	}
