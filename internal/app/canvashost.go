@@ -345,7 +345,7 @@ func (h canvasHost) Disconnect(ctx context.Context, by users.User, workspace, ta
 	if _, err := h.table(ctx, o, workspace, table); err != nil {
 		return err
 	}
-	_, err = o.Connections.Disconnect(ctx, connections.User{ID: by.ID, Level: levelOf(by)}, ref(a), ref(b))
+	_, err = o.Connections.DisconnectInTable(ctx, connections.User{ID: by.ID, Level: levelOf(by)}, workspace, table, ref(a), ref(b))
 	return refuse(err)
 }
 

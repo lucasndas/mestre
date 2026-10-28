@@ -358,6 +358,53 @@ func (s *Service) Disconnect(ctx context.Context, by User, a, b Ref) (Disconnect
 	return DisconnectResult{Removed: left.ID == "", Remaining: left.ReasonNames()}, nil
 }
 
+// DisconnectInTable is Disconnect as a user does at the canvas of one table:
+// both ends must belong to that table (the Grand Master of its workspace
+// included, since the table master is connected to it), otherwise the
+// connection is not found, so a table cannot touch the connections of another.
+func (s *Service) DisconnectInTable(ctx context.Context, by User, workspace, table string, a, b Ref) (DisconnectResult, error) {
+	if by.Level != characters.LevelOwner && by.Level != characters.LevelAdministrator {
+		return DisconnectResult{}, ErrLevelDenied
+	}
+	for _, x := range []Ref{a, b} {
+		if err := s.belongs(ctx, workspace, table, x); err != nil {
+			return DisconnectResult{}, err
+		}
+	}
+	return s.Disconnect(ctx, by, a, b)
+}
+
+// belongs is inTable without the rules of a new connection: the end only has
+// to be of the table (or the Grand Master of its workspace).
+func (s *Service) belongs(ctx context.Context, workspace, table string, x Ref) error {
+	switch x.Kind {
+	case KindCharacter:
+		c, err := s.o.Registry.Get(ctx, x.ID)
+		switch {
+		case errors.Is(err, characters.ErrNoCharacter):
+			return notFound(x.ID)
+		case err != nil:
+			return err
+		case c.Workspace != workspace, c.Role != characters.RoleGrandMaster && c.Table != table:
+			return notFound(x.ID)
+		}
+		return nil
+	case KindScroll, KindTome:
+		if s.o.Scrolls == nil {
+			return notFound(x.ID)
+		}
+		sc, ok, err := s.o.Scrolls.Get(ctx, x)
+		switch {
+		case err != nil:
+			return err
+		case !ok, sc.Table != table:
+			return notFound(x.ID)
+		}
+		return nil
+	}
+	return notFound(x.ID)
+}
+
 // Link connects two endpoints by hand on behalf of whoever made one of them: a
 // scroll is connected to the character that created it (reason manual, by that
 // character). Unlike Connect it asks nothing of the level of the caller: it is
