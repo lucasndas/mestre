@@ -2,11 +2,13 @@ package app
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 
 	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/store"
 	guilddb "github.com/mestre-ia/mestre/internal/store/guild"
 	"github.com/mestre-ia/mestre/internal/store/machine"
@@ -27,7 +29,9 @@ func SetupCodeMain(ctx context.Context, args []string, stdout, stderr io.Writer,
 // SetupCodeWith is SetupCodeMain with the test of the privilege given: root on
 // Linux, elevated on Windows. The tests give theirs.
 func SetupCodeWith(ctx context.Context, args []string, stdout, stderr io.Writer, lookupEnv func(string) (string, bool), elevated func() bool) int {
+	lang := i18n.MachineLanguageFrom(lookupEnv)
 	if _, agent := lookupEnv("MESTRE_AGENT_ID"); agent {
+		// for an agent, never translated
 		fmt.Fprintln(stderr, "error: an agent never makes the code of setup (MESTRE_AGENT_ID is in the environment)")
 		return 3
 	}
@@ -43,20 +47,20 @@ func SetupCodeWith(ctx context.Context, args []string, stdout, stderr io.Writer,
 		return 2
 	}
 	if !elevated() {
-		fmt.Fprintln(stderr, "error: mestre setup-code needs root (Linux) or an administrator (Windows)")
+		fmt.Fprintln(stderr, "error: "+i18n.Render(lang, i18n.M("person.needs_root")))
 		return 3
 	}
 	paths := DirPaths(*dir)
 	if *dir == "" {
 		var err error
 		if paths, err = DefaultPaths(*instance); err != nil {
-			fmt.Fprintln(stderr, "error:", err)
+			fmt.Fprintln(stderr, "error:", personText(lang, err))
 			return 2
 		}
 	}
 	code, err := newSetupCode(ctx, paths)
 	if err != nil {
-		fmt.Fprintln(stderr, "error:", err)
+		fmt.Fprintln(stderr, "error:", personText(lang, err))
 		return 1
 	}
 	fmt.Fprintln(stdout, code)
@@ -77,10 +81,10 @@ func newSetupCode(ctx context.Context, paths Paths) (string, error) {
 	member.UsePendingKey(vault.NewFileKeyStore(paths.pendingKey()))
 	id, _, err := member.TLS(ctx)
 	if err != nil {
-		return "", fmt.Errorf("this instance is in no Guild: %w", err)
+		return "", personErr{i18n.M("person.instance_in_no_guild", "detail", err.Error())}
 	}
 	if !id.IsCitadel() {
-		return "", fmt.Errorf("this machine is not the Citadel: the code of setup is made where the Guild was created")
+		return "", personErr{i18n.M("person.not_citadel")}
 	}
 	db, err := guilddb.Open(ctx, paths.guildDB(), store.Options{Clock: clk})
 	if err != nil {
@@ -96,4 +100,21 @@ func newSetupCode(ctx context.Context, paths Paths) (string, error) {
 		return "", err
 	}
 	return code, nil
+}
+
+// personErr is an error that is a message of the catalog: the command says it in
+// the language of the person (personText); anywhere else it reads as the code and
+// its parameters.
+type personErr struct{ msg i18n.Msg }
+
+func (e personErr) Error() string { return e.msg.String() }
+
+// personText is the text of an error for a person: a personErr in the language,
+// any other error (a detail from below, in English) as it is.
+func personText(lang string, err error) string {
+	var pe personErr
+	if errors.As(err, &pe) {
+		return i18n.Render(lang, pe.msg)
+	}
+	return err.Error()
 }

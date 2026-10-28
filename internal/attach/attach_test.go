@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
@@ -115,6 +116,7 @@ func TestAttachNeedsATerminal(t *testing.T) {
 func TestASmallWindowFollowsTheCursorAndNeverAsksForAResize(t *testing.T) {
 	t.Parallel()
 	s := newScreen(200, 50)
+	s.say = func(m i18n.Msg) string { return i18n.Render(i18n.En, m) }
 	defer s.Close()
 	var feed strings.Builder
 	for row := 1; row <= 44; row++ {

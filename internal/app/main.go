@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/logging"
 )
 
@@ -23,6 +24,12 @@ func Main(ctx context.Context, args []string, stderr io.Writer, lookupEnv func(s
 		return 3
 	}
 	getenv := func(k string) string { v, _ := lookupEnv(k); return v }
+	// the errors of the start are for the person at the terminal: in the language of the machine
+	// (the prefix "error:" stays; the log of the service stays in English)
+	lang := i18n.MachineLanguageFrom(lookupEnv)
+	failWith := func(m i18n.Msg, err error) {
+		fmt.Fprintln(stderr, "error:", i18n.Render(lang, i18n.M(m.Code, "detail", personText(lang, err))))
+	}
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	instance := fs.String("instance", DefaultInstance, "the instance of the Mestre")
@@ -38,20 +45,20 @@ func Main(ctx context.Context, args []string, stderr io.Writer, lookupEnv func(s
 	if *dir == "" {
 		var err error
 		if paths, err = DefaultPaths(*instance); err != nil {
-			fmt.Fprintln(stderr, "error:", err)
+			failWith(i18n.M("person.run_start_failed"), err)
 			return 2
 		}
 	}
 	cfg, err := LoadConfig(paths)
 	if err != nil {
-		fmt.Fprintln(stderr, "error:", err)
+		failWith(i18n.M("person.config_failed"), err)
 		return 1
 	}
 	deps := Deps{Version: version, HostOrchestration: true, Integration: StandardIntegration{}}
 	after, cleanup, err := testHooks(ctx, &deps, cfg, getenv)
 	defer cleanup()
 	if err != nil {
-		fmt.Fprintln(stderr, "error:", err)
+		failWith(i18n.M("person.run_start_failed"), err)
 		return 1
 	}
 	// one masker for the log and the vault: a secret the vault opens is
@@ -60,15 +67,15 @@ func Main(ctx context.Context, args []string, stderr io.Writer, lookupEnv func(s
 	deps.Logger = logging.New(stderr, deps.Masker, logging.Options{Level: slog.LevelInfo, Clock: deps.Clock})
 	e, err := New(cfg, paths, deps)
 	if err != nil {
-		fmt.Fprintln(stderr, "error:", err)
+		failWith(i18n.M("person.run_start_failed"), err)
 		return 1
 	}
 	if err := after(e); err != nil {
-		fmt.Fprintln(stderr, "error:", err)
+		failWith(i18n.M("person.run_start_failed"), err)
 		return 1
 	}
 	if err := e.Run(ctx); err != nil {
-		fmt.Fprintln(stderr, "error:", err)
+		failWith(i18n.M("person.engine_stopped"), err)
 		return 1
 	}
 	return 0

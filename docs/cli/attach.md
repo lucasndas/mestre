@@ -1,6 +1,6 @@
 # CLI: `mestre attach`
 
-> **Assunto:** comando das pessoas para ver, e com nível digitar, o terminal de um personagem de qualquer máquina da Guilda no próprio terminal, como o `tmux attach`: login, tamanho fixo, só leitura, digitação com auditoria e desconectar sem afetar o agente · **Componente:** CLI · **Atualizado:** 2026-10-26
+> **Assunto:** comando das pessoas para ver, e com nível digitar, o terminal de um personagem de qualquer máquina da Guilda no próprio terminal, como o `tmux attach`: login, tamanho fixo, só leitura, digitação com auditoria e desconectar sem afetar o agente · **Componente:** CLI · **Atualizado:** 2026-10-28
 
 ## Objetivo
 
@@ -16,6 +16,7 @@ Deixar uma pessoa abrir o terminal de um agente no terminal dela, de qualquer m�
 - **Só leitura por padrão:** nenhuma tecla vai ao agente, fora a de desconectar.
 - **Digitar (`--write`):** só **Administrador ou acima** na campanha, com a mesma regra do canvas ([digitar no terminal](../painel/canvas.md#digitar-no-terminal)): se o personagem está ocupado, a CLI mostra "o agente está trabalhando" e pede confirmação antes de liberar o teclado; a sessão de digitação vai para a auditoria (usuário, personagem, início e fim, sem o conteúdo, que já está no log do terminal). A entrada chega ao agente pelo motor da máquina dele ([digitação](../arquitetura/terminal.md#digitação)).
 - **Desconectar:** `Ctrl-]` (padrão; `--detach-key` muda) fecha o `attach` e sai com 0; o agente segue exatamente como estava. O terminal que termina mostra "terminal encerrado" e sai com 0. Conexão perdida: a CLI tenta de novo por até 60 s (padrão) e então sai com 5.
+- **Idioma:** pedidos, erros, avisos e a linha de estado saem do catálogo (área `person`) no idioma da máquina; depois do login, no `Language` do usuário que entrou, se ele tem ([idioma por canal](../plataforma/idioma-por-canal.md#cli)). Os prefixos `error:` e `hint:` e os códigos (`--json`) não mudam. A recusa a um agente (`MESTRE_AGENT_ID`) é texto de agente e sai sempre em en.
 - Linux e Windows, o mesmo código; no Windows, o console em modo VT.
 
 ### Implementação

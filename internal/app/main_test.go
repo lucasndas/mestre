@@ -29,3 +29,25 @@ func TestTheEngineDoesNotStartWithMESTRE_AGENT_IDInTheEnvironmentEvenEmpty(t *te
 		}
 	}
 }
+
+// The errors of the start of `mestre run` are for the person at the terminal: in
+// the language of the machine, with the fixed prefix error:.
+func TestTheStartErrorsOfTheEngineSpeakTheLanguageOfTheMachine(t *testing.T) {
+	t.Parallel()
+	for lang, want := range map[string]string{"pt_BR.UTF-8": "error: não consigo ler a configuração:", "en_US.UTF-8": "error: cannot read the configuration:"} {
+		var out bytes.Buffer
+		lookup := func(k string) (string, bool) {
+			if k == "LANG" {
+				return lang, true
+			}
+			return "", false
+		}
+		// a folder with no configuration: the engine does not start
+		if code := app.Main(t.Context(), []string{"--dir", t.TempDir()}, &out, lookup, "test"); code == 0 {
+			t.Fatalf("%s: the engine started with a broken configuration", lang)
+		}
+		if !strings.HasPrefix(out.String(), want) {
+			t.Errorf("%s: %q", lang, out.String())
+		}
+	}
+}

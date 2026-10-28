@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
@@ -33,12 +34,11 @@ const maxBody = 4 << 20
 func loadCA(path string) (*x509.CertPool, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fail(codeUnavailable, "the engine of this machine writes it when it runs; check that `mestre run` has run here and that you may read the folder of the instance (or use --dir)",
-			"cannot read the CA of the Guild (%s): %v", path, err)
+		return nil, fail(codeUnavailable, i18n.M("person.ca_unreadable_hint"), i18n.M("person.ca_unreadable", "path", path, "detail", err.Error()))
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(data) {
-		return nil, fail(codeUnavailable, "the file is not a PEM certificate; the engine writes it again when it starts", "the CA of the Guild in %s is not valid", path)
+		return nil, fail(codeUnavailable, i18n.M("person.ca_invalid_hint"), i18n.M("person.ca_invalid", "path", path))
 	}
 	return pool, nil
 }
@@ -79,10 +79,10 @@ func normalizeServer(s string) (*url.URL, error) {
 	}
 	u, err := url.Parse(s)
 	if err != nil || u.Hostname() == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" {
-		return nil, fail(codeUsage, "usage: "+usageLine, "--server %q is not an address of the panel", s)
+		return nil, fail(codeUsage, i18n.M("person.hint_usage", "usage", usageLine), i18n.M("person.server_bad", "value", s))
 	}
 	if u.Scheme != "https" {
-		return nil, fail(codeUsage, "the panel is served over https", "--server %q must be an https address", s)
+		return nil, fail(codeUsage, i18n.M("person.hint_https"), i18n.M("person.server_https", "value", s))
 	}
 	return &url.URL{Scheme: "https", Host: u.Host}, nil
 }
@@ -94,9 +94,9 @@ func unreachable(err error) failure {
 	var host x509.HostnameError
 	switch {
 	case errors.As(err, &unknown), errors.As(err, &invalid), errors.As(err, &host):
-		return fail(codeUnavailable, "the certificate of the panel is not from the CA of this Guild; check the address, or --server", "cannot verify the certificate of the panel: %v", err)
+		return fail(codeUnavailable, i18n.M("person.cert_unverified_hint"), i18n.M("person.cert_unverified", "detail", err.Error()))
 	}
-	return fail(codeUnavailable, "check that the Citadel is running and that the address is right; run mestre debug on the machine of the Citadel", "the panel does not answer: %v", err)
+	return fail(codeUnavailable, i18n.M("person.panel_no_answer_hint"), i18n.M("person.panel_no_answer", "detail", err.Error()))
 }
 
 // resolve finds the Citadel of now: it asks the status of the panel and follows
@@ -106,7 +106,7 @@ func (c *panelClient) resolve(ctx context.Context, start *url.URL) (*url.URL, er
 	for hop := 0; hop <= maxHops; hop++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, base.String()+"/api/status", nil)
 		if err != nil {
-			return nil, fail(codeInternal, "this is a bug", "%v", err)
+			return nil, fail(codeInternal, i18n.M("person.hint_bug"), i18n.M("person.internal", "detail", err.Error()))
 		}
 		req.Header.Set("User-Agent", c.userAgent)
 		res, err := c.hc.Do(req)
@@ -121,18 +121,18 @@ func (c *panelClient) resolve(ctx context.Context, start *url.URL) (*url.URL, er
 		case res.StatusCode >= 300 && res.StatusCode < 400:
 			next, err := url.Parse(res.Header.Get("Location"))
 			if err != nil || next.Hostname() == "" {
-				return nil, fail(codeUnavailable, "try again in a moment", "the panel redirected to an address that makes no sense")
+				return nil, fail(codeUnavailable, i18n.M("person.hint_retry"), i18n.M("person.bad_redirect"))
 			}
 			next = base.ResolveReference(next)
 			if next.Scheme != "https" {
-				return nil, fail(codeUnavailable, "the panel is served over https", "the panel redirected to a plain address")
+				return nil, fail(codeUnavailable, i18n.M("person.hint_https"), i18n.M("person.redirect_plain"))
 			}
 			base = &url.URL{Scheme: "https", Host: next.Host}
 		default:
-			return nil, fail(codeUnavailable, "the Citadel is suspended or being changed; try again in a moment", "the panel answered %d and is not serving now", res.StatusCode)
+			return nil, fail(codeUnavailable, i18n.M("person.not_serving_hint"), i18n.M("person.not_serving", "status", res.StatusCode))
 		}
 	}
-	return nil, fail(codeUnavailable, "the Guild is changing its Citadel; try again in a moment", "too many redirects looking for the Citadel")
+	return nil, fail(codeUnavailable, i18n.M("person.too_many_redirects_hint"), i18n.M("person.too_many_redirects"))
 }
 
 // current is the Citadel the client talks to now.
@@ -227,9 +227,9 @@ func (c *panelClient) login(ctx context.Context, login, password string) (panel.
 	case err != nil:
 		return me, err
 	case aerr != nil && (status == http.StatusUnauthorized || status == http.StatusTooManyRequests):
-		return me, fail(codeAuthFailed, "check the user and the password; after too many mistakes the login is blocked for a while", "invalid user or password, or the login is blocked")
+		return me, fail(codeAuthFailed, i18n.M("person.login_blocked_hint"), i18n.M("person.login_blocked"))
 	case aerr != nil:
-		return me, fail(codeUnavailable, "try again in a moment", "the panel refused the login (%d)", status)
+		return me, fail(codeUnavailable, i18n.M("person.hint_retry"), i18n.M("person.login_refused", "status", status))
 	}
 	for _, ck := range (&http.Response{Header: hdr}).Cookies() {
 		if ck.Name == c.cookieName && ck.Value != "" {
@@ -239,7 +239,7 @@ func (c *panelClient) login(ctx context.Context, login, password string) (panel.
 			return me, nil
 		}
 	}
-	return me, fail(codeUnavailable, "this is a bug of the panel", "the panel opened no session")
+	return me, fail(codeUnavailable, i18n.M("person.hint_bug_panel"), i18n.M("person.no_session"))
 }
 
 // logout ends the session on the Citadel; the session lives only in this process.
@@ -272,7 +272,7 @@ func (c *panelClient) find(ctx context.Context, name, workspace string) ([]panel
 	case aerr != nil && status == http.StatusUnauthorized:
 		return nil, errSessionEnded
 	case aerr != nil:
-		return nil, fail(codeUnavailable, "try again in a moment", "the panel cannot list the terminals (%d)", status)
+		return nil, fail(codeUnavailable, i18n.M("person.hint_retry"), i18n.M("person.list_failed", "status", status))
 	}
 	return list.Terminals, nil
 }
@@ -288,9 +288,9 @@ func (c *panelClient) info(ctx context.Context, character string) (info panel.Te
 	case aerr != nil && status == http.StatusUnauthorized:
 		return info, false, errSessionEnded
 	case aerr != nil:
-		return info, false, fail(codeUnavailable, "try again in a moment", "the panel cannot read the terminal (%d)", status)
+		return info, false, fail(codeUnavailable, i18n.M("person.hint_retry"), i18n.M("person.read_failed", "status", status))
 	}
 	return info, true, nil
 }
 
-var errSessionEnded = fail(codeSessionEnded, "log in again with mestre attach; the session ends when the user is suspended, changes the password or loses the workspace", "the session was ended by the Citadel")
+var errSessionEnded = fail(codeSessionEnded, i18n.M("person.session_ended_hint"), i18n.M("person.session_ended"))

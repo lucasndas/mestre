@@ -187,8 +187,13 @@ func (w *attachWorld) attach(t *testing.T, con *attachConsole, via string, args 
 	dial := w.r.net.DialContext("cli")
 	env := attach.Env{
 		Stdout: &syncBuffer{}, Stderr: &syncBuffer{}, Console: con, Clock: clock.Real{},
-		LookupEnv: func(string) (string, bool) { return "", false },
-		Hostname:  "notebook", Retry: 3 * time.Second,
+		LookupEnv: func(k string) (string, bool) { // the machine speaks en, so the texts below are the English ones
+			if k == "LANG" {
+				return "en_US.UTF-8", true
+			}
+			return "", false
+		},
+		Hostname: "notebook", Retry: 3 * time.Second,
 		Folders: func(_, dir string) (string, int, error) { return filepath.Join(dir, "config"), 7443, nil },
 		Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			// the names of the machines are <name>.local and the one of the Citadel mestre.local (mDNS
@@ -418,7 +423,7 @@ func TestALostConnectionIsRetriedAndThenExits5(t *testing.T) {
 	}
 }
 
-// A terminal that ends shows "terminal encerrado" and the command exits 0.
+// A terminal that ends shows "terminal ended" and the command exits 0.
 func TestATerminalThatEndsExitsZeroAndSaysSo(t *testing.T) {
 	t.Parallel()
 	w := newAttachWorld(t)
@@ -429,7 +434,7 @@ func TestATerminalThatEndsExitsZeroAndSaysSo(t *testing.T) {
 	if err := w.a.e.mach.Load().Stop(t.Context(), w.b.id, characters.StopCommand{Character: w.c.ID, Final: true, Reason: "test"}); err != nil {
 		t.Fatal(err)
 	}
-	if code := run.exit(t); code != 0 || !strings.Contains(run.stdout.b.String(), "terminal encerrado") {
+	if code := run.exit(t); code != 0 || !strings.Contains(run.stdout.b.String(), "terminal ended") {
 		t.Fatalf("exit %d, stdout %q, stderr %q", code, run.stdout.b.String(), run.stderr.b.String())
 	}
 }

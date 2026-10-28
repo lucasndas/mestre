@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
@@ -50,6 +51,9 @@ type Env struct {
 	// default one; dir: every folder under it) and the engine port it is set to
 	// (0: the default one).
 	Folders func(instance, dir string) (config string, port int, err error)
+
+	// ui is the language the command speaks; Run sets it (the machine's, then the user's).
+	ui *ui
 }
 
 // Run is `mestre attach`: it logs in, finds the character, follows its terminal
@@ -59,21 +63,23 @@ func Run(ctx context.Context, env Env, args []string) int {
 	asJSON := wantsJSON(args)
 	// first of all: an agent never attaches, and nothing is asked of anyone before this
 	if _, agent := env.LookupEnv("MESTRE_AGENT_ID"); agent {
-		return fail(codeNotForAgents, "agents read the screen of another with mestre check; people use mestre attach", "mestre attach is not a command of agents (MESTRE_AGENT_ID is in the environment)").
-			report(env.Stdout, env.Stderr, asJSON)
+		// the one text for an agent: always in en, the locale of the machine has no effect
+		return fail(codeNotForAgents, i18n.M("person.not_for_agents_hint"), i18n.M("person.not_for_agents")).
+			report(env.Stdout, env.Stderr, asJSON, i18n.En)
 	}
 	if env.Clock == nil {
 		env.Clock = clock.Real{}
 	}
+	env.ui = &ui{lang: i18n.MachineLanguageFrom(env.LookupEnv)}
 	err := run(ctx, env, args)
 	var f failure
 	switch {
 	case err == nil:
 		return 0
 	case errors.As(err, &f):
-		return f.report(env.Stdout, env.Stderr, asJSON)
+		return f.report(env.Stdout, env.Stderr, asJSON, env.ui.lang)
 	default:
-		return fail(codeInternal, "this is a bug; run mestre debug", "%v", err).report(env.Stdout, env.Stderr, asJSON)
+		return fail(codeInternal, i18n.M("person.hint_bug"), i18n.M("person.internal", "detail", err.Error())).report(env.Stdout, env.Stderr, asJSON, env.ui.lang)
 	}
 }
 
@@ -83,11 +89,11 @@ func run(ctx context.Context, env Env, args []string) error {
 		return err
 	}
 	if !env.Console.Interactive() {
-		return fail(codeUsage, "run it in a terminal", "mestre attach needs a terminal for the login and for the screen")
+		return fail(codeUsage, i18n.M("person.hint_terminal"), i18n.M("person.needs_a_terminal"))
 	}
 	config, port, err := env.Folders(opts.instance, opts.dir)
 	if err != nil {
-		return fail(codeUsage, "usage: "+usageLine, "%v", err)
+		return fail(codeUsage, i18n.M("person.hint_usage", "usage", usageLine), i18n.M("person.internal", "detail", err.Error()))
 	}
 	pool, err := loadCA(filepath.Join(config, CAFile))
 	if err != nil {
@@ -110,9 +116,13 @@ func run(ctx context.Context, env Env, args []string) error {
 		return err
 	}
 	c.setBase(base)
-	me, err := c.loginPrompt(ctx, env.Console)
+	me, err := c.loginPrompt(ctx, env)
 	if err != nil {
 		return err
+	}
+	// from the login on, the language of the user who came in wins over the one of the machine
+	if me.User.Language != "" {
+		env.ui.lang = i18n.Match(me.User.Language)
 	}
 	info, err := pickTerminal(ctx, c, opts)
 	if err != nil {
@@ -121,15 +131,15 @@ func run(ctx context.Context, env Env, args []string) error {
 	write := opts.write
 	if write {
 		if !info.CanType {
-			return fail(codeLevelDenied, "typing needs Administrator or above in the workspace of the character", "%s may not type in %s (level %s)", me.User.Login, info.Name, me.User.LevelName)
+			return fail(codeLevelDenied, i18n.M("person.type_denied_hint"), i18n.M("person.type_denied", "login", me.User.Login, "name", info.Name, "level", me.User.LevelName))
 		}
 		if info.Busy {
-			ans, err := env.Console.ReadLine("o agente está trabalhando. Digitar mesmo assim? [s/N] ")
+			ans, err := env.Console.ReadLine(env.say(i18n.M("person.busy_confirm")))
 			if err != nil {
-				return fail(codeUsage, "answer the question, or run without --write", "no answer to the confirmation")
+				return fail(codeUsage, i18n.M("person.no_answer_hint"), i18n.M("person.no_answer"))
 			}
 			if a := strings.ToLower(strings.TrimSpace(ans)); a != "s" && a != "sim" && a != "y" && a != "yes" {
-				fmt.Fprintln(env.Stdout, "teclado não liberado: só leitura")
+				fmt.Fprintln(env.Stdout, env.say(i18n.M("person.keyboard_read_only")))
 				write = false
 			}
 		}
@@ -150,14 +160,14 @@ func serverOf(o options, port int) (*url.URL, error) {
 }
 
 // loginPrompt asks the user and the password (no echo) and opens the session.
-func (c *panelClient) loginPrompt(ctx context.Context, con Console) (panel.Me, error) {
-	login, err := con.ReadLine("login: ")
+func (c *panelClient) loginPrompt(ctx context.Context, env Env) (panel.Me, error) {
+	login, err := env.Console.ReadLine(env.say(i18n.M("person.login_prompt")))
 	if err != nil {
-		return panel.Me{}, fail(codeUsage, "run it in a terminal", "no login was typed")
+		return panel.Me{}, fail(codeUsage, i18n.M("person.hint_terminal"), i18n.M("person.no_login"))
 	}
-	pass, err := con.ReadPassword("password: ")
+	pass, err := env.Console.ReadPassword(env.say(i18n.M("person.password_prompt")))
 	if err != nil {
-		return panel.Me{}, fail(codeUsage, "run it in a terminal", "no password was typed")
+		return panel.Me{}, fail(codeUsage, i18n.M("person.hint_terminal"), i18n.M("person.no_password"))
 	}
 	return c.login(ctx, strings.TrimSpace(login), pass)
 }
@@ -171,7 +181,7 @@ func pickTerminal(ctx context.Context, c *panelClient, o options) (panel.Termina
 	}
 	switch len(list) {
 	case 0:
-		return panel.TerminalInfo{}, fail(codeNotVisible, "check the name on the canvas, and the workspace", "there is no character %q that you see", o.character)
+		return panel.TerminalInfo{}, fail(codeNotVisible, i18n.M("person.character_not_visible_hint"), i18n.M("person.character_not_visible", "name", o.character))
 	case 1:
 		return list[0], nil
 	}
@@ -183,7 +193,7 @@ func pickTerminal(ctx context.Context, c *panelClient, o options) (panel.Termina
 			ws = append(ws, t.Workspace)
 		}
 	}
-	return panel.TerminalInfo{}, fail(codeUsage, "choose with --workspace <name>: "+strings.Join(ws, ", "), "%q exists in more than one place that you see", o.character)
+	return panel.TerminalInfo{}, fail(codeUsage, i18n.M("person.which_character_hint", "flag", "workspace", "list", strings.Join(ws, ", ")), i18n.M("person.which_character", "name", o.character))
 }
 
 // printable keeps a host name fit for a header.
