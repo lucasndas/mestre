@@ -249,7 +249,12 @@ test("the trail of a table reads Campanhas › campanha › mesa, and the first 
     "loja",
     "Login com Google",
   ]);
-  expect(within(trail).getByText("Login com Google").getAttribute("aria-current")).toBe("page");
+  expect(
+    within(trail)
+      .getByText("Login com Google")
+      .closest("[aria-current]")
+      ?.getAttribute("aria-current"),
+  ).toBe("page");
   expect(current()).toEqual(["Campanhas"]);
   // the campaign opens the switch of campaigns
   await user.click(within(trail).getByRole("button", { name: /Campanha loja/ }));
@@ -316,6 +321,12 @@ test("Configurações has four groups with a sentence per entry, and every scree
       .getAllByRole("listitem")
       .map((i) => i.textContent?.replace("›", "").trim()),
   ).toEqual(["Configurações", "Regras e consumo", "Decretos"]);
+  // a phone keeps the trail on one line: "… › parent › here", the levels above the parent give way
+  const lis = within(trail).getAllByRole("listitem");
+  expect(trail.querySelector("ol")?.className).toMatch(/\bflex-nowrap\b/);
+  expect(lis[0]?.className).toMatch(/\bhidden\b/);
+  expect(lis[1]?.className).toMatch(/before:content-/);
+  expect(lis[2]?.className).not.toMatch(/\bhidden\b/);
   // the mark follows the item it separates: no line of a narrow screen begins with it, and the page has none after it
   const marks = within(trail)
     .getAllByRole("listitem")

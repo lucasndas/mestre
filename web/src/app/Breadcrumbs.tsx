@@ -21,16 +21,28 @@ const INVITE_STEPS: Record<string, "invite" | "invitation"> = {
 
 function Trail({ items }: { items: ReactNode[] }) {
   const { t } = useTranslation("shell");
+  const last = items.length - 1;
   return (
     <nav aria-label={t("crumbs.label")} className="mb-3">
-      <ol className="flex flex-wrap items-center gap-x-1">
+      {/* a phone keeps one line: "… › parent › here", the levels above the parent give way and the
+          page truncates, so it never falls alone to a second line */}
+      <ol className="flex flex-nowrap items-center gap-x-1 sm:flex-wrap">
         {items.map((it, i) => (
           // the trail is rebuilt whole from the address, in a fixed order
-          // biome-ignore lint/suspicious/noArrayIndexKey: no item has an id of its own
-          <li key={i} className="flex items-center gap-1">
+          <li
+            // biome-ignore lint/suspicious/noArrayIndexKey: no item has an id of its own
+            key={i}
+            className={`flex items-center gap-1 ${i === last ? "min-w-0" : "shrink-0"} ${
+              i < last - 1 ? "hidden sm:flex" : ""
+            } ${
+              i === last - 1 && last > 1
+                ? "before:mr-1 before:text-muted before:content-['…_›'] sm:before:hidden"
+                : ""
+            }`}
+          >
             {it}
             {/* the mark follows the item it separates, so a line never begins with it */}
-            {i < items.length - 1 ? (
+            {i < last ? (
               <span aria-hidden="true" className="text-muted">
                 ›
               </span>
@@ -44,8 +56,11 @@ function Trail({ items }: { items: ReactNode[] }) {
 
 function Here({ children }: { children: ReactNode }) {
   return (
-    <span aria-current="page" className="inline-flex min-h-11 items-center px-1.5 font-semibold">
-      {children}
+    <span
+      aria-current="page"
+      className="inline-flex min-h-11 min-w-0 max-w-full items-center px-1.5 font-semibold"
+    >
+      <span className="truncate">{children}</span>
     </span>
   );
 }
