@@ -625,3 +625,37 @@ test("the card says the about once, the tab counts what waits and the filters fo
   await user.click(toggle);
   expect(toggle.getAttribute("aria-expanded")).toBe("true");
 });
+
+// docs/painel/conversa-e-aprovacoes.md#cartão-legível: "campanha › mesa" names the table by its title, as the campaign does
+test("the card names the table by its title once the view of the campaign is read", async () => {
+  fakeServer({
+    ...base([item({ type: "custo_extra", about: "mais US$ 20 de uso este mês" })]),
+    "GET /api/workspaces/loja/view": () => ({
+      body: {
+        workspace: { slug: "loja", repo: "acme/loja" },
+        tables: [
+          {
+            id: "42-login",
+            epic: 42,
+            epic_title: "Login com Google",
+            branch: "epico/42-login",
+            state: "working",
+            paused: false,
+            party: [],
+            party_size: 0,
+            waits: [],
+            stalled: false,
+            quiet_seconds: 0,
+            pr: 0,
+          },
+        ],
+        layout: [],
+        can_pause: false,
+        can_type: false,
+      },
+    }),
+  });
+  renderApp("/aprovacoes");
+  const card = await screen.findByRole("article", { name: "Pedido #7" });
+  expect(await within(card).findByText(/loja · mesa Login com Google/)).toBeTruthy();
+});

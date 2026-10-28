@@ -12,6 +12,7 @@ import { api } from "../lib/api";
 import { approvalDetailsQuery } from "../lib/approvalQueries";
 import { errorText } from "../lib/errors";
 import { useFormatTime } from "../lib/time";
+import { viewQuery } from "../workspace/queries";
 import { Alert, Button, Field } from "./ui";
 
 /** A text by a key that is built at run time (the name of an answer, a type, a state). */
@@ -387,11 +388,17 @@ export function ApprovalCard({
   const fmt = useFormatTime();
   const [details, setDetails] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
+  // the table by its title, as the Home and the campaign say it; its id until the view is read
+  const { data: view } = useQuery({
+    ...viewQuery(item.workspace),
+    enabled: item.workspace !== "" && item.table !== "",
+  });
+  const tableName = view?.tables.find((b) => b.id === item.table)?.epic_title || item.table;
   const open = !item.closed;
   const known = i18n.exists(`approvals:readable.${item.type}.title`);
   const place = item.workspace
     ? item.table
-      ? t("item.place", { workspace: item.workspace, table: item.table })
+      ? t("item.place", { workspace: item.workspace, table: tableName })
       : t("item.placeNoTable", { workspace: item.workspace })
     : t("item.system");
   const exact = known ? exactLines(item.text) : [];

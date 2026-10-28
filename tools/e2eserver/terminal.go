@@ -85,7 +85,7 @@ func (f *fakeTerminals) Write(p []byte) (int, error) {
 }
 
 func (f *fakeTerminals) info() panel.TerminalInfo {
-	return panel.TerminalInfo{TerminalID: fakeTerminal, Character: fakeCharacter, Name: "Dev-1", Machine: "e2e", State: "idle", Signal: true}
+	return panel.TerminalInfo{TerminalID: fakeTerminal, Character: fakeCharacter, Name: "Dev-1", Machine: "e2e", State: "idle", Signal: true, Workspace: fakeWorkspace, Table: fakeTable}
 }
 
 // ByCharacter implements panel.TerminalSource.

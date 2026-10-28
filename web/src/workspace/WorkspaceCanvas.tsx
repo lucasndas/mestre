@@ -30,6 +30,7 @@ import {
   type BuildOptions,
   buildEdges,
   buildNodes,
+  GM_KEY,
   type GmData,
   layoutOf,
   type ViewNode,
@@ -161,6 +162,16 @@ function Canvas({
     });
   }, [view, showEnded, build]);
   const edges = useMemo(() => buildEdges(nodes), [nodes]);
+  // it opens where the text is readable: the Grand Master and the first row of tables, not every table
+  // squeezed into the screen (docs/painel/visao-do-workspace.md#layout)
+  const first = useMemo(() => {
+    const built = buildNodes(view, showEnded, build);
+    const tables = built.filter((n) => n.type === "table");
+    const top = Math.min(...tables.map((n) => n.position.y));
+    return [GM_KEY, ...tables.filter((n) => n.position.y === top).map((n) => n.id)].map((id) => ({
+      id,
+    }));
+  }, [view, showEnded, build]);
 
   const save = (list: ViewNode[]) => {
     void api("PUT", `/api/workspaces/${enc(slug)}/view/layout`, { items: layoutOf(list) }).catch(
@@ -196,7 +207,7 @@ function Canvas({
         nodesConnectable={false}
         deleteKeyCode={null}
         fitView
-        fitViewOptions={{ padding: 0.12, maxZoom: 1 }}
+        fitViewOptions={{ padding: 0.12, maxZoom: 1, minZoom: 0.6, nodes: first }}
         minZoom={0.1}
         proOptions={{ hideAttribution: true }}
       >
