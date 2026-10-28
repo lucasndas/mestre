@@ -16,6 +16,7 @@ export default defineConfig({
   build: { outDir, emptyOutDir: false },
   test: {
     setupFiles: ["src/test-setup.ts"],
+    runner: "src/test-runner.ts",
     css: false,
     // A failed test is never run again (docs/qualidade/testes.md#regras-e-erros).
     retry: 0,
