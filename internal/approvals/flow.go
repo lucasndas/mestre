@@ -9,11 +9,13 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/notices"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -97,6 +99,9 @@ type Options struct {
 	// taken back: the panel updates what it shows (nil: nobody listens). It runs in
 	// the goroutine of the change and must not block.
 	OnChange func(ctx context.Context, request int64)
+	// Bell is given the notice for the bell of the panel of each user who may decide a request,
+	// the first time the request is put to the people (nil: no bell).
+	Bell func(ctx context.Context, n notices.Notice)
 }
 
 // Flow is the flow of approval over the people.
@@ -227,6 +232,10 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 		return err
 	}
 	q.Text = withFields(q, all)
+	_, asked, err := f.row(ctx, q.Request.ID)
+	if err != nil {
+		return err
+	}
 	req, _ := json.Marshal(q.Require)
 	if q.Require == nil {
 		req = []byte("[]")
@@ -257,6 +266,10 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 		}
 		if len(answers) == 0 {
 			continue
+		}
+		if !asked && f.o.Bell != nil {
+			f.o.Bell(ctx, notices.Notice{Kind: notices.Approval, Workspace: q.Request.Workspace, Mesa: q.Request.Table, Audience: notices.User, UserID: u.ID,
+				Text: "Nova aprovação", LinkKind: notices.LinkRequest, LinkRef: strconv.FormatInt(q.Request.ID, 10)})
 		}
 		text, err := f.render(ctx, q.Request.ID, q.Text, max(q.Approvals, 1))
 		if err != nil {

@@ -134,3 +134,22 @@ func TestARequestWithNoWorkspaceIsOnlyTheOwners(t *testing.T) {
 		t.Fatalf("the Owner sees %+v", got)
 	}
 }
+
+// CA-CONV-08 (the suggested pattern): a pattern built from a command that carries a token
+// is not suggested at all, so the central never offers the secret as the text to approve.
+func TestAPatternThatCarriesATokenIsNotSuggested(t *testing.T) {
+	t.Parallel()
+	a := newApprRig(t)
+	token := secretToken()
+	a.open(reqOpt{command: "deploy " + token + " now"})
+	it := a.list(a.adminTok, "").Requests[0]
+	if pat := answersOf(it)["approve_pattern"]; pat.Suggested != "" || strings.Contains(fmt.Sprint(it), token) {
+		t.Fatalf("the pattern answer is %+v", pat)
+	}
+	// a clean command still gets its suggestion
+	b := newApprRig(t)
+	b.open(reqOpt{command: "npm install lodash"})
+	if s := answersOf(b.list(b.adminTok, "").Requests[0])["approve_pattern"].Suggested; s != "npm install *" {
+		t.Errorf("the clean command is suggested %q", s)
+	}
+}

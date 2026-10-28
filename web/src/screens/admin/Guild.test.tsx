@@ -60,7 +60,8 @@ const view = (o: Record<string, unknown>) => ({
 });
 const owner = { "GET /api/guild": () => ({ body: view({}) }) };
 
-// CA-ADM-08, CA-CRESC-08
+// CA-ADM-08
+// CA-CRESC-08
 test("with the Citadel alone the strip says one machine, and the card to add a second one marks the installer as coming soon", async () => {
   fakeServer({
     ...base,

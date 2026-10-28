@@ -460,3 +460,50 @@ func TestInheritMovesTheConnectionsWithTheirReasons(t *testing.T) {
 		t.Errorf("the old one kept %+v", cs)
 	}
 }
+
+// CA-CANVAS-10 (security): a table cannot undo the connection of a scroll that belongs to the
+// table of the same name in another campaign.
+func TestDisconnectInTableRefusesAScrollOfAnotherCampaignWithTheSameTable(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	gm := w.gm()
+	w.master("42-login", gm)
+	dev := w.dev("42-login", "Dev", by(gm))
+	mine := w.scrolls.scroll(workspace+"/42-login/notas", "notas", "42-login")
+	foreign := w.scrolls.scroll("outra/42-login/notas", "notas", "42-login")
+	admin := connections.User{ID: "u1", Level: characters.LevelAdministrator}
+	if _, err := w.svc.ConnectByUser(w.ctx, admin, workspace, "42-login", connections.Char(dev.ID), mine); err != nil {
+		t.Fatal(err)
+	}
+	// the engine made this one (a user cannot): it is the connection to protect
+	if err := w.svc.Link(w.ctx, workspace, "42-login", connections.Char(dev.ID), foreign, "u2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.svc.DisconnectInTable(w.ctx, admin, workspace, "42-login", connections.Char(dev.ID), foreign); !errors.Is(err, connections.ErrNotFound) {
+		t.Fatalf("disconnecting the scroll of another campaign = %v; want not found", err)
+	}
+	if w.reasons(connections.Char(dev.ID), foreign) == "" {
+		t.Error("the connection of the other campaign is gone")
+	}
+	if _, err := w.svc.DisconnectInTable(w.ctx, admin, workspace, "42-login", connections.Char(dev.ID), mine); err != nil {
+		t.Fatalf("disconnecting its own scroll: %v", err)
+	}
+}
+
+// CA-CANVAS-10 (security): a user cannot connect a scroll of another campaign whose table has the
+// same id; nothing is connected.
+func TestConnectByUserRefusesAScrollOfAnotherCampaignWithTheSameTable(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	gm := w.gm()
+	w.master("42-login", gm)
+	dev := w.dev("42-login", "Dev", by(gm))
+	foreign := w.scrolls.scroll("outra/42-login/notas", "notas", "42-login")
+	admin := connections.User{ID: "u1", Level: characters.LevelAdministrator}
+	if _, err := w.svc.ConnectByUser(w.ctx, admin, workspace, "42-login", connections.Char(dev.ID), foreign); !errors.Is(err, connections.ErrDifferentTables) {
+		t.Fatalf("connecting the scroll of another campaign = %v; want different tables", err)
+	}
+	if w.reasons(connections.Char(dev.ID), foreign) != "" {
+		t.Error("a connection was made")
+	}
+}

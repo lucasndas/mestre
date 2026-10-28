@@ -1,6 +1,6 @@
 # Canvas da mesa
 
-> **Assunto:** canvas infinito da mesa: personagens com terminal ao vivo, conexões, pergaminhos, missões, esperas, ajuda nos termos e digitação no terminal · **Componente:** Painel · **Atualizado:** 2026-10-27
+> **Assunto:** canvas infinito da mesa: personagens com terminal ao vivo, conexões, pergaminhos, missões, esperas, ajuda nos termos e digitação no terminal · **Componente:** Painel · **Atualizado:** 2026-10-28
 
 ## Objetivo
 
@@ -29,7 +29,7 @@ Mostrar, em tempo real, tudo o que acontece numa mesa: o Mestre da mesa, a party
 
 ### Canvas infinito
 
-- **Zoom inicial legível:** a mesa abre em zoom 100%, nunca encolhida para caber tudo; o texto dos personagens, selos e pergaminhos tem 17 px ou mais a 100% ([design](design.md#direção-pergaminho)), e o "Ajustar à tela" é um botão, não o estado inicial. Se a mesa não cabe, o quadro abre centrado no personagem que está trabalhando (senão, no Mestre da mesa), sem que os controles do canto de baixo cubram o cartão. Os três cartões lado a lado do protótipo são uma divergência consciente: cada cartão embute o terminal de tamanho fixo, 200×50, e três não cabem legíveis. Terminais seguem o tamanho fixo do PTY.
+- **Zoom inicial legível:** a mesa abre em zoom 100%, nunca encolhida para caber tudo; o texto dos personagens, selos e pergaminhos tem 17 px ou mais a 100% ([design](design.md#direção-pergaminho)), e o "Ajustar à tela" é um botão, não o estado inicial. Se a mesa não cabe, o quadro abre centrado no personagem que está trabalhando (senão, no Mestre da mesa), sem que os controles do canto de baixo cubram o cartão. Os três cartões lado a lado do protótipo são uma divergência consciente: cada cartão embute o terminal de tamanho fixo, 200×50, e três não cabem legíveis ([terminal no painel](terminal-no-painel.md) é dono da interface do terminal; o tamanho fixo vem do [terminal](../arquitetura/terminal.md)). Terminais seguem o tamanho fixo do PTY.
 - **Cabeçalho da tela da mesa:** migalha `Workspaces › workspace › título da mesa` ([visão da campanha](visao-do-workspace.md#como-se-chega-e-a-campanha-atual)), o título, o estado em palavras, branch, issue e última entrega, os botões **Voltar para a campanha** e **Conversar sobre esta mesa**, abas **Quadro** e **Terminal de <personagem>** (o terminal de um personagem é aba da mesa, com a escolha do personagem quando há mais de um) e, ao lado do quadro, "Em palavras simples": uma frase sobre o que cada personagem faz e o que espera, as **Provas** da missão, o **Uso** do limite e **Pausar mesa** (com motivo, como no cartão da campanha). No celular o quadro vira uma lista vertical de personagens ligados por uma linha (tracejada na espera), cada um com **Ver terminal**.
 - Zoom, arrastar o fundo, selecionar vários, arrastar elementos e agrupar.
 - Posição, tamanho e grupos de cada elemento ficam salvos no banco da Cidadela por mesa (tabela `canvas_items`, chave `<tipo>:<id>`; um grupo é um elemento com rótulo; `internal/orchestration/canvas`). Reabrir o navegador mostra tudo como estava. Quem vê a mesa move e redimensiona; **agrupar** é de quem edita o canvas.

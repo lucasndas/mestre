@@ -157,3 +157,20 @@ func TestARequestThatHoldsTheGateEntersItOnce(t *testing.T) {
 		t.Errorf("login entered the gate %d times and released %d; want once", e-before, r-before)
 	}
 }
+
+// CA-LOGIN-06 (the audit): a refused Origin is audited only when the request carries a valid
+// session; a cookie that names no session writes nothing.
+func TestARefusedOriginIsAuditedOnlyWithAValidSession(t *testing.T) {
+	t.Parallel()
+	g := newGateRig(t)
+	sess := g.ownerSession()
+	n := g.audited("panel.origin_refused")
+	g.wantErr(g.call("POST", "/api/logout", nil, opts{cookie: "not-a-session", origin: "https://evil.example"}), http.StatusForbidden, panel.CodeBadOrigin)
+	if g.audited("panel.origin_refused") != n {
+		t.Error("a cookie with no session wrote an audit line")
+	}
+	g.wantErr(g.call("POST", "/api/logout", nil, opts{cookie: sess, origin: "https://evil.example"}), http.StatusForbidden, panel.CodeBadOrigin)
+	if g.audited("panel.origin_refused") != n+1 {
+		t.Error("a valid session was not audited")
+	}
+}

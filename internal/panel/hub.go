@@ -321,9 +321,7 @@ func (h *Hub) remove(c *uiConn) {
 // before the upgrade.
 func (p *Panel) serveWS(w http.ResponseWriter, r *http.Request) {
 	if !originOK(r) {
-		if _, err := r.Cookie(CookieName); err == nil {
-			p.audit(r.Context(), "panel.origin_refused", map[string]any{"ip": clientIP(r), "path": clip(r.URL.Path, 200)})
-		}
+		p.auditOriginRefused(r)
 		WriteError(w, Err(CodeBadOrigin, "origem não permitida", nil))
 		return
 	}

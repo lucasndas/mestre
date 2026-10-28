@@ -144,7 +144,12 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r.gh = &telegram.GitHubChannel{Users: svc, Personal: r.personal, Clock: env.Clock, Logger: env.Log, Moment: r.decrees.Moment}
 	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
-		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log, OnChange: r.flowChanged})
+		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log, OnChange: r.flowChanged,
+		Bell: func(ctx context.Context, n notices.Notice) {
+			if _, _, err := r.feed.Add(ctx, n); err != nil {
+				env.Log.Warn("app: the bell was not told of a new approval", "err", err)
+			}
+		}})
 	if err != nil {
 		return nil, fmt.Errorf("app: the flow of approval: %w", err)
 	}
@@ -187,7 +192,9 @@ type stdRun struct {
 	env IntegrationEnv
 
 	users *users.Service
-	flow  *approvals.Flow
+	// analyst replaces the analyst of the stage analysis (a test; nil: the one of this version).
+	analyst sessionzero.Analyst
+	flow    *approvals.Flow
 	// onFlow is what the panel of the period wants to hear when a request changes.
 	onFlow atomic.Pointer[func(context.Context, int64)]
 	// feed is the bell of the panel: the notices the Telegram also gets.

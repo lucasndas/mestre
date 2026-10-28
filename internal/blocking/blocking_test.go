@@ -111,7 +111,9 @@ func TestTheOwnerIsTheRequiredUsersOrTheMinimumLevelAndNeverSomebody(t *testing.
 	}
 }
 
-// Part of CA-BLOQ-04 (the panel that receives the whole text is the M6's)
+// CA-BLOQ-04
+// The evidence goes cut in 3 lines with the token masked, and the whole text the panel gets is
+// masked too (the bell and the saved notice: internal/telegram/panelfeed_test.go).
 func TestTheEvidenceIsCutInThreeLinesAndMaskedButTheWholeIsKeptMasked(t *testing.T) {
 	t.Parallel()
 	n := stripe()

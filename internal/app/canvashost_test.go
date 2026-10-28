@@ -115,6 +115,32 @@ func TestCanvasRemovesTheManualConnectionAndRefusesTheAutomaticOne(t *testing.T)
 	}
 }
 
+// CA-CANVAS-10 (security: a table cannot undo the connection of another): the
+// path of another table, or of another campaign, finds nothing to disconnect,
+// and the connection stays.
+func TestCanvasDoesNotDisconnectWhatBelongsToAnotherTable(t *testing.T) {
+	t.Parallel()
+	w := newCommWorld(t)
+	dev, rev := w.recruit("Dev-1", "Dev Claude"), w.recruit("Revisor", "Revisor Codex")
+	host := app.NewCanvasHostForTest(w.orc, w.clk)
+	if err := host.Connect(w.ctx, canvasAdmin, w.slug, w.table.ID, char(dev.ID), char(rev.ID)); err != nil {
+		t.Fatal(err)
+	}
+	other, _ := w.openTable(43)
+	for name, path := range map[string][2]string{"another table": {w.slug, other.ID}, "another campaign": {"outra-campanha", w.table.ID}} {
+		err := host.Disconnect(w.ctx, canvasAdmin, path[0], path[1], char(dev.ID), char(rev.ID))
+		var ref *panel.Refusal
+		isRef := errors.As(err, &ref)
+		if !errors.Is(err, panel.ErrCanvasNotFound) && (!isRef || ref.Reason != "not_found") {
+			t.Errorf("%s: disconnect = %v; want not found", name, err)
+		}
+		st, _ := host.State(w.ctx, w.slug, w.table.ID)
+		if c, ok := connected(st, dev.ID, rev.ID); !ok || !c.Manual {
+			t.Errorf("%s: the connection of the table is gone (%v) after %v", name, ok, err)
+		}
+	}
+}
+
 // Part of CA-CANVAS-05: the engine refuses a drag with its reason, and an
 // Observer cannot connect.
 func TestCanvasRefusesWhatTheEngineRefuses(t *testing.T) {

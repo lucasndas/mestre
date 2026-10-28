@@ -2,11 +2,13 @@ package approvals_test
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/notices"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -408,5 +410,37 @@ func TestAUserSuspendedWhileTheTargetIsReadVotesNothing(t *testing.T) {
 	var n int
 	if err := w.db.Reader().QueryRowContext(w.ctx, `SELECT COUNT(*) FROM approval_votes WHERE request = ?`, r.ID).Scan(&n); err != nil || n != 0 || len(w.ch.Decisions()) != 0 {
 		t.Errorf("votes %d, decisions %d, %v", n, len(w.ch.Decisions()), err)
+	}
+}
+
+// CA-VIDA-13: a request put to the people rings the bell of each user who decides it, once, with
+// the table filled (never a slug in the text) and the link to the request; whoever does not decide
+// it, or does not act in its campaign, is not told.
+func TestARequestPutToThePeopleRingsTheBellOfWhoDecidesIt(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ana := w.add("Ana", users.Approver, "loja")
+	w.add("Beto", users.Observer, "loja")
+	w.add("Caio", users.Approver, "blog")
+	r := w.open(openOpts{action: "npm install lodash"})
+	got := map[string]notices.Notice{}
+	for _, n := range w.bell {
+		got[n.UserID] = n
+	}
+	if len(w.bell) != 2 || got[w.owner.ID].Text == "" || got[ana.ID].Text == "" {
+		t.Fatalf("the bell rang for %+v; want the Owner and Ana", w.bell)
+	}
+	n := got[ana.ID]
+	if n.Text != "Nova aprovação" || n.Workspace != "loja" || n.Mesa != "42-login" || n.Audience != notices.User ||
+		n.LinkKind != notices.LinkRequest || n.LinkRef != strconv.FormatInt(r.ID, 10) {
+		t.Errorf("the notice is %+v", n)
+	}
+	// asking again (the question changed) does not ring again
+	q := chain.PeopleQuestion{Request: r, Text: "outra", Approvals: 1, MinLevel: classes.LevelApprover, Answers: []chain.Answer{chain.AnswerApprove}}
+	if err := w.flow.Ask(w.ctx, q); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.bell) != 2 {
+		t.Errorf("the bell rang again: %d notices", len(w.bell))
 	}
 }
