@@ -178,6 +178,9 @@ type (
 		IsBot     bool   `json:"is_bot"`
 		FirstName string `json:"first_name"`
 		Username  string `json:"username"`
+		// LanguageCode is the IETF tag of the language of the app of the user, as the
+		// Telegram sends it (empty when it does not).
+		LanguageCode string `json:"language_code"`
 	}
 	// Chat is a chat.
 	Chat struct {

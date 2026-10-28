@@ -2,7 +2,10 @@ package users
 
 import (
 	"errors"
+	"slices"
 	"time"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // State is the state of a user.
@@ -22,6 +25,9 @@ type User struct {
 	Login string
 	// Language is the language of the panel the user chose ("" until chosen).
 	Language string
+	// TelegramLanguage is the last language_code the Telegram sent for the user (a
+	// hint; it is never written to Language).
+	TelegramLanguage string
 	// LastWorkspace is the workspace the user opened last in the panel ("" if none).
 	LastWorkspace string
 	Level         Level
@@ -84,6 +90,19 @@ var (
 
 // Languages are the languages of the panel.
 var Languages = []string{"pt-BR", "en"}
+
+// MatchLanguage turns a hint of language into one of Languages: it is i18n.Match,
+// the one rule (docs/plataforma/idioma-por-canal.md#a-regra-única).
+func MatchLanguage(tag string) string { return i18n.Match(tag) }
+
+// LanguageFor is the language to speak to the user: the one he chose, or else the
+// match of the hint.
+func (u User) LanguageFor(hint string) string {
+	if slices.Contains(Languages, u.Language) {
+		return u.Language
+	}
+	return MatchLanguage(hint)
+}
 
 // ErrBadLanguage is the refusal of a language the panel does not have.
 var ErrBadLanguage = errors.New("users: not a language of the panel")

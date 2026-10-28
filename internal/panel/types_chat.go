@@ -150,4 +150,6 @@ type ChatSent struct {
 // ChatChoice is the body of POST /api/chat/choices/{id}: the option, from 0.
 type ChatChoice struct {
 	Option int `json:"option"`
+	// Language is the language the panel is open in (optional).
+	Language string `json:"language,omitempty"`
 }

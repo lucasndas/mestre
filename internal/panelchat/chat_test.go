@@ -246,7 +246,7 @@ func TestAMessageOfThePanelEntersTheInboxWithItsOrigin(t *testing.T) {
 		o.Level != characters.LevelAdministrator {
 		t.Fatalf("item %+v origin %+v", it, o)
 	}
-	if !strings.HasPrefix(it.Header(), "[Mestre · user · de Bia (Administrador) · via painel · m") {
+	if !strings.HasPrefix(it.Header(), "[Mestre · user · de Bia (Administrador) · via painel · idioma pt-BR · m") {
 		t.Fatalf("header %q", it.Header())
 	}
 	if _, err := r.send(r.bia, in("loja", "outra vez", "msg-0000001")); err != nil || len(r.items("loja", r.bia)) != 1 {
@@ -547,12 +547,12 @@ func TestAChoiceGoesBackOnceAndTheProgressIsOneCard(t *testing.T) {
 	if got := r.conv(r.ana, "loja"); len(got.Entries) != 0 {
 		t.Fatalf("another user sees the question: %+v", got.Entries)
 	}
-	wantCode(t, r.svc.Choose(r.ctx, r.ana, id, 0), panel.CodeChatChoiceUnknown)
-	wantCode(t, r.svc.Choose(r.ctx, r.bia, id, 9), panel.CodeBadRequest)
-	if err := r.svc.Choose(r.ctx, r.bia, id, 2); err != nil {
+	wantCode(t, r.svc.Choose(r.ctx, r.ana, id, 0, ""), panel.CodeChatChoiceUnknown)
+	wantCode(t, r.svc.Choose(r.ctx, r.bia, id, 9, ""), panel.CodeBadRequest)
+	if err := r.svc.Choose(r.ctx, r.bia, id, 2, ""); err != nil {
 		t.Fatal(err)
 	}
-	wantCode(t, r.svc.Choose(r.ctx, r.bia, id, 1), panel.CodeChatChoiceTaken)
+	wantCode(t, r.svc.Choose(r.ctx, r.bia, id, 1, ""), panel.CodeChatChoiceTaken)
 	var answers []inbox.Item
 	for _, it := range r.items("loja", r.bia) {
 		if it.Origin.Choice == id {
@@ -572,7 +572,7 @@ func TestAChoiceGoesBackOnceAndTheProgressIsOneCard(t *testing.T) {
 	}
 	var tg int64
 	_ = r.db.Reader().QueryRowContext(r.ctx, `SELECT MAX(id) FROM choose_questions`).Scan(&tg)
-	wantCode(t, r.svc.Choose(r.ctx, r.bia, tg, 0), panel.CodeChatChoiceUnknown)
+	wantCode(t, r.svc.Choose(r.ctx, r.bia, tg, 0, ""), panel.CodeChatChoiceUnknown)
 	// the user who may not give orders, or does not act in the workspace, is not asked
 	if _, err := r.svc.AskChoice(r.ctx, panelchat.Question{Workspace: "loja", UserID: r.otto.ID, Text: "q", Options: []string{"a", "b"}}, 1); err == nil {
 		t.Fatal("the Observer was asked")
@@ -944,4 +944,45 @@ func TestARedactedMessageIsDroppedByTheOpenTabs(t *testing.T) {
 	if len(ev) != 1 || ev[0].User != r.bia.ID || ev[0].Kind != panel.EventChatChanged {
 		t.Fatalf("events %+v", ev)
 	}
+}
+
+// CA-IDIOMA-08 (the panel side; the Telegram side is in internal/telegram)
+func TestAMessageOfThePanelCarriesTheLanguageOfTheUserOrOfThePanel(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	// no choice: the language the panel is open in
+	inEN := in("loja", "hi", "msg-0000101")
+	inEN.Language = "en-GB"
+	if _, err := r.send(r.bia, inEN); err != nil {
+		t.Fatal(err)
+	}
+	inPT := in("loja", "oi", "msg-0000102")
+	inPT.Language = "pt-BR"
+	if _, err := r.send(r.bia, inPT); err != nil {
+		t.Fatal(err)
+	}
+	// a choice beats the panel
+	chose := r.bia
+	chose.Language = "en"
+	if _, err := r.send(chose, inPT2("msg-0000103")); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	var headers []string
+	for _, it := range r.items("loja", r.bia) {
+		got = append(got, it.Origin.Language)
+		headers = append(headers, it.Header())
+	}
+	if len(got) != 3 || got[0] != "en" || got[1] != "pt-BR" || got[2] != "en" {
+		t.Fatalf("languages %v", got)
+	}
+	if !strings.Contains(headers[0], " · idioma en · ") || !strings.Contains(headers[1], " · idioma pt-BR · ") {
+		t.Fatalf("headers %q", headers)
+	}
+}
+
+func inPT2(id string) panel.ChatDraftInput {
+	d := in("loja", "oi", id)
+	d.Language = "pt-BR"
+	return d
 }

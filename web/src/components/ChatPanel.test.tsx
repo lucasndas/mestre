@@ -165,6 +165,7 @@ test("a message is sent with its files, the field is cleared and the conversatio
   expect(body.text).toBe("abra a mesa");
   expect(body.files).toEqual(["plano.pdf"]);
   expect(typeof body.client_id).toBe("string");
+  expect(body.language).toBe("pt-BR"); // the language the panel is open in goes with the message
   expect(
     (within(panel).getByLabelText("Mensagem para o Grão-Mestre") as HTMLTextAreaElement).value,
   ).toBe("");
@@ -405,7 +406,7 @@ test("the question shows a button per option and the choice goes once", async ()
   expect(calls.filter((x) => x.method === "POST" && x.path === "/api/chat-choices/5")).toHaveLength(
     1,
   );
-  expect(calls.find((x) => x.method === "POST")?.body).toEqual({ option: 1 });
+  expect(calls.find((x) => x.method === "POST")?.body).toEqual({ option: 1, language: "pt-BR" });
   expect(within(panel).queryByRole("group", { name: "Opções da pergunta" })).toBeNull();
 });
 

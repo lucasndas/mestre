@@ -395,7 +395,7 @@ func (r *Routing) choose(ctx context.Context, k Click) (string, string, error) {
 // answer of the Grand Master goes back through it.
 func OriginOf(d Delivery) *inbox.Origin {
 	o := &inbox.Origin{Channel: inbox.ChannelTelegram, User: d.User.ID, UserName: d.User.Name, Level: characters.UserLevel(d.User.Level),
-		Conversation: fmt.Sprint(d.ChatID), Message: fmt.Sprint(d.MessageID), Table: d.Mesa}
+		Conversation: fmt.Sprint(d.ChatID), Message: fmt.Sprint(d.MessageID), Table: d.Mesa, Language: d.User.LanguageFor(d.User.TelegramLanguage)}
 	if d.ReplyToMessage != 0 {
 		o.RepliedTo = fmt.Sprint(d.ReplyToMessage)
 	}
