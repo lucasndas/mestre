@@ -29,6 +29,44 @@ const CELL_EM = 0.6;
 const LINE_HEIGHT = 1.4;
 const ENDED = new Set(["stopped", "stopping", "interrupted"]);
 
+const BAND_ICONS = {
+  wifi: "M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01",
+  warn: "M12 4 3 20h18L12 4zM12 10v4M12 17h.01",
+  ended: "M7 4h10v16H7z",
+} as const;
+
+/** The text of a band of the window: its icon and the first sentence in bold, the rest after it. */
+function BandText({ icon, text }: { icon: keyof typeof BAND_ICONS; text: string }) {
+  const m = /^(.+?[.…])\s+(.+)$/s.exec(text);
+  return (
+    <span className="inline-flex items-center gap-2.5">
+      <svg
+        viewBox="0 0 24 24"
+        width="20"
+        height="20"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className="shrink-0"
+      >
+        <path d={BAND_ICONS[icon]} />
+      </svg>
+      <span>
+        {m ? (
+          <>
+            <strong>{m[1]}</strong> {m[2]}
+          </>
+        ) : (
+          text
+        )}
+      </span>
+    </span>
+  );
+}
+
 export interface TerminalViewProps {
   terminalId: string;
   /** What the server said about the terminal (the answer of GET /api/characters/{id}/terminal). */
@@ -374,6 +412,7 @@ export function TerminalView({
     if (reconnecting) return t("support.reconnecting");
     if (decision) return t("support.decision");
     if (keys) return t("support.typing");
+    if (mode === "message" && info.busy) return t("support.busy");
     return t("support.fixed", { cols, rows: rowsCount });
   })();
   const conn: Connection = reconnecting
@@ -431,7 +470,7 @@ export function TerminalView({
       )}
       {reconnecting ? (
         <p className="m-0 border-b border-term-line bg-warn px-3.5 py-2 text-warn-ink">
-          {t("banner.reconnecting")}
+          <BandText icon="wifi" text={t("banner.reconnecting")} />
         </p>
       ) : null}
       {context?.paused ? (
@@ -446,18 +485,19 @@ export function TerminalView({
           role="status"
           className="m-0 border-b border-term-line bg-term-chrome-2 px-3.5 py-2 text-term-fg"
         >
-          {since
-            ? t("noSignal", { time: formatTime(since, i18n.language, timeZone) })
-            : t("noSignalNoTime")}
+          <BandText
+            icon="wifi"
+            text={
+              since
+                ? t("noSignal", { time: formatTime(since, i18n.language, timeZone) })
+                : t("noSignalNoTime")
+            }
+          />
         </p>
       ) : null}
       {!compact && decision && !ended ? (
         <div className="flex flex-wrap items-center gap-3 bg-accent px-3.5 py-2 text-accent-ink">
-          <span>
-            {t("banner.decision", {
-              name: info.name,
-            })}
-          </span>
+          <BandText icon="warn" text={t("banner.decision", { name: info.name })} />
           <AriaButton
             onPress={() => onDecide?.()}
             className="min-h-11 rounded-field border border-accent-ink px-3 font-semibold text-accent-ink hover:bg-accent-strong"
@@ -468,7 +508,7 @@ export function TerminalView({
       ) : null}
       {!compact && ended ? (
         <div className="flex flex-wrap items-center gap-3 border-b border-term-line bg-term-chrome-2 px-3.5 py-2 text-term-fg">
-          <span>{t("banner.ended", { name: info.name })}</span>
+          <BandText icon="ended" text={t("banner.ended", { name: info.name })} />
           {onSeeTable ? (
             <AriaButton
               onPress={onSeeTable}

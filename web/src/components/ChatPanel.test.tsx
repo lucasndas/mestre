@@ -260,10 +260,37 @@ test("with the system locked the send says it is kept until it is unlocked", asy
       /Sistema travado: o que você enviar fica guardado até destravar/,
     ),
   ).toBeTruthy();
+  // the line of status says it in two words, with the red dot, as the prototype
+  expect(within(panel).getByRole("status").textContent).toContain("Sistema travado");
+  expect(within(panel).getByRole("status").textContent).toContain("envio guardado");
   await fill(user, within(panel).getByLabelText("Mensagem para o Grão-Mestre"), "guarde");
   await user.click(within(panel).getByRole("button", { name: "Enviar" }));
   expect(await within(panel).findByText("Mensagem guardada até destravar.")).toBeTruthy();
   expect(await within(panel).findByText("Guardada até destravar")).toBeTruthy();
+});
+
+// The engine keeps a notice in place of what the filter of secrets held or cut: the message of the
+// user shows the band of what happened, not the notice of the engine.
+test("a held message shows Não entregue and a message with the secret cut shows Enviada sem o segredo", async () => {
+  const c = conv({
+    entries: [
+      entry({
+        id: "in-1",
+        text: "[mensagem retida: o usuário mandou uma senha pelo painel; o motor não a entregou.]",
+      }),
+      entry({ id: "in-2", text: "Use o token [segredo removido] no deploy" }),
+    ],
+  });
+  fakeServer({ ...base(c), "GET /api/chat/loja": () => ({ body: c }) });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/");
+  const panel = await openPanel(user);
+  online();
+  expect(await within(panel).findByText("Não entregue.")).toBeTruthy();
+  expect(within(panel).queryByText(/mensagem retida/)).toBeNull();
+  expect(within(panel).getByRole("link", { name: "Segredos" })).toBeTruthy();
+  expect(within(panel).getByText("Enviada sem o segredo.")).toBeTruthy();
+  expect(within(panel).getByText(/Use o token \[segredo removido\] no deploy/)).toBeTruthy();
 });
 
 // CA-CONV-02 (the screen): the answer that came while the panel was closed is counted on the button,

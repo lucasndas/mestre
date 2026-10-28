@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 
 	"github.com/mestre-ia/mestre/internal/attachments"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
@@ -28,7 +29,15 @@ const (
 	chatWorkspace   = "loja"
 	// askForApproval is what a message must hold for the double to leave a request of cost waiting.
 	askForApproval = "mais orçamento"
+	// the states of the Grão-Mestre a browser can ask for in words: busy until another message says
+	// he is done, and locked until another says to unlock.
+	askToThink  = "só pensando"
+	askToLock   = "travar o sistema"
+	askToUnlock = "destravar o sistema"
 )
+
+// thinking and locked are the two switches of the double of the Grão-Mestre.
+var thinking, locked atomic.Bool
 
 type noFiles struct{}
 
@@ -74,7 +83,27 @@ func startFakeChat(ctx context.Context, guildDB, filesDir string, mask func(stri
 				return it, err
 			}
 			if n.Origin != nil && n.Origin.Choice == 0 {
+				low := strings.ToLower(it.Text)
+				switch {
+				case strings.Contains(low, askToLock):
+					locked.Store(true)
+					svc.LockChanged(ctx)
+				case strings.Contains(low, askToUnlock):
+					locked.Store(false)
+					svc.LockChanged(ctx)
+				}
+				if strings.Contains(low, askToThink) {
+					thinking.Store(true)
+					// the card of progress the Grão-Mestre keeps while he works
+					_ = svc.SetProgress(ctx, it.Workspace, "2 mesas em andamento, 1 precisa de você.")
+					svc.Changed(ctx, fakeGrandMaster)
+					return it, nil
+				}
+				wasThinking := thinking.Swap(false)
 				answer(ctx, ib, svc, it)
+				if wasThinking {
+					svc.Changed(ctx, fakeGrandMaster)
+				}
 				// the journey test asks for an approval in words, as a person does; the double raises it
 				if strings.Contains(strings.ToLower(it.Text), askForApproval) {
 					if err := insertCostRequest(ctx, db, clk.Now()); err != nil {
@@ -85,12 +114,22 @@ func startFakeChat(ctx context.Context, guildDB, filesDir string, mask func(stri
 			return it, nil
 		},
 		GrandMaster: func(_ context.Context, ws string) (characters.Character, bool, error) {
-			return gm, ws == chatWorkspace || ws == fakeWorkspace, nil
+			g := gm
+			if thinking.Load() {
+				g.State = characters.Busy
+			}
+			return g, ws == chatWorkspace || ws == fakeWorkspace, nil
 		},
 		Character: func(context.Context, string) (characters.Character, error) { return gm, nil },
-		Pending:   func(context.Context, string) (int, error) { return 0, nil },
-		Receive:   files.ReceiveData,
-		Limit:     files.Limit,
+		Pending: func(context.Context, string) (int, error) {
+			if thinking.Load() {
+				return 1, nil
+			}
+			return 0, nil
+		},
+		Locked:  func(context.Context) bool { return locked.Load() },
+		Receive: files.ReceiveData,
+		Limit:   files.Limit,
 	})
 	if err != nil {
 		return fail(err)

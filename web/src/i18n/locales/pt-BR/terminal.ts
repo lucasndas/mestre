@@ -7,8 +7,10 @@ export default {
   noTerminal: "Este personagem não tem um terminal aberto agora.",
   snapshotLabel: "Retrato do terminal de {{name}}, atualizado a cada 2 segundos",
   snapshotHint: "Retrato da tela. Chegue mais perto para ver ao vivo.",
-  noSignal: "Máquina sem sinal desde {{time}}.",
-  noSignalNoTime: "Máquina sem sinal.",
+  noSignal:
+    "Máquina sem sinal desde {{time}}. A tela fica como estava. A digitação está desligada até o sinal voltar.",
+  noSignalNoTime:
+    "Máquina sem sinal. A tela fica como estava. A digitação está desligada até o sinal voltar.",
   lost: "trecho perdido",
   type: "Digitar",
   stopTyping: "Parar de digitar",
@@ -80,6 +82,7 @@ export default {
     reconnecting: "Digitar volta quando a conexão voltar",
     decision: "Digitar volta depois da sua decisão",
     ended: "O terminal terminou",
+    busy: "Trabalhando: sua mensagem entra na fila",
     needsLive: "Chegue mais perto para digitar",
   },
   status: {
@@ -107,8 +110,10 @@ export default {
     maxLength: "A mensagem é grande demais.",
   },
   banner: {
-    reconnecting: "Reconectando à Cidadela…",
-    decision: "{{name}} espera a sua decisão: decida na aprovação.",
+    reconnecting:
+      "Reconectando à Cidadela… A tela abaixo é a última recebida. Quando voltar, segue de onde parou.",
+    decision:
+      "{{name}} espera a sua decisão. A resposta não vai pelo teclado: decida na aprovação.",
     decideIn: "Decidir em Aprovações",
     ended: "{{name}} foi encerrado. A saída continua aqui para leitura.",
     seeTable: "Ver a mesa",

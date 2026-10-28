@@ -45,6 +45,8 @@ const chat: Widen<typeof pt> = {
     none: "This campaign has no Grand Master right now.",
     ahead: "In the queue: {{count}}",
     locked: "System locked: what you send is kept until it is unlocked.",
+    lockedShort: "System locked",
+    lockedHeld: "kept until unlocked",
   },
   progress: {
     tables: "Tables",
@@ -69,6 +71,14 @@ const chat: Widen<typeof pt> = {
     replyTo: "Reply to this message from {{who}}",
     waiting: "In the queue of the Grand Master",
     held: "Kept until unlocked",
+    heldText: "A message with a password. It was not kept.",
+    notDelivered: "Not delivered.",
+    notDeliveredWhy:
+      "It looked like a password. The Grão-Mestre got only a notice. Change that password: it already passed through here, and register credentials in",
+    secrets: "Secrets",
+    sentWithout: "Sent without the secret.",
+    sentWithoutWhy:
+      "The part was swapped for [segredo removido] and the attachments were not. Change the token.",
     newDivider: "New",
     quote: "In reply to {{who}}",
   },

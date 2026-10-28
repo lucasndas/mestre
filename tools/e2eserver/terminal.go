@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -90,6 +91,9 @@ func (f *fakeTerminals) info() panel.TerminalInfo {
 
 // ByCharacter implements panel.TerminalSource.
 func (f *fakeTerminals) ByCharacter(_ context.Context, id string) (panel.TerminalInfo, error) {
+	if table, sc, ok := scenarioOf(id); ok {
+		return infoOf(table, sc), nil
+	}
 	if id != fakeCharacter {
 		return panel.TerminalInfo{}, panel.ErrNoTerminal
 	}
@@ -98,6 +102,11 @@ func (f *fakeTerminals) ByCharacter(_ context.Context, id string) (panel.Termina
 
 // Info implements panel.TerminalSource.
 func (f *fakeTerminals) Info(_ context.Context, id string) (panel.TerminalInfo, error) {
+	if table, ok := strings.CutPrefix(id, termPrefix); ok {
+		if sc, ok := scenarios[table]; ok {
+			return infoOf(table, sc), nil
+		}
+	}
 	if id != fakeTerminal {
 		return panel.TerminalInfo{}, panel.ErrNoTerminal
 	}

@@ -169,6 +169,8 @@ test("CA-TUI-03: a busy agent queues the messages, Tirar and Enviar agora work o
     await u.click(screen.getByRole("button", { name: "Pôr na fila" }));
   }
   expect(typed).toEqual([]);
+  // the support sentence of the line of status says where the message goes
+  expect(screen.getByText("Trabalhando: sua mensagem entra na fila")).toBeTruthy();
   expect(screen.getByText("Na fila (3): vai para Revisor quando ele terminar")).toBeTruthy();
 
   await u.click(screen.getByRole("button", { name: "Tirar da fila: segunda" }));
@@ -257,6 +259,13 @@ test("CA-TUI-06: a machine that lost the signal at 14:02 is grey, says so in the
   act(() => followers.get("T1")?.signal?.({ signal: false, since: "2026-10-26T17:02:00Z" }));
   expect(document.querySelector("[data-renderer]")?.getAttribute("data-signal")).toBe("lost");
   expect(screen.getByRole("status").textContent).toContain("Máquina sem sinal desde 14:02.");
+  // the first sentence of the band is in bold, with its icon, and the rest says what it means
+  expect(screen.getByRole("status").querySelector("strong")?.textContent).toBe(
+    "Máquina sem sinal desde 14:02.",
+  );
+  expect(screen.getByRole("status").textContent).toContain(
+    "A digitação está desligada até o sinal voltar.",
+  );
   expect(screen.getByRole("button", { name: "Digitar" }).hasAttribute("disabled")).toBe(true);
   expect(screen.getByRole("toolbar").textContent).toContain("Sem sinal");
   act(() => followers.get("T1")?.signal?.({ signal: true }));

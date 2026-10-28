@@ -54,11 +54,15 @@ func (f *fakeCanvas) State(_ context.Context, ws, table string) (panel.CanvasSta
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	devID := devOf(ws, table)
 	char := func(id, name, class, role string, terminal bool) panel.CanvasCharacter {
 		return panel.CanvasCharacter{ID: id, Name: name, Class: class, Kind: "character", Role: role, Machine: "e2e", MachineName: "e2e", State: "idle", Pinned: f.pinned[id], HasTerminal: terminal}
 	}
-	dev := char("e2e-dev", "Dev-1", "Dev", "character", true)
+	dev := char(devID, "Dev-1", "Dev", "character", true)
 	dev.State = "busy"
+	if _, sc, ok := scenarioOf(devID); ok {
+		dev.State, dev.Reason = sc.state, sc.reason
+	}
 	rev := char("e2e-rev", "Revisor", "Revisor", "character", false)
 	rev.State, rev.Reason = "waiting", "Dev-1"
 	st := panel.CanvasState{
@@ -66,16 +70,16 @@ func (f *fakeCanvas) State(_ context.Context, ws, table string) (panel.CanvasSta
 		Characters:  []panel.CanvasCharacter{char("e2e-master", "Mestre", "", "table_master", false), dev, rev},
 		Scrolls:     []panel.CanvasScroll{f.scroll},
 		Tomes:       []panel.CanvasTome{},
-		Connections: slices.Clone(f.conns),
+		Connections: connsOf(f.conns, devID),
 		Quests: []panel.CanvasQuest{{ID: "q1", Name: "entrega", State: "running", Round: 1, Steps: []panel.CanvasStep{
-			{ID: "dev", Title: "Dev", State: "running", Character: "e2e-dev", Current: true},
+			{ID: "dev", Title: "Dev", State: "running", Character: devID, Current: true},
 			{ID: "rev", Title: "Revisão", State: "pending", Character: "e2e-rev", After: []string{"dev"}, ReturnTo: "dev"},
 		}}},
-		Waits:     []panel.CanvasWait{{ID: "w1", Waiter: "e2e-rev", Target: "e2e-dev", Kind: "step", Reason: "Dev-1"}},
+		Waits:     []panel.CanvasWait{{ID: "w1", Waiter: "e2e-rev", Target: devID, Kind: "step", Reason: "Dev-1"}},
 		Deadlocks: []panel.CanvasDeadlock{},
 	}
 	// the places: the ones the person set, else a row
-	for i, k := range []string{"character:e2e-master", "character:e2e-dev", "character:e2e-rev", "scroll:e2e/p0001"} {
+	for i, k := range []string{"character:e2e-master", "character:" + devID, "character:e2e-rev", "scroll:e2e/p0001"} {
 		it, ok := f.layout[k]
 		if !ok {
 			it = panel.CanvasItem{Key: k, X: float64(i * 820), Y: 0}
@@ -176,4 +180,18 @@ func (*fakeCanvas) Rituals(context.Context, string, string) ([]panel.RitualInfo,
 }
 func (*fakeCanvas) EditRitual(context.Context, users.User, string, string, string, panel.RitualEditRequest) (panel.RitualInfo, error) {
 	return panel.RitualInfo{}, &panel.Refusal{Reason: "invalid_state", Message: "não nesta demonstração"}
+}
+
+// connsOf is the connections of the table with its Dev-1 under the id it has there.
+func connsOf(conns []panel.CanvasConnection, dev string) []panel.CanvasConnection {
+	out := slices.Clone(conns)
+	for i := range out {
+		if out[i].A.ID == fakeCharacter {
+			out[i].A.ID = dev
+		}
+		if out[i].B.ID == fakeCharacter {
+			out[i].B.ID = dev
+		}
+	}
+	return out
 }
