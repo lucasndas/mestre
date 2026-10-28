@@ -12,10 +12,16 @@ export function useGoto(): (path: string) => void {
 }
 
 /** Where a notice of the bell leads; "" when it leads nowhere. */
-export function noticePath(workspace: string, link: NoticeLink): string {
+export function noticePath(workspace: string, link: NoticeLink, table = ""): string {
   switch (link.kind) {
-    case "request":
-      return `/aprovacoes?pedido=${encodeURIComponent(link.ref)}`;
+    case "request": {
+      // the central opens filtered by the table that waits, with the request highlighted
+      const filter =
+        workspace && table
+          ? `&mesa=${encodeURIComponent(table)}&campanha=${encodeURIComponent(workspace)}`
+          : "";
+      return `/aprovacoes?pedido=${encodeURIComponent(link.ref)}${filter}`;
+    }
     case "blocking":
       return `/aprovacoes?aviso=${encodeURIComponent(link.ref)}`;
     case "table":

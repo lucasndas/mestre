@@ -1,8 +1,8 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { TableBlock, WorkspaceRow, WorkspaceView } from "../gen/panel";
-import { installFakeSocket } from "../test-socket";
+import { installFakeSocket, openSocket } from "../test-socket";
 import { fakeServer, ME, renderApp } from "../test-utils";
 
 beforeEach(() => installFakeSocket());
@@ -568,4 +568,24 @@ test("a campaign with no conversation is said so and never swapped for another o
   const panel = await screen.findByRole("complementary", { name: "Conversa com o Grão-Mestre" });
   expect(await within(panel).findByText(/A campanha blog não tem conversa agora/)).toBeTruthy();
   expect(within(panel).queryByRole("textbox")).toBeNull();
+});
+
+// Part of CA-CRESC-14: who is not the Lord of the Guild sees the band and none of the switch timeline.
+test("while the Citadel switches, who is not the Lord of the Guild sees only the reconnecting band", async () => {
+  fakeServer(
+    base({
+      ...as("administrator", ["status", "decide_approvals"]),
+      "GET /api/guild": () => ({
+        status: 403,
+        body: { error: { code: "level_denied", message: "x" } },
+      }),
+    }),
+  );
+  renderApp("/guilda");
+  await screen.findByRole("navigation", { name: "Navegação principal" });
+  const sock = openSocket();
+  act(() => sock.onclose?.({ code: 1006 }));
+  expect(await screen.findByText("Reconectando à Cidadela…")).toBeTruthy();
+  expect(screen.queryByRole("region", { name: "Troca da Cidadela em andamento" })).toBeNull();
+  expect(screen.queryByText(/parou de agir/)).toBeNull();
 });

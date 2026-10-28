@@ -373,6 +373,8 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
               maxZoom={2}
               defaultViewport={{ x: 0, y: 0, zoom: 1 }}
               selectionOnDrag={false}
+              multiSelectionKeyCode="Shift"
+              selectionKeyCode={null}
               deleteKeyCode={state.can_edit ? ["Backspace", "Delete"] : null}
               nodesConnectable={state.can_edit}
               elementsSelectable

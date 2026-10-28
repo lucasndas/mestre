@@ -81,7 +81,7 @@ function NoticeRow({
   const say = t as unknown as (k: string, o?: object) => string;
   const { i18n } = useTranslation();
   const { timezone } = useMe();
-  const path = noticePath(n.workspace, n.link);
+  const path = noticePath(n.workspace, n.link, n.table);
   const kind = kindOf(n);
   // the human name of the table, never its identifier (the identifier only when the name is not known)
   const place = n.workspace
@@ -235,7 +235,7 @@ export function NoticesBell() {
                     onOpen={(x) => {
                       if (!x.read) read.mutate([x.id]);
                       setOpen(false);
-                      goto(noticePath(x.workspace, x.link));
+                      goto(noticePath(x.workspace, x.link, x.table));
                     }}
                   />
                 ))}

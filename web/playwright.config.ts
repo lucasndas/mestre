@@ -18,6 +18,8 @@ export default defineConfig({
   projects: [
     { name: "smoke", testMatch: "smoke.spec.ts" },
     { name: "journey", testMatch: "journey.spec.ts", dependencies: ["smoke"] },
+    // the same Guild, seen on a phone (390 px): no screen scrolls sideways
+    { name: "phone", testMatch: "phone.spec.ts", dependencies: ["journey"] },
   ],
   webServer: {
     command: "go run ./tools/e2eserver",
