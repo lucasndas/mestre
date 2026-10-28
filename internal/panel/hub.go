@@ -3,6 +3,7 @@ package panel
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -376,6 +377,10 @@ func (p *Panel) serveWS(w http.ResponseWriter, r *http.Request) {
 		}
 		// each message is a use of the session, and a session that is over closes the socket
 		if _, err := p.sessions.Use(cctx, c.sessionID); err != nil {
+			if errors.Is(err, ErrInFailover) { // the touch of the session is a write: refused while the Citadel drains
+				_ = ws.Close(websocket.StatusTryAgainLater, string(CodeCitadelInFailover))
+				return
+			}
 			_ = ws.Close(CloseSessionEnded, "session ended")
 			return
 		}

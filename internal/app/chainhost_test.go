@@ -108,7 +108,7 @@ func ownerHearsOfThePolicyFile(t *testing.T, content string) string {
 		t.Fatal(err)
 	}
 	tell := chanTeller{got: make(chan string, 4)}
-	pf := policyFileFor(layout, tell, nil)
+	pf := policyFileFor(layout, tell, nil, nil)
 	if _, v, err := pf.Chain(t.Context(), "loja"); err != nil || v != "default" {
 		t.Fatalf("Chain = %q, %v; want the default content to hold", v, err)
 	}

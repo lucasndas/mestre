@@ -394,17 +394,23 @@ func (ts *termSub) detail(extra map[string]any) map[string]any {
 
 // beginTyping opens the typing session of the browser if it has none: the first
 // input accepted is its start.
-func (ts *termSub) beginTyping(ctx context.Context) {
+func (ts *termSub) beginTyping(ctx context.Context) bool {
 	ts.mu.Lock()
 	if ts.typing != nil {
 		ts.typing.inputs++
 		ts.mu.Unlock()
-		return
+		return true
 	}
 	now := ts.a.p.clk.Now().UTC()
 	ts.typing = &typingSession{started: now, inputs: 1}
 	ts.mu.Unlock()
-	ts.a.p.audit(ctx, "panel.terminal_typing_started", ts.detail(map[string]any{"started_at": now}))
+	if err := ts.a.p.auditGated(ctx, "panel.terminal_typing_started", ts.detail(map[string]any{"started_at": now})); errors.Is(err, ErrInFailover) {
+		ts.mu.Lock()
+		ts.typing = nil
+		ts.mu.Unlock()
+		return false
+	}
+	return true
 }
 
 // endTyping closes the typing session: who, which character, when it began and
@@ -470,7 +476,11 @@ func (a *terminalArea) input(ctx context.Context, s Socket, env UIEnvelope) {
 		s.Fail(env.ID, Err(CodeForbiddenLevel, "ação não permitida nesta campanha", map[string]any{"workspace": ts.info.Workspace}))
 		return
 	}
-	ts.beginTyping(ctx)
+	if !ts.beginTyping(ctx) {
+		// the start of a typing session is audited first; nothing is typed that the audit does not know
+		s.Fail(env.ID, errInFailover())
+		return
+	}
 	switch err := src.Type(ctx, in.TerminalID, []byte(in.Data)); {
 	case err == nil:
 	case errors.Is(err, ErrNoSignal):

@@ -1,6 +1,6 @@
 # Política de aprovação
 
-> **Assunto:** o que o Grão-Mestre decide no nível dele da cadeia de aprovação e quando o pedido vai às pessoas: tipos de ação, o que o motor confere e como decretos ajustam a política · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** o que o Grão-Mestre decide no nível dele da cadeia de aprovação e quando o pedido vai às pessoas: tipos de ação, o que o motor confere e como decretos ajustam a política · **Componente:** Motor · **Atualizado:** 2026-10-28
 
 ## Objetivo
 
@@ -109,6 +109,7 @@ Um decreto `policy` pode mudar a política sem editar o arquivo (ex.: "pode apro
 - **CA-APROV-POL-19** · *rápida* — **Dado** um PR com tudo verde e o rótulo `mestre:humano`, **quando** o Grão-Mestre tenta aprovar, **então** o motor recusa com `human_required`; **dado** o mesmo PR sem o rótulo, **então** segue as condições normais.
 - **CA-APROV-POL-20** · *rápida* — **Dado** um PR que adiciona `config/service-account-prod.json` e outro que adiciona `docs/conta.md`, **quando** o Grão-Mestre tenta aprovar sozinho, **então** o primeiro sai `human_required` citando a área `permissoes_e_segredos` e o segundo segue as condições normais.
 - **CA-APROV-POL-21** · *rápida* — **Dado** o arquivo de política de uma campanha (o conteúdo padrão, e outro com `expiracao: 6h`, `tipos.custo_extra.expiracao: 3h`, `cadeia.prazo_agente: 3m` e um ajuste de risco), **quando** a cadeia e a classificação o leem, **então** valem os prazos das pessoas por tipo (os tipos sem prazo próprio usam `expiracao`; `permissao_de_classe` mantém 2 h), a seção `cadeia`, os ajustes de risco e as áreas `permissoes_e_segredos` e `mestre`, com a versão (hash) do arquivo; **dado** um arquivo inválido (seção desconhecida, sem `versao`, prazo que não é positivo, tipo desconhecido ou de regra fixa, ajuste ou `mesa_decide` inválidos, dois documentos), ilegível ou que é um link, **então** vale a última versão válida (o conteúdo padrão antes de qualquer uma), nada afrouxa e o Senhor da Guilda é avisado uma vez por conteúdo que falhou.
+- **CA-APROV-POL-22** · *rápida* — **Dado** uma política válida que a Cidadela já leu e guardou, **quando** a Cidadela reinicia com o arquivo apagado, trocado por um inválido ou não confiável, **então** vale a política guardada no banco, com a mesma versão (hash), e nunca o conteúdo padrão; **dado** um novo arquivo válido, **então** ele substitui o guardado; **dado** uma campanha sem política guardada nem arquivo, **então** vale o conteúdo padrão.
 
 ## Depende de
 

@@ -338,6 +338,12 @@ func (p *Panel) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	if !begin() {
 		return
 	}
+	// the files are read: only now does the message change the Guild, so only now is the gate of the handover held
+	r, release, held := p.holdRequest(w, r)
+	if !held {
+		return // the draft is given up by the defer above
+	}
+	defer release()
 	res, err := draft.Send(r.Context())
 	sent = true // Send gives the draft up itself, with or without an error
 	if err != nil {

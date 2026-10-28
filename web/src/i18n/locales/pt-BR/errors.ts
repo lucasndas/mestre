@@ -25,6 +25,8 @@ export default {
   permission_prompt:
     "O agente espera a sua decisão numa tela de permissão. Responda pela aprovação, não pelo teclado do terminal.",
   too_many_streams: "Há terminais demais abertos nesta conta. Feche algum e tente de novo.",
+  citadel_in_failover:
+    "Outra máquina está assumindo a Cidadela. Nada foi feito; tente de novo em alguns minutos.",
   internal: "Algo deu errado na Cidadela. Tente de novo.",
   approval_closed: "Esse pedido já foi encerrado. A tela vai se atualizar.",
   approval_answered: "Você já respondeu a esse pedido.",

@@ -58,7 +58,7 @@ func (e *Engine) openPanel(ctx context.Context, db *store.DB, integ IntegrationR
 		return func() {}
 	}
 	svc, alerts := src.PanelPieces()
-	opts := panel.Options{DB: db, Clock: e.clk, Users: svc, Alerts: alerts, Assets: assets, Machine: e.id.MachineID, Logger: e.log, VaultChanged: vaultChanged, Mask: e.deps.Masker.Mask}
+	opts := panel.Options{DB: db, Clock: e.clk, Users: svc, Alerts: alerts, Assets: assets, Machine: e.id.MachineID, Logger: e.log, VaultChanged: vaultChanged, Mask: e.deps.Masker.Mask, Hold: enginePlacement{e}.Hold}
 	if adm, ok := integ.(PanelAdminSource); ok {
 		opts.GitHub, opts.Vault = adm.PanelAdmin()
 	}
@@ -137,8 +137,8 @@ func (p enginePlacement) Place() panel.Place {
 	return panel.PlaceSuspended
 }
 
-// Hold implements panel.Holder: a request of the panel that changes something holds the gate
-// of the handover until it ends.
+// Hold is the gate of the handover for the panel (panel.Options.Hold): a request of the panel that
+// changes something, and each write of a read or of the socket, holds it until it ends.
 func (p enginePlacement) Hold() (func(), bool) {
 	p.e.mu.Lock()
 	run := p.e.cit

@@ -43,14 +43,30 @@ type PolicyFile struct {
 	Read func(path string) ([]byte, error)
 	// Alert is told that the file of the workspace does not hold, with why; once
 	// for each content that failed, and not again until it changes. nil drops it.
-	Alert  func(workspace string, err error)
+	Alert func(workspace string, err error)
+	// Store keeps the last valid version of each workspace outside the folder the agents
+	// reach: after a restart with the file replaced, missing or untrusted, that version holds,
+	// not the default content. nil keeps it in memory only.
+	Store  PolicyStore
 	Logger *slog.Logger
 
 	mu   sync.Mutex
 	last map[string]*policyState
 }
 
+// PolicyStore keeps the text of the last valid policy file of each workspace
+// (docs/arquitetura/persistencia.md, table policy_versions).
+type PolicyStore interface {
+	// Last is the stored text; ok is false when none has been kept.
+	Last(workspace string) (doc []byte, ok bool, err error)
+	// Keep stores the text that just held, with its SHA-256 (hex). It runs inside the
+	// reading, which may be inside a write of the database, so it must not wait for one.
+	Keep(workspace, hash string, doc []byte)
+}
+
 type policyState struct {
+	seeded  bool          // the stored version was looked up
+	kept    string        // hash of the version in the store
 	valid   *parsedPolicy // the last version that held
 	alerted string        // hash of the last content that did not hold and was told
 }
@@ -284,6 +300,9 @@ func (f *PolicyFile) loadLocked(workspace string, told *error) *parsedPolicy {
 		st = &policyState{}
 		f.last[workspace] = st
 	}
+	if !st.seeded {
+		st.seeded = f.seed(workspace, st)
+	}
 	holds := func() *parsedPolicy {
 		if st.valid != nil {
 			return st.valid
@@ -316,6 +335,10 @@ func (f *PolicyFile) loadLocked(workspace string, told *error) *parsedPolicy {
 		var rules PolicyRules
 		if settings, risk, rules, err = parsePolicyFull(data); err == nil {
 			st.valid = &parsedPolicy{version: "sha256:" + hash[:16], settings: settings, risk: risk, rules: &rules}
+			if f.Store != nil && st.kept != hash {
+				st.kept = hash
+				f.Store.Keep(workspace, hash, data)
+			}
 			st.alerted = ""
 			return st.valid
 		}
@@ -330,6 +353,32 @@ func (f *PolicyFile) loadLocked(workspace string, told *error) *parsedPolicy {
 		*told = err
 	}
 	return holds()
+}
+
+// seed makes the stored version the one that holds, until the file gives a valid one. A stored
+// text that no longer parses (a binary that reads more strictly) is ignored, with a warning; a
+// store that cannot be read is tried again at the next reading.
+func (f *PolicyFile) seed(workspace string, st *policyState) (done bool) {
+	if f.Store == nil {
+		return true
+	}
+	doc, ok, err := f.Store.Last(workspace)
+	if err != nil || !ok {
+		if err != nil {
+			f.log().Warn("chain: the stored policy could not be read, the next reading tries again", "workspace", workspace, "err", err)
+		}
+		return err == nil
+	}
+	settings, risk, rules, err := parsePolicyFull(doc)
+	if err != nil {
+		f.log().Warn("chain: the stored policy does not hold", "workspace", workspace, "err", err)
+		return true
+	}
+	sum := sha256.Sum256(doc)
+	hash := hex.EncodeToString(sum[:])
+	st.kept = hash
+	st.valid = &parsedPolicy{version: "sha256:" + hash[:16], settings: settings, risk: risk, rules: &rules}
+	return true
 }
 
 // PolicySnapshot is what holds of a workspace at one reading of the file: the

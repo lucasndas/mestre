@@ -34,6 +34,8 @@ const (
 	CodePermissionPrompt   Code = "permission_prompt"
 	CodeTooManyStreams     Code = "too_many_streams"
 	CodeInternal           Code = "internal"
+	// CodeCitadelInFailover: the Citadel hands over the command; the request changed nothing.
+	CodeCitadelInFailover Code = "citadel_in_failover"
 	// CodeRefused: the engine refused an action of the canvas; params.reason says why.
 	CodeRefused Code = "refused"
 	// CodeConflict: the thing changed under the request (a scroll edited by somebody else).
@@ -79,6 +81,7 @@ var status = map[Code]int{
 	CodePermissionPrompt:   http.StatusConflict,
 	CodeTooManyStreams:     http.StatusTooManyRequests,
 	CodeInternal:           http.StatusInternalServerError,
+	CodeCitadelInFailover:  http.StatusServiceUnavailable,
 	CodeRefused:            http.StatusConflict,
 	CodeConflict:           http.StatusConflict,
 }

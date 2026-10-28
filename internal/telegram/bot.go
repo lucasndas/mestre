@@ -35,6 +35,15 @@ type Holder interface {
 	Hold(ctx context.Context) (release func(), ok bool)
 }
 
+// prefetch downloads, before the gate of the handover is held, the files an update will need (the
+// Router that implements Prefetcher says which); a slow download never holds up the handover.
+func (b *Bot) prefetch(ctx context.Context, up Update) context.Context {
+	if p, ok := b.o.Router.(Prefetcher); ok {
+		return p.Prefetch(ctx, up)
+	}
+	return ctx
+}
+
 // admit admits one update; a Gate without Holder admits everything.
 func (b *Bot) admit(ctx context.Context) (func(), bool) {
 	if h, ok := b.o.Gate.(Holder); ok {
@@ -384,6 +393,7 @@ func (b *Bot) PollOnce(ctx context.Context) error {
 		if !b.allowed(ctx) {
 			return nil // recorded, it waits for the Citadel that may act
 		}
+		ctx := b.prefetch(ctx, up) // the download of a file is made before the gate is held
 		release, held := b.admit(ctx)
 		if !held {
 			return nil // recorded, it waits for the Citadel that may act
@@ -455,12 +465,13 @@ func (b *Bot) processPending(ctx context.Context) error {
 		if err := json.Unmarshal(p.Body, &up); err == nil {
 			switch {
 			case !up.Redacted:
-				rel, held := b.admit(ctx)
+				hctx := b.prefetch(ctx, up)
+				rel, held := b.admit(hctx)
 				if !held {
 					return nil // what is left waits for the Citadel that may act
 				}
 				release = rel
-				b.handle(ctx, up)
+				b.handle(hctx, up)
 			case up.Secret != "":
 				// the text had a secret and was never handled: the message is
 				// still in the chat, so it is deleted, audited and the author told

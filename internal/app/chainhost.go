@@ -100,7 +100,7 @@ func (b *classBooks) For(workspace string) *classes.Library {
 // policyFileFor is the approval policy of the workspaces, read from the file in
 // their main clone; the Owner is told, once per version, of a file that does
 // not hold.
-func policyFileFor(layout workspaces.Layout, tell ownerTeller, log *slog.Logger) *chain.PolicyFile {
+func policyFileFor(layout workspaces.Layout, tell ownerTeller, log *slog.Logger, db *store.DB) *chain.PolicyFile {
 	pf := &chain.PolicyFile{
 		Path: func(workspace string) string {
 			if !plainName(workspace) {
@@ -109,6 +109,9 @@ func policyFileFor(layout workspaces.Layout, tell ownerTeller, log *slog.Logger)
 			return filepath.Join(layout.Principal(workspace), ".mestre", "regras", "politica-de-aprovacao.yaml")
 		},
 		Logger: log,
+	}
+	if db != nil {
+		pf.Store = &chain.PolicyDB{DB: db, Logger: log}
 	}
 	if tell != nil {
 		pf.Alert = func(workspace string, err error) {

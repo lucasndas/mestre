@@ -1,6 +1,6 @@
 # Sessão zero da campanha
 
-> **Assunto:** o que acontece, uma vez por repositório, quando uma campanha é criada: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, comandos de verificação, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-26
+> **Assunto:** o que acontece, uma vez por repositório, quando uma campanha é criada: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, comandos de verificação, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-28
 
 ## Objetivo
 
@@ -104,7 +104,7 @@ O motor descobre se a aprovação do App "Grão-Mestre" conta para as revisões 
 - **CA-SZ-WS-07** · *rápida* — **Dado** um `.mestre/` existente com `teto.yaml` próprio, **quando** a estrutura é criada, **então** o `teto.yaml` não muda e só as pastas que faltavam são criadas.
 - **CA-SZ-WS-08** · *rápida* — **Dado** um projeto Go analisado pelo Grão-Mestre, **quando** a etapa `analysis` termina, **então** `.mestre/regras/verificacao.yaml` tem a proposta (`go build ./...` e `go test ./...`) e ela não vale antes da confirmação de um Administrador; **dado** uma edição por fora, **então** vale a última versão confirmada e os Administradores são avisados.
 
-- **CA-SZ-WS-09** · *rápida* — **Dado** um `.mestre/` novo, ou um `politica-de-aprovacao.yaml` que uma versão anterior deixou 0664, **quando** a estrutura é criada, **então** os arquivos de `regras/` (`teto.yaml`, política, instruções extras) não têm escrita para o grupo `mestre-agente` e o conteúdo do existente não muda; **dado** o Senhor da Guilda que salva a política ou as instruções no painel, **então** o arquivo fica 0644. **Dado** um arquivo de `regras/` (ou a pasta `.mestre/` ou `regras/`) que o grupo pode escrever, **então** o motor não o lê (vale a última versão válida) até ser apertado, o que o motor faz ao achar a campanha, depois de avançar o clone e ao abrir as telas de regras. No Windows vale a ACL da pasta, ainda sem ACL própria em `.mestre\regras\` (pendente, issue #357).
+- **CA-SZ-WS-09** · *rápida* — **Dado** um `.mestre/` novo, ou um `politica-de-aprovacao.yaml` que uma versão anterior deixou 0664, **quando** a estrutura é criada, **então** os arquivos de `regras/` (`teto.yaml`, política, instruções extras) não têm escrita para o grupo `mestre-agente` e o conteúdo do existente não muda; **dado** o Senhor da Guilda que salva a política ou as instruções no painel, **então** o arquivo fica 0644. **Dado** um arquivo de `regras/` (ou a pasta `.mestre/` ou `regras/`) que o grupo pode escrever, **então** o motor não o lê (vale a última versão válida) até ser apertado, o que o motor faz ao achar a campanha, depois de avançar o clone e ao abrir as telas de regras. No Windows o motor põe na ACL de `.mestre\regras\` uma negação de escrita à conta dos agentes, herdada pelo que está embaixo ([arquivo de política](../aprovacoes/arquivo-de-politica.md#onde-fica-e-quem-edita)); a verificação em um Windows real entra na rodada pendente do M3 e do M4.
 
 ## Depende de
 
