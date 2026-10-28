@@ -70,7 +70,8 @@ test("the Owner creates the Guild, signs out and signs in again", async ({ page 
   // agent printed before the browser opened the terminal, which the Citadel asked of the
   // machine and relayed, drawn by xterm.js at the fixed size of the PTY
   await page.goto("/terminal/e2e-dev");
-  await expect(page.getByRole("heading", { name: "Terminal de Dev-1" })).toBeVisible();
+  // a character with a table has its terminal as a tab of the table: the address leads there
+  await expect(page).toHaveURL(/\/workspaces\/e2e\/mesas\/mesa-e2e\?aba=terminal/);
   const screen = page.getByRole("region", { name: "Terminal de Dev-1" });
   await expect(screen.locator(".xterm-accessibility-tree")).toContainText("Claude Code (fake)");
   // the Owner may type: the keyboard is released by a button, and refused until then
