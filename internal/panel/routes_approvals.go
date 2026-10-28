@@ -216,6 +216,9 @@ func (p *Panel) approvalItem(ctx context.Context, u users.User, pd approvals.Pen
 			it.Members = append(it.Members, ApprovalMember{ID: m.ID, About: p.m(m.About)})
 		}
 	}
+	if p.m(suggested) != suggested {
+		suggested = "" // a pattern that carries a secret is never suggested
+	}
 	for _, a := range p.appr.Flow.AnswersOf(u, r, pd) {
 		x := ApprovalAnswer{Answer: string(a), Field: field(a)}
 		if a == chain.AnswerApprovePattern {

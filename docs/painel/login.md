@@ -46,7 +46,7 @@ Garantir que só usuários autorizados usem o painel, cada um com o seu nível e
 - Ao entrar, a Cidadela cria uma sessão (tabela `panel_sessions`, [persistência](../arquitetura/persistencia.md)): guarda só o hash do token, usuário, aparelho (agente do navegador), IP, criação e último uso.
 - O token vai num cookie `HttpOnly`, `Secure`, `SameSite=Strict`, com caminho `/`.
 - **Expiração (padrão):** 12 h sem uso, e no máximo 7 dias desde o login. Depois disso, novo login.
-- Toda requisição que muda algo, e a abertura do WebSocket, conferem o cabeçalho `Origin` contra o endereço do painel.
+- Toda requisição que muda algo, e a abertura do WebSocket, conferem o cabeçalho `Origin` contra o endereço do painel. A recusa só vai para a auditoria (`panel.origin_refused`) quando a requisição traz uma sessão válida.
 - Quando a sessão acaba, o WebSocket do painel é fechado pela Cidadela.
 - **Encerram na hora** todas as sessões do usuário: suspensão, remoção, mudança de nível, redefinição ou troca de senha.
 - Cada usuário vê e encerra as próprias sessões; o Senhor da Guilda vê e encerra as de todos.

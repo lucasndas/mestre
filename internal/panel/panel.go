@@ -286,6 +286,19 @@ func (p *Panel) authenticate(r *http.Request) (context.Context, *APIError) {
 	return context.WithValue(ctx, keySession, ss), nil
 }
 
+// auditOriginRefused records a refused Origin, but only for a request that carries a
+// valid session: a request with no cookie, or with one that names no session, writes nothing.
+func (p *Panel) auditOriginRefused(r *http.Request) {
+	c, err := r.Cookie(CookieName)
+	if err != nil {
+		return
+	}
+	if _, err := p.sessions.Lookup(r.Context(), c.Value); err != nil {
+		return
+	}
+	p.audit(r.Context(), "panel.origin_refused", map[string]any{"ip": clientIP(r), "path": clip(r.URL.Path, 200)})
+}
+
 // whoIs is the user logged in for a request outside the API (the pages of the creation
 // of an App): the session of the cookie, the same as the API's.
 func (p *Panel) whoIs(r *http.Request) (users.User, bool) {
@@ -311,9 +324,7 @@ func (p *Panel) requireLimit(limit int64, stream bool, h http.HandlerFunc, publi
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		if mutating(r.Method) && !originOK(r) {
-			if _, err := r.Cookie(CookieName); err == nil { // a request with no session writes nothing
-				p.audit(r.Context(), "panel.origin_refused", map[string]any{"ip": clientIP(r), "path": clip(r.URL.Path, 200)})
-			}
+			p.auditOriginRefused(r)
 			WriteError(w, Err(CodeBadOrigin, "origem não permitida", nil))
 			return
 		}
