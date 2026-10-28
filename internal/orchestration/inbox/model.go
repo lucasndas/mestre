@@ -85,6 +85,9 @@ type Origin struct {
 	// message answers (0: it is not an answer): the text of such a message was
 	// written by an agent around the click, so it is no order of the user.
 	Choice int64 `json:"choice,omitempty"`
+	// Language is the language of the person who wrote it, "pt-BR" or "en" (empty:
+	// unknown): the header tells the Grand Master, who answers in it.
+	Language string `json:"language,omitempty"`
 	// Transcribed is true for an audio the engine turned into text.
 	Transcribed bool `json:"transcribed,omitempty"`
 }
@@ -194,7 +197,7 @@ const unreadable = "(sem nome legível)"
 // Header is the first line of every item, the one format of the inbox:
 // `[Mestre · <tipo> · de <remetente> · <id>]`; a message of a user has
 // `<nome> (<nível>)` as the sender and the optional fields `via <canal>`,
-// `mesa <mesa>` and `áudio transcrito` before the id. It is the engine's whoever
+// `mesa <mesa>`, `idioma <idioma>` and `áudio transcrito` before the id. It is the engine's whoever
 // chose the words in it (the name of a quest or of a ritual, the name a user
 // gives, the table a message cites): see headerText.
 func (it Item) Header() string {
@@ -218,6 +221,9 @@ func (it Item) Header() string {
 		}
 		if o.Table != "" {
 			extra = append(extra, "mesa "+headerText(o.Table))
+		}
+		if o.Language != "" {
+			extra = append(extra, "idioma "+headerText(o.Language))
 		}
 		if o.Transcribed {
 			extra = append(extra, "áudio transcrito")

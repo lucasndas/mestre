@@ -85,3 +85,44 @@ func TestTheLayerOfTheGrandMasterHasTheDecisionRuleAndFitsInEveryProvider(t *tes
 		t.Errorf("a sheet without the skills lost the triage:\n%s", rules)
 	}
 }
+
+// CA-IDIOMA-09
+func TestTheGrandMasterAnswersInTheLanguageOfTheHeaderAndNoOtherCharacterIsToldSo(t *testing.T) {
+	t.Parallel()
+	rules := func(role sessionzero.Role) string {
+		var all strings.Builder
+		for _, r := range (sessionzero.BuiltinModels{}).Current().Rules[role] {
+			all.WriteString(r.Text + "\n")
+		}
+		return all.String()
+	}
+	gm := rules(sessionzero.RoleGrandMaster)
+	for _, want := range []string{"language named by `idioma` in the header", "`notify`, `choose`", "last message", "pt-BR when there is none"} {
+		if !strings.Contains(gm, want) {
+			t.Errorf("the rules of the Grand Master lack %q", want)
+		}
+	}
+	for _, role := range []sessionzero.Role{sessionzero.RoleCharacter, sessionzero.RoleTableMaster} {
+		if strings.Contains(rules(role), "idioma") {
+			t.Errorf("the rules of %v talk about the language", role)
+		}
+	}
+	// the rendered layer too, in every provider
+	for _, agent := range threeAgents {
+		r := newCharRig(t, nil)
+		plan, err := r.ch.Prepare(r.ctx, r.req("gm", agent, sessionzero.RoleGrandMaster))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(plan.Layer.Section(sessionzero.SectionRules), "`idioma` in the header") {
+			t.Errorf("%s: the layer of the Grand Master lacks the rule of the language", agent)
+		}
+		plain, err := newCharRig(t, nil).ch.Prepare(r.ctx, r.req("c", agent, sessionzero.RoleCharacter))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(plain.Layer.Text, "`idioma`") {
+			t.Errorf("%s: the layer of a character has the rule of the language", agent)
+		}
+	}
+}

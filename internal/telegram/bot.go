@@ -510,6 +510,20 @@ func (b *Bot) say(ctx context.Context, chat int64, user, text string) {
 	}
 }
 
+// noteLanguage keeps the language_code of the last update of a user with the link to
+// the Telegram, and updates the copy in hand. It is a hint for the language of what
+// the engine says to him; it never writes the language he chose.
+func (b *Bot) noteLanguage(ctx context.Context, u *users.User, from *User) {
+	if from == nil || from.LanguageCode == "" || from.LanguageCode == u.TelegramLanguage {
+		return
+	}
+	if err := b.o.Users.NoteTelegramLanguage(ctx, u.ID, from.LanguageCode); err != nil {
+		b.log.Warn("telegram: the language_code was not kept", "err", err)
+		return
+	}
+	u.TelegramLanguage = from.LanguageCode
+}
+
 func (b *Bot) message(ctx context.Context, m *Message) {
 	// The filter comes before anything else: the type of the chat, then who sent it.
 	if m.Chat.Type != "private" {
@@ -530,6 +544,7 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 	case u.State != users.Active:
 		return // suspended: no answer, no alert
 	}
+	b.noteLanguage(ctx, &u, m.From)
 	c, found, cerr := b.st.Capturing(ctx, u.ID)
 	armed := cerr == nil && found && c.Armed
 	// The filter of secrets comes right after the user is known, before any
@@ -896,6 +911,7 @@ func (b *Bot) click(ctx context.Context, cq *CallbackQuery) {
 		answer("")
 		return
 	}
+	b.noteLanguage(ctx, &u, &cq.From)
 	cb, ok, err := b.st.Callback(ctx, cq.Data)
 	if err != nil || !ok {
 		answer("Esse botão expirou.")

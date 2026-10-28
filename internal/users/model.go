@@ -2,6 +2,8 @@ package users
 
 import (
 	"errors"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -22,6 +24,9 @@ type User struct {
 	Login string
 	// Language is the language of the panel the user chose ("" until chosen).
 	Language string
+	// TelegramLanguage is the last language_code the Telegram sent for the user (a
+	// hint; it is never written to Language).
+	TelegramLanguage string
 	// LastWorkspace is the workspace the user opened last in the panel ("" if none).
 	LastWorkspace string
 	Level         Level
@@ -84,6 +89,26 @@ var (
 
 // Languages are the languages of the panel.
 var Languages = []string{"pt-BR", "en"}
+
+// MatchLanguage is the one rule that turns a hint of language (the language_code of
+// the Telegram, the language of the browser, the locale of the machine) into one
+// of Languages: a tag that starts with "en", whatever the case, is "en"; anything
+// else (empty included) is "pt-BR" (docs/plataforma/idioma-por-canal.md#a-regra-única).
+func MatchLanguage(tag string) string {
+	if len(tag) >= 2 && strings.EqualFold(tag[:2], "en") {
+		return "en"
+	}
+	return "pt-BR"
+}
+
+// LanguageFor is the language to speak to the user: the one he chose, or else the
+// match of the hint.
+func (u User) LanguageFor(hint string) string {
+	if slices.Contains(Languages, u.Language) {
+		return u.Language
+	}
+	return MatchLanguage(hint)
+}
 
 // ErrBadLanguage is the refusal of a language the panel does not have.
 var ErrBadLanguage = errors.New("users: not a language of the panel")

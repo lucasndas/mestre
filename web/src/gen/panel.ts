@@ -1530,6 +1530,10 @@ export interface ChatSent {
  */
 export interface ChatChoice {
   option: number /* int */;
+  /**
+   * Language is the language the panel is open in (optional).
+   */
+  language?: string;
 }
 
 //////////
