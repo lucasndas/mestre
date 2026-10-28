@@ -98,6 +98,9 @@ func (f *fakeTerminals) lojaTerminal(character string) (panel.TerminalInfo, bool
 	}
 	i := f.info()
 	i.TerminalID, i.Character, i.Workspace, i.Table = lojaTerminalPrefix+table, character, lojaWorkspace, table
+	if sc, ok := scenarios[table]; ok {
+		sc.apply(&i)
+	}
 	return i, true
 }
 

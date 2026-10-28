@@ -10,8 +10,10 @@ const terminal: Widen<typeof ptBR> = {
   noTerminal: "This character has no open terminal right now.",
   snapshotLabel: "Picture of {{name}}'s terminal, refreshed every 2 seconds",
   snapshotHint: "A picture of the screen. Move closer to watch it live.",
-  noSignal: "Machine without signal since {{time}}.",
-  noSignalNoTime: "Machine without signal.",
+  noSignal:
+    "Machine without signal since {{time}}. The screen stays as it was. Typing is off until the signal returns.",
+  noSignalNoTime:
+    "Machine without signal. The screen stays as it was. Typing is off until the signal returns.",
   lost: "lost stretch",
   type: "Type",
   stopTyping: "Stop typing",
@@ -83,6 +85,7 @@ const terminal: Widen<typeof ptBR> = {
     reconnecting: "Typing comes back when the connection returns",
     decision: "Typing comes back after your decision",
     ended: "The terminal has ended",
+    busy: "Working: your message goes to the queue",
     needsLive: "Move closer to type",
   },
   status: {
@@ -110,8 +113,10 @@ const terminal: Widen<typeof ptBR> = {
     maxLength: "The message is too large.",
   },
   banner: {
-    reconnecting: "Reconnecting to the Citadel…",
-    decision: "{{name}} waits for your decision: decide in the approval.",
+    reconnecting:
+      "Reconnecting to the Citadel… The screen below is the last one received. When it is back, it goes on where it stopped.",
+    decision:
+      "{{name}} waits for your decision. The answer does not go by the keyboard: decide in the approval.",
     decideIn: "Decide in Approvals",
     ended: "{{name}} has ended. The output stays here for reading.",
     seeTable: "See the table",

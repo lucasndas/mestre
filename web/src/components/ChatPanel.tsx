@@ -73,20 +73,27 @@ function statusText(t: ReturnType<typeof useTranslation<"chat">>["t"], s: ChatSt
 /** The state of the Grão-Mestre at the top: free, busy, the queue ahead, unavailable, and the lock. */
 function StatusLine({ status }: { status: ChatStatus }) {
   const { t } = useTranslation("chat");
-  const dot =
-    status.state === "idle" ? "bg-signal" : status.state === "busy" ? "bg-warn" : "bg-muted";
+  const dot = status.locked
+    ? "bg-danger"
+    : status.state === "idle"
+      ? "bg-signal"
+      : status.state === "busy"
+        ? "bg-warn"
+        : "bg-muted";
   return (
     <div role="status" className="flex flex-col gap-1 border-b border-line px-4 py-2 text-sm">
-      <p className="flex flex-wrap items-center gap-x-3">
+      <p className="flex flex-wrap items-center justify-between gap-x-3">
         <span className="inline-flex items-center gap-2">
           <span aria-hidden="true" className={`size-2.5 rounded-full ${dot}`} />
-          {statusText(t, status)}
+          {status.locked ? t("status.lockedShort") : statusText(t, status)}
         </span>
-        {status.ahead > 0 ? (
+        {status.locked ? (
+          <span className="text-muted">{t("status.lockedHeld")}</span>
+        ) : status.ahead > 0 ? (
           <span className="text-muted">{t("status.ahead", { count: status.ahead })}</span>
         ) : null}
       </p>
-      {status.locked ? <p className="font-semibold text-danger">{t("status.locked")}</p> : null}
+      {status.locked ? <p className="sr-only">{t("status.locked")}</p> : null}
     </div>
   );
 }
@@ -256,6 +263,9 @@ function EntryView({
   const { t } = useTranslation("chat");
   const fmt = useFormatDateTime();
   const mine = entry.from === "user";
+  // the engine keeps a notice in place of what the filter of secrets held or cut (internal/panelchat/send.go)
+  const held = mine && entry.text.startsWith("[mensagem retida:");
+  const removed = mine && entry.text.includes("[segredo removido]");
   const who = mine
     ? t("entry.you")
     : entry.from === "question"
@@ -283,8 +293,28 @@ function EntryView({
       ) : null}
       {entry.from === "grand_master" ? (
         <ChatMarkdown>{entry.text}</ChatMarkdown>
+      ) : held ? (
+        <p className="break-words">{t("entry.heldText")}</p>
       ) : entry.text ? (
         <p className="break-words whitespace-pre-wrap">{entry.text}</p>
+      ) : null}
+      {held ? (
+        <p className="m-0 flex gap-3 rounded-field bg-danger-wash p-2 text-sm text-danger">
+          <strong className="shrink-0">{t("entry.notDelivered")}</strong>
+          <span>
+            {t("entry.notDeliveredWhy")}{" "}
+            <Link to="/segredos" className="underline">
+              {t("entry.secrets")}
+            </Link>
+            .
+          </span>
+        </p>
+      ) : null}
+      {removed ? (
+        <p className="m-0 flex gap-3 rounded-field bg-warn-wash p-2 text-sm text-warn-ink">
+          <strong className="shrink-0">{t("entry.sentWithout")}</strong>
+          <span>{t("entry.sentWithoutWhy")}</span>
+        </p>
       ) : null}
       <Attachments entry={entry} />
       <Question entry={entry} workspace={workspace} />

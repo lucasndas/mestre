@@ -49,10 +49,10 @@ O terminal da mesa tem de parecer um terminal e ser mais que um: a tela do agent
 | Estado | Como aparece |
 |---|---|
 | Ao vivo | ponto verde, estado em palavras, tela seguindo o fim |
-| Digitando | modo MENSAGEM (caixa e fila) ou TECLADO (cursor cheio), moldura de destaque, **Parar de digitar** |
+| Digitando | modo MENSAGEM (caixa e fila; com o agente ocupado, "Trabalhando: sua mensagem entra na fila") ou TECLADO (cursor cheio), moldura de destaque, **Parar de digitar** |
 | Somente leitura | modo LEITURA com cadeado e "Somente leitura: seu nível não permite digitar aqui"; cursor oco |
-| Reconectando | faixa âmbar "Reconectando à Cidadela…", tela mantida e atenuada, Digitar desligado; ao voltar, segue de onde parou ([reconexão](design.md#reconexão)) |
-| Sem sinal | tela em cinza, estado "Sem sinal", faixa "Máquina sem sinal desde HH:MM" (fuso da Guilda, `role="status"`), Digitar desligado |
+| Reconectando | faixa âmbar com ícone e "Reconectando à Cidadela…" em negrito, tela mantida e atenuada, Digitar desligado; ao voltar, segue de onde parou ([reconexão](design.md#reconexão)) |
+| Sem sinal | tela em cinza, estado "Sem sinal", faixa com ícone e "Máquina sem sinal desde HH:MM." em negrito (fuso da Guilda, `role="status"`), seguida de "A tela fica como estava…", Digitar desligado |
 | Espera a sua decisão | faixa em `--color-accent` "espera a sua decisão: decida na aprovação" com **Decidir em Aprovações** |
 | Encerrado ou interrompido | saída preservada para leitura, sem cursor, faixa "foi encerrado" com **Ver a mesa** |
 | Retrato (fora do orçamento WebGL) | rótulo "retrato · atualiza a cada 2 s" sobre a tela |

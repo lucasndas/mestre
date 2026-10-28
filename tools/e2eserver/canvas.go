@@ -61,6 +61,9 @@ func (f *fakeCanvas) State(_ context.Context, ws, table string) (panel.CanvasSta
 	}
 	dev := char(who+"-dev", "Dev-1", "Dev", "character", true)
 	dev.State = "busy"
+	if sc, ok := scenarios[table]; ok && who != "e2e" {
+		dev.State, dev.Reason = sc.state, sc.reason
+	}
 	rev := char(who+"-rev", "Revisor", "Revisor", "character", false)
 	rev.State, rev.Reason = "waiting", "Dev-1"
 	conns := slices.Clone(f.conns)
