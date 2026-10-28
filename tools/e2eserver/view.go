@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"sync"
 	"time"
 
@@ -17,11 +18,24 @@ import (
 type fakeView struct {
 	mu     sync.Mutex
 	layout map[string]panel.CanvasItem
+	// trigger is a file: once it exists, the table "loja-surpresa" is stuck, so a screen that
+	// has the campaign open sees a table that now needs the user (the notice on the screen)
+	trigger string
 }
 
 var _ panel.ViewSource = (*fakeView)(nil)
 
-func newFakeView() *fakeView { return &fakeView{layout: map[string]panel.CanvasItem{}} }
+func newFakeView(trigger string) *fakeView {
+	return &fakeView{layout: map[string]panel.CanvasItem{}, trigger: trigger}
+}
+
+func (f *fakeView) surprise() bool {
+	if f.trigger == "" {
+		return false
+	}
+	_, err := os.Stat(f.trigger)
+	return err == nil
+}
 
 func (f *fakeView) View(_ context.Context, ws string) (panel.ViewData, error) {
 	if ws == lojaWorkspace {
@@ -29,7 +43,7 @@ func (f *fakeView) View(_ context.Context, ws string) (panel.ViewData, error) {
 			GrandMaster: &panel.ViewGrandMaster{ID: fakeCharacter, Name: "Grão-Mestre", State: "idle", Machine: "e2e", MachineName: "e2e", HasTerminal: true},
 			Tables:      []panel.TableBlock{}, Layout: []panel.CanvasItem{},
 		}
-		for _, t := range lojaTables(clock.Real{}.Now()) {
+		for _, t := range lojaTables(clock.Real{}.Now(), f.surprise()) {
 			v.Tables = append(v.Tables, t.block)
 		}
 		return v, nil

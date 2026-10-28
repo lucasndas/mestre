@@ -131,6 +131,20 @@ test("a proposal that changed meanwhile says so and nothing is approved", async 
   expect(screen.queryByText(/Apps na conta/)).toBeNull(); // no band at 3 Apps
 });
 
+// Part of CA-CLASSES-06: a change found on disk has no author, and the line says so by saying nothing
+test("a proposal found on disk has no author in its line", async () => {
+  fakeServer({
+    ...base,
+    "GET /api/classes": () => ({
+      body: { apps: count(3), classes: [], proposals: [proposal({ origin: "disk", by: "" })] },
+    }),
+  });
+  renderApp("/classes");
+  const line = (await screen.findByText(/^loja ·/)).textContent ?? "";
+  expect(line).not.toMatch(/por\s*·/);
+  expect(line).not.toMatch(/por\s*$/);
+});
+
 // Part of CA-ADM-02: each App is a card with what it is, what it does and where it is installed
 test("an App is a card with its technical name, what it does, where it is installed and the next step", async () => {
   const app = (o: Record<string, unknown>) => ({
@@ -157,7 +171,8 @@ test("an App is a card with its technical name, what it does, where it is instal
           app({
             name: "mestre-revisor",
             class: "revisor",
-            state_label: "link vencido",
+            state: "expirado",
+            state_label: "em criação",
             can_link: true,
           }),
         ],

@@ -434,6 +434,9 @@ test("CA-TUI-12: Pausar mesa needs the reason written, sends it, and the banner 
   rerender({ context: context({ setPaused, paused: true, pausedReason: "revisar o PR" }) });
   expect(screen.getByText("Mesa pausada: revisar o PR")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Retomar mesa" })).toBeTruthy();
+  // the bar and the banner keep their height when the window is short (a phone): the actions never run under the banner
+  expect(screen.getByRole("toolbar").className).toMatch(/\bshrink-0\b/);
+  expect(screen.getByText("Mesa pausada: revisar o PR").className).toMatch(/\bshrink-0\b/);
   unmount();
 
   setup({ context: context({ canPause: false, canPin: false }) });

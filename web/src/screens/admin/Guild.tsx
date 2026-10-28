@@ -67,6 +67,7 @@ export function Guild() {
   const citadel = data?.machines.find((m) => m.citadel);
   const suspended = data?.machines.some((m) => m.suspended) ?? false;
   const silent = data?.machines.filter((m) => !m.online).length ?? 0;
+  const joining = data?.pending.length ?? 0;
 
   return (
     <section>
@@ -74,20 +75,28 @@ export function Guild() {
       <VocabLine terms={["Guilda", "Cidadela", "Torre"]} />
       {data ? (
         <StatusStrip
-          tone={suspended ? "warn" : silent > 0 ? "warn" : data.single ? "neutral" : "ok"}
+          tone={
+            suspended || joining > 0 ? "warn" : silent > 0 ? "warn" : data.single ? "neutral" : "ok"
+          }
           title={
-            data.single
-              ? t("strip.single")
-              : t("strip.many", { count: data.machines.length, citadel: citadel?.name ?? "" })
+            joining > 0
+              ? joining === 1
+                ? t("strip.joinOne", { name: data.pending[0]?.name ?? "" })
+                : t("strip.joinMany", { count: joining })
+              : data.single
+                ? t("strip.single")
+                : t("strip.many", { count: data.machines.length, citadel: citadel?.name ?? "" })
           }
           hint={
-            suspended
-              ? t("strip.suspended")
-              : data.single
-                ? t("single.body")
-                : silent > 0
-                  ? t("strip.silent", { count: silent })
-                  : t("strip.hint")
+            joining > 0
+              ? t("strip.joinHint")
+              : suspended
+                ? t("strip.suspended")
+                : data.single
+                  ? t("single.body")
+                  : silent > 0
+                    ? t("strip.silent", { count: silent })
+                    : t("strip.hint")
           }
         />
       ) : null}
@@ -191,18 +200,16 @@ function MachineRow({
         <Badge tone={m.citadel ? "ok" : "plain"}>
           {t(m.citadel ? "roles.citadel" : "roles.tower")}
         </Badge>
+        <Badge tone={m.online ? "ok" : "danger"}>
+          {t(m.online ? "states.connectedChip" : "states.noSignalChip")}
+        </Badge>
         {m.self ? <Badge>{t("badges.self")}</Badge> : null}
         {m.suspended ? <Badge tone="danger">{t("badges.suspended")}</Badge> : null}
         {m.github_down ? <Badge tone="warn">{t("badges.githubDown")}</Badge> : null}
         {m.telegram_stopped ? <Badge tone="danger">{t("badges.telegramStopped")}</Badge> : null}
       </header>
       <p className="mt-1 text-muted">
-        {[
-          sheet.os,
-          m.online ? t("states.connected") : noSignal,
-          t("running", { count: m.load.running }),
-          m.self ? t("youAreHere") : "",
-        ]
+        {[sheet.os, t("running", { count: m.load.running }), m.self ? t("youAreHere") : ""]
           .filter(Boolean)
           .join(" · ")}
       </p>
@@ -279,7 +286,12 @@ function MachineRow({
 
       {m.citadel ? null : (
         <div className="mt-4 flex flex-col gap-4 border-t border-line pt-4">
-          <TowerCheck m={m} />
+          <details>
+            <summary className="min-h-11 cursor-pointer py-2 font-semibold">
+              {t("check.title", { name: m.name })}
+            </summary>
+            <TowerCheck m={m} />
+          </details>
           <PassCitadel
             m={m}
             citadel={citadel}

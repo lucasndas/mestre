@@ -114,7 +114,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
       ...view,
       minZoom: 1,
       maxZoom: 1,
-      padding: { top: "8px", right: "16px", bottom: "76px", left: "16px" },
+      padding: { top: "2px", right: "16px", bottom: "68px", left: "16px" },
     });
   }, [ready, state, nodes, flow]);
 
@@ -329,7 +329,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
 
   return (
     <CanvasEnvContext.Provider value={env}>
-      <div className="relative flex w-full flex-col border border-line bg-paper md:h-[calc(100dvh-19.5rem)] md:min-h-[36rem] md:flex-row">
+      <div className="relative flex w-full flex-col border border-line bg-paper md:h-[calc(100dvh-19.5rem)] md:min-h-[30.5rem] md:flex-row">
         <section
           aria-label={t("region", { table })}
           className="hidden min-h-[18rem] min-w-0 flex-1 md:flex md:flex-col"

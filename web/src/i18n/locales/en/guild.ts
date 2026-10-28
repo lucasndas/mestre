@@ -16,6 +16,14 @@ export default {
       "it comes from someone you recognize, aloud or on a call. If the request was not expected, refuse it.",
     many: "There are {{count}} requests at the same time. If you did not expect more than one, refuse them all and ask them to try again.",
     noCode: "Waiting for the machine to show its code. It cannot be accepted before that.",
+    cardTitle: "{{name}} wants to join the Guild",
+    cardMeta: "asked at {{when}}",
+    instruction: "Look at the screen of the new machine and type the entry code that shows on it.",
+    placeholder: "000 000",
+    moreHint:
+      "More than one request arrived at the same time? Refuse them all and ask them to try again: a request you did not expect may come from someone else on the network.",
+    telegram:
+      "On Telegram the question is the same (“Accept {{name}} into the Guild?”) and the comparison of the code is with your own eyes, before the PIN.",
     typeLabel: "Code the new machine ({{name}}) shows",
     typeHint:
       "Type the 6 digits shown on the new machine. The panel does not show the request's: the check only counts if you type it.",
@@ -37,6 +45,9 @@ export default {
     hint: "Each Tower keeps a copy and can take command.",
     silent: "{{count}} with no signal now.",
     suspended: "The Citadel is being switched: the panel reconnects by itself.",
+    joinOne: "{{name}} wants to join the Guild",
+    joinMany: "{{count}} machines want to join the Guild",
+    joinHint: "Compare the entry code and decide.",
   },
   add: {
     title: "Add another machine",
@@ -94,6 +105,8 @@ export default {
     noSignalSince: "no signal since {{when}}",
     noSignalYet: "no signal (not seen since the engine started)",
     outside: "outside the local network",
+    connectedChip: "Connected",
+    noSignalChip: "No signal",
   },
   engine: "Engine and Guardian",
   engineVersion: "Engine {{version}}",

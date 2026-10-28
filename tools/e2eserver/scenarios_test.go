@@ -14,7 +14,7 @@ func TestTheDevOfEachLojaTableIsInItsState(t *testing.T) {
 	terms := &fakeTerminals{}
 	canvas := newFakeCanvas()
 	for table, sc := range scenarios {
-		id := devOf(lojaWorkspace, table)
+		id := table + "-dev"
 		info, err := terms.ByCharacter(ctx, id)
 		if err != nil {
 			t.Fatalf("%s: %v", table, err)

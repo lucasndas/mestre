@@ -469,12 +469,12 @@ export function TerminalView({
         />
       )}
       {reconnecting ? (
-        <p className="m-0 border-b border-term-line bg-warn px-3.5 py-2 text-warn-ink">
+        <p className="m-0 shrink-0 border-b border-term-line bg-warn px-3.5 py-2 text-warn-ink">
           <BandText icon="wifi" text={t("banner.reconnecting")} />
         </p>
       ) : null}
       {context?.paused ? (
-        <p className="m-0 border-b border-term-line bg-warn px-3.5 py-2 text-warn-ink">
+        <p className="m-0 shrink-0 border-b border-term-line bg-warn px-3.5 py-2 text-warn-ink">
           {context.pausedReason
             ? t("pause.banner", { reason: context.pausedReason })
             : t("pause.bannerNoReason")}
@@ -483,7 +483,7 @@ export function TerminalView({
       {noSignal ? (
         <p
           role="status"
-          className="m-0 border-b border-term-line bg-term-chrome-2 px-3.5 py-2 text-term-fg"
+          className="m-0 shrink-0 border-b border-term-line bg-term-chrome-2 px-3.5 py-2 text-term-fg"
         >
           <BandText
             icon="wifi"
@@ -496,7 +496,7 @@ export function TerminalView({
         </p>
       ) : null}
       {!compact && decision && !ended ? (
-        <div className="flex flex-wrap items-center gap-3 bg-accent px-3.5 py-2 text-accent-ink">
+        <div className="flex shrink-0 flex-wrap items-center gap-3 bg-accent px-3.5 py-2 text-accent-ink">
           <BandText icon="warn" text={t("banner.decision", { name: info.name })} />
           <AriaButton
             onPress={() => onDecide?.()}
@@ -507,7 +507,7 @@ export function TerminalView({
         </div>
       ) : null}
       {!compact && ended ? (
-        <div className="flex flex-wrap items-center gap-3 border-b border-term-line bg-term-chrome-2 px-3.5 py-2 text-term-fg">
+        <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-term-line bg-term-chrome-2 px-3.5 py-2 text-term-fg">
           <BandText icon="ended" text={t("banner.ended", { name: info.name })} />
           {onSeeTable ? (
             <AriaButton

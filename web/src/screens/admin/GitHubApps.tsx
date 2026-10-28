@@ -276,6 +276,7 @@ function AppItem({
   const say = t as unknown as Say;
   const fmt = useFormatDateTime();
   const ready = a.state_label === "pronto";
+  const expired = a.state === "expirado" || Boolean(request?.expired);
   const status = a.request || request?.status || "";
   let next = "";
   if (ready) next = "";
@@ -283,17 +284,18 @@ function AppItem({
     next = t("next.link", { when: fmt(request.expires_at) });
   else if (status === "exchanging") next = t("next.exchanging");
   else if (status === "failed") next = t("next.failed");
-  else if (request?.expired || status === "expired") next = t("next.expired");
+  else if (expired || status === "expired") next = t("next.expired");
   else if (a.can_link) next = t("next.noLink");
   else if (!owner) next = t("next.waitingOwner");
-  const expired = a.state_label === "link vencido" || Boolean(request?.expired);
   return (
     <li className="grid gap-x-6 gap-y-2 rounded-field border border-line bg-surface p-4 sm:grid-cols-[minmax(0,1fr)_auto]">
       <div className="min-w-0">
         <p className="flex flex-wrap items-center gap-2 text-lg font-semibold">
           <span className="font-mono text-base break-all">{a.name}</span>
           <Badge>{a.class ? t("list.class", { class: a.class }) : t("list.fixed")}</Badge>
-          <Badge tone={appTone(a.state_label)}>{a.state_label}</Badge>
+          <Badge tone={expired ? "danger" : appTone(a.state_label)}>
+            {expired ? t("list.expiredChip") : a.state_label}
+          </Badge>
           {status && !ready && !expired ? (
             <Badge>{labelOr(say, `requests.status.${status}`, status)}</Badge>
           ) : null}

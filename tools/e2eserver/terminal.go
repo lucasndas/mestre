@@ -89,10 +89,27 @@ func (f *fakeTerminals) info() panel.TerminalInfo {
 	return panel.TerminalInfo{TerminalID: fakeTerminal, Character: fakeCharacter, Name: "Dev-1", Machine: "e2e", State: "idle", Signal: true, Workspace: fakeWorkspace, Table: fakeTable}
 }
 
+// lojaTerminal is the terminal of the Dev of a table of `loja`: the same fake agent, said to be at
+// that table (so the bar of the terminal follows the table: paused or not).
+func (f *fakeTerminals) lojaTerminal(character string) (panel.TerminalInfo, bool) {
+	table, ok := strings.CutSuffix(character, "-dev")
+	if !ok || lojaState(table) == "" {
+		return panel.TerminalInfo{}, false
+	}
+	i := f.info()
+	i.TerminalID, i.Character, i.Workspace, i.Table = lojaTerminalPrefix+table, character, lojaWorkspace, table
+	if sc, ok := scenarios[table]; ok {
+		sc.apply(&i)
+	}
+	return i, true
+}
+
+const lojaTerminalPrefix = "term:"
+
 // ByCharacter implements panel.TerminalSource.
 func (f *fakeTerminals) ByCharacter(_ context.Context, id string) (panel.TerminalInfo, error) {
-	if table, sc, ok := scenarioOf(id); ok {
-		return infoOf(table, sc), nil
+	if i, ok := f.lojaTerminal(id); ok {
+		return i, nil
 	}
 	if id != fakeCharacter {
 		return panel.TerminalInfo{}, panel.ErrNoTerminal
@@ -102,9 +119,9 @@ func (f *fakeTerminals) ByCharacter(_ context.Context, id string) (panel.Termina
 
 // Info implements panel.TerminalSource.
 func (f *fakeTerminals) Info(_ context.Context, id string) (panel.TerminalInfo, error) {
-	if table, ok := strings.CutPrefix(id, termPrefix); ok {
-		if sc, ok := scenarios[table]; ok {
-			return infoOf(table, sc), nil
+	if table, ok := strings.CutPrefix(id, lojaTerminalPrefix); ok {
+		if i, ok := f.lojaTerminal(table + "-dev"); ok {
+			return i, nil
 		}
 	}
 	if id != fakeTerminal {

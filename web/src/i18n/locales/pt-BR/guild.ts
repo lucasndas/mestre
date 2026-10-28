@@ -16,6 +16,14 @@ export default {
       "vem de alguém que você reconhece, em voz alta ou numa ligação. Se o pedido não foi esperado, recuse.",
     many: "Há {{count}} pedidos ao mesmo tempo. Se você não esperava mais de um, recuse todos e peça para tentarem de novo.",
     noCode: "Esperando a máquina mostrar o código dela. Não dá para aceitar antes disso.",
+    cardTitle: "{{name}} quer entrar na Guilda",
+    cardMeta: "pediu às {{when}}",
+    instruction: "Olhe a tela da máquina nova e digite o código de entrada que aparece nela.",
+    placeholder: "000 000",
+    moreHint:
+      "Chegou mais de um pedido ao mesmo tempo? Recuse todos e peça para tentarem de novo: um pedido que você não esperava pode ser de outra pessoa na rede.",
+    telegram:
+      "No Telegram a pergunta é a mesma (“Aceitar {{name}} na Guilda?”) e a comparação do código é com os seus olhos, antes do PIN.",
     typeLabel: "Código que a máquina nova ({{name}}) mostra",
     typeHint:
       "Digite os 6 dígitos que aparecem na máquina nova. O painel não mostra o do pedido: a conferência só vale se for você a digitar.",
@@ -36,6 +44,9 @@ export default {
     hint: "Cada Torre guarda uma cópia e pode assumir o comando.",
     silent: "{{count}} sem sinal agora.",
     suspended: "A Cidadela está sendo trocada: o painel reconecta sozinho.",
+    joinOne: "{{name}} quer entrar na Guilda",
+    joinMany: "{{count}} máquinas querem entrar na Guilda",
+    joinHint: "Compare o código de entrada e decida.",
   },
   add: {
     title: "Adicionar outra máquina",
@@ -93,6 +104,8 @@ export default {
     noSignalSince: "sem sinal desde {{when}}",
     noSignalYet: "sem sinal (não vista desde que o motor subiu)",
     outside: "fora da rede local",
+    connectedChip: "Conectada",
+    noSignalChip: "Sem sinal",
   },
   engine: "Motor e Guardião",
   engineVersion: "Motor {{version}}",

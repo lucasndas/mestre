@@ -225,6 +225,12 @@ test("the secrets show name, type, fingerprint, dates and notices, with no value
   for (const cell of ["Classes", "Domínios", "Último uso", "Impressão"])
     expect(within(card).getByText(cell)).toBeTruthy();
   expect(within(card).queryByText("Criado em")).toBeNull();
+  // under the name goes the domain (the login page is in the ciphertext and the list never opens it)
+  expect(within(card).getAllByText("mail.exemplo.com").length).toBe(2);
+  expect(card.textContent).not.toContain("https://");
+  // Apagar sits beside Substituir and its warning is a line of the card, not a column of the button
+  expect(within(card).getByRole("button", { name: /Apagar/ })).toBeTruthy();
+  expect(within(card).getByText(/Não se desfaz/)).toBeTruthy();
   expect(screen.getAllByText("Chave de um App do GitHub").length).toBeGreaterThan(0);
   // what the Mestre keeps is not changed here; no screen has a button that shows a value
   expect(screen.getAllByRole("button", { name: /Substituir/ })).toHaveLength(1);
