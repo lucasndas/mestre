@@ -4,19 +4,47 @@ import { useTranslation } from "react-i18next";
 import { AuthLayout } from "../app/AuthLayout";
 import { Alert, Button, Field } from "../components/ui";
 import type { FirstAccessRequest, Me } from "../gen/panel";
-import { api } from "../lib/api";
+import { ApiError, api } from "../lib/api";
 import { errorText, localError } from "../lib/errors";
 import { useAuthForm } from "../lib/forms";
+
+type Say = (k: string, o?: object) => string;
+
+const FIRST_ACCESS_ERRORS = [
+  "invalid_code",
+  "password_too_short",
+  "login_taken",
+  "invalid_pin",
+  "rate_limited",
+];
+
+/** The text of an error of this screen: in its own words and with the way out, by the `code`. */
+function firstAccessText(
+  t: Say,
+  te: Parameters<typeof errorText>[0],
+  err: unknown,
+  pinEmpty: boolean,
+): string {
+  // the server answers a first access without PIN as an internal error: say what is missing
+  if (err instanceof ApiError && err.code === "internal" && pinEmpty)
+    return t("first.errors.pin_missing");
+  if (err instanceof ApiError && FIRST_ACCESS_ERRORS.includes(err.code)) {
+    const secs = err.params.retry_after_seconds;
+    const minutes = typeof secs === "number" ? Math.max(1, Math.ceil(secs / 60)) : 1;
+    return t(`first.errors.${err.code}`, { minutes });
+  }
+  return errorText(te, err);
+}
 
 /**
  * The first access of a user, or the new password after a reset. A reset has no
  * PIN: the user leaves the PIN fields empty.
  */
-export function FirstAccess({ code }: { code?: string }) {
+export function FirstAccess() {
   const { t } = useTranslation("auth");
   const { t: te } = useTranslation("errors");
   const [f, setF] = useState({
-    code: code ?? "",
+    code: "",
     login: "",
     password: "",
     password2: "",
@@ -53,14 +81,13 @@ export function FirstAccess({ code }: { code?: string }) {
         <Field
           label={t("first.code")}
           autoComplete="off"
-          autoFocus={!code}
+          autoFocus
           value={f.code}
           onChange={set("code")}
         />
         <Field
           label={t("first.login")}
           autoComplete="username"
-          autoFocus={Boolean(code)}
           value={f.login}
           onChange={set("login")}
         />
@@ -96,7 +123,10 @@ export function FirstAccess({ code }: { code?: string }) {
             onChange={set("pin2")}
           />
         </div>
-        {error ? <Alert>{errorText(te, error)}</Alert> : null}
+        <p className="text-sm text-muted">{t("first.pinWhy")}</p>
+        {error ? (
+          <Alert>{firstAccessText(t as unknown as Say, te, error, f.pin === "")}</Alert>
+        ) : null}
         <Button type="submit" isDisabled={busy} className="mt-2">
           {t("first.submit")}
         </Button>

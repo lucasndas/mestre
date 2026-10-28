@@ -305,12 +305,9 @@ const loginRoute = createRoute({
 const firstAccessRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/primeiro-acesso",
-  validateSearch: (s: Record<string, unknown>): { codigo?: string } =>
-    typeof s.codigo === "string" ? { codigo: s.codigo } : {},
   beforeLoad: ({ context }) => leaveIfSignedIn(context.queryClient),
-  component: function FirstAccessPage() {
-    return <FirstAccess code={firstAccessRoute.useSearch().codigo} />;
-  },
+  // the code is typed, never carried by the address: the history would keep it
+  component: FirstAccess,
 });
 
 const setupRoute = createRoute({
@@ -365,5 +362,13 @@ export function makeRouter(queryClient: QueryClient, history?: RouterHistory) {
 declare module "@tanstack/react-router" {
   interface Register {
     router: ReturnType<typeof makeRouter>;
+  }
+}
+
+declare module "@tanstack/react-router" {
+  /** What a screen leaves for the next one in the state of the history, out of the address. */
+  interface HistoryState {
+    /** The post of Guildmaster changed: the login says why the sessions ended. */
+    postChanged?: boolean;
   }
 }

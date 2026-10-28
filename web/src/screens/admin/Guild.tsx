@@ -6,18 +6,14 @@ import { useFormatDateTime } from "../../app/session";
 import { SensitiveButton } from "../../components/PinField";
 import { Term } from "../../components/Term";
 import { Alert, Button, Field } from "../../components/ui";
-import type {
-  GuildAgent,
-  GuildMachineRow,
-  GuildPendingJoin,
-  GuildRemoval,
-  GuildView,
-} from "../../gen/panel";
+import type { GuildAgent, GuildMachineRow, GuildRemoval, GuildView } from "../../gen/panel";
 import { ApiError, api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
 import { formatNumber } from "../../lib/format";
 import { useLive, useLiveEvents } from "../../lib/live";
-import { Badge, NativeSelect, PageHeader } from "./kit";
+import { HandoverTimeline, PassCitadel } from "./GuildHandover";
+import { AddMachineCard, PendingJoins, TowerCheck } from "./GuildJoin";
+import { Badge, LoadError, NativeSelect, PageHeader, StatusStrip, VocabLine } from "./kit";
 
 type Say = (k: string, o?: object) => string;
 
@@ -59,7 +55,7 @@ export function Guild() {
   const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
   const live = useLive();
-  const { data, error } = useQuery(guildQuery);
+  const { data, error, refetch } = useQuery(guildQuery);
   const [notice, setNotice] = useState<string | null>(null);
 
   // the snapshot opens the view and each "view" event replaces it
@@ -69,119 +65,70 @@ export function Guild() {
   });
   const refresh = () => qc.invalidateQueries({ queryKey: guildQuery.queryKey });
 
+  const errorOf = useGuildError();
+  const citadel = data?.machines.find((m) => m.citadel);
+  const suspended = data?.machines.some((m) => m.suspended) ?? false;
+  const silent = data?.machines.filter((m) => !m.online).length ?? 0;
+
   return (
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
-      <p className="mb-6 flex flex-wrap items-center gap-3 text-sm text-muted">
-        <Term name="Guilda" /> · <Term name="Cidadela" /> · <Term name="Torre" /> ·{" "}
-        <Term name="Máquina excluída" />
-        {data ? (
-          <span className="inline-flex items-center gap-1">
-            <Term name="Época" />
-            <Badge>{t("epoch", { epoch: data.epoch })}</Badge>
-          </span>
-        ) : null}
-      </p>
+      <VocabLine
+        terms={["Guilda", "Cidadela", "Torre", "Máquina excluída"]}
+        extra={
+          data ? (
+            <span className="inline-flex items-center gap-1">
+              <Term name="Época" />
+              <Badge>{t("epoch", { epoch: data.epoch })}</Badge>
+            </span>
+          ) : null
+        }
+      />
+      {data ? (
+        <StatusStrip
+          tone={suspended ? "warn" : silent > 0 ? "warn" : data.single ? "neutral" : "ok"}
+          title={
+            data.single
+              ? t("strip.single")
+              : t("strip.many", { count: data.machines.length, citadel: citadel?.name ?? "" })
+          }
+          hint={
+            suspended
+              ? t("strip.suspended")
+              : data.single
+                ? t("single.body")
+                : silent > 0
+                  ? t("strip.silent", { count: silent })
+                  : t("strip.hint")
+          }
+        />
+      ) : null}
       <div className="flex max-w-5xl flex-col gap-6">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
-        {error ? <Alert>{errorText(te, error)}</Alert> : null}
+        {error ? (
+          <LoadError what={t("loadWhat")} error={error} onRetry={() => void refetch()} />
+        ) : null}
         {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
-        {data?.single ? <SingleBand /> : null}
+        {data ? <HandoverTimeline machines={data.machines} /> : null}
         {data && data.pending.length > 0 ? (
-          <Pending joins={data.pending} say={setNotice} onDone={refresh} />
+          <PendingJoins
+            joins={data.pending}
+            say={setNotice}
+            describeError={errorOf}
+            onDone={refresh}
+          />
         ) : null}
         {data ? (
           <ul aria-label={t("machines")} className="flex flex-col gap-4">
             {data.machines.map((m) => (
-              <MachineRow key={m.id} m={m} say={setNotice} onDone={refresh} />
+              <MachineRow key={m.id} m={m} citadel={citadel} say={setNotice} onDone={refresh} />
             ))}
           </ul>
         ) : null}
+        {data ? <AddMachineCard single={data.single} /> : null}
         {data ? <p className="text-sm text-muted">{t("later")}</p> : null}
         {data ? <Timezone zone={data.timezone} say={setNotice} onDone={refresh} /> : null}
       </div>
-    </section>
-  );
-}
-
-function SingleBand() {
-  const { t } = useTranslation("guild");
-  return (
-    <aside
-      aria-label={t("single.title")}
-      className="rounded-field border border-warn-ink/30 bg-warn px-4 py-3 text-warn-ink"
-    >
-      <p className="font-semibold">
-        <Term name="Modo máquina única" />
-      </p>
-      <p>{t("single.body")}</p>
-    </aside>
-  );
-}
-
-function Pending({
-  joins,
-  say,
-  onDone,
-}: {
-  joins: GuildPendingJoin[];
-  say: (s: string) => void;
-  onDone: () => Promise<unknown>;
-}) {
-  const { t } = useTranslation("guild");
-  const errorOf = useGuildError();
-  const fmt = useFormatDateTime();
-  const decide = async (j: GuildPendingJoin, pin: string, accept: boolean, excluded: boolean) => {
-    await api(
-      "POST",
-      `/api/guild/joins/${encodeURIComponent(j.id)}/decide`,
-      { accept, excluded },
-      { pin },
-    );
-    say(t(accept ? "pending.accepted" : "pending.refused", { name: j.name }));
-    await onDone();
-  };
-  return (
-    <section aria-label={t("pending.title")} className="flex flex-col gap-3">
-      <h2 className="text-xl">{t("pending.title")}</h2>
-      <ul className="flex flex-col gap-3">
-        {joins.map((j) => (
-          <li key={j.id} className="rounded-field border border-accent bg-accent-wash p-4">
-            <p className="font-semibold">{j.name}</p>
-            <p className="text-sm">
-              {t("pending.code")}:{" "}
-              {j.code ? (
-                <code className="text-lg font-semibold tracking-wider">{j.code}</code>
-              ) : (
-                t("pending.noCode")
-              )}{" "}
-              · {fmt(j.created_at)}
-            </p>
-            <div className="mt-3 flex flex-wrap items-start gap-3">
-              <SensitiveButton
-                describeError={errorOf}
-                onConfirm={(pin) => decide(j, pin, true, false)}
-              >
-                {t("pending.accept")}
-              </SensitiveButton>
-              <SensitiveButton
-                describeError={errorOf}
-                variant="secondary"
-                onConfirm={(pin) => decide(j, pin, true, true)}
-              >
-                {t("pending.acceptExcluded")}
-              </SensitiveButton>
-              <SensitiveButton
-                describeError={errorOf}
-                variant="danger"
-                onConfirm={(pin) => decide(j, pin, false, false)}
-              >
-                {t("pending.refuse")}
-              </SensitiveButton>
-            </div>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }
@@ -205,10 +152,12 @@ function Fact({
 
 function MachineRow({
   m,
+  citadel,
   say,
   onDone,
 }: {
   m: GuildMachineRow;
+  citadel: GuildMachineRow | undefined;
   say: (s: string) => void;
   onDone: () => Promise<unknown>;
 }) {
@@ -328,61 +277,66 @@ function MachineRow({
 
       {m.citadel ? null : (
         <div className="mt-4 flex flex-col gap-4 border-t border-line pt-4">
-          <div className="flex flex-wrap items-start gap-3">
-            <SensitiveButton
-              describeError={errorOf}
-              variant="secondary"
-              onConfirm={(pin) =>
-                act(
-                  "POST",
-                  "exclusion",
-                  { excluded: !m.excluded },
-                  pin,
-                  m.excluded ? "done.included" : "done.excluded",
-                )
-              }
-            >
-              {sayT(m.excluded ? "actions.includeNamed" : "actions.excludeNamed", { name: m.name })}
-            </SensitiveButton>
-            <div className="flex flex-col gap-1">
-              <SensitiveButton
-                describeError={errorOf}
-                isDisabled={Boolean(passHint)}
-                onConfirm={(pin) => act("POST", "pass-citadel", undefined, pin, "done.passed")}
-              >
-                {t("actions.passNamed", { name: m.name })}
-              </SensitiveButton>
-              {passHint ? <p className="text-sm text-muted">{passHint}</p> : null}
+          <TowerCheck m={m} />
+          <PassCitadel
+            m={m}
+            citadel={citadel}
+            reason={passHint}
+            describeError={errorOf}
+            onPass={(pin) => act("POST", "pass-citadel", undefined, pin, "done.passed")}
+          />
+          <details>
+            <summary className="min-h-11 cursor-pointer py-2 font-semibold">{t("more")}</summary>
+            <div className="mt-2 flex flex-col gap-4">
+              <div className="flex flex-wrap items-start gap-3">
+                <SensitiveButton
+                  describeError={errorOf}
+                  variant="secondary"
+                  onConfirm={(pin) =>
+                    act(
+                      "POST",
+                      "exclusion",
+                      { excluded: !m.excluded },
+                      pin,
+                      m.excluded ? "done.included" : "done.excluded",
+                    )
+                  }
+                >
+                  {sayT(m.excluded ? "actions.includeNamed" : "actions.excludeNamed", {
+                    name: m.name,
+                  })}
+                </SensitiveButton>
+                <Button
+                  variant="danger"
+                  aria-expanded={removing}
+                  onPress={() => setRemoving(!removing)}
+                >
+                  {t("actions.removeNamed", { name: m.name })}
+                </Button>
+              </div>
+              <div className="flex max-w-md flex-col gap-2">
+                <Field
+                  label={t("priorityLabel", { name: m.name })}
+                  description={t("priorityHint")}
+                  inputMode="numeric"
+                  value={priority}
+                  onChange={setPriority}
+                />
+                <div>
+                  <SensitiveButton
+                    describeError={errorOf}
+                    variant="secondary"
+                    isDisabled={!/^\d{1,4}$/.test(priority) || Number(priority) === m.priority}
+                    onConfirm={(pin) =>
+                      act("PUT", "priority", { priority: Number(priority) }, pin, "prioritySaved")
+                    }
+                  >
+                    {t("savePriority")}
+                  </SensitiveButton>
+                </div>
+              </div>
             </div>
-            <Button
-              variant="danger"
-              aria-expanded={removing}
-              onPress={() => setRemoving(!removing)}
-            >
-              {t("actions.removeNamed", { name: m.name })}
-            </Button>
-          </div>
-          <div className="flex max-w-md flex-col gap-2">
-            <Field
-              label={t("priorityLabel", { name: m.name })}
-              description={t("priorityHint")}
-              inputMode="numeric"
-              value={priority}
-              onChange={setPriority}
-            />
-            <div>
-              <SensitiveButton
-                describeError={errorOf}
-                variant="secondary"
-                isDisabled={!/^\d{1,4}$/.test(priority) || Number(priority) === m.priority}
-                onConfirm={(pin) =>
-                  act("PUT", "priority", { priority: Number(priority) }, pin, "prioritySaved")
-                }
-              >
-                {t("savePriority")}
-              </SensitiveButton>
-            </div>
-          </div>
+          </details>
           {removing ? (
             <Removal
               m={m}

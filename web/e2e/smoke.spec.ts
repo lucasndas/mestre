@@ -80,28 +80,71 @@ test("the Owner creates the Guild, signs out and signs in again", async ({ page 
   await expect(page.getByRole("button", { name: "Ajuda sobre Leitura" })).toBeVisible();
 });
 
-// The administration step of the smoke: the Owner registers a user (with the PIN, as
-// the server demands) and sees the code of first access, which shows up once.
-test("the Owner registers a user and sees the code of first access", async ({ page }) => {
+// The administration step of the smoke (CA-CRESC-18): the Owner invites a person (with the PIN,
+// as the server demands) and the invite comes in three parts; the person, in another browser,
+// does the first access with the code, sees the welcome of their level, and the same code does
+// not serve a second time.
+// Part of CA-CRESC-18 (the criterion is *completa*: this e2e is the whole journey)
+test("the Owner invites a person, who does the first access once with the code", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
   await page.goto("/");
   await page.getByLabel("Nome de login").fill("maria");
   await page.getByLabel("Senha").fill("uma senha bem longa");
   await page.getByRole("button", { name: "Entrar" }).click();
   await openSetting(page, /^Usuários/);
   await expect(page.getByRole("heading", { name: "Usuários", level: 1 })).toBeVisible();
-  await page.getByRole("button", { name: "Cadastrar usuário" }).click();
+  await page.getByRole("button", { name: "Convidar pessoa" }).first().click();
   await page.getByLabel("Nome", { exact: true }).fill("Ana Lima");
-  await page.getByRole("button", { name: "Cadastrar usuário" }).click();
-  await page.getByLabel("PIN").fill("123456");
-  await page.getByRole("button", { name: "Cadastrar usuário" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Código de primeiro acesso de Ana Lima" }),
-  ).toBeVisible();
-  await expect(page.getByTestId("shown-once")).toHaveText(/^[A-Z0-9]{8,}$/);
+  await page.getByRole("radiogroup").locator("label", { hasText: "Observador" }).click();
+  await page.getByRole("button", { name: "Criar convite" }).click();
+  await page.getByRole("textbox", { name: "PIN" }).fill("123456");
+  await page.getByRole("button", { name: "Criar convite" }).click();
+
+  // the three parts: the check code is computed from /ca.crt, the secret waits for the word
+  const p2 = page.getByRole("region", { name: "2. Código de conferência do certificado" });
+  await expect(p2.locator("pre")).toHaveText(/^([0-9a-f]{8} ){7}[0-9a-f]{8}$/);
+  await expect(page.getByRole("region", { name: "1. Instruções" })).toBeVisible();
+  await expect(page.getByTestId("shown-once")).toHaveCount(0);
+  await page.locator("label", { hasText: "conferiu o código" }).click();
+  const code = (await page.getByTestId("shown-once").textContent()) ?? "";
+  expect(code).toMatch(/^[A-Z0-9]{8,}$/);
   await expect(page.getByText("Ana Lima").first()).toBeVisible();
   // the code is shown once: after it is written down, it is gone
-  await page.getByRole("button", { name: "Já anotei" }).click();
+  await page.getByRole("button", { name: "Já enviei e anotei" }).click();
   await expect(page.getByTestId("shown-once")).toHaveCount(0);
+  await expect(page.getByText("Ainda não entrou", { exact: true })).toBeVisible();
+
+  // the person, in another browser: the address carries nothing, the code is typed
+  const guest = await browser.newContext({ baseURL, ignoreHTTPSErrors: true, locale: "pt-BR" });
+  const ana = await guest.newPage();
+  await ana.goto("/primeiro-acesso");
+  await ana.getByLabel("Código de primeiro acesso").fill(code);
+  await ana.getByLabel("Escolha o nome de login").fill("ana");
+  await ana.getByLabel("Senha (mínimo 12 caracteres)").fill("uma senha bem longa");
+  await ana.getByLabel("Repita a senha").fill("uma senha bem longa");
+  await ana.getByLabel("PIN (6 a 12 números)").fill("654321");
+  await ana.getByLabel("Repita o PIN").fill("654321");
+  await ana.getByRole("button", { name: "Entrar" }).click();
+  await expect(ana.getByRole("heading", { name: "Início" })).toBeVisible();
+  await expect(ana.getByRole("region", { name: "Você entrou como Observador" })).toBeVisible();
+  await guest.close();
+
+  // the same code does not serve twice
+  const again = await browser.newContext({ baseURL, ignoreHTTPSErrors: true, locale: "pt-BR" });
+  const other = await again.newPage();
+  await other.goto("/primeiro-acesso");
+  await other.getByLabel("Código de primeiro acesso").fill(code);
+  await other.getByLabel("Escolha o nome de login").fill("ana2");
+  await other.getByLabel("Senha (mínimo 12 caracteres)").fill("uma senha bem longa");
+  await other.getByLabel("Repita a senha").fill("uma senha bem longa");
+  await other.getByLabel("PIN (6 a 12 números)").fill("654321");
+  await other.getByLabel("Repita o PIN").fill("654321");
+  await other.getByRole("button", { name: "Entrar" }).click();
+  await expect(other.getByRole("alert")).toContainText("Esse código não vale mais");
+  await again.close();
 });
 
 // The canvas step of the smoke: the table of the engine double is drawn with its
@@ -243,7 +286,8 @@ test("the Owner sees the classes and exports and imports a sheet", async ({ page
 });
 
 // The Guild step of the smoke: the real Citadel is alone in its throwaway Guild, so the
-// screen shows the band of the single-machine mode, its own row and the epoch.
+// screen shows the strip of the single machine, the card to add a second one, its own row and
+// the epoch.
 test("the Guild screen shows the single-machine band and the Citadel", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Nome de login").fill("maria");
@@ -251,7 +295,8 @@ test("the Guild screen shows the single-machine band and the Citadel", async ({ 
   await page.getByRole("button", { name: "Entrar" }).click();
   await openSetting(page, /^Guilda/);
   await expect(page.getByRole("heading", { name: "Guilda e máquinas", level: 1 })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Modo máquina única" })).toBeVisible();
+  await expect(page.getByText("1 máquina, e é a Cidadela")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Adicionar uma segunda máquina" })).toBeVisible();
   await expect(page.getByText(/^Época \d+$/)).toBeVisible();
   const rows = page.getByRole("list", { name: "Máquinas" }).getByRole("listitem");
   await expect(rows).toHaveCount(1);
