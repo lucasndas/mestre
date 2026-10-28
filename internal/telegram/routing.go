@@ -382,7 +382,7 @@ func (r *Routing) choose(ctx context.Context, k Click) (string, string, error) {
 			return "", "", err
 		}
 	}
-	text := "Workspace ativo: #" + k.Arg + "."
+	text := "Campanha ativa: #" + k.Arg + "."
 	if len(parked) > 0 {
 		text += " Entreguei a sua mensagem."
 	}
