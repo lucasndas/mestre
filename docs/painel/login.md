@@ -1,6 +1,6 @@
 # Login do painel
 
-> **Assunto:** login, assistente de criação do Senhor da Guilda, primeiro acesso de cada usuário, sessões com expiração e PIN em ações sensíveis · **Componente:** Painel · **Atualizado:** 2026-10-27
+> **Assunto:** login, assistente de criação do Senhor da Guilda, primeiro acesso de cada usuário, sessões com expiração e PIN em ações sensíveis · **Componente:** Painel · **Atualizado:** 2026-10-28
 
 ## Objetivo
 
