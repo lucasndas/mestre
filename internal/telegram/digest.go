@@ -3,9 +3,9 @@ package telegram
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/digest"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -48,7 +48,7 @@ func (c *DigestChannel) Send(ctx context.Context, m digest.Message) error {
 	for _, row := range m.Buttons {
 		var r []Button
 		for _, b := range row {
-			btn := Button{Text: b.Text, Action: b.Action, Arg: b.Arg}
+			btn := Button{Text: b.Text, Action: b.Action, Arg: b.Arg} // the label comes from the digest, in pt-BR
 			switch b.Action {
 			case digest.MistakeAction:
 				btn.Capability = users.RevokeTemporaryRules
@@ -61,16 +61,16 @@ func (c *DigestChannel) Send(ctx context.Context, m digest.Message) error {
 		}
 		rows = append(rows, r)
 	}
-	_, err = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: m.Text, Workspace: m.Workspace, Origin: "motor", Buttons: rows})
+	_, err = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.Text(m.Text), Workspace: m.Workspace, Origin: "motor", Buttons: rows})
 	return err
 }
 
 func (c *DigestChannel) say(err error) error {
 	switch {
 	case errors.Is(err, digest.ErrNotOwner):
-		return errors.New("só o Senhor da Guilda responde a uma sugestão")
+		return i18n.Err("bot.digest_owner_only")
 	case errors.Is(err, digest.ErrNotOpen):
-		return errors.New("essa sugestão já foi respondida ou saiu")
+		return i18n.Err("bot.digest_not_open")
 	}
 	return err
 }
@@ -78,72 +78,72 @@ func (c *DigestChannel) say(err error) error {
 func (c *DigestChannel) id(k Click) (int64, error) {
 	n, err := strconv.ParseInt(k.Arg, 10, 64)
 	if err != nil {
-		return 0, errors.New("botão inválido")
+		return 0, errInvalidButton
 	}
 	return n, nil
 }
 
-func (c *DigestChannel) mistake(ctx context.Context, k Click) (string, string, error) {
+func (c *DigestChannel) mistake(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	n, err := c.id(k)
 	if err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
 	revoked, err := c.Svc.Mark(ctx, n, k.User.ID)
 	if err != nil {
-		return "", "", c.say(err)
+		return i18n.Msg{}, i18n.Msg{}, c.say(err)
 	}
-	text := fmt.Sprintf("Decisão #%d marcada como erro por %s.", n, k.User.Name)
+	parts := []i18n.Msg{i18n.M("bot.marked_mistake", "id", n, "name", k.User.Name)}
 	if revoked > 0 {
-		text += fmt.Sprintf(" %d regra(s) temporária(s) revogada(s).", revoked)
+		parts = append(parts, i18n.M("bot.marked_revoked", "count", revoked))
 	}
-	text += " Para proibir, peça um decreto ao Grão-Mestre."
-	return "Marcado.", "", c.reply(ctx, k, text)
+	parts = append(parts, i18n.M("bot.marked_to_forbid"))
+	return i18n.M("bot.marked"), i18n.Msg{}, c.reply(ctx, k, i18n.Concat(parts...))
 }
 
 // reply tells the user, in a message of its own, what a click did (the buttons
 // of the sample stay for the other actions).
-func (c *DigestChannel) reply(ctx context.Context, k Click, text string) error {
+func (c *DigestChannel) reply(ctx context.Context, k Click, m i18n.Msg) error {
 	if k.User.TelegramID == 0 || c.bot == nil {
 		return nil
 	}
-	_, err := c.bot.Send(ctx, Out{ChatID: k.User.TelegramID, UserID: k.User.ID, Text: text, Origin: "motor"})
+	_, err := c.bot.Send(ctx, Out{ChatID: k.User.TelegramID, UserID: k.User.ID, Msg: m, Origin: "motor"})
 	return err
 }
 
-func (c *DigestChannel) accept(ctx context.Context, k Click) (string, string, error) {
+func (c *DigestChannel) accept(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	n, err := c.id(k)
 	if err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
 	pend, err := c.Svc.Accept(ctx, n, k.User.ID)
 	if err != nil {
-		return "", "", c.say(err)
+		return i18n.Msg{}, i18n.Msg{}, c.say(err)
 	}
 	if err := c.Decrees.Offer(ctx, pend); err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
-	return "Proposta feita.", "Sugestão aceita: confirme o decreto na mensagem seguinte.", nil
+	return i18n.M("bot.proposal_made"), i18n.M("bot.suggestion_accepted"), nil
 }
 
-func (c *DigestChannel) decline(ctx context.Context, k Click) (string, string, error) {
+func (c *DigestChannel) decline(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	n, err := c.id(k)
 	if err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
 	if err := c.Svc.Decline(ctx, n, k.User.ID); err != nil {
-		return "", "", c.say(err)
+		return i18n.Msg{}, i18n.Msg{}, c.say(err)
 	}
-	return "Recusada.", "Sugestão recusada: o mesmo padrão não volta por 30 dias.", nil
+	return i18n.M("bot.declined"), i18n.M("bot.suggestion_declined"), nil
 }
 
-func (c *DigestChannel) examples(ctx context.Context, k Click) (string, string, error) {
+func (c *DigestChannel) examples(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	n, err := c.id(k)
 	if err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
 	text, err := c.Svc.ExamplesText(ctx, n)
 	if err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
-	return "Exemplos.", "", c.reply(ctx, k, text)
+	return i18n.M("bot.examples"), i18n.Msg{}, c.reply(ctx, k, i18n.Text(text))
 }

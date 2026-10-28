@@ -3,13 +3,20 @@
   "guild.bad_timezone": "Esse fuso não existe na base IANA.",
   "guild.citadel_protected": "A Cidadela não pode ser excluída nem removida: passe a Cidadela a outra máquina antes.",
   "guild.confirm_required": "Leia o aviso da remoção e confirme.",
+  "guild.entry_not_applied": "A resposta sobre a entrada da máquina \"{{name}}\" não pôde ser aplicada agora ({{reason}}). Nada foi emitido; peça que ela tente de novo.",
+  "guild.entry_not_waiting": "A entrada da máquina \"{{name}}\" já não estava esperando (a hora acabou ou foi decidida): nada foi emitido. Peça que ela tente de novo.",
   "guild.excluded_machine": "Uma máquina excluída não vira Cidadela.",
+  "guild.github_back": "GitHub de volta. {{queued}} ações saem da fila, na ordem.",
+  "guild.github_down": "GitHub fora desde {{since}}. Último erro: {{why}}. O Telegram e o comando seguem; as ações no GitHub ficam na fila ({{queued}} até agora).",
+  "guild.github_down_no_detail": "sem detalhe",
   "guild.handover_in_progress": "A troca da Cidadela já está em andamento: espere ela terminar.",
+  "guild.locked_by": "Sistema: {{name}} travou o Mestre às {{hour}}. Nada é executado até o Senhor da Guilda destravar.",
   "guild.no_lock": "A Guilda não tem a trava no GitHub configurada: a troca ainda não é possível.",
   "guild.not_active": "A máquina não está mais na Guilda.",
   "guild.not_online": "A máquina não está online agora.",
   "guild.not_pending": "Este pedido já foi decidido ou venceu.",
   "guild.not_revealed": "A máquina ainda não mostrou o código dela: espere o instalador exibi-lo.",
   "guild.outside_local_network": "Esta máquina está fora da rede local: ninguém da Guilda a alcança pelo mestre.local, então ela não pode receber a Cidadela.",
-  "guild.suspended": "A Cidadela está suspensa e não aceita mudanças agora."
+  "guild.suspended": "A Cidadela está suspensa e não aceita mudanças agora.",
+  "guild.unlocked_by": "Sistema: {{name}} destravou o Mestre às {{hour}}."
 }

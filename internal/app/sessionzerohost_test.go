@@ -13,6 +13,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
@@ -310,7 +311,8 @@ func (w *szWorld) outbox() string {
 }
 
 func (w *szWorld) github(u users.User) (string, error) {
-	return w.run.gh.Commands()[0].Run(w.ctx, telegram.Call{User: u, ChatID: 4242})
+	m, err := w.run.gh.Commands()[0].Run(w.ctx, telegram.Call{User: u, ChatID: 4242})
+	return i18n.Render(i18n.PtBR, m), err
 }
 
 // connecting sends /github and waits until the wait for the authorization is armed
@@ -554,7 +556,7 @@ func TestAnEditOfTheVerificationFileOutsideThePanelIsToldToTheAdministrators(t *
 	}
 	told := 0
 	for _, n := range notes {
-		if strings.Contains(n.Text, "foi mudado fora do painel") {
+		if strings.Contains(n.In(i18n.PtBR), "foi mudado fora do painel") {
 			told++
 		}
 	}
@@ -640,7 +642,7 @@ func TestAVerificationFileThatIsALinkDoesNotBlockTheScreenOrTheConfirmation(t *t
 	notes, _ := w.run.feed.For(w.ctx, w.owner, 50)
 	told := 0
 	for _, n := range notes {
-		if strings.Contains(n.Text, "foi mudado fora do painel") {
+		if strings.Contains(n.In(i18n.PtBR), "foi mudado fora do painel") {
 			told++
 		}
 	}

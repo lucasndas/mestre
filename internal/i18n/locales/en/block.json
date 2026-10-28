@@ -1,0 +1,22 @@
+{
+  "block.agent": "{{sep}}— agent text, not verified —\n{{lines}}",
+  "block.agent_checked": "{{sep}}Already checked: {{text}}",
+  "block.agent_step": "{{sep}}[ ] {{text}}",
+  "block.agent_stopped": "{{sep}}Stopped because: {{text}}",
+  "block.agent_why_not": "{{sep}}Why I do not decide: {{text}}",
+  "block.details": "See details",
+  "block.evidence": "{{sep}}Evidence:\n```\n{{text}}\n```",
+  "block.evidence_more_one": "\n… +{{count}} line in See details",
+  "block.evidence_more_other": "\n… +{{count}} lines in See details",
+  "block.head": "{{icon}} {{what}}",
+  "block.no_evidence": "\nno verified evidence",
+  "block.open_panel": "Open in the panel",
+  "block.owner": "\nIn charge: {{owner}}",
+  "block.owner_an_administrator": "an Administrator",
+  "block.owner_an_approver": "an Approver",
+  "block.owner_the_owner": "the Guildmaster",
+  "block.step": "\n[ ] {{step}}",
+  "block.step_panel": "\n[ ] {{step}} (panel)",
+  "block.step_vault": "register the key in the vault",
+  "block.to_unblock": "\nTo unblock:"
+}

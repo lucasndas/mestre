@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/blocking"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/notices"
 	"github.com/mestre-ia/mestre/internal/testkit/faketelegram"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -45,11 +46,11 @@ func TestTheAlertOfAnUnknownSenderIsAlsoInThePanelForTheOwnerAndTheAdministrator
 		w.drain()
 	}
 	got := w.noticesOf(w.owner)
-	if len(got) != 1 || got[0].Kind != notices.Stranger || got[0].Audience != notices.Admins || !strings.Contains(got[0].Text, "ID: 555") {
+	if len(got) != 1 || got[0].Kind != notices.Stranger || got[0].Audience != notices.Admins || !strings.Contains(got[0].In(i18n.PtBR), "ID: 555") {
 		t.Fatalf("the Owner's bell: %+v", got)
 	}
-	if !strings.Contains(got[0].Text, "tentativas") {
-		t.Errorf("the notice does not count the tries: %q", got[0].Text)
+	if !strings.Contains(got[0].In(i18n.PtBR), "tentativas") {
+		t.Errorf("the notice does not count the tries: %q", got[0].In(i18n.PtBR))
 	}
 	if got := w.noticesOf(apr); len(got) != 0 {
 		t.Fatalf("an Approver sees the alert of a stranger: %+v", got)
@@ -63,10 +64,10 @@ func TestTheAlertsOfTheEngineAreKeptOnceForThePanel(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, rigOpts{ownerAlerts: true})
 	w.oa.Panel = w.feed()
-	w.oa.OwnerNotice(w.ctx, notices.GitHubDown, "GitHub fora desde 09:00:00. Último erro: 503.")
-	w.oa.OwnerWorkspaceAlert(w.ctx, "loja", "O limite de uso da Loja chegou a 90%.")
-	_, _ = w.oa.AdminAlert(w.ctx, "loja", "A mesa 42 parou.")
-	w.oa.Tell(w.ctx, w.owner.ID, "Você foi pareado.")
+	w.oa.OwnerNotice(w.ctx, notices.GitHubDown, i18n.Text("GitHub fora desde 09:00:00. Último erro: 503."))
+	w.oa.OwnerWorkspaceAlert(w.ctx, "loja", i18n.Text("O limite de uso da Loja chegou a 90%."))
+	_, _ = w.oa.AdminAlert(w.ctx, "loja", i18n.Text("A mesa 42 parou."))
+	w.oa.Tell(w.ctx, w.owner.ID, i18n.Text("Você foi pareado."))
 	kinds := map[notices.Kind]int{}
 	for _, n := range w.noticesOf(w.owner) {
 		kinds[n.Kind]++
@@ -122,7 +123,7 @@ func TestTheBlockingNoticeAndTheMessageOfTheGrandMasterAlsoGoToThePanel(t *testi
 	if _, err := w.bc.Say(w.ctx, "loja", "42-checkout", "A mesa terminou."); err != nil {
 		t.Fatal(err)
 	}
-	if got := w.noticesOf(apr); len(got) != 1 || got[0].Kind != notices.Notify || got[0].LinkKind != notices.LinkTable || !strings.Contains(got[0].Text, "A mesa terminou.") {
+	if got := w.noticesOf(apr); len(got) != 1 || got[0].Kind != notices.Notify || got[0].LinkKind != notices.LinkTable || !strings.Contains(got[0].In(i18n.PtBR), "A mesa terminou.") {
 		t.Fatalf("the bell of the Approver: %+v", got)
 	}
 }

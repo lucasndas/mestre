@@ -13,6 +13,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
@@ -48,9 +49,10 @@ type alerts struct {
 	owner []string
 }
 
-func (a *alerts) Unauthorized(context.Context, int64, string) {}
-func (a *alerts) Tell(context.Context, string, string)        {}
-func (a *alerts) OwnerAlert(_ context.Context, text string) {
+func (a *alerts) Unauthorized(context.Context, int64, i18n.Msg) {}
+func (a *alerts) Tell(context.Context, string, i18n.Msg)        {}
+func (a *alerts) OwnerAlert(_ context.Context, m i18n.Msg) {
+	text := i18n.Render(i18n.PtBR, m)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.owner = append(a.owner, text)

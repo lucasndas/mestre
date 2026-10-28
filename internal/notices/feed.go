@@ -8,12 +8,14 @@ package notices
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/users"
 	"github.com/mestre-ia/mestre/pkg/clock"
@@ -75,7 +77,10 @@ type Notice struct {
 	Mesa     string
 	Audience Audience
 	// UserID is the user of the audience User.
-	UserID   string
+	UserID string
+	// Msg is the notice as a message, said in the language of each reader. Text is
+	// all a notice written before the messages has, shown as it was written.
+	Msg      i18n.Msg
 	Text     string
 	LinkKind string
 	LinkRef  string
@@ -180,6 +185,14 @@ func (f *Feed) Reach(ctx context.Context, n Notice) (int, error) {
 	return len(to), err
 }
 
+// In is the notice in a language: the message translated, or the text of an old row.
+func (n Notice) In(lang string) string {
+	if !n.Msg.IsZero() {
+		return i18n.Render(lang, n.Msg)
+	}
+	return n.Text
+}
+
 // ErrEmpty is a notice with no text.
 var ErrEmpty = errors.New("notices: the notice has no text")
 
@@ -190,19 +203,51 @@ func (f *Feed) clean(text string) string {
 	return strings.TrimSpace(text)
 }
 
+// cleanMsg takes the secrets out of the text parameters of a message (the words of
+// an agent or a person), at any depth. The frame is the engine's and has none.
+func (f *Feed) cleanMsg(m i18n.Msg) i18n.Msg {
+	if f.Mask == nil || len(m.Params) == 0 {
+		return m
+	}
+	out := i18n.Msg{Code: m.Code, Params: make(map[string]any, len(m.Params))}
+	for k, v := range m.Params {
+		switch x := v.(type) {
+		case string:
+			out.Params[k] = f.Mask(x)
+		case i18n.Msg:
+			out.Params[k] = f.cleanMsg(x)
+		default:
+			out.Params[k] = v
+		}
+	}
+	return out
+}
+
+func (f *Feed) empty(n Notice) bool {
+	if n.Msg.IsZero() {
+		return strings.TrimSpace(n.Text) == ""
+	}
+	return false
+}
+
 // Add keeps a notice, masked, and returns its number and how many users see it.
 func (f *Feed) Add(ctx context.Context, n Notice) (id int64, seen int, err error) {
 	n.Text = f.clean(n.Text)
-	if n.Text == "" {
+	n.Msg = f.cleanMsg(n.Msg)
+	if f.empty(n) {
 		return 0, 0, ErrEmpty
+	}
+	msg, err := encode(n.Msg)
+	if err != nil {
+		return 0, 0, err
 	}
 	if n.Audience == "" {
 		n.Audience = Workspace
 	}
 	n.At = f.Clock.Now().UTC()
 	err = f.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `INSERT INTO panel_notices (kind, workspace, mesa, audience, user_id, text, link_kind, link_ref, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			string(n.Kind), n.Workspace, n.Mesa, string(n.Audience), n.UserID, n.Text, n.LinkKind, n.LinkRef, n.At.UnixMilli())
+		res, err := tx.ExecContext(ctx, `INSERT INTO panel_notices (kind, workspace, mesa, audience, user_id, text, msg, link_kind, link_ref, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			string(n.Kind), n.Workspace, n.Mesa, string(n.Audience), n.UserID, n.Text, msg, n.LinkKind, n.LinkRef, n.At.UnixMilli())
 		if err != nil {
 			return err
 		}
@@ -227,15 +272,36 @@ func (f *Feed) Add(ctx context.Context, n Notice) (id int64, seen int, err error
 	return id, len(to), nil
 }
 
-// Update replaces the text of a notice (the alert of a stranger counts the tries)
+// encode is the message as it is kept ("" for none).
+func encode(m i18n.Msg) (string, error) {
+	if m.IsZero() {
+		return "", nil
+	}
+	b, err := json.Marshal(m)
+	return string(b), err
+}
+
+func decode(s string) i18n.Msg {
+	var m i18n.Msg
+	if s != "" && json.Unmarshal([]byte(s), &m) != nil {
+		return i18n.Msg{}
+	}
+	return m
+}
+
+// Update replaces the message of a notice (the alert of a stranger counts the tries)
 // and tells the listeners again.
-func (f *Feed) Update(ctx context.Context, id int64, text string) error {
-	text = f.clean(text)
-	if text == "" {
+func (f *Feed) Update(ctx context.Context, id int64, m i18n.Msg) error {
+	m = f.cleanMsg(m)
+	if m.IsZero() {
 		return ErrEmpty
 	}
-	err := f.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `UPDATE panel_notices SET text = ? WHERE id = ?`, text, id)
+	msg, err := encode(m)
+	if err != nil {
+		return err
+	}
+	err = f.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `UPDATE panel_notices SET text = '', msg = ? WHERE id = ?`, msg, id)
 		return err
 	})
 	if err != nil {
@@ -253,15 +319,16 @@ func (f *Feed) Update(ctx context.Context, id int64, text string) error {
 	return nil
 }
 
-const columns = `id, kind, workspace, mesa, audience, user_id, text, link_kind, link_ref, created_at`
+const columns = `id, kind, workspace, mesa, audience, user_id, text, link_kind, link_ref, created_at, msg`
 
 func scan(sc interface{ Scan(...any) error }) (Notice, error) {
 	var n Notice
-	var kind, aud string
+	var kind, aud, msg string
 	var at int64
-	if err := sc.Scan(&n.ID, &kind, &n.Workspace, &n.Mesa, &aud, &n.UserID, &n.Text, &n.LinkKind, &n.LinkRef, &at); err != nil {
+	if err := sc.Scan(&n.ID, &kind, &n.Workspace, &n.Mesa, &aud, &n.UserID, &n.Text, &n.LinkKind, &n.LinkRef, &at, &msg); err != nil {
 		return Notice{}, err
 	}
+	n.Msg = decode(msg)
 	n.Kind, n.Audience, n.At = Kind(kind), Audience(aud), time.UnixMilli(at).UTC()
 	return n, nil
 }
@@ -286,12 +353,13 @@ func (f *Feed) For(ctx context.Context, u users.User, limit int) ([]Notice, erro
 	out := []Notice{}
 	for rows.Next() {
 		var n Notice
-		var kind, aud string
+		var kind, aud, msg string
 		var at int64
 		var read bool
-		if err := rows.Scan(&n.ID, &kind, &n.Workspace, &n.Mesa, &aud, &n.UserID, &n.Text, &n.LinkKind, &n.LinkRef, &at, &read); err != nil {
+		if err := rows.Scan(&n.ID, &kind, &n.Workspace, &n.Mesa, &aud, &n.UserID, &n.Text, &n.LinkKind, &n.LinkRef, &at, &msg, &read); err != nil {
 			return nil, err
 		}
+		n.Msg = decode(msg)
 		n.Kind, n.Audience, n.At, n.Read = Kind(kind), Audience(aud), time.UnixMilli(at).UTC(), read
 		if !Visible(u, n) {
 			continue

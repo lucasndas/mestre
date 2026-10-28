@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/notices"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/store"
@@ -49,7 +50,8 @@ var ErrNoChannel = errors.New("approvals: the user has no channel")
 type Message struct {
 	UserID  string
 	Request chain.Request
-	Text    string
+	// Msg is the question, to be said in the language of the user.
+	Msg i18n.Msg
 	// Answers are those this user may give.
 	Answers []chain.Answer
 }
@@ -66,9 +68,10 @@ type Messenger interface {
 
 // MessageEdit is the new content of a question already sent.
 type MessageEdit struct {
-	UserID, Ref, Text string
-	Request           int64
-	Answers           []chain.Answer
+	UserID, Ref string
+	Msg         i18n.Msg
+	Request     int64
+	Answers     []chain.Answer
 }
 
 // Targets reads the live target of a request (the head of the PR, the
@@ -133,16 +136,16 @@ func New(o Options) (*Flow, error) {
 
 // Refusals the user reads.
 var (
-	ErrNotYours      = errors.New("você não pode responder a esse pedido")
-	ErrNotOpen       = errors.New("o pedido já foi encerrado")
-	ErrAnswered      = errors.New("você já respondeu a esse pedido")
-	ErrLevel         = errors.New("seu nível não permite essa resposta")
-	ErrLocked        = errors.New("o canal está travado: nenhuma aprovação é aceita até destravar")
-	ErrTargetChanged = errors.New("o alvo do pedido mudou: ele foi invalidado")
-	ErrNoVerify      = errors.New("o alvo do pedido não pôde ser conferido: nada foi aprovado")
-	ErrPIN           = errors.New("o PIN não foi confirmado")
-	ErrExpired       = errors.New("o prazo do pedido acabou")
-	ErrQuorumEffect  = errors.New("com mais de uma aprovação exigida, só \"Aprovar agora\" vale: decreto e delegação são de quem decide sozinho")
+	ErrNotYours      = i18n.Err("approval.err_not_yours")
+	ErrNotOpen       = i18n.Err("approval.err_not_open")
+	ErrAnswered      = i18n.Err("approval.err_answered")
+	ErrLevel         = i18n.Err("approval.err_level")
+	ErrLocked        = i18n.Err("approval.err_locked")
+	ErrTargetChanged = i18n.Err("approval.err_target_changed")
+	ErrNoVerify      = i18n.Err("approval.err_no_verify")
+	ErrPIN           = i18n.Err("approval.err_pin")
+	ErrExpired       = i18n.Err("approval.err_expired")
+	ErrQuorumEffect  = i18n.Err("approval.err_quorum_effect")
 )
 
 // Capability is what the level of a user needs to give an answer.
@@ -202,14 +205,16 @@ type flowRow struct {
 	Require   []string
 	Min       classes.Level
 	PIN       bool
-	Text      string
+	// Msg is the question as a message; for a row written before the messages it is
+	// the text it has, shown as it was written.
+	Msg i18n.Msg
 }
 
 func (f *Flow) row(ctx context.Context, request int64) (flowRow, bool, error) {
 	var r flowRow
-	var req, min string
+	var req, min, text, msg string
 	var pin int
-	err := f.o.DB.Reader().QueryRowContext(ctx, `SELECT approvals, require, min_level, pin, text FROM approval_flow WHERE request = ?`, request).Scan(&r.Approvals, &req, &min, &pin, &r.Text)
+	err := f.o.DB.Reader().QueryRowContext(ctx, `SELECT approvals, require, min_level, pin, text, msg FROM approval_flow WHERE request = ?`, request).Scan(&r.Approvals, &req, &min, &pin, &text, &msg)
 	if errors.Is(err, sql.ErrNoRows) {
 		return flowRow{}, false, nil
 	}
@@ -220,6 +225,14 @@ func (f *Flow) row(ctx context.Context, request int64) (flowRow, bool, error) {
 		return flowRow{}, false, err
 	}
 	r.Min, r.PIN = classes.Level(min), pin == 1
+	switch {
+	case msg != "":
+		if err := json.Unmarshal([]byte(msg), &r.Msg); err != nil {
+			return flowRow{}, false, err
+		}
+	case text != "": // written before the messages: shown as it was written
+		r.Msg = i18n.Text(text)
+	}
 	return r, true, nil
 }
 
@@ -231,7 +244,7 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 	if err != nil {
 		return err
 	}
-	q.Text = withFields(q, all)
+	q.Text, q.Engine, q.Agent = withFields(q, all)
 	_, asked, err := f.row(ctx, q.Request.ID)
 	if err != nil {
 		return err
@@ -240,14 +253,18 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 	if q.Require == nil {
 		req = []byte("[]")
 	}
+	msg, err := json.Marshal(i18n.Concat(q.Engine, q.Agent))
+	if err != nil {
+		return err
+	}
 	pin := 0
 	if q.PIN {
 		pin = 1
 	}
 	err = f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO approval_flow (request, approvals, require, min_level, pin, text, asked_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT (request) DO UPDATE SET approvals = excluded.approvals, require = excluded.require, min_level = excluded.min_level, pin = excluded.pin, text = excluded.text`,
-			q.Request.ID, max(q.Approvals, 1), string(req), string(q.MinLevel), pin, q.Text, f.ms(f.clk.Now()))
+		_, err := tx.ExecContext(ctx, `INSERT INTO approval_flow (request, approvals, require, min_level, pin, text, msg, asked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (request) DO UPDATE SET approvals = excluded.approvals, require = excluded.require, min_level = excluded.min_level, pin = excluded.pin, text = excluded.text, msg = excluded.msg`,
+			q.Request.ID, max(q.Approvals, 1), string(req), string(q.MinLevel), pin, "", string(msg), f.ms(f.clk.Now()))
 		return err
 	})
 	if err != nil {
@@ -269,9 +286,9 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 		}
 		if !asked && f.o.Bell != nil {
 			f.o.Bell(ctx, notices.Notice{Kind: notices.Approval, Workspace: q.Request.Workspace, Mesa: q.Request.Table, Audience: notices.User, UserID: u.ID,
-				Text: "Nova aprovação", LinkKind: notices.LinkRequest, LinkRef: strconv.FormatInt(q.Request.ID, 10)})
+				Msg: i18n.M("approval.new_request"), LinkKind: notices.LinkRequest, LinkRef: strconv.FormatInt(q.Request.ID, 10)})
 		}
-		text, err := f.render(ctx, q.Request.ID, q.Text, max(q.Approvals, 1))
+		text, err := f.render(ctx, q.Request.ID, i18n.Concat(q.Engine, q.Agent), max(q.Approvals, 1))
 		if err != nil {
 			return err
 		}
@@ -281,7 +298,7 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 			if err := f.setRef(ctx, q.Request.ID, u.ID, ref, answers); err != nil {
 				return err
 			}
-			if err := f.edit(ctx, MessageEdit{UserID: u.ID, Ref: ref, Text: text, Request: q.Request.ID, Answers: answers}); err != nil {
+			if err := f.edit(ctx, MessageEdit{UserID: u.ID, Ref: ref, Msg: text, Request: q.Request.ID, Answers: answers}); err != nil {
 				f.log.Warn("approvals: the question was not updated", "request", q.Request.ID, "user", u.ID, "err", err)
 			}
 			sent++
@@ -291,7 +308,7 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 			sent++
 			continue
 		}
-		ref, err := f.o.Messenger.Send(ctx, Message{UserID: u.ID, Request: q.Request, Text: text, Answers: answers})
+		ref, err := f.o.Messenger.Send(ctx, Message{UserID: u.ID, Request: q.Request, Msg: text, Answers: answers})
 		switch {
 		case errors.Is(err, ErrNoChannel):
 			continue
@@ -320,15 +337,15 @@ func (f *Flow) changed(ctx context.Context, request int64) {
 
 // render is the text of the question, with the count of the quorum when it is
 // more than one.
-func (f *Flow) render(ctx context.Context, request int64, text string, quorum int) (string, error) {
+func (f *Flow) render(ctx context.Context, request int64, text i18n.Msg, quorum int) (i18n.Msg, error) {
 	if quorum <= 1 {
 		return text, nil
 	}
 	n, err := f.counted(ctx, request)
 	if err != nil {
-		return "", err
+		return i18n.Msg{}, err
 	}
-	return fmt.Sprintf("%s\n\n%d de %d aprovações", text, n, quorum), nil
+	return i18n.Concat(text, i18n.M("approval.quorum_count", "counted", n, "quorum", quorum)), nil
 }
 
 func (f *Flow) ref(ctx context.Context, request int64, user string) (string, bool, error) {
@@ -417,7 +434,7 @@ func (f *Flow) Withdraw(ctx context.Context, request int64, why string) error {
 			continue // the question is shared with requests that are still open
 		}
 		text := f.endText(why, by, at, m.user == by.id)
-		if err := f.o.Messenger.Edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Text: text, Request: request}); err != nil {
+		if err := f.o.Messenger.Edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Msg: text, Request: request}); err != nil {
 			f.log.Warn("approvals: the message was not edited", "request", request, "user", m.user, "err", err)
 		}
 	}
@@ -439,26 +456,32 @@ func (f *Flow) decider(ctx context.Context, r chain.Request) (who, time.Time) {
 	return who{id: id, name: name}, r.ClosedAt
 }
 
-func (f *Flow) endText(why string, by who, at time.Time, self bool) string {
+func (f *Flow) endText(why string, by who, at time.Time, self bool) i18n.Msg {
 	hour := at.In(f.o.Location).Format("15:04")
-	verb := map[string]string{"approved": "Aprovado", "denied": "Negado"}[why]
-	switch {
-	case verb != "" && by.id != "" && self:
-		return fmt.Sprintf("Você respondeu: %s às %s.", verb, hour)
-	case verb != "" && by.id != "":
-		return fmt.Sprintf("Já respondido por %s: %s às %s.", by.name, verb, hour)
-	case why == "approved":
-		return "Aprovado."
-	case why == "denied":
-		return "Negado."
-	case why == "expired":
-		return "Expirado: ninguém aprovou no prazo e nada foi aprovado."
-	case why == "invalidated":
-		return "Invalidado: o alvo mudou ou quem aprovou perdeu o direito. Nada foi aprovado."
-	case why == "cancelled":
-		return "Cancelado: a ação não é mais necessária."
+	var verb i18n.Msg
+	switch why {
+	case "approved":
+		verb = i18n.M("approval.verb_approved")
+	case "denied":
+		verb = i18n.M("approval.verb_denied")
 	}
-	return "Esse pedido mudou de nível; você receberá a pergunta de novo se for preciso."
+	switch {
+	case !verb.IsZero() && by.id != "" && self:
+		return i18n.M("approval.you_answered", "verb", verb, "hour", hour)
+	case !verb.IsZero() && by.id != "":
+		return i18n.M("approval.answered_by", "name", by.name, "verb", verb, "hour", hour)
+	case why == "approved":
+		return i18n.M("approval.ended_approved")
+	case why == "denied":
+		return i18n.M("approval.ended_denied")
+	case why == "expired":
+		return i18n.M("approval.ended_expired")
+	case why == "invalidated":
+		return i18n.M("approval.ended_invalidated")
+	case why == "cancelled":
+		return i18n.M("approval.ended_cancelled")
+	}
+	return i18n.M("approval.ended_moved")
 }
 
 // Input is an answer of a user.
@@ -475,8 +498,8 @@ type Input struct {
 // Reply is what the user is told. PIN is the request of PIN the channel must
 // ask the PIN for (users.PINRequest.ID); when set, Answer was not applied yet.
 type Reply struct {
-	Text string
-	PIN  string
+	Msg i18n.Msg
+	PIN string
 }
 
 // Answer takes the answer of a user to a request: the user, the level, the
@@ -553,7 +576,7 @@ func (f *Flow) answer(ctx context.Context, userID string, in Input, pinChecked *
 		}); err != nil {
 			return Reply{}, err
 		}
-		return Reply{Text: "Digite o seu PIN para confirmar.", PIN: pr.ID}, nil
+		return Reply{Msg: i18n.M("approval.type_pin"), PIN: pr.ID}, nil
 	}
 	return f.applyAnswer(ctx, u, r, fr, members, userID, in)
 }
@@ -620,20 +643,16 @@ func (f *Flow) ConfirmPIN(ctx context.Context, userID, pinRequest string) (Reply
 // Details is the text behind "Ver detalhes": the whole question as the engine
 // builds it, with the exact target of the request (the files and the PR link). It
 // is for a user who acts in the workspace of the request and may decide approvals.
-func (f *Flow) Details(ctx context.Context, userID string, request int64) (string, error) {
+func (f *Flow) Details(ctx context.Context, userID string, request int64) (i18n.Msg, error) {
 	u, err := f.o.Users.Get(ctx, userID)
 	if err != nil {
-		return "", ErrNotYours
+		return i18n.Msg{}, ErrNotYours
 	}
 	r, err := f.o.Chain.Get(ctx, request)
 	if err != nil || !u.Acts(r.Workspace) || !users.Can(u.Level, users.DecideApprovals) {
-		return "", ErrNotYours
+		return i18n.Msg{}, ErrNotYours
 	}
-	text := chain.Text(r, r.Level, nil)
-	if len(r.Target) > 0 {
-		text += "\nAlvo exato: " + string(r.Target) + "\n"
-	}
-	return text, nil
+	return detailMsg(r), nil
 }
 
 // check is everything that must hold for the answer of a user to count.
@@ -758,7 +777,7 @@ func (f *Flow) apply(ctx context.Context, u users.User, r chain.Request, fr flow
 		}
 		if n < fr.Approvals || missing > 0 {
 			f.refresh(ctx, r.ID, fr)
-			return Reply{Text: fmt.Sprintf("Sua aprovação foi contada: %d de %d.", n, fr.Approvals)}, nil
+			return Reply{Msg: i18n.M("approval.counted", "counted", n, "quorum", fr.Approvals)}, nil
 		}
 	}
 	out, err := f.o.Chain.DecideByPerson(ctx, d)
@@ -803,11 +822,11 @@ func (f *Flow) reply(out chain.Outcome, err error) (Reply, error) {
 	}
 	switch out.State {
 	case chain.Approved:
-		return Reply{Text: "Aprovado."}, nil
+		return Reply{Msg: i18n.M("approval.ended_approved")}, nil
 	case chain.Denied:
-		return Reply{Text: "Negado."}, nil
+		return Reply{Msg: i18n.M("approval.ended_denied")}, nil
 	}
-	return Reply{Text: "Resposta registrada."}, nil
+	return Reply{Msg: i18n.M("approval.answer_recorded")}, nil
 }
 
 // vote records the first answer of a user; a second one is refused.
@@ -844,7 +863,7 @@ func (f *Flow) unvote(ctx context.Context, request int64, user string) error {
 // refresh edits the question of every recipient with the count of the quorum.
 func (f *Flow) refresh(ctx context.Context, request int64, fr flowRow) {
 	defer f.changed(ctx, request)
-	text, err := f.render(ctx, request, fr.Text, fr.Approvals)
+	text, err := f.render(ctx, request, fr.Msg, fr.Approvals)
 	if err != nil {
 		return
 	}
@@ -853,7 +872,7 @@ func (f *Flow) refresh(ctx context.Context, request int64, fr flowRow) {
 		return
 	}
 	for _, m := range rs {
-		if err := f.edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Text: text, Request: request, Answers: m.answers}); err != nil {
+		if err := f.edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Msg: text, Request: request, Answers: m.answers}); err != nil {
 			f.log.Warn("approvals: the question was not updated", "request", request, "user", m.user, "err", err)
 		}
 	}
@@ -944,7 +963,7 @@ func (f *Flow) Resend(ctx context.Context, request int64, userID string) {
 	if err != nil || !ok {
 		return
 	}
-	text, err := f.render(ctx, request, fr.Text, fr.Approvals)
+	text, err := f.render(ctx, request, fr.Msg, fr.Approvals)
 	if err != nil {
 		return
 	}
@@ -956,7 +975,7 @@ func (f *Flow) Resend(ctx context.Context, request int64, userID string) {
 		if m.user != userID {
 			continue
 		}
-		if err := f.edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Text: text, Request: request, Answers: m.answers}); err != nil {
+		if err := f.edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Msg: text, Request: request, Answers: m.answers}); err != nil {
 			f.log.Warn("approvals: the buttons were not given back", "request", request, "user", userID, "err", err)
 		}
 	}

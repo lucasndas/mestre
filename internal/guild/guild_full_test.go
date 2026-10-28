@@ -22,6 +22,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/discovery"
 	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/privdir"
 	"github.com/mestre-ia/mestre/internal/protocol"
@@ -388,9 +389,9 @@ const ownerPIN = "123456"
 
 type noAlerts struct{}
 
-func (noAlerts) Unauthorized(context.Context, int64, string) {}
-func (noAlerts) OwnerAlert(context.Context, string)          {}
-func (noAlerts) Tell(context.Context, string, string)        {}
+func (noAlerts) Unauthorized(context.Context, int64, i18n.Msg) {}
+func (noAlerts) OwnerAlert(context.Context, i18n.Msg)          {}
+func (noAlerts) Tell(context.Context, string, i18n.Msg)        {}
 
 type noRouter struct{}
 
@@ -438,7 +439,7 @@ func newTelegramOwner(t *testing.T, ctx context.Context, db *store.DB, clk clock
 	ac.Bind(bot, flow)
 	entry := app.EntryApprover{Chain: func() *chain.Service { return svcChain },
 		Decide: func(ctx context.Context, id string, d guild.Decision) error { return citadel().Decide(ctx, id, d) },
-		Tell:   func(context.Context, string) {}}
+		Tell:   func(context.Context, i18n.Msg) {}}
 	if svcChain, err = chain.NewService(chain.Options{Store: &chain.Store{DB: db}, Clock: clk, Characters: noCharacters{}, Inbox: noInbox{}, Classes: noClasses{},
 		Policy: chain.StaticPolicy{}, Users: flow, Sinks: map[classes.RequestType]chain.Sink{classes.RequestGuildEntry: entry}}); err != nil {
 		t.Fatal(err)

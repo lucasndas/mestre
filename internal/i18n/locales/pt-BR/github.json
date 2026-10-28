@@ -1,4 +1,10 @@
 {
+  "github.app_creation_failed": "A criação do App \"{{app}}\" falhou ({{why}}). Se ele chegou a ser criado no GitHub, exclua-o em https://github.com/settings/apps; o próximo pedido usa outro nome.",
+  "github.app_device_flow": "Falta um passo no App \"{{app}}\": abra https://github.com/settings/apps/{{slug}}, marque \"Enable Device Flow\" e salve. O Mestre confere sozinho em seguida.",
+  "github.app_install_unseen": "Não vi a instalação do App \"{{app}}\" em 1 hora. Instale-o em https://github.com/apps/{{slug}}/installations/new e abra o link de volta que o GitHub mostrar, ou peça o status ao Grão-Mestre.",
+  "github.app_link_expired": "O link para criar o App \"{{app}}\" venceu. Peça outro no painel (Apps do GitHub) ou ao Grão-Mestre; enquanto isso a classe segue com o App \"Mestre\".",
+  "github.app_not_used": "O App \"{{app}}\" não será usado: {{why}}. Se ele existe no GitHub, exclua-o em https://github.com/settings/apps.",
+  "github.app_ready": "O App \"{{app}}\" está pronto.",
   "github.belongs_to_other_table": "#{{number}} pertence a outra mesa; peça ao Grão-Mestre.",
   "github.block_unknown": "O bloco \"{{block}}\" não existe; os blocos são {{blocks}}.",
   "github.force_master_only": "O push forçado é só do Mestre da mesa.",

@@ -11,6 +11,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/testkit/fakelock"
 )
@@ -24,7 +25,7 @@ func newEntryApprover(decide func(context.Context, string, guild.Decision) error
 	return EntryApprover{
 		Chain:  func() *chain.Service { return nil },
 		Decide: decide,
-		Tell:   func(_ context.Context, text string) { *told = append(*told, text) },
+		Tell:   func(_ context.Context, m i18n.Msg) { *told = append(*told, i18n.Render(i18n.PtBR, m)) },
 		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 }

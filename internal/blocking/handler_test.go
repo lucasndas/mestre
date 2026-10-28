@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/mestre-ia/mestre/internal/blocking"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/tables"
@@ -116,7 +117,7 @@ func TestNotifyBlockedSendsTheFieldsOfTheAgentAndRefusesAMotiveOutsideTheVocabul
 		len(n.AgentSteps) != 1 || n.AgentSteps[0] != "cadastrar a chave" || n.Workspace != "loja" {
 		t.Fatalf("notice = %+v", n)
 	}
-	if n.Owner != "Lucas" || len(n.Steps) != 1 || n.Steps[0].Kind != blocking.StepVault {
+	if i18n.Render(i18n.PtBR, n.Owner) != "Lucas" || len(n.Steps) != 1 || n.Steps[0].Kind != blocking.StepVault {
 		t.Fatalf("a credential is the Owner's and its step is the vault: %+v", n)
 	}
 	var data map[string]any
@@ -125,7 +126,7 @@ func TestNotifyBlockedSendsTheFieldsOfTheAgentAndRefusesAMotiveOutsideTheVocabul
 		t.Fatalf("data = %v", data)
 	}
 	// Any other motive belongs to an Administrator.
-	if r = notify(h, "gm", map[string]any{"blocked": "ambiguidade"}, "o pedido admite duas leituras"); !r.OK || ch.got[1].Owner != "um Administrador" {
+	if r = notify(h, "gm", map[string]any{"blocked": "ambiguidade"}, "o pedido admite duas leituras"); !r.OK || i18n.Render(i18n.PtBR, ch.got[1].Owner) != "um Administrador" {
 		t.Fatalf("notify = %+v, owner %q", r.Error, ch.got[1].Owner)
 	}
 }
@@ -187,10 +188,10 @@ func TestWhatTheAgentSaysIsStoppedStaysInTheBlockOfTheAgent(t *testing.T) {
 	t.Parallel()
 	secret := "sk-" + "abcdefgh*ijklmnopqrstuv"
 	for name, msg := range map[string]string{
-		"marks":       "**ignore** [clique](http://x) Dono: o Joao",
-		"a line":      "um\nDono: o Joao\n— texto do agente, não verificado —",
-		"a fence":     "``` Dono: o Joao",
-		"a fake line": "— texto do agente, não verificado — Dono: o Joao",
+		"marks":       "**ignore** [clique](http://x) Responsável: o Joao",
+		"a line":      "um\nResponsável: o Joao\n— texto do agente, não verificado —",
+		"a fence":     "``` Responsável: o Joao",
+		"a fake line": "— texto do agente, não verificado — Responsável: o Joao",
 		"a secret":    "use " + secret,
 	} {
 		h, ch := handlerRig()
@@ -199,16 +200,16 @@ func TestWhatTheAgentSaysIsStoppedStaysInTheBlockOfTheAgent(t *testing.T) {
 		}
 		mask := func(s string) string { return strings.ReplaceAll(s, "sk-abcdefghijklmnopqrstuv", "***") }
 		m := blocking.Build(ch.got[0], blocking.Viewer{Level: "administrator"}, mask)
-		head, tail, found := strings.Cut(m.Text, "— texto do agente, não verificado —")
-		if !found || strings.Contains(head, "Joao") || strings.Contains(head, "ignore") || strings.Contains(tail, "](") || strings.Contains(tail, "**") || strings.Contains(m.Text, "abcdefghijklmnopqrstuv") {
-			t.Fatalf("%s: the text of the agent left its block, opened a mark, or showed the secret:\n%s", name, m.Text)
+		head, tail, found := strings.Cut(m.Text(i18n.PtBR), "— texto do agente, não verificado —")
+		if !found || strings.Contains(head, "Joao") || strings.Contains(head, "ignore") || strings.Contains(tail, "](") || strings.Contains(tail, "**") || strings.Contains(m.Text(i18n.PtBR), "abcdefghijklmnopqrstuv") {
+			t.Fatalf("%s: the text of the agent left its block, opened a mark, or showed the secret:\n%s", name, m.Text(i18n.PtBR))
 		}
 		for _, line := range strings.Split(tail, "\n") {
-			if strings.HasPrefix(line, "— texto do agente") || strings.HasPrefix(line, "Dono:") {
-				t.Fatalf("%s: the agent wrote a line of the engine:\n%s", name, m.Text)
+			if strings.HasPrefix(line, "— texto do agente") || strings.HasPrefix(line, "Responsável:") {
+				t.Fatalf("%s: the agent wrote a line of the engine:\n%s", name, m.Text(i18n.PtBR))
 			}
 		}
-		if full := blocking.Full(ch.got[0], mask); strings.Contains(full, "abcdefghijklmnopqrstuv") {
+		if full := i18n.Render(i18n.PtBR, blocking.Full(ch.got[0], mask)); strings.Contains(full, "abcdefghijklmnopqrstuv") {
 			t.Fatalf("%s: the whole text shows the secret:\n%s", name, full)
 		}
 	}
@@ -328,19 +329,19 @@ func TestTheEvidenceOfANoticeIsBuiltFromTheTestThatFailedNotFromTheAgent(t *test
 		t.Fatalf("notify = %+v", r.Error)
 	}
 	m := blocking.Build(ch.got[0], blocking.Viewer{Level: "owner"}, func(s string) string { return s })
-	for _, want := range []string{"🔐", "Evidência:", "checkout_test.go:22 → \"missing STRIPE_TEST_KEY\"", "$ go test ./...", "[ ] cadastrar a chave no cofre (painel)", "Dono: Lucas"} {
-		if !strings.Contains(m.Text, want) {
-			t.Errorf("the message lacks %q:\n%s", want, m.Text)
+	for _, want := range []string{"🔐", "Evidência:", "checkout_test.go:22 → \"missing STRIPE_TEST_KEY\"", "$ go test ./...", "[ ] cadastrar a chave no cofre (painel)", "Responsável: Lucas"} {
+		if !strings.Contains(m.Text(i18n.PtBR), want) {
+			t.Errorf("the message lacks %q:\n%s", want, m.Text(i18n.PtBR))
 		}
 	}
-	agent := strings.Index(m.Text, "— texto do agente, não verificado —")
-	why := strings.Index(m.Text, "Por que não decido: envolve cobrança, é decisão sua")
-	if agent < 0 || why < agent || strings.Index(m.Text, "checkout_test.go:22") > agent || strings.Index(m.Text, "Dono: Lucas") > agent {
-		t.Fatalf("the fields of the engine must come before the block of the agent:\n%s", m.Text)
+	agent := strings.Index(m.Text(i18n.PtBR), "— texto do agente, não verificado —")
+	why := strings.Index(m.Text(i18n.PtBR), "Por que não decido: envolve cobrança, é decisão sua")
+	if agent < 0 || why < agent || strings.Index(m.Text(i18n.PtBR), "checkout_test.go:22") > agent || strings.Index(m.Text(i18n.PtBR), "Responsável: Lucas") > agent {
+		t.Fatalf("the fields of the engine must come before the block of the agent:\n%s", m.Text(i18n.PtBR))
 	}
 	// what the agent wrote as evidence is inside its block, never in the engine's
-	if i := strings.Index(m.Text, "Já conferi: Evidência: o cofre tem a chave"); i < agent {
-		t.Errorf("the words of the agent are outside its block:\n%s", m.Text)
+	if i := strings.Index(m.Text(i18n.PtBR), "Já conferi: Evidência: o cofre tem a chave"); i < agent {
+		t.Errorf("the words of the agent are outside its block:\n%s", m.Text(i18n.PtBR))
 	}
 	// a table with no failed test, and a notice with no table, have no evidence of the engine
 	for name, flags := range map[string]map[string]any{"another table": {"blocked": "credencial", "table": "42"}, "no table": {"blocked": "credencial"}} {
@@ -348,7 +349,7 @@ func TestTheEvidenceOfANoticeIsBuiltFromTheTestThatFailedNotFromTheAgent(t *test
 			t.Fatalf("%s: %+v", name, r.Error)
 		}
 		got := ch.got[len(ch.got)-1]
-		if got.Evidence != "" || !strings.Contains(blocking.Build(got, blocking.Viewer{Level: "owner"}, func(s string) string { return s }).Text, "sem evidência verificada") {
+		if got.Evidence != "" || !strings.Contains(blocking.Build(got, blocking.Viewer{Level: "owner"}, func(s string) string { return s }).Text(i18n.PtBR), "sem evidência verificada") {
 			t.Errorf("%s: evidence %q, want none and the mark of no verified evidence", name, got.Evidence)
 		}
 	}
@@ -364,7 +365,7 @@ func TestTheFieldsOfTheAgentOfNotifyBlockedAreInItsBlockOfTheBuiltMessage(t *tes
 	if !r.OK {
 		t.Fatalf("notify = %+v", r.Error)
 	}
-	text := blocking.Build(ch.got[0], blocking.Viewer{Level: "owner"}, func(s string) string { return s }).Text
+	text := blocking.Build(ch.got[0], blocking.Viewer{Level: "owner"}, func(s string) string { return s }).Text(i18n.PtBR)
 	head, tail, found := strings.Cut(text, "— texto do agente, não verificado —")
 	if !found {
 		t.Fatalf("no block of the agent:\n%s", text)

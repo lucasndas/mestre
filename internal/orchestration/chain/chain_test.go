@@ -99,7 +99,7 @@ func TestABaixoRequestReachesTheTableMasterAsAnApprovalItemAndApprovingNowIsAOne
 		t.Fatalf("the table master has %d approval items, want 1", len(items))
 	}
 	text := items[0].Text
-	for _, part := range []string{"Ferramenta: Bash", "Comando exato: " + cmd, "classe", "risco baixo", "Dev", task, "#" + "1"} {
+	for _, part := range []string{"Tool: Bash", "Exact command: " + cmd, "class", "risk baixo", "Dev", task, "#" + "1"} {
 		if !strings.Contains(text, part) {
 			t.Errorf("the item lacks %q:\n%s", part, text)
 		}
@@ -272,14 +272,14 @@ func TestTheJustificationOfTheAgentOnlyAppearsInsideTheUnverifiedBlockAfterTheFi
 	}
 	it := items[0]
 	text := it.Text
-	i, block, end := strings.Index(text, forged), strings.Index(text, chain.UnverifiedOpen), strings.Index(text, chain.UnverifiedClose)
+	i, block, end := strings.Index(text, forged), strings.Index(text, chain.UnverifiedOpenEn), strings.Index(text, chain.UnverifiedCloseEn)
 	if i < 0 || block < 0 || block >= i || i >= end {
 		t.Fatalf("the text of the agent is not inside the unverified block:\n%s", text)
 	}
 	if strings.Count(text, "[Mestre ·") != 1 || strings.Contains(text[:block], "[Mestre ·") {
 		t.Errorf("a header outside the block:\n%s", text)
 	}
-	for _, field := range []string{"Comando exato", "Risco:", "Quem pediu"} {
+	for _, field := range []string{"Exact command", "Risk:", "Who asked"} {
 		if at := strings.Index(text, field); at < 0 || at > block {
 			t.Errorf("%q is not before the block", field)
 		}

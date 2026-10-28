@@ -85,7 +85,7 @@ type Opener interface {
 
 // Tell says something to a user by the channel (the Telegram bot).
 type Tell interface {
-	Tell(ctx context.Context, userID, text string) error
+	Tell(ctx context.Context, userID string, m i18n.Msg) error
 }
 
 // Approver applies on GitHub the approvals decided in the Mestre, under the
@@ -417,7 +417,7 @@ func (a *Approver) sendLink(ctx context.Context, o ApproveOrder, p users.User) (
 	if a.Tell == nil {
 		return Approval{}, human("approval.gh_cannot_notify", "person", plain(p.Name), "number", o.Number)
 	}
-	text := fmt.Sprintf("O PR #%d precisa do seu review no GitHub: https://github.com/%s/pull/%d\nO Mestre percebe o seu review e conclui sozinho.", o.Number, strings.ToLower(o.Repo), o.Number)
+	text := i18n.M("approval.gh_review_link", "number", o.Number, "repo", strings.ToLower(o.Repo))
 	if err := a.Tell.Tell(ctx, p.ID, text); err != nil {
 		return Approval{}, human("approval.gh_link_not_delivered", "number", o.Number, "person", plain(p.Name), "reason", err.Error())
 	}

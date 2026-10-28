@@ -13,6 +13,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/github"
 	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/telegram"
 	"github.com/mestre-ia/mestre/internal/testkit/fakegithub"
 	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
@@ -264,7 +265,11 @@ func TestWithGitHubOutTheCitadelKeepsTheTelegramQueuesTheGitHubAndTellsTheOwnerO
 		var mu sync.Mutex
 		var f *guild.Fence
 		notice := &guild.DownNotice{Clock: clk, Queued: func() int { return f.Queued() }, LastError: func() error { return f.LastError() },
-			Tell: func(_ context.Context, text string) { mu.Lock(); told = append(told, text); mu.Unlock() }}
+			Tell: func(_ context.Context, m i18n.Msg) {
+				mu.Lock()
+				told = append(told, i18n.Render(i18n.PtBR, m))
+				mu.Unlock()
+			}}
 		f = guild.NewFence(guild.FenceConfig{Lock: rig.lock(clk, nil), Clock: clk, Epoch: func() uint64 { return 3 }, OnChange: notice.Changed})
 		go func() { _ = f.Run(ctx) }()
 		synctest.Wait()

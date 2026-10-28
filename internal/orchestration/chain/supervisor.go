@@ -442,7 +442,7 @@ func (s *Supervisor) Decided(ctx context.Context, d AuditEntry) error {
 	if d.Level != LevelMesa {
 		delivered = 1 // the summary is about the Mestres de mesa
 	}
-	about := strings.Join(strings.Fields(strings.ReplaceAll(describe(r), "\n", " · ")), " ")
+	about := strings.Join(strings.Fields(strings.ReplaceAll(describeText(r), "\n", " · ")), " ")
 	return s.st.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `INSERT INTO supervision_decisions (workspace, table_id, request, at, approver, level, answer, risk, reason, about, delivered)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, r.Workspace, r.Table, d.Request, ms(d.At), d.Approver, string(d.Level), string(d.Answer), d.Risk, d.Reason, about, delivered)

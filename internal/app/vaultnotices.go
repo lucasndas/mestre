@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/telegram"
 	"github.com/mestre-ia/mestre/internal/users"
 	"github.com/mestre-ia/mestre/internal/vault"
@@ -45,7 +46,7 @@ func (v vaultNotices) Notify(ctx context.Context, n vault.Notice, person string)
 	if err != nil {
 		return err
 	}
-	if _, err := bot.Send(ctx, telegram.Out{ChatID: u.TelegramID, UserID: u.ID, Text: noticeText(n), Origin: "motor"}); err != nil {
+	if _, err := bot.Send(ctx, telegram.Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.Text(noticeText(n)), Origin: "motor"}); err != nil {
 		return fmt.Errorf("app: a notice about a credential was not queued for %s: %w", u.ID, err)
 	}
 	return nil

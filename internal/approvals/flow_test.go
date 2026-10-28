@@ -8,6 +8,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/notices"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -56,7 +57,7 @@ func TestAQuorumNeedsTheRequiredUsersAndEachUserCountsOnce(t *testing.T) {
 	bia := w.add("Bia", users.Approver, "loja")
 	r := w.open(openOpts{quorum: 2, require: []string{lucas.ID}})
 	rep, err := w.answer(ana, r.ID, chain.AnswerApprove)
-	if err != nil || rep.Text != "Sua aprovação foi contada: 1 de 2." {
+	if err != nil || i18n.Render(i18n.PtBR, rep.Msg) != "Sua aprovação foi contada: 1 de 2." {
 		t.Fatalf("Ana: %+v, %v", rep, err)
 	}
 	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); !errors.Is(err, approvals.ErrAnswered) {
@@ -344,8 +345,8 @@ func TestAVoteOfWhoWasSuspendedMeanwhileDoesNotMakeTheQuorum(t *testing.T) {
 	if err != nil || w.state(r.ID) != chain.Open || len(w.ch.Decisions()) != 0 {
 		t.Fatalf("Bia: %+v, %v, %s: the vote of a suspended user made the quorum", rep, err, w.state(r.ID))
 	}
-	if rep.Text != "Sua aprovação foi contada: 1 de 2." {
-		t.Errorf("the count = %q", rep.Text)
+	if i18n.Render(i18n.PtBR, rep.Msg) != "Sua aprovação foi contada: 1 de 2." {
+		t.Errorf("the count = %q", i18n.Render(i18n.PtBR, rep.Msg))
 	}
 	// the vote stays in the record, revoked
 	var counts, revoked int64
@@ -427,11 +428,11 @@ func TestARequestPutToThePeopleRingsTheBellOfWhoDecidesIt(t *testing.T) {
 	for _, n := range w.bell {
 		got[n.UserID] = n
 	}
-	if len(w.bell) != 2 || got[w.owner.ID].Text == "" || got[ana.ID].Text == "" {
+	if len(w.bell) != 2 || got[w.owner.ID].Msg.IsZero() || got[ana.ID].Msg.IsZero() {
 		t.Fatalf("the bell rang for %+v; want the Owner and Ana", w.bell)
 	}
 	n := got[ana.ID]
-	if n.Text != "Nova aprovação" || n.Workspace != "loja" || n.Mesa != "42-login" || n.Audience != notices.User ||
+	if i18n.Render(i18n.PtBR, n.Msg) != "Nova aprovação" || n.Workspace != "loja" || n.Mesa != "42-login" || n.Audience != notices.User ||
 		n.LinkKind != notices.LinkRequest || n.LinkRef != strconv.FormatInt(r.ID, 10) {
 		t.Errorf("the notice is %+v", n)
 	}

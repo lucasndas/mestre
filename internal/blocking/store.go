@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/users"
 	"github.com/mestre-ia/mestre/pkg/clock"
@@ -28,7 +29,23 @@ type Parts struct {
 	// Agent is the text of the agent, one safe line per field, for the block
 	// "texto do agente, não verificado".
 	Agent string `json:"agent"`
+	// Msg is the same parts as messages, for whoever reads them in his language;
+	// the text fields above are their pt-BR form, and all that an old row has.
+	Msg Frame `json:"-"`
 }
+
+// Frame is what a notice keeps as messages (blocking_notices.msg): the frame of the
+// engine around the words of the agent, which are parameters, masked and never translated.
+type Frame struct {
+	Summary i18n.Msg   `json:"summary"`
+	Full    i18n.Msg   `json:"full"`
+	Owner   i18n.Msg   `json:"owner"`
+	Steps   []i18n.Msg `json:"steps,omitempty"`
+	Agent   i18n.Msg   `json:"agent"`
+}
+
+// IsZero says the notice has no messages: a row written before them.
+func (f Frame) IsZero() bool { return f.Full.IsZero() && f.Summary.IsZero() }
 
 // StepPart is a step of "para destravar".
 type StepPart struct {
@@ -36,9 +53,17 @@ type StepPart struct {
 	Kind StepKind `json:"kind"`
 }
 
+// plainPt is a message in pt-BR, the form of the old columns.
+func plainPt(m i18n.Msg) string { return strings.TrimLeft(i18n.RenderOrEmpty(i18n.PtBR, m), "\n") }
+
 // PartsOf makes the parts of a notice, masked.
 func PartsOf(n Notice, mask func(string) string) Parts {
-	p := Parts{Owner: engineLine(n.Owner), Agent: strings.TrimRight(agentBlock(n, mask), "\n")}
+	agent := AgentLines(n, mask)
+	p := Parts{Owner: engineLine(plainPt(n.Owner)), Agent: plainPt(agent)}
+	p.Msg = Frame{Owner: n.Owner, Agent: agent}
+	if agent.Code == "msg.text" { // nothing was written
+		p.Msg.Agent, p.Agent = i18n.Msg{}, ""
+	}
 	if n.Stopped != "" {
 		p.Stopped = maskedLine(n.Stopped, mask)
 	}
@@ -46,7 +71,8 @@ func PartsOf(n Notice, mask func(string) string) Parts {
 		p.Evidence = safeBlock(strings.Join(ls, "\n"))
 	}
 	for _, s := range n.Steps {
-		p.Steps = append(p.Steps, StepPart{Text: maskedLine(s.Text, mask), Kind: s.Kind})
+		p.Steps = append(p.Steps, StepPart{Text: maskedLine(plainPt(s.Text), mask), Kind: s.Kind})
+		p.Msg.Steps = append(p.Msg.Steps, s.Text)
 	}
 	return p
 }
@@ -86,16 +112,22 @@ func (s *Store) Save(ctx context.Context, n Notice, mask func(string) string) (i
 		summary = string(n.Motive)
 	}
 	p := PartsOf(n, mask)
+	p.Msg.Summary = i18n.Text(Line(summary, mask))
+	p.Msg.Full = Full(n, mask)
+	frame, err := json.Marshal(p.Msg)
+	if err != nil {
+		return 0, err
+	}
 	steps, err := json.Marshal(append([]StepPart{}, p.Steps...))
 	if err != nil {
 		return 0, err
 	}
 	var id int64
 	err = s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `INSERT INTO blocking_notices (workspace, mesa, motive, summary, full, machine, created_at, stopped, evidence, steps, owner, agent)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			n.Workspace, n.Mesa, string(n.Motive), Line(summary, mask), Full(n, mask), n.MachineLine(), s.Clock.Now().UnixMilli(),
-			p.Stopped, p.Evidence, string(steps), p.Owner, p.Agent)
+		res, err := tx.ExecContext(ctx, `INSERT INTO blocking_notices (workspace, mesa, motive, summary, full, machine, created_at, stopped, evidence, steps, owner, agent, msg)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			n.Workspace, n.Mesa, string(n.Motive), Line(summary, mask), plainPt(Full(n, mask)), n.MachineLine(), s.Clock.Now().UnixMilli(),
+			p.Stopped, p.Evidence, string(steps), p.Owner, p.Agent, string(frame))
 		if err != nil {
 			return err
 		}
@@ -105,14 +137,19 @@ func (s *Store) Save(ctx context.Context, n Notice, mask func(string) string) (i
 	return id, err
 }
 
-const savedColumns = `id, workspace, mesa, motive, summary, full, created_at, stopped, evidence, steps, owner, agent`
+const savedColumns = `id, workspace, mesa, motive, summary, full, created_at, stopped, evidence, steps, owner, agent, msg`
 
 func scanSaved(sc interface{ Scan(...any) error }) (Saved, error) {
 	var v Saved
-	var motive, steps string
+	var motive, steps, frame string
 	var at int64
-	if err := sc.Scan(&v.ID, &v.Workspace, &v.Mesa, &motive, &v.Summary, &v.Full, &at, &v.Stopped, &v.Evidence, &steps, &v.Owner, &v.Agent); err != nil {
+	if err := sc.Scan(&v.ID, &v.Workspace, &v.Mesa, &motive, &v.Summary, &v.Full, &at, &v.Stopped, &v.Evidence, &steps, &v.Owner, &v.Agent, &frame); err != nil {
 		return Saved{}, err
+	}
+	if frame != "" {
+		if err := json.Unmarshal([]byte(frame), &v.Msg); err != nil {
+			return Saved{}, err
+		}
 	}
 	v.Motive, v.At = Motive(motive), time.UnixMilli(at).UTC()
 	if err := json.Unmarshal([]byte(steps), &v.Steps); err != nil {

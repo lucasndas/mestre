@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/mestre-ia/mestre/internal/approvals"
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // Channel records the questions and the edits.
@@ -45,7 +46,7 @@ func (c *Channel) Send(_ context.Context, m approvals.Message) (string, error) {
 	}
 	c.n++
 	ref := fmt.Sprintf("m%d", c.n)
-	c.sent[ref], c.text[ref], c.keep[ref] = m, m.Text, true
+	c.sent[ref], c.text[ref], c.keep[ref] = m, i18n.Render(i18n.PtBR, m.Msg), true
 	c.order = append(c.order, ref)
 	return ref, nil
 }
@@ -54,7 +55,7 @@ func (c *Channel) Send(_ context.Context, m approvals.Message) (string, error) {
 func (c *Channel) Edit(_ context.Context, e approvals.MessageEdit) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.text[e.Ref], c.keep[e.Ref] = e.Text, len(e.Answers) > 0
+	c.text[e.Ref], c.keep[e.Ref] = i18n.Render(i18n.PtBR, e.Msg), len(e.Answers) > 0
 	return nil
 }
 

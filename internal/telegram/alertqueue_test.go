@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/telegram"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -22,7 +23,7 @@ func TestTheOperationalAlertsThatWaitForTheBotGoOutOnceWhenItIsBound(t *testing.
 	_, cris := w.user("Cris", users.Administrator, "blog")
 	al := &telegram.OwnerAlerts{Users: w.users, Clock: w.clk}
 	for i := range 25 {
-		if _, err := al.AdminAlert(w.ctx, "loja", "alerta "+strings.Repeat("x", i)); !errors.Is(err, telegram.ErrQueued) {
+		if _, err := al.AdminAlert(w.ctx, "loja", i18n.Text("alerta "+strings.Repeat("x", i))); !errors.Is(err, telegram.ErrQueued) {
 			t.Fatalf("alert %d with the bot down: %v; want it queued", i, err)
 		}
 	}
@@ -40,7 +41,7 @@ func TestTheOperationalAlertsThatWaitForTheBotGoOutOnceWhenItIsBound(t *testing.
 		t.Errorf("messages by chat after the bind = %v; want 20 each to the Owner and Ana (the queue keeps 20) and none to the others", count)
 	}
 	// bound: straight out, and nothing waits any more
-	if told, err := al.AdminAlert(w.ctx, "loja", "alerta depois"); err != nil || told != 2 {
+	if told, err := al.AdminAlert(w.ctx, "loja", i18n.Text("alerta depois")); err != nil || told != 2 {
 		t.Fatalf("alert after the bind: told %d, %v; want 2", told, err)
 	}
 	al.Bind(w.bot) // a second bind sends nothing again

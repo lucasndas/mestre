@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/mestre-ia/mestre/internal/blocking"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/users"
 )
 
@@ -16,8 +17,8 @@ func stripeNotice(workspace string) blocking.Notice {
 		Workspace: workspace, Mesa: "42-checkout", Motive: blocking.Credential,
 		Stopped:  "falta a chave STRIPE_TEST_KEY",
 		Evidence: "checkout_test.go:22 → \"missing STRIPE_TEST_KEY\"\nlinha 2 com ghp_abcdefgh12345678\nlinha 3\nlinha 4\nlinha 5",
-		Steps:    []blocking.Step{{Text: "cadastrar a chave no cofre", Kind: blocking.StepVault}},
-		Owner:    "Lucas", WhyNot: "envolve cobrança, é decisão sua",
+		Steps:    []blocking.Step{{Text: i18n.M("block.step_vault"), Kind: blocking.StepVault}},
+		Owner:    i18n.Text("Lucas"), WhyNot: "envolve cobrança, é decisão sua",
 	}
 }
 
@@ -33,7 +34,7 @@ func TestTheOwnerSeesOpenInThePanelAndAnAdministratorSeesNoButtonToRegisterTheSe
 	// Owner of the workspace, never an Administrator
 	notice := stripeNotice("loja")
 	notice.Owner = blocking.NoticeOwner(blocking.Credential, w.owner.Name)
-	if notice.Owner != w.owner.Name || blocking.NoticeOwner(blocking.Quota, w.owner.Name) != "um Administrador" {
+	if i18n.Render(i18n.PtBR, notice.Owner) != w.owner.Name || i18n.Render(i18n.PtBR, blocking.NoticeOwner(blocking.Quota, w.owner.Name)) != "um Administrador" {
 		t.Fatalf("owner of the notice = %q", notice.Owner)
 	}
 	id, sent, err := w.bc.Notify(w.ctx, notice)
@@ -70,12 +71,12 @@ func TestTheOwnerSeesOpenInThePanelAndAnAdministratorSeesNoButtonToRegisterTheSe
 		}
 	}
 	for name, text := range map[string]string{"Owner": ownerMsg, "Administrator": admMsg} {
-		for _, want := range []string{"<b>loja · Mesa #42 checkout</b>", "🔐 falta a chave STRIPE_TEST_KEY", "Dono: " + w.owner.Name, "<pre>"} {
+		for _, want := range []string{"<b>loja · Mesa #42 checkout</b>", "🔐 falta a chave STRIPE_TEST_KEY", "Responsável: " + w.owner.Name, "<pre>"} {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s: the message lacks %q:\n%s", name, want, text)
 			}
 		}
-		if strings.Contains(text, "Dono: Ana") {
+		if strings.Contains(text, "Responsável: Ana") {
 			t.Errorf("%s: an Administrator is named as the owner of the field:\n%s", name, text)
 		}
 		if strings.Contains(text, "ghp_") || strings.Contains(text, "linha 4") {
@@ -137,7 +138,7 @@ func TestSayTellsTheUsersOfTheWorkspaceTheTextOfTheGrandMasterAsTheTextOfAnAgent
 	_, adm := w.user("Ana", users.Administrator, "loja")
 	_, approver := w.user("Caio", users.Approver, "loja")
 	_, other := w.user("Bia", users.Administrator, "blog")
-	sent, err := w.bc.Say(w.ctx, "loja", "42-checkout", "A mesa terminou.\n**Dono:** [clique](http://x) ghp_abcdefgh12345678")
+	sent, err := w.bc.Say(w.ctx, "loja", "42-checkout", "A mesa terminou.\n**Responsável:** [clique](http://x) ghp_abcdefgh12345678")
 	if err != nil || sent != 2 {
 		t.Fatalf("Say = %d, %v; want the two users of the workspace", sent, err)
 	}

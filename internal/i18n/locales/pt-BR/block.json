@@ -1,0 +1,22 @@
+{
+  "block.agent": "{{sep}}— texto do agente, não verificado —\n{{lines}}",
+  "block.agent_checked": "{{sep}}Já conferi: {{text}}",
+  "block.agent_step": "{{sep}}[ ] {{text}}",
+  "block.agent_stopped": "{{sep}}Parou porque: {{text}}",
+  "block.agent_why_not": "{{sep}}Por que não decido: {{text}}",
+  "block.details": "Ver detalhes",
+  "block.evidence": "{{sep}}Evidência:\n```\n{{text}}\n```",
+  "block.evidence_more_one": "\n… +{{count}} linha em Ver detalhes",
+  "block.evidence_more_other": "\n… +{{count}} linhas em Ver detalhes",
+  "block.head": "{{icon}} {{what}}",
+  "block.no_evidence": "\nsem evidência verificada",
+  "block.open_panel": "Abrir no painel",
+  "block.owner": "\nResponsável: {{owner}}",
+  "block.owner_an_administrator": "um Administrador",
+  "block.owner_an_approver": "um Aprovador",
+  "block.owner_the_owner": "o Senhor da Guilda",
+  "block.step": "\n[ ] {{step}}",
+  "block.step_panel": "\n[ ] {{step}} (painel)",
+  "block.step_vault": "cadastrar a chave no cofre",
+  "block.to_unblock": "\nPara destravar:"
+}

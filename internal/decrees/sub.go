@@ -97,7 +97,7 @@ func (s *Service) Subdelegate(ctx context.Context, in SubRequest) (Sub, error) {
 			return Sub{}, refuse(CodeTooWide, "decree.sub_no_origin", "type", in.Type, "mesa", in.Mesa)
 		}
 		if !d.Until.IsZero() && in.Until.After(d.Until) {
-			return Sub{}, refuse(CodeTooWide, "decree.sub_beyond_origin", "number", d.Number, "until", s.inGuildZone(ctx, d.Until))
+			return Sub{}, refuse(CodeTooWide, "decree.sub_beyond_origin", "number", d.Number, "until", s.InGuildZone(ctx, d.Until))
 		}
 		origin = d.Number
 	}

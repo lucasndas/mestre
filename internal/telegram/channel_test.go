@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/logging"
 	"github.com/mestre-ia/mestre/internal/telegram"
 	"github.com/mestre-ia/mestre/internal/testkit/faketelegram"
@@ -161,7 +162,7 @@ func TestAnAnswerWithSomethingLikeATokenLeavesMasked(t *testing.T) {
 	}
 	token := "ghp_" + strings.Repeat("a1B2", 9)
 	for _, text := range []string{"O token é " + token, "O token é **" + token[:12] + "**" + token[12:], "bot 123456789:" + strings.Repeat("AbC_d", 7)} {
-		if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: ana.ID, Text: text}); err != nil {
+		if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: ana.ID, Msg: i18n.Text(text)}); err != nil {
 			t.Fatal(err)
 		}
 	}

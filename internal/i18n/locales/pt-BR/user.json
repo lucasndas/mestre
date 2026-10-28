@@ -1,0 +1,8 @@
+{
+  "user.login_blocked": "O login de {{name}} foi bloqueado por {{minutes}} minutos: {{errors}} senhas erradas em {{window}} minutos.",
+  "user.paired": "{{name}} foi pareado ao Telegram.",
+  "user.pin_locked": "O PIN de {{name}} foi bloqueado por {{minutes}} minutos: {{errors}} erros em {{window}} minutos.",
+  "user.transfer_accepted": "{{name}} aceitou o posto de Senhor da Guilda. Você agora é Administrador.",
+  "user.transfer_offer": "{{name}} quer passar o posto de Senhor da Guilda a você. Aceite com o seu PIN em até 24 horas.",
+  "user.you_are_owner": "Você é o Senhor da Guilda."
+}

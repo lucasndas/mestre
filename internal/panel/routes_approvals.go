@@ -155,12 +155,13 @@ func (p *Panel) closedOf(ctx context.Context, u users.User, r chain.Request) *Ap
 }
 
 // splitAgent separates the block of the text of the agents from the text of the engine.
-func splitAgent(text string) (engine, agent string) {
-	head, tail, ok := strings.Cut(text, chain.UnverifiedOpen)
+func splitAgent(lang, text string) (engine, agent string) {
+	open, close := i18n.Render(lang, i18n.M("approval.unverified_open")), i18n.Render(lang, i18n.M("approval.unverified_close"))
+	head, tail, ok := strings.Cut(text, open)
 	if !ok {
 		return strings.TrimRight(text, "\n"), ""
 	}
-	inner, _, _ := strings.Cut(tail, chain.UnverifiedClose)
+	inner, _, _ := strings.Cut(tail, close)
 	return strings.TrimRight(head, "\n"), strings.Trim(inner, "\n")
 }
 
@@ -192,7 +193,12 @@ func field(a chain.Answer) string {
 // is given by his level and by its type.
 func (p *Panel) approvalItem(ctx context.Context, u users.User, pd approvals.Pending) ApprovalItem {
 	r := pd.Request
-	engine, agent := splitAgent(p.m(pd.Text))
+	lang := u.LanguageFor(u.TelegramLanguage)
+	text := pd.Text
+	if !pd.Msg.IsZero() {
+		text = i18n.Render(lang, pd.Msg) // the question in the language of who reads
+	}
+	engine, agent := splitAgent(lang, p.m(text))
 	it := ApprovalItem{
 		ID: r.ID, Workspace: r.Workspace, Table: r.Table, Type: orPermission(r.Type), Risk: string(r.Risk.Risk), State: string(r.State),
 		About: p.m(r.About), Text: engine, Agent: agent, Requester: p.m(r.RequesterName), CreatedAt: r.CreatedAt.UTC(),
@@ -233,10 +239,22 @@ func (p *Panel) approvalItem(ctx context.Context, u users.User, pd approvals.Pen
 }
 
 func (p *Panel) blockingView(u users.User, n blocking.Saved) BlockingView {
+	lang := u.LanguageFor(u.TelegramLanguage)
+	// the frame of the engine is said in the language of who reads; a notice from before the messages is shown as written
+	said := func(m i18n.Msg, old string) string {
+		if m.IsZero() {
+			return p.m(old)
+		}
+		return p.m(strings.TrimLeft(i18n.Render(lang, m), "\n"))
+	}
 	v := BlockingView{ID: n.ID, Workspace: n.Workspace, Table: n.Mesa, Motive: string(n.Motive), Stopped: p.m(n.Stopped), Evidence: p.m(n.Evidence),
-		Owner: p.m(n.Owner), Agent: p.m(n.Agent), CreatedAt: n.At, Steps: []BlockingStep{}}
-	for _, s := range n.Steps {
-		st := BlockingStep{Text: p.m(s.Text)}
+		Owner: said(n.Msg.Owner, n.Owner), Agent: said(n.Msg.Agent, n.Agent), CreatedAt: n.At, Steps: []BlockingStep{}}
+	for i, s := range n.Steps {
+		var sm i18n.Msg
+		if i < len(n.Msg.Steps) {
+			sm = n.Msg.Steps[i]
+		}
+		st := BlockingStep{Text: said(sm, s.Text)}
 		if s.Kind == blocking.StepVault {
 			st.Action, st.CanDo = "open_vault", blocking.CanDo(s.Kind, u.Level)
 		}
@@ -339,7 +357,7 @@ func (p *Panel) handleApprovalDetails(w http.ResponseWriter, r *http.Request) {
 		p.writeApprovalError(w, err)
 		return
 	}
-	out := ApprovalDetails{Text: p.m(approvals.DetailText(pd.Request)), Files: []ApprovalDiffFile{}}
+	out := ApprovalDetails{Text: p.m(approvals.DetailTextIn(UserOf(r).LanguageFor(UserOf(r).TelegramLanguage), pd.Request)), Files: []ApprovalDiffFile{}}
 	if pd.Request.PR != nil && p.appr.Diff != nil {
 		files, err := p.appr.Diff(ctx, pd.Request)
 		if err != nil {

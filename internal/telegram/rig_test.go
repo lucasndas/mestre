@@ -14,6 +14,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/decrees"
 	"github.com/mestre-ia/mestre/internal/glossary"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/lockdown"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
@@ -60,19 +61,20 @@ type alerts struct {
 	owner        []string
 }
 
-func (a *alerts) Unauthorized(_ context.Context, id int64, _ string) {
+func (a *alerts) Unauthorized(_ context.Context, id int64, _ i18n.Msg) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.unauthorized = append(a.unauthorized, id)
 }
 
-func (a *alerts) OwnerAlert(_ context.Context, text string) {
+func (a *alerts) OwnerAlert(_ context.Context, m i18n.Msg) {
+	text := i18n.Render(i18n.PtBR, m)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.owner = append(a.owner, text)
 }
 
-func (a *alerts) Tell(context.Context, string, string) {}
+func (a *alerts) Tell(context.Context, string, i18n.Msg) {}
 
 type world struct {
 	t      *testing.T
@@ -191,7 +193,7 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 		router := &telegram.PINRouter{Users: w.users}
 		sharedPINs = router
 		var err error
-		w.lock, err = lockdown.New(lockdown.Options{DB: db, Clock: clk, Users: w.users, Tell: func(ctx context.Context, id, text string) { w.tell(ctx, id, text) }})
+		w.lock, err = lockdown.New(lockdown.Options{DB: db, Clock: clk, Users: w.users, Tell: func(ctx context.Context, id string, m i18n.Msg) { w.tell(ctx, id, i18n.Render(i18n.PtBR, m)) }})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -433,7 +435,7 @@ func (w *world) tell(ctx context.Context, id, text string) {
 	if err != nil || u.TelegramID == 0 {
 		return
 	}
-	if _, err := w.bot.Send(ctx, telegram.Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Origin: "motor"}); err != nil {
+	if _, err := w.bot.Send(ctx, telegram.Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.Text(text), Origin: "motor"}); err != nil {
 		w.t.Error(err)
 	}
 }

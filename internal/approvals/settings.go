@@ -11,6 +11,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 )
 
@@ -58,7 +59,7 @@ type Settings struct {
 	// GrandMaster gives the client of the App "Grão-Mestre" and its id.
 	GrandMaster func(ctx context.Context, workspace string) (SettingsClient, int64, error)
 	// Tell warns the Owner (the bot and the panel).
-	Tell   func(ctx context.Context, workspace, text string)
+	Tell   func(ctx context.Context, workspace string, m i18n.Msg)
 	Logger *slog.Logger
 }
 
@@ -85,7 +86,7 @@ func (s *Settings) ProposePlanB(ctx context.Context, workspace string) (int64, e
 	if rules.CodeOwners || rules.LastPush {
 		// the exception skips every rule of its ruleset: the code owner review and the
 		// approval of the last push would stop being enforced for the Grão-Mestre
-		why := "o repositório exige review de code owner ou aprovação do último push, que a exceção do ruleset deixaria de impor"
+		why := i18n.M("approval.why_code_owner")
 		if err := s.human(ctx, workspace, why); err != nil {
 			return 0, err
 		}
@@ -255,7 +256,7 @@ func (s *Settings) Decided(ctx context.Context, r chain.Result) error {
 	ws := r.Request.Workspace
 	if !r.Approved {
 		if t.PlanB {
-			return s.human(ctx, ws, "o Senhor da Guilda não aprovou o ruleset de exceção para o Grão-Mestre")
+			return s.human(ctx, ws, i18n.M("approval.why_owner_declined"))
 		}
 		return nil
 	}
@@ -277,27 +278,27 @@ func (s *Settings) Decided(ctx context.Context, r chain.Result) error {
 	switch {
 	case err == nil:
 		name, _ := t.Body["name"].(string)
-		s.tell(ctx, ws, fmt.Sprintf("O ruleset %q foi criado no repositório %s.", name, t.Repo))
+		s.tell(ctx, ws, i18n.M("approval.ruleset_created", "name", name, "repo", t.Repo))
 		return nil
 	case t.PlanB && errors.As(err, &api) && api.Status == http.StatusForbidden:
-		return s.human(ctx, ws, "o GitHub não aceita rulesets em repositório privado sem o plano Pro ("+api.Message+")")
+		return s.human(ctx, ws, i18n.M("approval.why_private_plan", "detail", api.Message))
 	case t.PlanB:
-		s.tell(ctx, ws, fmt.Sprintf("O ruleset de exceção do repositório %s não foi criado: %v.", t.Repo, err))
+		s.tell(ctx, ws, i18n.M("approval.ruleset_not_created", "repo", t.Repo, "reason", err.Error()))
 		return err
 	}
 	return err
 }
 
-func (s *Settings) human(ctx context.Context, workspace, why string) error {
-	if err := s.Modes.Set(ctx, workspace, ModeHuman, why); err != nil {
+func (s *Settings) human(ctx context.Context, workspace string, why i18n.Msg) error {
+	if err := s.Modes.Set(ctx, workspace, ModeHuman, i18n.Render(i18n.PtBR, why)); err != nil {
 		return err
 	}
-	s.tell(ctx, workspace, fmt.Sprintf("A campanha %s passou ao modo de aprovação humana: %s. Cada merge vai pedir a aprovação de uma pessoa pelo Telegram.", workspace, why))
+	s.tell(ctx, workspace, i18n.M("approval.human_mode", "workspace", workspace, "why", why))
 	return nil
 }
 
-func (s *Settings) tell(ctx context.Context, workspace, text string) {
+func (s *Settings) tell(ctx context.Context, workspace string, m i18n.Msg) {
 	if s.Tell != nil {
-		s.Tell(ctx, workspace, text)
+		s.Tell(ctx, workspace, m)
 	}
 }

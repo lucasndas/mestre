@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"golang.org/x/crypto/argon2"
 )
 
@@ -265,7 +266,7 @@ func (s *Service) CheckPIN(ctx context.Context, requestID, pin string) error {
 		if lockedNow {
 			result = fmt.Errorf("%w: %w", ErrBadPIN, ErrPINLocked)
 		} else if state == "cancelled" {
-			result = fmt.Errorf("%w: o pedido foi cancelado depois de %d erros", ErrBadPIN, PINRequestErrors)
+			result = fmt.Errorf("%w: the request was cancelled after %d errors", ErrBadPIN, PINRequestErrors)
 		}
 		return nil
 	})
@@ -277,7 +278,7 @@ func (s *Service) CheckPIN(ctx context.Context, requestID, pin string) error {
 		if u, gerr := s.Get(ctx, userID); gerr == nil {
 			name = u.Name
 		}
-		s.o.Alerts.OwnerAlert(ctx, fmt.Sprintf("O PIN de %s foi bloqueado por %d minutos: %d erros em %d minutos.", name, int(PINLockFor/time.Minute), PINLockErrors, int(PINLockWindow/time.Minute)))
+		s.o.Alerts.OwnerAlert(ctx, i18n.M("user.pin_locked", "name", name, "minutes", int(PINLockFor/time.Minute), "errors", PINLockErrors, "window", int(PINLockWindow/time.Minute)))
 	}
 	return result
 }

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/logging"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
@@ -411,11 +412,11 @@ func TestTheSecretFilterComesBeforeEveryBranch(t *testing.T) {
 	sw := newSecretWorld(t)
 	sw.rebuild(func(o *telegram.Options) {
 		o.Strangers = strangers
-		o.Captures = map[string]telegram.CaptureFunc{"free": func(_ context.Context, _ users.User, _, text string) (string, bool, error) {
+		o.Captures = map[string]telegram.CaptureFunc{"free": func(_ context.Context, _ users.User, _, text string) (i18n.Msg, bool, error) {
 			mu.Lock()
 			defer mu.Unlock()
 			captured = append(captured, text)
-			return "ok", false, nil
+			return i18n.Text("ok"), false, nil
 		}}
 	})
 	say := func(u faketelegram.User, text string) {
@@ -442,7 +443,7 @@ func TestTheSecretFilterComesBeforeEveryBranch(t *testing.T) {
 	}
 
 	// the free text of a capture that is not a PIN
-	if err := sw.bot.Ask(sw.ctx, sw.owner.ID, "free", "r", "Diga", time.Hour); err != nil {
+	if err := sw.bot.Ask(sw.ctx, sw.owner.ID, "free", "r", i18n.Text("Diga"), time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	sw.drain()

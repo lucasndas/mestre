@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/users"
 )
 
@@ -35,7 +36,7 @@ type RevokeHooks interface {
 	// delegation to the level above.
 	Reroute(ctx context.Context, workspace string) error
 	// Told tells the Administrators and the Grão-Mestre of the workspace.
-	Told(ctx context.Context, workspace, text string)
+	Told(ctx context.Context, workspace string, m i18n.Msg)
 }
 
 // SetDelegationTimes tells the Service where the validity a delegation gets by
@@ -100,7 +101,7 @@ func (s *Service) remind(ctx context.Context) error {
 		case s.o.Reminder != nil:
 			s.o.Reminder.DelegationEnding(ctx, d)
 		case s.o.Alerts != nil:
-			s.o.Alerts.Tell(ctx, d.Author, fmt.Sprintf("A delegação %d (%s) acaba em %s.", d.Number, d.Summary(), s.Moment(ctx, d.Until)))
+			s.o.Alerts.Tell(ctx, d.Author, i18n.M("decree.delegation_ending", "number", d.Number, "summary", d.SummaryMsg(), "moment", s.InGuildZone(ctx, d.Until)))
 		}
 	}
 	return nil
@@ -190,7 +191,7 @@ func (s *Service) RevokeAllDelegations(ctx context.Context, userID string) (Revo
 			if err := h.Reroute(ctx, w); err != nil {
 				s.log.Warn("decrees: the open requests were not rerouted", "workspace", w, "err", err)
 			}
-			h.Told(ctx, w, fmt.Sprintf("%s revogou todas as delegações e regras temporárias (%d delegações, %d subdelegações, %d regras temporárias).", rep.By.Name, countIn(rep.Decrees, w), rep.Subdelegations, n))
+			h.Told(ctx, w, i18n.M("decree.revoked_all", "name", rep.By.Name, "delegations", countIn(rep.Decrees, w), "subdelegations", rep.Subdelegations, "rules", n))
 		}
 	}
 	return rep, nil

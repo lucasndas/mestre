@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/digest"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
@@ -23,7 +24,7 @@ func routingWorld(t *testing.T) *world {
 // and returns its id in the chat.
 func (w *world) botSays(u users.User, tg faketelegram.User, workspace, mesa, text string) int64 {
 	w.t.Helper()
-	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: text, Workspace: workspace, Mesa: mesa, Origin: "motor"}); err != nil {
+	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Msg: i18n.Text(text), Workspace: workspace, Mesa: mesa, Origin: "motor"}); err != nil {
 		w.t.Fatal(err)
 	}
 	w.drain()
@@ -244,7 +245,7 @@ func TestEveryMessageToAUserStartsWithItsHeader(t *testing.T) {
 		{"loja", "42-checkout", "<b>loja · Mesa #42 checkout</b>\n"},
 		{"", "", "<b>Sistema</b>\n"},
 	} {
-		if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: "corpo", Workspace: c.ws, Mesa: c.mesa, Origin: "motor"}); err != nil {
+		if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Msg: i18n.Text("corpo"), Workspace: c.ws, Mesa: c.mesa, Origin: "motor"}); err != nil {
 			t.Fatal(err)
 		}
 		w.drain()
@@ -409,7 +410,7 @@ func TestTheApprovalOfAMesaTheBlockNoticeTheQuotaNoticeAndTheProgressStartWithTh
 	}
 
 	// the notice of quota is of a workspace, not of the Sistema
-	w.oa.OwnerWorkspaceAlert(w.ctx, "loja", "O limite diário do Claude passou de 80%.")
+	w.oa.OwnerWorkspaceAlert(w.ctx, "loja", i18n.Text("O limite diário do Claude passou de 80%."))
 	w.drain()
 	startsWith("passou de 80%", "<b>loja</b>")
 
@@ -421,7 +422,7 @@ func TestTheApprovalOfAMesaTheBlockNoticeTheQuotaNoticeAndTheProgressStartWithTh
 	startsWith("Progresso do blog", "<b>blog</b>")
 
 	// a reply to who is no user says nothing about the Mestre: no header at all
-	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: 999, Text: "Código inválido ou expirado.", Origin: "motor"}); err != nil {
+	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: 999, Msg: i18n.Text("Código inválido ou expirado."), Origin: "motor"}); err != nil {
 		t.Fatal(err)
 	}
 	w.drain()

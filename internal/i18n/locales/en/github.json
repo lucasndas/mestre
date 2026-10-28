@@ -1,4 +1,10 @@
 {
+  "github.app_creation_failed": "The creation of the App \"{{app}}\" failed ({{why}}). If it did get created on GitHub, delete it at https://github.com/settings/apps; the next request uses another name.",
+  "github.app_device_flow": "A step is missing on the App \"{{app}}\": open https://github.com/settings/apps/{{slug}}, tick \"Enable Device Flow\" and save. The Mestre checks it on its own afterwards.",
+  "github.app_install_unseen": "I did not see the installation of the App \"{{app}}\" in 1 hour. Install it at https://github.com/apps/{{slug}}/installations/new and open the link back that GitHub shows, or ask the Grand Master for the status.",
+  "github.app_link_expired": "The link to create the App \"{{app}}\" expired. Ask for another in the panel (GitHub Apps) or from the Grand Master; meanwhile the class keeps the App \"Mestre\".",
+  "github.app_not_used": "The App \"{{app}}\" will not be used: {{why}}. If it exists on GitHub, delete it at https://github.com/settings/apps.",
+  "github.app_ready": "The App \"{{app}}\" is ready.",
   "github.belongs_to_other_table": "#{{number}} belongs to another table; ask the Grand Master.",
   "github.block_unknown": "The block \"{{block}}\" does not exist; the blocks are {{blocks}}.",
   "github.force_master_only": "The force push is only for the Mestre of the table.",

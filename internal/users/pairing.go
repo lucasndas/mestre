@@ -7,6 +7,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // The numbers of the pairing (docs/telegram/usuarios-e-niveis.md#pareamento-por-código).
@@ -86,7 +88,7 @@ type PairRequest struct {
 // messages at the same time spend a code once.
 func (s *Service) Pair(ctx context.Context, r PairRequest) (User, error) {
 	now := s.clk.Now()
-	var reason string
+	var reason i18n.Msg
 	var outcome error
 	var paired string
 	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
@@ -98,46 +100,46 @@ func (s *Service) Pair(ctx context.Context, r PairRequest) (User, error) {
 			outcome = ErrSilent
 			return nil
 		}
-		fail := func(why string, err error) error { // the failure is recorded and the transaction ends well
+		fail := func(why i18n.Msg, err error) error { // the failure is recorded and the transaction ends well
 			reason, outcome = why, err
 			_, e := tx.ExecContext(ctx, `INSERT INTO telegram_pairing_failures (telegram_id, at) VALUES (?, ?)`, r.TelegramID, ms(now))
 			return e
 		}
 		if !r.Private {
-			return fail("pareamento fora de um chat privado", ErrNotPrivate)
+			return fail(i18n.M("pairing.not_private"), ErrNotPrivate)
 		}
 		code := strings.ToUpper(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(r.Text), "/start")))
 		if !LooksLikeCode(code) {
-			return fail("código com formato inválido", ErrBadCode)
+			return fail(i18n.M("pairing.bad_format"), ErrBadCode)
 		}
 		var userID string
 		var expires, used int64
 		err := tx.QueryRowContext(ctx, `SELECT user_id, expires_at, used_at FROM telegram_pairing_codes WHERE code = ?`, code).Scan(&userID, &expires, &used)
 		switch {
 		case err == sql.ErrNoRows:
-			return fail("código desconhecido", ErrBadCode)
+			return fail(i18n.M("pairing.unknown_code"), ErrBadCode)
 		case err != nil:
 			return err
 		case used != 0:
-			return fail("código já usado", ErrBadCode)
+			return fail(i18n.M("pairing.used_code"), ErrBadCode)
 		case !now.Before(fromMs(expires)):
-			return fail("código expirado", ErrBadCode)
+			return fail(i18n.M("pairing.expired_code"), ErrBadCode)
 		}
 		us, err := s.load(ctx, tx, `id = ?`, userID)
 		if err != nil {
 			return err
 		}
 		if len(us) == 0 || us[0].State != Active {
-			return fail("código de um usuário que não está ativo", ErrBadCode)
+			return fail(i18n.M("pairing.inactive_user"), ErrBadCode)
 		}
 		u := us[0]
 		if u.TelegramID != 0 && u.TelegramID != r.TelegramID {
-			return fail("o id do Telegram não é o do cadastro", ErrWrongID)
+			return fail(i18n.M("pairing.wrong_id"), ErrWrongID)
 		}
 		var other string
 		switch err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE telegram_id = ? AND state <> 'removed' AND id <> ?`, r.TelegramID, u.ID).Scan(&other); {
 		case err == nil:
-			return fail("o id do Telegram pertence a outro usuário", ErrTelegramTaken)
+			return fail(i18n.M("pairing.id_taken"), ErrTelegramTaken)
 		case err != sql.ErrNoRows:
 			return err
 		}
@@ -154,7 +156,7 @@ func (s *Service) Pair(ctx context.Context, r PairRequest) (User, error) {
 		return User{}, err
 	}
 	if outcome != nil {
-		if reason != "" && s.o.Alerts != nil {
+		if !reason.IsZero() && s.o.Alerts != nil {
 			s.o.Alerts.Unauthorized(ctx, r.TelegramID, reason)
 		}
 		return User{}, outcome
@@ -164,7 +166,7 @@ func (s *Service) Pair(ctx context.Context, r PairRequest) (User, error) {
 		return User{}, err
 	}
 	if s.o.Alerts != nil {
-		s.o.Alerts.OwnerAlert(ctx, fmt.Sprintf("%s foi pareado ao Telegram.", u.Name))
+		s.o.Alerts.OwnerAlert(ctx, i18n.M("user.paired", "name", u.Name))
 	}
 	return u, nil
 }

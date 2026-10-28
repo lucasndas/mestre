@@ -10,6 +10,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/ghcli"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/basesync"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/orchestration/tables"
@@ -123,7 +124,7 @@ func (r *stdRun) githubSetup() error {
 	if r.env.Vault != nil && r.env.PanelURL != nil {
 		// the creation of the Apps by link: the pages of the link are the panel's
 		r.creation, err = github.NewCreation(github.CreationOptions{Apps: apps, Tokens: r.tokens, Vault: r.env.Vault, API: r.s.GitHubBase, Web: r.s.GitHubWeb, HTTP: r.s.HTTP,
-			Panel: r.env.PanelURL, OwnerLogin: r.ownerLogin, Tell: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) }, Logger: r.env.Log})
+			Panel: r.env.PanelURL, OwnerLogin: r.ownerLogin, Tell: func(ctx context.Context, m i18n.Msg) { r.alert.OwnerAlert(ctx, m) }, Logger: r.env.Log})
 		if err != nil {
 			return fmt.Errorf("app: the creation of Apps: %w", err)
 		}
@@ -257,7 +258,7 @@ func (r *stdRun) poller(orc *Orchestration) (*github.Poller, error) {
 	return github.NewPoller(github.PollerOptions{
 		DB: r.env.DB, Clock: r.env.Clock, API: r.s.GitHubBase, HTTP: r.s.HTTP, Token: gm.Token, Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock},
 		Sink: sinks, Merges: ghMerges{orc}, Situation: ghSituation{orc}, Watches: watches(orc), Quota: r.quota, App: app,
-		Alert: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) }, Logger: r.env.Log,
+		Alert: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, i18n.Text(text)) }, Logger: r.env.Log,
 	})
 }
 

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/protocol"
 	"github.com/mestre-ia/mestre/internal/store"
@@ -185,7 +186,8 @@ func (s *Service) Propose(ctx context.Context, p Proposal) (Pending, error) {
 	}); err != nil {
 		return Pending{}, err
 	}
-	return Pending{ID: id, Author: u.ID, PIN: why != "", Why: why, Text: confirmationText(p, s.Moment(ctx, p.Until)), Order: p.Text, Workspace: p.Workspace, Mesa: p.Mesa}, nil
+	pending := confirmationMsg(p, s.InGuildZone(ctx, p.Until), why)
+	return Pending{ID: id, Author: u.ID, PIN: why != "", Why: why, WhyMsg: whyMsg(why), Msg: pending, Text: i18n.Render(i18n.PtBR, pending), Order: p.Text, Workspace: p.Workspace, Mesa: p.Mesa}, nil
 }
 
 // normalize fills what an exception implies.
@@ -203,25 +205,43 @@ func normalize(p Proposal) Proposal {
 	return p
 }
 
-func confirmationText(p Proposal, moment string) string {
-	until := "permanente"
-	if p.Kind == KindException {
-		until = "uma vez"
-	} else if !p.Until.IsZero() {
-		until = "até " + moment
+func confirmationMsg(p Proposal, until time.Time, why string) i18n.Msg {
+	var when i18n.Msg
+	switch {
+	case p.Kind == KindException:
+		when = i18n.M("decree.when_once")
+	case !p.Until.IsZero():
+		when = i18n.M("decree.when_until", "moment", until)
+	default:
+		when = i18n.M("decree.when_permanent")
 	}
-	where := "campanha " + p.Workspace
+	where := i18n.M("decree.where_workspace", "name", p.Workspace)
 	if p.Mesa != "" {
-		where += ", mesa " + p.Mesa
+		where = i18n.Concat(where, i18n.M("decree.where_table", "name", p.Mesa))
 	}
 	if p.Scope != "" {
-		where += ", escopo " + p.Scope
+		where = i18n.Concat(where, i18n.M("decree.where_scope", "name", p.Scope))
 	}
-	text := fmt.Sprintf("Entendi: %s, %s (%s). Confirma?", describeEffect(p.Effect, p.Target, p.Kind, p.Action), until, where)
+	parts := []i18n.Msg{i18n.M("decree.understood", "effect", describeMsg(p.Effect, p.Target, p.Kind, p.Action), "when", when, "where", where)}
 	if p.Origin.Audio && p.Origin.Transcript != "" {
-		text += fmt.Sprintf("\nVoz transcrita: %q", p.Origin.Transcript)
+		parts = append(parts, i18n.M("decree.transcript", "text", fmt.Sprintf("%q", p.Origin.Transcript)))
 	}
-	return text
+	return i18n.Concat(parts...)
+}
+
+// whyMsg is the reason the PIN is asked, as a message.
+func whyMsg(why string) i18n.Msg {
+	switch why {
+	case "":
+		return i18n.Msg{}
+	case "amplia o teto da campanha":
+		return i18n.M("decree.why_ceiling")
+	case "regra permanente que libera":
+		return i18n.M("decree.why_loosening_rule")
+	case "delegação":
+		return i18n.M("decree.why_delegation")
+	}
+	return i18n.Text(why)
 }
 
 // BeginPIN opens the request of PIN of the author for a proposal; the answer
@@ -532,7 +552,7 @@ func (s *Service) announce(ctx context.Context, cs []conflict) {
 		return
 	}
 	for _, c := range cs {
-		text := fmt.Sprintf("Os decretos %d e %d, do mesmo nível, se opõem sobre o mesmo alvo (%s): os dois ficaram suspensos. Revogue um, ajuste ou reative.", c.a.Number, c.b.Number, c.a.Target.Name)
+		text := i18n.M("decree.conflict", "a", c.a.Number, "b", c.b.Number, "target", c.a.Target.Name)
 		for _, u := range []string{c.a.Author, c.b.Author} {
 			s.o.Alerts.Tell(ctx, u, text)
 		}
@@ -582,7 +602,7 @@ func (s *Service) Revoke(ctx context.Context, number int64, userID, pinRequest s
 		return err
 	}
 	if s.o.Alerts != nil && d.Author != userID {
-		s.o.Alerts.Tell(ctx, d.Author, fmt.Sprintf("O decreto %d (%s) foi revogado.", d.Number, d.Summary()))
+		s.o.Alerts.Tell(ctx, d.Author, i18n.M("decree.revoked_notice", "number", d.Number, "summary", d.SummaryMsg()))
 	}
 	return nil
 }
@@ -728,11 +748,11 @@ func (s *Service) InvalidateBy(ctx context.Context, userID string) error {
 		return err
 	}
 	if s.o.Alerts != nil && len(rules) > 0 {
-		var lines []string
+		var lines []i18n.Msg
 		for _, d := range rules {
-			lines = append(lines, fmt.Sprintf("decreto %d: %s", d.Number, d.Summary()))
+			lines = append(lines, i18n.M("decree.orphan_line", "number", d.Number, "summary", d.SummaryMsg()))
 		}
-		s.o.Alerts.OwnerAlert(ctx, "O autor de regras permanentes saiu ou perdeu o nível, e elas ficaram suspensas. Reative (passa a ser sua) ou revogue:\n"+strings.Join(lines, "\n"))
+		s.o.Alerts.OwnerAlert(ctx, i18n.M("decree.orphaned", "lines", i18n.Join(i18n.Text("\n"), lines...)))
 	}
 	return nil
 }
@@ -766,11 +786,11 @@ func (s *Service) Sweep(ctx context.Context) error {
 	}
 	if s.o.Alerts != nil {
 		for _, d := range gone {
-			what := "O decreto"
+			m := i18n.M("decree.expired_decree", "number", d.Number, "summary", d.SummaryMsg())
 			if d.Kind == KindException {
-				what = "A exceção"
+				m = i18n.M("decree.expired_exception", "number", d.Number, "summary", d.SummaryMsg())
 			}
-			s.o.Alerts.Tell(ctx, d.Author, fmt.Sprintf("%s %d (%s) expirou.", what, d.Number, d.Summary()))
+			s.o.Alerts.Tell(ctx, d.Author, m)
 		}
 	}
 	return nil

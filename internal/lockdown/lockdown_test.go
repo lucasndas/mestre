@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/lockdown"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
@@ -62,7 +63,8 @@ func newWorld(t *testing.T) *world {
 
 func (w *world) newService() *lockdown.Service {
 	svc, err := lockdown.New(lockdown.Options{DB: w.db, Clock: w.clk, Users: w.users, Operator: operator{w},
-		Tell: func(_ context.Context, id, text string) {
+		Tell: func(_ context.Context, id string, m i18n.Msg) {
+			text := i18n.Render(i18n.PtBR, m)
 			w.mu.Lock()
 			w.told[id] = append(w.told[id], text)
 			w.mu.Unlock()

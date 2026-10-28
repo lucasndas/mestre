@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/providers"
@@ -185,23 +186,21 @@ func (f *Flow) pinPending(ctx context.Context, members []chain.Request) bool {
 }
 
 // groupText is the question of the first request and the list of the actions.
-func groupText(question string, members []chain.Request) string {
-	var b strings.Builder
-	b.WriteString(question)
-	fmt.Fprintf(&b, "\n\nPedidos parecidos, na mesma pergunta (%d):\n", len(members))
+func groupText(question i18n.Msg, members []chain.Request) i18n.Msg {
+	parts := []i18n.Msg{question, i18n.M("approval.group_head", "count", len(members))}
 	for _, m := range members {
 		cmd := inbox.OneLine(m.Action.Command)
 		if r := []rune(cmd); len(r) > 200 {
 			cmd = string(r[:200]) + "…"
 		}
-		fmt.Fprintf(&b, "- #%d: %s\n", m.ID, cmd)
+		parts = append(parts, i18n.M("approval.group_line", "id", m.ID, "command", cmd))
 	}
-	b.WriteString("Aprovar agora e Negar valem para todos os listados")
+	pattern := i18n.Text("")
 	if p := groupPattern(members); p != "" {
-		fmt.Fprintf(&b, "; Aprovar o padrão vale para os que casam o padrão (por exemplo %s)", inbox.OneLine(p))
+		pattern = i18n.M("approval.group_pattern", "pattern", inbox.OneLine(p))
 	}
-	b.WriteString(".")
-	return b.String()
+	parts = append(parts, i18n.M("approval.group_tail", "pattern", pattern))
+	return i18n.Concat(parts...)
 }
 
 // editGroup rewrites the shared message: the question of its first request and
@@ -213,14 +212,14 @@ func (f *Flow) editGroup(ctx context.Context, user, ref string, members []chain.
 	if err != nil || !ok {
 		return false
 	}
-	text := fr.Text
+	text := fr.Msg
 	if len(members) > 1 {
-		text = groupText(fr.Text, members)
-		if len([]rune(text)) > maxGroupText {
+		text = groupText(fr.Msg, members)
+		if len([]rune(i18n.Render(i18n.PtBR, text))) > maxGroupText {
 			return false
 		}
 	}
-	if err := f.o.Messenger.Edit(ctx, MessageEdit{UserID: user, Ref: ref, Text: text, Request: lead.ID, Answers: answers}); err != nil {
+	if err := f.o.Messenger.Edit(ctx, MessageEdit{UserID: user, Ref: ref, Msg: text, Request: lead.ID, Answers: answers}); err != nil {
 		f.log.Warn("approvals: the question of similar requests was not updated", "request", lead.ID, "user", user, "err", err)
 		return false
 	}
@@ -276,11 +275,11 @@ func (f *Flow) leaveGroup(ctx context.Context, user string, r chain.Request) {
 	}); err != nil {
 		return
 	}
-	text, err := f.render(ctx, r.ID, fr.Text, fr.Approvals)
+	text, err := f.render(ctx, r.ID, fr.Msg, fr.Approvals)
 	if err != nil {
 		return
 	}
-	ref, err := f.o.Messenger.Send(ctx, Message{UserID: user, Request: r, Text: text, Answers: answers})
+	ref, err := f.o.Messenger.Send(ctx, Message{UserID: user, Request: r, Msg: text, Answers: answers})
 	if err != nil {
 		f.log.Warn("approvals: the request that left the group was not asked again", "request", r.ID, "user", user, "err", err)
 		return

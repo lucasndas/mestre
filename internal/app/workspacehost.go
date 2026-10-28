@@ -395,7 +395,7 @@ func (r *stdRun) checkOutsideEdits(ctx context.Context) {
 			continue
 		}
 		if changed {
-			text := "O arquivo " + verification.File + " da campanha " + w.Slug + " foi mudado fora do painel. Vale a última versão confirmada; para aplicar a mudança, confirme-a na tela de campanhas."
+			text := i18n.M("workspace.verification_edited", "file", verification.File, "workspace", w.Slug)
 			if _, err := r.alert.AdminAlert(ctx, w.Slug, text); err != nil && !errors.Is(err, telegram.ErrQueued) {
 				r.env.Log.Warn("app: the Administrators were not told of an edit of the verification commands", "workspace", w.Slug, "err", err)
 			}

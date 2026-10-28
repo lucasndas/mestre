@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -112,7 +113,7 @@ const (
 
 // Step is a step of the checklist.
 type Step struct {
-	Text string
+	Text i18n.Msg
 	Kind StepKind
 }
 
@@ -131,7 +132,7 @@ type Notice struct {
 	Steps    []Step
 	// Owner is who acts: the name of the user, or the minimum level ("um
 	// Administrador"), never "alguém".
-	Owner string
+	Owner i18n.Msg
 	// BlockedBy are the numbers of the epics that must move first; empty: only
 	// a person unblocks it.
 	BlockedBy []string
@@ -146,27 +147,27 @@ type Notice struct {
 
 // OwnerOf is who acts on a request of approval: the users the policy requires,
 // by name, or, without them, the minimum level of the type.
-func OwnerOf(require []string, min classes.Level) string {
+func OwnerOf(require []string, min classes.Level) i18n.Msg {
 	if len(require) > 0 {
-		return strings.Join(require, ", ")
+		return i18n.Text(strings.Join(require, ", "))
 	}
 	switch min {
 	case classes.LevelOwner:
-		return "o Senhor da Guilda"
+		return i18n.M("block.owner_the_owner")
 	case classes.LevelAdmin:
-		return "um Administrador"
+		return i18n.M("block.owner_an_administrator")
 	}
-	return "um Aprovador"
+	return i18n.M("block.owner_an_approver")
 }
 
 // NoticeOwner is who acts on a notice, which has no type: the Owner of the
 // workspace for a credential (the vault only takes it from the Owner) and an
 // Administrator for the rest.
-func NoticeOwner(m Motive, owner string) string {
+func NoticeOwner(m Motive, owner string) i18n.Msg {
 	if m == Credential {
-		return owner
+		return i18n.Text(owner)
 	}
-	return "um Administrador"
+	return i18n.M("block.owner_an_administrator")
 }
 
 // MachineLine is the line for machines: `blocked-by: 42,43` or `blocked-by: -`.
@@ -184,7 +185,7 @@ type Viewer struct {
 
 // Button is a button the viewer is given.
 type Button struct {
-	Text string
+	Text i18n.Msg
 	// Panel says it opens the panel (a link, not a callback).
 	Panel bool
 	// Details says it shows the whole evidence.
@@ -193,8 +194,34 @@ type Button struct {
 
 // Message is the text and the buttons for a user.
 type Message struct {
-	Text    string
+	// Msg is the text, to be said in the language of who reads it.
+	Msg     i18n.Msg
 	Buttons []Button
+}
+
+// Text is the message in a language.
+func (m Message) Text(lang string) string { return i18n.Render(lang, m.Msg) }
+
+// headOf is the first line: the icon of the motive and what is missing.
+func headOf(n Notice, mask func(string) string) i18n.Msg {
+	motive := n.Motive
+	if motive.Icon() == "" {
+		motive = HumanDecision
+	}
+	what := string(motive)
+	if n.Stopped != "" {
+		what = clip(maskedLine(n.Stopped, mask), MaxField)
+	}
+	return i18n.M("block.head", "icon", motive.Icon(), "what", what)
+}
+
+// evidenceMsg is the evidence in its fence, with how many lines were left out.
+func evidenceMsg(text string, more int, sep string) i18n.Msg {
+	body := i18n.Text(text)
+	if more > 0 {
+		body = i18n.Concat(body, i18n.M("block.evidence_more", "count", more))
+	}
+	return i18n.M("block.evidence", "sep", sep, "text", body)
 }
 
 // Build makes the message for a viewer. mask takes the secrets out of the
@@ -202,59 +229,58 @@ type Message struct {
 // required. The text of the engine comes first; the text of the agent, after
 // them, inside the block marked as not verified.
 func Build(n Notice, v Viewer, mask func(string) string) Message {
-	var b strings.Builder
-	motive := n.Motive
-	if motive.Icon() == "" {
-		motive = HumanDecision
-	}
-	if n.Stopped != "" {
-		fmt.Fprintf(&b, "%s %s\n", motive.Icon(), clip(maskedLine(n.Stopped, mask), MaxField))
-	} else {
-		fmt.Fprintf(&b, "%s %s\n", motive.Icon(), motive)
-	}
-	if ev := cut(mask(n.Evidence)); ev != "" {
-		b.WriteString("Evidência:\n```\n" + ev + "\n```\n")
+	parts := []i18n.Msg{headOf(n, mask)}
+	hasEvidence := len(lines(mask(n.Evidence))) > 0
+	if ev, more := cut(mask(n.Evidence)); ev != "" {
+		parts = append(parts, evidenceMsg(ev, more, "\n"))
 	}
 	var buttons []Button
+	var rest []i18n.Msg
 	if len(n.Steps) > 0 {
-		b.WriteString("Para destravar:\n")
+		rest = append(rest, i18n.M("block.to_unblock"))
 		for _, s := range n.Steps {
-			text := maskedLine(s.Text, mask)
 			if CanDo(s.Kind, v.Level) {
-				text += " (painel)"
-				buttons = append(buttons, Button{Text: "Abrir no painel", Panel: true})
+				buttons = append(buttons, Button{Text: i18n.M("block.open_panel"), Panel: true})
+				rest = append(rest, i18n.M("block.step_panel", "step", s.Text))
+				continue
 			}
-			fmt.Fprintf(&b, "[ ] %s\n", text)
+			rest = append(rest, i18n.M("block.step", "step", s.Text))
 		}
 	}
-	if n.Owner != "" {
-		fmt.Fprintf(&b, "Dono: %s\n", engineLine(n.Owner))
+	if !n.Owner.IsZero() {
+		rest = append(rest, i18n.M("block.owner", "owner", n.Owner))
 	}
-	if agent := agentBlock(n, mask); agent != "" {
-		b.WriteString("— texto do agente, não verificado —\n" + agent)
+	if agent := AgentLines(n, mask); !agent.IsZero() {
+		rest = append(rest, i18n.M("block.agent", "sep", "\n", "lines", agent))
 	}
-	buttons = append(buttons, Button{Text: "Ver detalhes", Details: true})
-	text := strings.TrimRight(b.String(), "\n")
-	if len(lines(mask(n.Evidence))) == 0 {
+	if !hasEvidence && len(rest) > 0 {
 		// nothing the engine could put together: only the text of the agent
-		text = strings.Replace(text, "\n", "\nsem evidência verificada\n", 1)
+		parts = append(parts, i18n.M("block.no_evidence"))
 	}
-	return Message{Text: text, Buttons: buttons}
+	parts = append(parts, rest...)
+	buttons = append(buttons, Button{Text: i18n.M("block.details"), Details: true})
+	return Message{Msg: i18n.Concat(parts...), Buttons: buttons}
 }
 
 // Full is the whole evidence, masked, for Ver detalhes and for the panel.
-func Full(n Notice, mask func(string) string) string {
-	var b strings.Builder
+func Full(n Notice, mask func(string) string) i18n.Msg {
+	var parts []i18n.Msg
+	sep := func() string {
+		if len(parts) == 0 {
+			return ""
+		}
+		return "\n"
+	}
 	if n.Stopped != "" {
-		b.WriteString(maskedLine(n.Stopped, mask) + "\n")
+		parts = append(parts, i18n.Text(maskedLine(n.Stopped, mask)))
 	}
 	if ls := lines(mask(n.Evidence)); len(ls) > 0 {
-		b.WriteString("Evidência:\n```\n" + safeBlock(strings.Join(ls, "\n")) + "\n```\n")
+		parts = append(parts, evidenceMsg(safeBlock(strings.Join(ls, "\n")), 0, sep()))
 	}
-	if agent := agentBlock(n, mask); agent != "" {
-		b.WriteString("— texto do agente, não verificado —\n" + agent)
+	if agent := AgentLines(n, mask); !agent.IsZero() {
+		parts = append(parts, i18n.M("block.agent", "sep", sep(), "lines", agent))
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return i18n.Concat(parts...)
 }
 
 // MaxLine is the longest line of the evidence the message shows, and MaxField the
@@ -284,21 +310,17 @@ func lines(ev string) []string {
 
 // cut keeps the first lines of the evidence, each cut to a length, and says how
 // many were left out.
-func cut(ev string) string {
+func cut(ev string) (string, int) {
 	ls := lines(ev)
 	if len(ls) == 0 {
-		return ""
+		return "", 0
 	}
 	rest := len(ls) - MaxEvidenceLines
 	ls = ls[:min(len(ls), MaxEvidenceLines)]
 	for i, l := range ls {
 		ls[i] = clip(l, MaxLine)
 	}
-	out := safeBlock(strings.Join(ls, "\n"))
-	if rest > 0 {
-		out += fmt.Sprintf("\n… +%d linhas em Ver detalhes", rest)
-	}
-	return out
+	return safeBlock(strings.Join(ls, "\n")), max(rest, 0)
 }
 
 // safeBlock keeps a text from closing the fence it is shown in.
@@ -325,22 +347,26 @@ func plain(s string) string {
 	return strings.NewReplacer("*", "", "`", "'", "[", "(", "]", ")").Replace(s)
 }
 
-// agentBlock is what the agent wrote, each part under a title of the engine and
-// in one line: nothing it writes can open a title, a link or a field.
-func agentBlock(n Notice, mask func(string) string) string {
-	var b strings.Builder
-	add := func(title, text string) {
+// AgentLines is what the agent wrote, each part under a title of the engine and
+// in one line: nothing it writes can open a title, a link or a field. The words
+// of the agent are parameters, masked; the titles are the catalog's. It is empty
+// when the agent wrote nothing.
+func AgentLines(n Notice, mask func(string) string) i18n.Msg {
+	var parts []i18n.Msg
+	add := func(base i18n.Msg, text string) {
 		if strings.TrimSpace(text) != "" {
-			fmt.Fprintf(&b, "%s: %s\n", title, clip(maskedLine(text, mask), MaxField))
+			sep := "\n"
+			if len(parts) == 0 {
+				sep = ""
+			}
+			parts = append(parts, i18n.M(base.Code, "sep", sep, "text", clip(maskedLine(text, mask), MaxField)))
 		}
 	}
-	add("Parou porque", n.Message)
-	add("Já conferi", n.Checked)
-	add("Por que não decido", n.WhyNot)
+	add(i18n.M("block.agent_stopped"), n.Message)
+	add(i18n.M("block.agent_checked"), n.Checked)
+	add(i18n.M("block.agent_why_not"), n.WhyNot)
 	for _, s := range n.AgentSteps {
-		if strings.TrimSpace(s) != "" {
-			fmt.Fprintf(&b, "[ ] %s\n", clip(maskedLine(s, mask), MaxField))
-		}
+		add(i18n.M("block.agent_step"), s)
 	}
-	return b.String()
+	return i18n.Concat(parts...)
 }

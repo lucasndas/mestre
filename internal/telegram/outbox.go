@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/users"
 )
 
@@ -20,20 +21,28 @@ const ButtonTTL = 24 * time.Hour
 // Button is an inline button. Only a key goes to the Telegram as callback_data;
 // the action, the argument, the recipient and the validity stay in the database.
 type Button struct {
+	// Text is the label as it is (the option of a question of the Grand Master: the
+	// words of an agent); Msg, when set, is the label of the engine, said in the
+	// language of the user the button is for.
 	Text, Action, Arg string
+	Msg               i18n.Msg
 	// URL makes the button a link (the panel): nothing comes back to the bot.
 	URL string
 	// Capability is the level the click needs (checked again at the click).
 	Capability users.Capability
 }
 
-// Out is a message to send. Text is Markdown.
+// Out is a message to send. Msg is Markdown once said: it is said in the language of
+// the user it is for, or in Language when it is for someone who is not a user.
 type Out struct {
 	ChatID int64
 	// UserID is the user it is for: the terms he has not seen are explained and
 	// the buttons are his.
 	UserID string
-	Text   string
+	Msg    i18n.Msg
+	// Language is the language for a message to someone who is not a user (a tag, as
+	// the Telegram sends it); a message to a user goes in his.
+	Language string
 	// Workspace and Mesa are recorded with the message for the threaded reply.
 	Workspace, Mesa, Origin string
 	Buttons                 [][]Button
@@ -44,7 +53,8 @@ type Out struct {
 // Send puts a message in the queue and returns the id of its last part. It goes
 // out when the queue is flushed, never before the Gate lets it.
 func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
-	text := b.maskText(o.Text)
+	lang := b.langFor(ctx, o.UserID, o.Language)
+	text := b.maskText(i18n.Render(lang, o.Msg))
 	var seen map[string]bool
 	var explained []string
 	if o.UserID != "" && len(b.o.Terms) > 0 {
@@ -52,7 +62,7 @@ func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
 		if seen, err = b.st.Seen(ctx, o.UserID); err != nil {
 			return 0, err
 		}
-		text, explained = explain(text, b.o.Terms, seen)
+		text, explained = explain(text, termsIn(b.o.Terms, lang), seen, lang)
 	}
 	type item struct {
 		method string
@@ -60,16 +70,16 @@ func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
 	}
 	var items []item
 	// every message to a user says where it comes from
-	head := headOf(o.UserID, o.Workspace, o.Mesa)
+	head := headOf(lang, o.UserID, o.Workspace, o.Mesa)
 	parts := Split(text, partSize)
 	if len(parts) > MaxParts {
-		summary := Split(text, 600)[0] + "\n\n(o texto completo vai no arquivo abaixo)"
+		summary := Split(text, 600)[0] + "\n\n" + i18n.Render(lang, i18n.M("bot.full_text_below"))
 		whole := text
 		if head != "" {
 			whole = head + "\n\n" + text
 		}
 		parts = []string{summary}
-		items = append(items, item{"sendDocument", map[string]any{"chat_id": o.ChatID, "caption": "Texto completo", "filename": "mensagem.md", "content": whole}})
+		items = append(items, item{"sendDocument", map[string]any{"chat_id": o.ChatID, "caption": i18n.Render(lang, i18n.M("bot.full_text_caption")), "filename": i18n.Render(lang, i18n.M("bot.full_text_filename")), "content": whole}})
 	}
 	var msgs []item
 	for i, p := range parts {
@@ -94,7 +104,7 @@ func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
 		case o.ForceReply:
 			last["reply_markup"] = map[string]any{"force_reply": true}
 		case len(o.Buttons) > 0:
-			rows, err := b.buttons(ctx, tx, o.UserID, o.Buttons, false)
+			rows, err := b.buttons(ctx, tx, o.UserID, lang, o.Buttons, false)
 			if err != nil {
 				return err
 			}
@@ -134,14 +144,18 @@ func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
 
 // buttons registers the buttons of a message for a user and gives the rows of
 // the inline keyboard: only a key goes to the Telegram.
-func (b *Bot) buttons(ctx context.Context, tx *sql.Tx, userID string, rows [][]Button, replace bool) ([][]map[string]string, error) {
+func (b *Bot) buttons(ctx context.Context, tx *sql.Tx, userID, lang string, rows [][]Button, replace bool) ([][]map[string]string, error) {
 	now := b.clk.Now()
 	var out [][]map[string]string
 	for _, row := range rows {
 		var r []map[string]string
 		for _, bt := range row {
+			label := bt.Text
+			if !bt.Msg.IsZero() {
+				label = i18n.Render(lang, bt.Msg)
+			}
 			if bt.URL != "" {
-				r = append(r, map[string]string{"text": bt.Text, "url": bt.URL})
+				r = append(r, map[string]string{"text": label, "url": bt.URL})
 				continue
 			}
 			key, err := newKey()
@@ -158,7 +172,7 @@ func (b *Bot) buttons(ctx context.Context, tx *sql.Tx, userID string, rows [][]B
 				key, userID, bt.Action, bt.Arg, string(bt.Capability), ms(now.Add(ButtonTTL))); err != nil {
 				return nil, err
 			}
-			r = append(r, map[string]string{"text": bt.Text, "callback_data": key})
+			r = append(r, map[string]string{"text": label, "callback_data": key})
 		}
 		out = append(out, r)
 	}
@@ -293,7 +307,7 @@ func (b *Bot) Flush(ctx context.Context) (time.Time, error) {
 				return next, herr
 			}
 			if b.o.Alerts != nil {
-				b.o.Alerts.OwnerAlert(ctx, "O Telegram recusou o token do bot. Troque-o no cofre; a fila de saída espera.")
+				b.o.Alerts.OwnerAlert(ctx, i18n.M("bot.token_refused"))
 			}
 			soon(at)
 			return next, err
@@ -405,4 +419,18 @@ func (b *Bot) OutboxState(ctx context.Context) (queued, sent, failed int, err er
 		}
 	}
 	return queued, sent, failed, rows.Err()
+}
+
+// langFor is the language of what goes to a user: the one he chose, or else the
+// language_code the Telegram last sent for him, or pt-BR. For someone who is not a user
+// (userID empty) it is the tag given, matched by the one rule.
+func (b *Bot) langFor(ctx context.Context, userID, tag string) string {
+	if userID == "" {
+		return users.MatchLanguage(tag)
+	}
+	u, err := b.o.Users.Get(ctx, userID)
+	if err != nil {
+		return users.MatchLanguage(tag)
+	}
+	return u.LanguageFor(u.TelegramLanguage)
 }

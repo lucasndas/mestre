@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/testkit/guildtpl"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -21,19 +22,21 @@ type alerts struct {
 	told         map[string][]string
 }
 
-func (a *alerts) Unauthorized(_ context.Context, id int64, reason string) {
+func (a *alerts) Unauthorized(_ context.Context, id int64, reason i18n.Msg) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.unauthorized = append(a.unauthorized, reason)
+	a.unauthorized = append(a.unauthorized, i18n.Render(i18n.PtBR, reason))
 }
 
-func (a *alerts) OwnerAlert(_ context.Context, text string) {
+func (a *alerts) OwnerAlert(_ context.Context, m i18n.Msg) {
+	text := i18n.Render(i18n.PtBR, m)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.owner = append(a.owner, text)
 }
 
-func (a *alerts) Tell(_ context.Context, user, text string) {
+func (a *alerts) Tell(_ context.Context, user string, m i18n.Msg) {
+	text := i18n.Render(i18n.PtBR, m)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.told == nil {

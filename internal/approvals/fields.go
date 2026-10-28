@@ -5,6 +5,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/blocking"
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -16,9 +17,9 @@ import (
 // the agents. The owner is the users the policy requires, by name, or the
 // minimum level of the type; never "alguém". A request of the Guild (no
 // workspace) is the Owner's alone and keeps its text.
-func withFields(q chain.PeopleQuestion, all []users.User) string {
+func withFields(q chain.PeopleQuestion, all []users.User) (string, i18n.Msg, i18n.Msg) {
 	if q.Request.Workspace == "" {
-		return q.Text
+		return q.Text, q.Engine, q.Agent
 	}
 	motive := blocking.MotiveOf(q.Request.Type, false)
 	if q.Request.Type == "" {
@@ -39,12 +40,24 @@ func withFields(q chain.PeopleQuestion, all []users.User) string {
 		}
 		names = append(names, blocking.Line(name, identity))
 	}
-	owner := "Dono: " + blocking.OwnerOf(names, q.MinLevel) + "\n"
-	head, tail, found := strings.Cut(q.Text, chain.UnverifiedOpen)
-	if !found {
-		return motive.Icon() + " " + string(motive) + "\n" + strings.TrimRight(q.Text, "\n") + "\n" + strings.TrimRight(owner, "\n")
+	if q.Engine.IsZero() && q.Agent.IsZero() && q.Text != "" {
+		// a question that came only as a text (pt-BR): the block of the agents is cut from it
+		if head, tail, found := strings.Cut(q.Text, chain.UnverifiedOpen); found {
+			q.Engine, q.Agent = i18n.Text(strings.TrimRight(head, "\n")+"\n"), i18n.Text("\n"+chain.UnverifiedOpen+tail)
+		} else {
+			q.Engine = i18n.Text(strings.TrimRight(q.Text, "\n") + "\n")
+		}
 	}
-	return motive.Icon() + " " + string(motive) + "\n" + head + owner + "\n" + chain.UnverifiedOpen + tail
+	// the motive with its icon opens the text, and the owner closes the fields of the engine
+	// before the block of the agents
+	head := i18n.M("approval.motive_line", "icon", motive.Icon(), "motive", string(motive))
+	owner := i18n.M("approval.owner_line", "owner", blocking.OwnerOf(names, q.MinLevel))
+	engine := i18n.Concat(head, q.Engine, owner)
+	if q.Agent.IsZero() {
+		return i18n.Render(i18n.PtBR, engine), engine, q.Agent
+	}
+	engine = i18n.Concat(head, q.Engine, i18n.Text("\n"), owner)
+	return i18n.Render(i18n.PtBR, i18n.Concat(engine, q.Agent)), engine, q.Agent
 }
 
 func identity(s string) string { return s }

@@ -1,0 +1,10 @@
+{
+  "pairing.bad_format": "code with an invalid format",
+  "pairing.expired_code": "expired code",
+  "pairing.id_taken": "the Telegram id belongs to another user",
+  "pairing.inactive_user": "code of a user who is not active",
+  "pairing.not_private": "pairing outside a private chat",
+  "pairing.unknown_code": "unknown code",
+  "pairing.used_code": "code already used",
+  "pairing.wrong_id": "the Telegram id is not the one of the registration"
+}

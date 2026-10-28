@@ -12,6 +12,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/presets"
@@ -267,7 +268,7 @@ func (e *Engine) hostChain(o *OrchestrationOptions, people chainPeople, layout w
 	o.ClassLibraries = books.For
 	// the proposals of the Grand Master become requests of the type classe_workspace,
 	// and the "Aprovar" of an Administrator puts the class in use (classapproval.go)
-	ca := &classApprovals{chain: periodChain, books: books.For, users: people.Users, tell: people.OwnerAlert}
+	ca := &classApprovals{chain: periodChain, books: books.For, users: people.Users, tell: func(ctx context.Context, text string) { people.OwnerAlert(ctx, i18n.Text(text)) }}
 	books.alerts = ca.alertsFor
 	if o.ChainSinks == nil {
 		o.ChainSinks = map[classes.RequestType]chain.Sink{}

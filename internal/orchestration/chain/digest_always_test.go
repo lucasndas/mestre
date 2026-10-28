@@ -10,6 +10,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/digest"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -45,9 +46,9 @@ func (digestNoInbox) ToGrandMaster(context.Context, string, string) error { retu
 
 type digestAlerts struct{}
 
-func (digestAlerts) Unauthorized(context.Context, int64, string) {}
-func (digestAlerts) OwnerAlert(context.Context, string)          {}
-func (digestAlerts) Tell(context.Context, string, string)        {}
+func (digestAlerts) Unauthorized(context.Context, int64, i18n.Msg) {}
+func (digestAlerts) OwnerAlert(context.Context, i18n.Msg)          {}
+func (digestAlerts) Tell(context.Context, string, i18n.Msg)        {}
 
 // CA-APROV-RES-05: the Mestre da mesa decides "aprovar sempre" with the
 // command, on a real request of the chain; when the summary goes out the Owner

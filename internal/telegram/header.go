@@ -4,6 +4,8 @@ import (
 	"html"
 	"regexp"
 	"strings"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // SystemHeader is the header of a message that belongs to no workspace.
@@ -14,17 +16,20 @@ var mesaID = regexp.MustCompile(`^(\d+)-(.+)$`)
 // Header is the first line of every message of the bot, in bold, saying where
 // it comes from (docs/telegram/roteamento.md#cabeçalho): the workspace, the
 // workspace and the mesa ("loja · Mesa #42 checkout") or "Sistema".
-func Header(workspace, mesa string) string {
+func Header(workspace, mesa string) string { return HeaderIn(i18n.PtBR, workspace, mesa) }
+
+// HeaderIn is Header in a language ("System" and "Table #42 checkout" in English).
+func HeaderIn(lang, workspace, mesa string) string {
 	switch {
 	case workspace == "":
-		return SystemHeader
+		return i18n.Render(lang, i18n.M("bot.header_system"))
 	case mesa == "":
 		return workspace
 	}
 	if m := mesaID.FindStringSubmatch(mesa); m != nil {
-		return workspace + " · Mesa #" + m[1] + " " + strings.ReplaceAll(m[2], "-", " ")
+		return i18n.Render(lang, i18n.M("bot.header_table_numbered", "workspace", workspace, "number", m[1], "name", strings.ReplaceAll(m[2], "-", " ")))
 	}
-	return workspace + " · Mesa " + mesa
+	return i18n.Render(lang, i18n.M("bot.header_table", "workspace", workspace, "table", mesa))
 }
 
 // render makes the text of one part of a message for the Telegram, with the
@@ -49,9 +54,9 @@ func render(head, part string) (htmlText, plain string, ok bool) {
 
 // headOf is the header of a message for a user, "" for a reply to someone who
 // is not a user (a wrong code says nothing about the Mestre).
-func headOf(userID, workspace, mesa string) string {
+func headOf(lang, userID, workspace, mesa string) string {
 	if userID == "" {
 		return ""
 	}
-	return strings.NewReplacer("*", "", "`", "", "\n", " ").Replace(Header(workspace, mesa))
+	return strings.NewReplacer("*", "", "`", "", "\n", " ").Replace(HeaderIn(lang, workspace, mesa))
 }

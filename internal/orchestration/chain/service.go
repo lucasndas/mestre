@@ -13,6 +13,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/orchestration/quests"
@@ -381,7 +382,7 @@ func (s *Service) arrive(ctx context.Context, id int64, st Settings) {
 	switch r.Level.Kind {
 	case LevelPeople:
 		if s.o.Users != nil {
-			if err := s.o.Users.Ask(ctx, s.question(r, Text(r, r.Level, answers), answers)); err != nil {
+			if err := s.o.Users.Ask(ctx, s.question(r, Card(r, r.Level, answers), answers)); err != nil {
 				s.log.Warn("chain: the people were not asked", "request", r.ID, "err", err)
 			}
 		}
@@ -418,10 +419,10 @@ func (s *Service) arrive(ctx context.Context, id int64, st Settings) {
 
 // question is what the people are asked: the text, the answers and what the
 // policy requires of who answers.
-func (s *Service) question(r Request, text string, answers []Answer) PeopleQuestion {
+func (s *Service) question(r Request, v View, answers []Answer) PeopleQuestion {
 	rules, _ := s.rulesOf(r.Workspace)
 	n, require, min := rules.Need(r)
-	return PeopleQuestion{Request: r, Text: text, Deadline: r.Deadline, Answers: answers, Approvals: n, Require: require, MinLevel: min, PIN: rules.NeedsPIN(r)}
+	return PeopleQuestion{Request: r, Text: i18n.Render(i18n.PtBR, v.Msg()), Engine: v.Engine, Agent: v.Agent, Deadline: r.Deadline, Answers: answers, Approvals: n, Require: require, MinLevel: min, PIN: rules.NeedsPIN(r)}
 }
 
 // informGM tells the Grão-Mestre about a request that went over him to the

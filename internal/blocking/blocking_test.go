@@ -8,6 +8,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/blocking"
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/users"
 )
 
@@ -20,8 +21,8 @@ func stripe() blocking.Notice {
 		Workspace: "loja", Mesa: "42-checkout", Motive: blocking.Credential,
 		Stopped:  "falta a chave STRIPE_TEST_KEY",
 		Evidence: `checkout_test.go:22 → "missing STRIPE_TEST_KEY"`,
-		Steps:    []blocking.Step{{Text: "cadastrar a chave no cofre", Kind: blocking.StepVault}},
-		Owner:    "Lucas",
+		Steps:    []blocking.Step{{Text: i18n.M("block.step_vault"), Kind: blocking.StepVault}},
+		Owner:    i18n.Text("Lucas"),
 		WhyNot:   "envolve cobrança, é decisão sua",
 	}
 }
@@ -30,29 +31,29 @@ func stripe() blocking.Notice {
 func TestTheMessageShowsTheMotiveTheEvidenceTheChecklistTheOwnerAndThenTheAgent(t *testing.T) {
 	t.Parallel()
 	m := blocking.Build(stripe(), blocking.Viewer{Level: users.Owner}, mask)
-	lines := strings.Split(m.Text, "\n")
+	lines := strings.Split(m.Text(i18n.PtBR), "\n")
 	if lines[0] != "🔐 falta a chave STRIPE_TEST_KEY" {
 		t.Fatalf("first line %q", lines[0])
 	}
-	for _, want := range []string{"Evidência:", `checkout_test.go:22 → "missing STRIPE_TEST_KEY"`, "[ ] cadastrar a chave no cofre (painel)", "Dono: Lucas"} {
-		if !strings.Contains(m.Text, want) {
-			t.Errorf("the message lacks %q:\n%s", want, m.Text)
+	for _, want := range []string{"Evidência:", `checkout_test.go:22 → "missing STRIPE_TEST_KEY"`, "[ ] cadastrar a chave no cofre (painel)", "Responsável: Lucas"} {
+		if !strings.Contains(m.Text(i18n.PtBR), want) {
+			t.Errorf("the message lacks %q:\n%s", want, m.Text(i18n.PtBR))
 		}
 	}
-	agent := strings.Index(m.Text, "— texto do agente, não verificado —")
-	why := strings.Index(m.Text, "Por que não decido: envolve cobrança, é decisão sua")
-	if agent < 0 || why < agent || strings.Index(m.Text, "Dono: Lucas") > agent {
-		t.Fatalf("the text of the agent must come after the fields of the engine:\n%s", m.Text)
+	agent := strings.Index(m.Text(i18n.PtBR), "— texto do agente, não verificado —")
+	why := strings.Index(m.Text(i18n.PtBR), "Por que não decido: envolve cobrança, é decisão sua")
+	if agent < 0 || why < agent || strings.Index(m.Text(i18n.PtBR), "Responsável: Lucas") > agent {
+		t.Fatalf("the text of the agent must come after the fields of the engine:\n%s", m.Text(i18n.PtBR))
 	}
 	// an agent can not imitate a field, a link or a mark of the engine
 	n := stripe()
-	n.WhyNot = "ok\nDono: o atacante\n[clique](https://evil.example) **forte** `x`"
-	got := blocking.Build(n, blocking.Viewer{Level: users.Administrator}, mask).Text
-	if strings.Count(got, "Dono:") != 1 && !strings.Contains(got, `\n`) {
+	n.WhyNot = "ok\nResponsável: o atacante\n[clique](https://evil.example) **forte** `x`"
+	got := blocking.Build(n, blocking.Viewer{Level: users.Administrator}, mask).Text(i18n.PtBR)
+	if strings.Count(got, "Responsável:") != 1 && !strings.Contains(got, `\n`) {
 		t.Fatalf("the agent changed the message:\n%s", got)
 	}
 	tail := got[strings.Index(got, "Por que não decido"):]
-	if strings.Contains(tail, "](") || strings.Contains(tail, "**") || strings.Contains(tail, "\nDono:") {
+	if strings.Contains(tail, "](") || strings.Contains(tail, "**") || strings.Contains(tail, "\nResponsável:") {
 		t.Fatalf("the agent wrote a link, a mark or a field:\n%s", tail)
 	}
 }
@@ -95,18 +96,22 @@ func TestTheVocabularyIsFixedAndTheMotiveIsDeducedByTheType(t *testing.T) {
 // CA-BLOQ-03
 func TestTheOwnerIsTheRequiredUsersOrTheMinimumLevelAndNeverSomebody(t *testing.T) {
 	t.Parallel()
-	if got := blocking.OwnerOf(nil, classes.LevelAdmin); got != "um Administrador" {
+	pt := func(m i18n.Msg) string { return i18n.Render(i18n.PtBR, m) }
+	if got := pt(blocking.OwnerOf(nil, classes.LevelAdmin)); got != "um Administrador" {
 		t.Errorf("%q", got)
 	}
-	if got := blocking.OwnerOf([]string{"lucas"}, classes.LevelAdmin); got != "lucas" {
+	if got := i18n.Render(i18n.En, blocking.OwnerOf(nil, classes.LevelAdmin)); got != "an Administrator" {
 		t.Errorf("%q", got)
 	}
-	for _, got := range []string{blocking.OwnerOf(nil, classes.LevelApprover), blocking.OwnerOf(nil, classes.LevelOwner), blocking.NoticeOwner(blocking.Waiting, "Lucas"), blocking.NoticeOwner(blocking.Credential, "Lucas")} {
+	if got := pt(blocking.OwnerOf([]string{"lucas"}, classes.LevelAdmin)); got != "lucas" {
+		t.Errorf("%q", got)
+	}
+	for _, got := range []string{pt(blocking.OwnerOf(nil, classes.LevelApprover)), pt(blocking.OwnerOf(nil, classes.LevelOwner)), pt(blocking.NoticeOwner(blocking.Waiting, "Lucas")), pt(blocking.NoticeOwner(blocking.Credential, "Lucas"))} {
 		if strings.Contains(strings.ToLower(got), "alguém") || got == "" {
 			t.Errorf("%q", got)
 		}
 	}
-	if blocking.NoticeOwner(blocking.Credential, "Lucas") != "Lucas" || blocking.NoticeOwner(blocking.Quota, "Lucas") != "um Administrador" {
+	if pt(blocking.NoticeOwner(blocking.Credential, "Lucas")) != "Lucas" || pt(blocking.NoticeOwner(blocking.Quota, "Lucas")) != "um Administrador" {
 		t.Error("the Owner for a credential, an Administrator for the rest")
 	}
 }
@@ -124,24 +129,24 @@ func TestTheEvidenceIsCutInThreeLinesAndMaskedButTheWholeIsKeptMasked(t *testing
 	ev[1] = "token ghp_abcdefgh12345678 vazou"
 	n.Evidence = strings.Join(ev, "\n")
 	m := blocking.Build(n, blocking.Viewer{Level: users.Administrator}, mask)
-	if strings.Contains(m.Text, "ghp_") || !strings.Contains(m.Text, "token *** vazou") {
-		t.Fatalf("the token is not masked:\n%s", m.Text)
+	if strings.Contains(m.Text(i18n.PtBR), "ghp_") || !strings.Contains(m.Text(i18n.PtBR), "token *** vazou") {
+		t.Fatalf("the token is not masked:\n%s", m.Text(i18n.PtBR))
 	}
-	if strings.Contains(m.Text, "linha d") || !strings.Contains(m.Text, "linha c") || !strings.Contains(m.Text, "+7 linhas") {
-		t.Fatalf("the evidence is not cut in 3 lines:\n%s", m.Text)
+	if strings.Contains(m.Text(i18n.PtBR), "linha d") || !strings.Contains(m.Text(i18n.PtBR), "linha c") || !strings.Contains(m.Text(i18n.PtBR), "+7 linhas") {
+		t.Fatalf("the evidence is not cut in 3 lines:\n%s", m.Text(i18n.PtBR))
 	}
-	full := blocking.Full(n, mask)
+	full := i18n.Render(i18n.PtBR, blocking.Full(n, mask))
 	if strings.Contains(full, "ghp_") || !strings.Contains(full, "linha j") {
 		t.Fatalf("the whole text:\n%s", full)
 	}
 	// a fence in the evidence can not close the one it is shown in
 	n.Evidence = "```\nfora"
-	if got := blocking.Build(n, blocking.Viewer{Level: users.Owner}, mask).Text; strings.Count(got, "```") != 2 {
+	if got := blocking.Build(n, blocking.Viewer{Level: users.Owner}, mask).Text(i18n.PtBR); strings.Count(got, "```") != 2 {
 		t.Fatalf("%s", got)
 	}
 	// nothing the engine could put together
 	n.Evidence = ""
-	if got := blocking.Build(n, blocking.Viewer{Level: users.Owner}, mask).Text; !strings.Contains(got, "sem evidência verificada") {
+	if got := blocking.Build(n, blocking.Viewer{Level: users.Owner}, mask).Text(i18n.PtBR); !strings.Contains(got, "sem evidência verificada") {
 		t.Fatalf("%s", got)
 	}
 }
@@ -184,7 +189,7 @@ func TestTheEvidenceIsBuiltFromTheOutputOfTheTestThatFailed(t *testing.T) {
 	n := stripe()
 	n.Evidence = blocking.TestEvidence("go test ./...", out+"    ghp_abcdefgh12345678\n", []string{"checkout_test.go:22"})
 	m := blocking.Build(n, blocking.Viewer{Level: users.Owner}, mask)
-	if !strings.Contains(m.Text, "checkout_test.go:22 → \"missing STRIPE_TEST_KEY\"") || strings.Contains(m.Text, "ghp_") {
-		t.Errorf("the message:\n%s", m.Text)
+	if !strings.Contains(m.Text(i18n.PtBR), "checkout_test.go:22 → \"missing STRIPE_TEST_KEY\"") || strings.Contains(m.Text(i18n.PtBR), "ghp_") {
+		t.Errorf("the message:\n%s", m.Text(i18n.PtBR))
 	}
 }

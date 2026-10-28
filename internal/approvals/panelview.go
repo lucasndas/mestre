@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/providers"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -24,6 +25,8 @@ type Pending struct {
 	// Text is the question as the Telegram message has it (the fields of the
 	// engine first, then the block of the text of the agents).
 	Text string
+	// Msg is the same question as a message, said in the language of who reads it.
+	Msg i18n.Msg
 	// Approvals is the quorum, Counted how many approvals stand and Require the
 	// users whose approval is required.
 	Approvals, Counted int
@@ -146,7 +149,7 @@ func (f *Flow) pending(ctx context.Context, u users.User, r chain.Request, fr fl
 	if err != nil {
 		return Pending{}, err
 	}
-	p := Pending{Request: r, Text: fr.Text, Approvals: fr.Approvals, Counted: counted, Require: fr.Require, MinLevel: fr.Min, PIN: fr.PIN, AskedAt: asked}
+	p := Pending{Request: r, Text: i18n.Render(i18n.PtBR, fr.Msg), Msg: fr.Msg, Approvals: fr.Approvals, Counted: counted, Require: fr.Require, MinLevel: fr.Min, PIN: fr.PIN, AskedAt: asked}
 	if err := f.o.DB.Reader().QueryRowContext(ctx, `SELECT COUNT(*) FROM approval_votes WHERE request = ? AND user_id = ?`, r.ID, u.ID).Scan(&counted); err == nil {
 		p.Voted = counted > 0
 	}
@@ -282,12 +285,18 @@ func (f *Flow) Pendings(ctx context.Context, u users.User) (int, error) {
 
 // DetailText is the whole question as the engine builds it, with the exact target
 // of the request, for a user who may see the request (Question checked it).
-func DetailText(r chain.Request) string {
-	text := chain.Text(r, r.Level, nil)
+func DetailText(r chain.Request) string { return DetailTextIn(i18n.PtBR, r) }
+
+// DetailTextIn is DetailText in a language.
+func DetailTextIn(lang string, r chain.Request) string { return i18n.Render(lang, detailMsg(r)) }
+
+// detailMsg is DetailText as a message, said in the language of who reads it.
+func detailMsg(r chain.Request) i18n.Msg {
+	m := chain.Card(r, r.Level, nil).Msg()
 	if len(r.Target) > 0 {
-		text += "\nAlvo exato: " + string(r.Target) + "\n"
+		m = i18n.Concat(m, i18n.M("approval.exact_target", "target", string(r.Target)))
 	}
-	return text
+	return m
 }
 
 // VisibleInHistory says whether the user may read the ended request in the history:

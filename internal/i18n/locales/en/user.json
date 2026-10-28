@@ -1,0 +1,8 @@
+{
+  "user.login_blocked": "The login of {{name}} was blocked for {{minutes}} minutes: {{errors}} wrong passwords in {{window}} minutes.",
+  "user.paired": "{{name}} was paired to Telegram.",
+  "user.pin_locked": "The PIN of {{name}} was locked for {{minutes}} minutes: {{errors}} errors in {{window}} minutes.",
+  "user.transfer_accepted": "{{name}} accepted the post of Guildmaster. You are now an Administrator.",
+  "user.transfer_offer": "{{name}} wants to hand the post of Guildmaster to you. Accept it with your PIN within 24 hours.",
+  "user.you_are_owner": "You are the Guildmaster."
+}

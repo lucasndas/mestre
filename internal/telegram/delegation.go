@@ -3,11 +3,10 @@ package telegram
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/tablerules"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -33,8 +32,8 @@ func (c *DecreeChannel) DelegationEnding(ctx context.Context, d decrees.Decree) 
 	}
 	n := strconv.FormatInt(d.Number, 10)
 	_, err = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Origin: "motor", Workspace: d.Workspace, Mesa: d.Mesa,
-		Text:    fmt.Sprintf("A delegação %d (%s) acaba em %s. Renovar vale pela validade padrão da campanha (até 30 dias), com o seu PIN.", d.Number, d.Summary(), c.Svc.Moment(ctx, d.Until)),
-		Buttons: [][]Button{{{Text: "Renovar", Action: DelegationRenewAction, Arg: n}, {Text: "Deixar vencer", Action: DelegationLapseAction, Arg: n}}}})
+		Msg:     i18n.M("bot.delegation_ending", "number", d.Number, "summary", d.SummaryMsg(), "moment", c.Svc.InGuildZone(ctx, d.Until)),
+		Buttons: [][]Button{{{Msg: i18n.M("bot.renew"), Action: DelegationRenewAction, Arg: n}, {Msg: i18n.M("bot.let_lapse"), Action: DelegationLapseAction, Arg: n}}}})
 	if err != nil {
 		c.bot.log.Warn("telegram: the reminder of a delegation was not queued", "decree", d.Number, "err", err)
 	}
@@ -42,49 +41,49 @@ func (c *DecreeChannel) DelegationEnding(ctx context.Context, d decrees.Decree) 
 
 // renew is the Renovar: it proposes the same delegation for the default validity of the workspace (up to 30 days), and
 // the author confirms it like any decree.
-func (c *DecreeChannel) renew(ctx context.Context, k Click) (string, string, error) {
+func (c *DecreeChannel) renew(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	n, err := strconv.ParseInt(k.Arg, 10, 64)
 	if err != nil {
-		return "", "", errors.New("botão inválido")
+		return i18n.Msg{}, i18n.Msg{}, errInvalidButton
 	}
 	pend, err := c.Svc.Renew(ctx, n, k.User.ID)
 	if err != nil {
-		return "", "", c.say(err)
+		return i18n.Msg{}, i18n.Msg{}, c.say(err)
 	}
 	if err := c.Offer(ctx, pend); err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
-	return "Renovação proposta.", fmt.Sprintf("Renovação da delegação %d proposta: confirme na mensagem seguinte.", n), nil
+	return i18n.M("bot.renewal_proposed"), i18n.M("bot.renewal_proposed_result", "number", n), nil
 }
 
-func (c *DecreeChannel) lapse(_ context.Context, k Click) (string, string, error) {
-	return "Combinado.", "A delegação " + k.Arg + " vence no prazo.", nil
+func (c *DecreeChannel) lapse(_ context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
+	return i18n.M("bot.agreed"), i18n.M("bot.delegation_lapses", "number", k.Arg), nil
 }
 
 // revokeAllAsk is /revogar_tudo: only the Owner (the bot checks the level), with
 // one confirmation by button, no PIN: it only restricts.
-func (c *DecreeChannel) revokeAllAsk(ctx context.Context, call Call) (string, error) {
+func (c *DecreeChannel) revokeAllAsk(ctx context.Context, call Call) (i18n.Msg, error) {
 	_, err := c.bot.Send(ctx, Out{ChatID: call.ChatID, UserID: call.User.ID, Origin: "motor",
-		Text:    "Revogar todas as delegações (de decisão, no GitHub, do Operador e subdelegações) e todas as regras temporárias de mesa, em todas as campanhas? Não para os agentes: para isso há o /travar.",
-		Buttons: [][]Button{{{Text: "Revogar todas as delegações", Action: RevokeAllAction, Capability: users.DelegateHigh}}}})
-	return "", err
+		Msg:     i18n.M("bot.revoke_all_ask"),
+		Buttons: [][]Button{{{Msg: i18n.M("bot.revoke_all_button"), Action: RevokeAllAction, Capability: users.DelegateHigh}}}})
+	return i18n.Msg{}, err
 }
 
 // RevokeAllClick is the confirmation of the emergency button; the panel calls it
 // too.
-func (c *DecreeChannel) revokeAll(ctx context.Context, k Click) (string, string, error) {
+func (c *DecreeChannel) revokeAll(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	rep, err := c.Svc.RevokeAllDelegations(ctx, k.User.ID)
 	switch {
 	case errors.Is(err, decrees.ErrNotAllowed):
-		return "", "", errors.New("só o Senhor da Guilda revoga todas as delegações")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.only_owner_revokes_all")
 	case err != nil:
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
 	rules := 0
 	for _, n := range rep.Rules {
 		rules += n
 	}
-	return "Revogadas.", fmt.Sprintf("%s revogou todas as delegações: %d delegações, %d subdelegações e %d regras temporárias de mesa.", k.User.Name, len(rep.Decrees), rep.Subdelegations, rules), nil
+	return i18n.M("bot.revoked_all_toast"), i18n.M("bot.revoked_all_result", "name", k.User.Name, "delegations", len(rep.Decrees), "subdelegations", rep.Subdelegations, "rules", rules), nil
 }
 
 // RevokeAllHooks is what the emergency button reaches beyond the decrees: the
@@ -98,7 +97,7 @@ type RevokeAllHooks struct {
 	RerouteFn func(ctx context.Context, workspace string) error
 	// GrandMaster puts the notice in the inbox of the Grão-Mestre of the
 	// workspace (nil: only the people are told).
-	GrandMaster func(ctx context.Context, workspace, text string)
+	GrandMaster func(ctx context.Context, workspace string, m i18n.Msg)
 	// Channel is the channel that has the bot.
 	Channel *DecreeChannel
 }
@@ -123,9 +122,9 @@ func (h RevokeAllHooks) Reroute(ctx context.Context, workspace string) error {
 
 // Told implements decrees.RevokeHooks: the Administrators of the workspace and
 // its Grão-Mestre.
-func (h RevokeAllHooks) Told(ctx context.Context, workspace, text string) {
+func (h RevokeAllHooks) Told(ctx context.Context, workspace string, m i18n.Msg) {
 	if h.GrandMaster != nil {
-		h.GrandMaster(ctx, workspace, text)
+		h.GrandMaster(ctx, workspace, m)
 	}
 	if h.Users == nil || h.Channel == nil || h.Channel.bot == nil {
 		return
@@ -138,7 +137,7 @@ func (h RevokeAllHooks) Told(ctx context.Context, workspace, text string) {
 		if u.State != users.Active || u.TelegramID == 0 || !u.Acts(workspace) || !users.Can(u.Level, users.RevokeTemporaryRules) || u.Level == users.Owner {
 			continue // the Owner pressed the button
 		}
-		if _, err := h.Channel.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: strings.TrimSpace(text), Workspace: workspace, Origin: "motor"}); err != nil {
+		if _, err := h.Channel.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: m, Workspace: workspace, Origin: "motor"}); err != nil {
 			h.Channel.bot.log.Warn("telegram: the notice of the revocation was not queued", "err", err)
 		}
 	}

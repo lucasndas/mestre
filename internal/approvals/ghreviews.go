@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -196,7 +197,7 @@ func (g *GitHubReviews) judge(ctx context.Context, rd ReviewReader, r chain.Requ
 		}
 		return outcomePIN, u.ID, "o review é válido e o pedido exige o PIN: ele foi pedido pelo canal", nil
 	}
-	return outcomeCounted, u.ID, rep.Text, nil
+	return outcomeCounted, u.ID, i18n.Render(i18n.PtBR, rep.Msg), nil
 }
 
 // userOf finds the active user whose github_login is the login of the review;

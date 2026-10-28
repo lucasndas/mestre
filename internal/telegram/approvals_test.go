@@ -8,6 +8,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/telegram"
 	"github.com/mestre-ia/mestre/internal/testkit/faketelegram"
@@ -398,7 +399,7 @@ func TestAButtonAboveTheLevelOfTheUserIsRefusedByTheBot(t *testing.T) {
 		t.Fatal(err)
 	}
 	// a question that wrongly offers a permanent answer to an Approver
-	if _, err := w.ac.Send(w.ctx, approvals.Message{UserID: ana.ID, Request: r, Text: "?", Answers: []chain.Answer{chain.AnswerApproveAlways}}); err != nil {
+	if _, err := w.ac.Send(w.ctx, approvals.Message{UserID: ana.ID, Request: r, Msg: i18n.Text("?"), Answers: []chain.Answer{chain.AnswerApproveAlways}}); err != nil {
 		t.Fatal(err)
 	}
 	w.drain()
@@ -507,12 +508,12 @@ func TestALongQuestionIsEditedInTheMessageNotInTheFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	long := strings.Repeat("linha de arquivo alterado\n", 600)
-	ref, err := w.ac.Send(w.ctx, approvals.Message{UserID: ana.ID, Request: r, Text: long, Answers: []chain.Answer{chain.AnswerApprove}})
+	ref, err := w.ac.Send(w.ctx, approvals.Message{UserID: ana.ID, Request: r, Msg: i18n.Text(long), Answers: []chain.Answer{chain.AnswerApprove}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	w.drain()
-	if err := w.ac.Edit(w.ctx, approvals.MessageEdit{UserID: ana.ID, Ref: ref, Text: "Encerrado.", Request: r.ID}); err != nil {
+	if err := w.ac.Edit(w.ctx, approvals.MessageEdit{UserID: ana.ID, Ref: ref, Msg: i18n.Text("Encerrado."), Request: r.ID}); err != nil {
 		t.Fatal(err)
 	}
 	var msgID int64

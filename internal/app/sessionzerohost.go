@@ -14,6 +14,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/verification"
@@ -77,7 +78,7 @@ func (r *stdRun) analystOr(def sessionzero.Analyst) sessionzero.Analyst {
 // Administrators they wait for the confirmation.
 func (r *stdRun) verificationKeeper() verification.Keeper {
 	return verification.Keeper{Log: r.env.Log, Notify: func(ctx context.Context, workspace, text string) error {
-		_, err := r.alert.AdminAlert(ctx, workspace, text)
+		_, err := r.alert.AdminAlert(ctx, workspace, i18n.Text(text))
 		if errors.Is(err, telegram.ErrQueued) {
 			return nil
 		}
@@ -98,29 +99,28 @@ var _ sessionzero.Users = szUsers{}
 
 // AskOwnerToInstall sends the links to the Owner alone (docs/github/criacao-de-apps.md).
 func (u szUsers) AskOwnerToInstall(ctx context.Context, workspace string, links []sessionzero.InstallLink) error {
-	var b strings.Builder
-	fmt.Fprintf(&b, "A campanha %s precisa dos Apps do Mestre no repositório. Abra o link, escolha o repositório e clique em Install:", workspace)
+	parts := []i18n.Msg{i18n.M("workspace.install_apps", "workspace", workspace)}
 	for _, l := range links {
-		fmt.Fprintf(&b, "\n- %s: %s", l.App, l.URL)
+		parts = append(parts, i18n.M("workspace.install_link", "app", l.App, "url", l.URL))
 	}
-	u.r.alert.OwnerAlert(ctx, b.String())
+	u.r.alert.OwnerAlert(ctx, i18n.Concat(parts...))
 	return nil
 }
 
 // Notify tells the Owner and the Administrators who act in the workspace.
 func (u szUsers) Notify(ctx context.Context, workspace string, n sessionzero.Notice) error {
-	return u.tell(ctx, workspace, n.Text)
+	return u.tell(ctx, workspace, i18n.Text(n.Text))
 }
 
 // AskVersioning tells the Administrators the question is pending. The answer
 // (versionar ou ficar só local) is given in the panel (milestone 6): the bot
 // does not take it.
 func (u szUsers) AskVersioning(ctx context.Context, workspace string) error {
-	return u.tell(ctx, workspace, "Pergunta pendente da campanha "+workspace+": a pasta .mestre/ deve ser versionada no projeto ou ficar só local? Até a resposta ela fica só local. A resposta é dada no painel.")
+	return u.tell(ctx, workspace, i18n.M("workspace.versioning_pending", "workspace", workspace))
 }
 
-func (u szUsers) tell(ctx context.Context, workspace, text string) error {
-	_, err := u.r.alert.AdminAlert(ctx, workspace, text)
+func (u szUsers) tell(ctx context.Context, workspace string, m i18n.Msg) error {
+	_, err := u.r.alert.AdminAlert(ctx, workspace, m)
 	if errors.Is(err, telegram.ErrQueued) {
 		return nil // it goes out when the bot is up
 	}

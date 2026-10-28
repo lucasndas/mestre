@@ -177,8 +177,8 @@ func (a decreeDelegations) Used(ctx context.Context, req chain.Request, by strin
 // tellUser says something to a user by the bot.
 type tellUser struct{ r *stdRun }
 
-func (t tellUser) Tell(ctx context.Context, userID, text string) error {
-	t.r.alert.Tell(ctx, userID, text)
+func (t tellUser) Tell(ctx context.Context, userID string, m i18n.Msg) error {
+	t.r.alert.Tell(ctx, userID, m)
 	return nil
 }
 
@@ -225,7 +225,7 @@ func (r *stdRun) approvalSetup(orc *Orchestration) {
 			}
 			return r.gmRest(a.Name, settingsPermissions), a.AppID, nil
 		},
-		Tell:   func(ctx context.Context, _, text string) { r.alert.OwnerAlert(ctx, text) },
+		Tell:   func(ctx context.Context, _ string, m i18n.Msg) { r.alert.OwnerAlert(ctx, m) },
 		Logger: r.env.Log,
 	})
 }

@@ -126,6 +126,9 @@ type Pending struct {
 	// Text is what the confirmation says; PIN says the author must give the
 	// PIN to confirm, and Why says why.
 	Text string
+	// Msg is the confirmation as a message, said in the language of the author, and
+	// WhyMsg the reason of the PIN (Text and Why are their pt-BR form).
+	Msg, WhyMsg i18n.Msg
 	// Order is the text of the order of the user, as he wrote it (without the
 	// blanks at the ends): shown with the proposal so he sees what was understood
 	// next to what he said.
@@ -197,6 +200,9 @@ type View struct {
 
 // Summary is the one line of /decretos.
 func (d Decree) Summary() string { return describeEffect(d.Effect, d.Target, d.Kind, d.Action) }
+
+// SummaryMsg is Summary as a message, said in the language of who reads.
+func (d Decree) SummaryMsg() i18n.Msg { return describeMsg(d.Effect, d.Target, d.Kind, d.Action) }
 
 // Refusal is a proposal or an action the engine does not take, with the
 // reason as a message (a code and its parameters) that whoever shows it

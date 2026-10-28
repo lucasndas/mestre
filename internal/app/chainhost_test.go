@@ -10,6 +10,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
@@ -57,14 +58,18 @@ func TestAMachineWithoutAPeriodSaysItOpensNoApprovals(t *testing.T) {
 
 type fakeTeller struct{ plain, scoped []string }
 
-func (f *fakeTeller) OwnerAlert(_ context.Context, text string) { f.plain = append(f.plain, text) }
-func (f *fakeTeller) OwnerWorkspaceAlert(_ context.Context, workspace, text string) {
-	f.scoped = append(f.scoped, workspace+"|"+text)
+func (f *fakeTeller) OwnerAlert(_ context.Context, m i18n.Msg) {
+	f.plain = append(f.plain, i18n.Render(i18n.PtBR, m))
+}
+func (f *fakeTeller) OwnerWorkspaceAlert(_ context.Context, workspace string, m i18n.Msg) {
+	f.scoped = append(f.scoped, workspace+"|"+i18n.Render(i18n.PtBR, m))
 }
 
 type plainTeller struct{ got []string }
 
-func (p *plainTeller) OwnerAlert(_ context.Context, text string) { p.got = append(p.got, text) }
+func (p *plainTeller) OwnerAlert(_ context.Context, m i18n.Msg) {
+	p.got = append(p.got, i18n.Render(i18n.PtBR, m))
+}
 
 // Part of CA-ROTA-06 (the header of each message is in internal/telegram): the
 // alert of the chain about a workspace, the warning of quota among them, goes
@@ -92,7 +97,7 @@ func TestTheAlertOfTheChainAboutAWorkspaceKeepsTheWorkspaceForTheHeader(t *testi
 // callback sends the alert in its own goroutine.
 type chanTeller struct{ got chan string }
 
-func (c chanTeller) OwnerAlert(_ context.Context, text string) { c.got <- text }
+func (c chanTeller) OwnerAlert(_ context.Context, m i18n.Msg) { c.got <- i18n.Render(i18n.PtBR, m) }
 
 // ownerHearsOfThePolicyFile writes the content as the policy file of the
 // workspace "loja", reads it through the production policyFileFor and returns

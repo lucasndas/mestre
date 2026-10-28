@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // Edit is the new text of a message the bot sent, with the buttons it keeps (an
@@ -15,7 +17,7 @@ type Edit struct {
 	Outbox int64
 	// UserID is the user the message is for: the new buttons are his.
 	UserID  string
-	Text    string
+	Msg     i18n.Msg
 	Buttons [][]Button
 }
 
@@ -33,9 +35,10 @@ func (b *Bot) Edit(ctx context.Context, e Edit) error {
 	if err != nil {
 		return err
 	}
-	text := Split(b.maskText(e.Text), partSize)[0]
+	lang := b.langFor(ctx, e.UserID, "")
+	text := Split(b.maskText(i18n.Render(lang, e.Msg)), partSize)[0]
 	p := map[string]any{"chat_id": chat, "message_id": msg}
-	h, plain, ok := render(headOf(e.UserID, workspace, mesa), text)
+	h, plain, ok := render(headOf(lang, e.UserID, workspace, mesa), text)
 	if ok {
 		p["text"], p["parse_mode"] = b.o.Mask(h), "HTML"
 	} else {
@@ -47,7 +50,7 @@ func (b *Bot) Edit(ctx context.Context, e Edit) error {
 		var rows [][]map[string]string
 		err := b.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 			var err error
-			rows, err = b.buttons(ctx, tx, e.UserID, e.Buttons, true)
+			rows, err = b.buttons(ctx, tx, e.UserID, lang, e.Buttons, true)
 			return err
 		})
 		if err != nil {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
@@ -179,7 +180,7 @@ func (h *Handler) handle(ctx context.Context, c *localchan.Call) localchan.Respo
 	}
 	n.Owner = NoticeOwner(motive, owner)
 	if motive == Credential {
-		n.Steps = []Step{{Text: "cadastrar a chave no cofre", Kind: StepVault}}
+		n.Steps = []Step{{Text: i18n.M("block.step_vault"), Kind: StepVault}}
 	}
 	cctx, stored := WithPanelCount(ctx)
 	id, sent, err := h.Channel.Notify(cctx, n)

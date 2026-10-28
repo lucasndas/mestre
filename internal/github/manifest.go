@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/users"
 	"github.com/mestre-ia/mestre/internal/vault"
@@ -96,7 +97,7 @@ type CreationOptions struct {
 	// OwnerLogin is the login on GitHub of the Owner of the Mestre.
 	OwnerLogin func(ctx context.Context) (string, error)
 	// Tell says something to the Owner (the bot and the panel); nil: nothing.
-	Tell func(ctx context.Context, text string)
+	Tell func(ctx context.Context, m i18n.Msg)
 	// OnReady is told an App that became ready (the Grão-Mestre one makes the
 	// repository of the lock then); nil: nobody.
 	OnReady func(ctx context.Context, app App)
@@ -164,9 +165,9 @@ func writeAudit(ctx context.Context, db *store.DB, clk clock.Clock, log *slog.Lo
 	}
 }
 
-func (c *Creation) tell(ctx context.Context, text string) {
+func (c *Creation) tell(ctx context.Context, m i18n.Msg) {
 	if c.o.Tell != nil {
-		c.o.Tell(ctx, text)
+		c.o.Tell(ctx, m)
 	}
 }
 
@@ -411,7 +412,7 @@ func (c *Creation) expire(ctx context.Context, r request) {
 		_ = c.o.Apps.SetState(ctx, r.app, classes.AppExpired)
 	}
 	c.audit(ctx, r.app, "expired", "", "")
-	c.tell(ctx, fmt.Sprintf("O link para criar o App %q venceu. Peça outro no painel (Apps do GitHub) ou ao Grão-Mestre; enquanto isso a classe segue com o App \"Mestre\".", r.app))
+	c.tell(ctx, i18n.M("github.app_link_expired", "app", r.app))
 }
 
 // fail ends a request whose code was not handed back: the App may exist at
@@ -424,7 +425,7 @@ func (c *Creation) fail(ctx context.Context, r request, from, why string) {
 	}
 	_ = c.o.Apps.SetState(ctx, r.app, classes.AppFailed)
 	c.audit(ctx, r.app, "failed", "", why)
-	c.tell(ctx, fmt.Sprintf("A criação do App %q falhou (%s). Se ele chegou a ser criado no GitHub, exclua-o em https://github.com/settings/apps; o próximo pedido usa outro nome.", r.app, why))
+	c.tell(ctx, i18n.M("github.app_creation_failed", "app", r.app, "why", why))
 }
 
 // conversion is what GitHub answers to the code of a manifest.
@@ -541,7 +542,7 @@ func (c *Creation) abort(ctx context.Context, r request, user, why string) {
 	_, _ = c.setStatus(ctx, r.id, "exchanging", "failed")
 	_ = c.o.Apps.SetState(ctx, r.app, classes.AppFailed)
 	c.audit(ctx, r.app, "aborted", user, why)
-	c.tell(ctx, fmt.Sprintf("O App %q não será usado: %s. Se ele existe no GitHub, exclua-o em https://github.com/settings/apps.", r.app, why))
+	c.tell(ctx, i18n.M("github.app_not_used", "app", r.app, "why", why))
 }
 
 // convert is POST /app-manifests/{code}/conversions.
@@ -705,7 +706,7 @@ func (c *Creation) finishInstall(ctx context.Context, app App, installationID in
 		if err := c.deviceFlowOn(ctx, app); err != nil {
 			if errors.Is(err, ErrDeviceFlowOff) && c.once(ctx, app.Name, "flow_told") {
 				c.audit(ctx, app.Name, "device_flow_off", by, "")
-				c.tell(ctx, fmt.Sprintf("Falta um passo no App %q: abra https://github.com/settings/apps/%s, marque \"Enable Device Flow\" e salve. O Mestre confere sozinho em seguida.", app.Name, app.Slug))
+				c.tell(ctx, i18n.M("github.app_device_flow", "app", app.Name, "slug", app.Slug))
 			}
 			return App{}, err
 		}
@@ -726,7 +727,7 @@ func (c *Creation) finishInstall(ctx context.Context, app App, installationID in
 	if err != nil {
 		return App{}, err
 	}
-	c.tell(ctx, fmt.Sprintf("O App %q está pronto.", ready.Name))
+	c.tell(ctx, i18n.M("github.app_ready", "app", ready.Name))
 	if c.o.OnReady != nil {
 		c.o.OnReady(ctx, ready)
 	}
@@ -863,7 +864,7 @@ func (c *Creation) poll(ctx context.Context, r request, owner string) {
 	if now.Sub(r.updatedAt) >= CodeLife && !r.flowTold {
 		if moved, err := c.setStatus(ctx, r.id, "created", "unconfirmed"); err == nil && moved {
 			c.audit(ctx, r.app, "installation_unconfirmed", "", "")
-			c.tell(ctx, fmt.Sprintf("Não vi a instalação do App %q em 1 hora. Instale-o em https://github.com/apps/%s/installations/new e abra o link de volta que o GitHub mostrar, ou peça o status ao Grão-Mestre.", r.app, strings.ToLower(Slug(r.app))))
+			c.tell(ctx, i18n.M("github.app_install_unseen", "app", r.app, "slug", strings.ToLower(Slug(r.app))))
 		}
 		return
 	}

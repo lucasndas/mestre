@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/telegram"
 	"github.com/mestre-ia/mestre/internal/testkit/faketelegram"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -56,8 +57,8 @@ func TestAnUpdateRecordedBeforeARestartIsProcessedOnceAndARepeatedIdIsIgnored(t 
 // CA-BOT-02
 func TestAQuickCommandIsAnsweredByTheEngineWithoutTheInbox(t *testing.T) {
 	t.Parallel()
-	w := newWorld(t, rigOpts{commands: []telegram.Command{{Name: "status", Description: "estado", Capability: users.Status,
-		Run: func(context.Context, telegram.Call) (string, error) { return "Cidadela online", nil }}}})
+	w := newWorld(t, rigOpts{commands: []telegram.Command{{Name: "status", Description: i18n.Text("estado"), Capability: users.Status,
+		Run: func(context.Context, telegram.Call) (i18n.Msg, error) { return i18n.Text("Cidadela online"), nil }}}})
 	_, tg := w.user("Ana", users.Approver)
 	// the Grand Master is busy: an ordinary message is in his inbox and he has not
 	// taken it (the fake router only records what is delivered, never consumes it)
@@ -79,7 +80,7 @@ func TestALongAnswerGoesAsASummaryAndTheWholeTextAsAFile(t *testing.T) {
 	w := newWorld(t)
 	u, tg := w.user("Ana", users.Approver)
 	long := strings.Repeat("linha de texto do Grão-Mestre\n\n", 700) // ~22.000 characters
-	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: long}); err != nil {
+	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Msg: i18n.Text(long)}); err != nil {
 		t.Fatal(err)
 	}
 	for range 3 {
@@ -103,13 +104,13 @@ func TestALongAnswerGoesAsASummaryAndTheWholeTextAsAFile(t *testing.T) {
 func TestAButtonOfAnotherUserIsRefusedAndNothingRuns(t *testing.T) {
 	t.Parallel()
 	ran := 0
-	w := newWorld(t, rigOpts{actions: map[string]telegram.Action{"approve": func(context.Context, telegram.Click) (string, string, error) {
+	w := newWorld(t, rigOpts{actions: map[string]telegram.Action{"approve": func(context.Context, telegram.Click) (i18n.Msg, i18n.Msg, error) {
 		ran++
-		return "feito", "Aprovado.", nil
+		return i18n.Text("feito"), i18n.Text("Aprovado."), nil
 	}}})
 	a, ta := w.user("Ana", users.Approver)
 	_, tb := w.user("Bia", users.Approver)
-	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: ta.ID, UserID: a.ID, Text: "Aprovar o PR 12?", Buttons: [][]telegram.Button{{{Text: "Aprovar", Action: "approve", Arg: "12", Capability: users.DecideApprovals}}}}); err != nil {
+	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: ta.ID, UserID: a.ID, Msg: i18n.Text("Aprovar o PR 12?"), Buttons: [][]telegram.Button{{{Msg: i18n.Text("Aprovar"), Action: "approve", Arg: "12", Capability: users.DecideApprovals}}}}); err != nil {
 		t.Fatal(err)
 	}
 	w.flush()
@@ -153,7 +154,7 @@ func TestA429HoldsTheQueueForItsRetryAfter(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
 	u, tg := w.user("Ana", users.Approver)
-	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: "oi"}); err != nil {
+	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Msg: i18n.Text("oi")}); err != nil {
 		t.Fatal(err)
 	}
 	w.fake.FailNext("sendMessage", faketelegram.Failure{Status: 429, RetryAfter: 7})
@@ -179,7 +180,7 @@ func TestATermIsExplainedOnlyTheFirstTime(t *testing.T) {
 	w := newWorld(t, rigOpts{terms: true})
 	u, tg := w.user("Ana", users.Approver)
 	for _, text := range []string{"A Companhia da mesa está pronta.", "Outra Companhia chegou."} {
-		if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: text}); err != nil {
+		if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Msg: i18n.Text(text)}); err != nil {
 			t.Fatal(err)
 		}
 		w.flush()
@@ -196,7 +197,7 @@ func TestAMessageStaysInTheQueueWhileTheTelegramIsDown(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
 	u, tg := w.user("Ana", users.Approver)
-	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: "resposta"}); err != nil {
+	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Msg: i18n.Text("resposta")}); err != nil {
 		t.Fatal(err)
 	}
 	w.fake.FailNext("sendMessage", faketelegram.Failure{Status: 502})
@@ -233,13 +234,13 @@ func TestAStickerIsRefusedWithTheAcceptedTypesAndNothingIsQueued(t *testing.T) {
 func TestTheAnswerToASecondFactorIsTakenByTheEngineAndOnlyBythatUser(t *testing.T) {
 	t.Parallel()
 	var used []string
-	w := newWorld(t, rigOpts{captures: map[string]telegram.CaptureFunc{"factor": func(_ context.Context, _ users.User, ref, text string) (string, bool, error) {
+	w := newWorld(t, rigOpts{captures: map[string]telegram.CaptureFunc{"factor": func(_ context.Context, _ users.User, ref, text string) (i18n.Msg, bool, error) {
 		used = append(used, ref+":"+text)
-		return "", false, nil
+		return i18n.Msg{}, false, nil
 	}}})
 	ana, ta := w.user("Ana", users.Approver)
 	_, tb := w.user("Bia", users.Approver)
-	if err := w.bot.Ask(w.ctx, ana.ID, "factor", "login-github", "Código de github.com", time.Hour); err != nil {
+	if err := w.bot.Ask(w.ctx, ana.ID, "factor", "login-github", i18n.Text("Código de github.com"), time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	w.say(ta, "uma conversa antes de o pedido chegar") // the prompt is still in the queue
@@ -265,7 +266,7 @@ func TestOnlyTheLongestTermIsExplainedAndACommonWordNeedsACapital(t *testing.T) 
 	t.Parallel()
 	w := newWorld(t, rigOpts{terms: true})
 	u, tg := w.user("Ana", users.Approver)
-	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: "o Mestre da mesa vigia a cidadela suspensa"}); err != nil {
+	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Msg: i18n.Text("o Mestre da mesa vigia a cidadela suspensa")}); err != nil {
 		t.Fatal(err)
 	}
 	w.flush()
@@ -291,7 +292,7 @@ func TestTheMarkdownBecomesSafeHTMLAPlainFallbackAndOnePerSecond(t *testing.T) {
 	w := newWorld(t)
 	u, tg := w.user("Ana", users.Approver)
 	for _, text := range []string{"**negrito** e o literal <b>", "```\nsem fechar"} {
-		if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: text}); err != nil {
+		if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Msg: i18n.Text(text)}); err != nil {
 			t.Fatal(err)
 		}
 		w.flush()
@@ -306,7 +307,7 @@ func TestTheMarkdownBecomesSafeHTMLAPlainFallbackAndOnePerSecond(t *testing.T) {
 	}
 	// 31 messages in the same second leave one per second
 	for i := range 31 {
-		if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: fmt.Sprintf("m%d", i)}); err != nil {
+		if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Msg: i18n.Text(fmt.Sprintf("m%d", i))}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -324,8 +325,8 @@ func TestTheMarkdownBecomesSafeHTMLAPlainFallbackAndOnePerSecond(t *testing.T) {
 func TestAnObserverTalkingFreelyGetsTheAllowedCommandsAndNothingGoesToTheInbox(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, rigOpts{commands: []telegram.Command{
-		{Name: "status", Description: "estado", Capability: users.Status, Run: func(context.Context, telegram.Call) (string, error) { return "ok", nil }},
-		{Name: "travar", Description: "emergência", Capability: users.Lock, Run: func(context.Context, telegram.Call) (string, error) { return "travado", nil }},
+		{Name: "status", Description: i18n.Text("estado"), Capability: users.Status, Run: func(context.Context, telegram.Call) (i18n.Msg, error) { return i18n.Text("ok"), nil }},
+		{Name: "travar", Description: i18n.Text("emergência"), Capability: users.Lock, Run: func(context.Context, telegram.Call) (i18n.Msg, error) { return i18n.Text("travado"), nil }},
 	}})
 	_, tg := w.user("Otto", users.Observer)
 	w.say(tg, "faça o deploy agora")
@@ -376,7 +377,7 @@ func TestThePINAnswerIsDeletedNeverKeptAndNeverInTheInbox(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := w.bot.Ask(w.ctx, owner.ID, telegram.PINKind, req.ID, "Digite o seu PIN.", 5*time.Minute); err != nil {
+	if err := w.bot.Ask(w.ctx, owner.ID, telegram.PINKind, req.ID, i18n.Text("Digite o seu PIN."), 5*time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	w.flush()
@@ -514,10 +515,10 @@ func TestAWrongPINKeepsThePromptOpenAndTheRetryIsCapturedToo(t *testing.T) {
 		t.Fatal(err)
 	}
 	req, _ := w.users.StartPIN(w.ctx, w.owner.ID, "unlock")
-	if err := w.bot.Ask(w.ctx, w.owner.ID, telegram.PINKind, req.ID, "Digite o PIN.", 5*time.Minute); err != nil {
+	if err := w.bot.Ask(w.ctx, w.owner.ID, telegram.PINKind, req.ID, i18n.Text("Digite o PIN."), 5*time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if err := w.bot.Ask(w.ctx, w.owner.ID, telegram.PINKind, "outro", "Outro PIN.", 5*time.Minute); !errors.Is(err, telegram.ErrCaptureBusy) {
+	if err := w.bot.Ask(w.ctx, w.owner.ID, telegram.PINKind, "outro", i18n.Text("Outro PIN."), 5*time.Minute); !errors.Is(err, telegram.ErrCaptureBusy) {
 		t.Fatalf("a second prompt = %v, want busy", err)
 	}
 	w.flush()
@@ -550,9 +551,11 @@ func TestAWrongPINKeepsThePromptOpenAndTheRetryIsCapturedToo(t *testing.T) {
 // An answer after the prompt expired is not an ordinary message either.
 func TestAnAnswerAfterThePromptExpiredIsDeletedAndNotDelivered(t *testing.T) {
 	t.Parallel()
-	w := newWorld(t, rigOpts{captures: map[string]telegram.CaptureFunc{"factor": func(context.Context, users.User, string, string) (string, bool, error) { return "", false, nil }}})
+	w := newWorld(t, rigOpts{captures: map[string]telegram.CaptureFunc{"factor": func(context.Context, users.User, string, string) (i18n.Msg, bool, error) {
+		return i18n.Msg{}, false, nil
+	}}})
 	a, ta := w.user("Ana", users.Approver)
-	if err := w.bot.Ask(w.ctx, a.ID, "factor", "r", "Código", time.Minute); err != nil {
+	if err := w.bot.Ask(w.ctx, a.ID, "factor", "r", i18n.Text("Código"), time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	w.flush()
@@ -570,9 +573,11 @@ func TestAnAnswerAfterThePromptExpiredIsDeletedAndNotDelivered(t *testing.T) {
 // A recorded answer is kept without its text, and a copy without text is not replayed.
 func TestTheRecordedCopyOfACapturedAnswerHasNoTextAndIsNotReplayed(t *testing.T) {
 	t.Parallel()
-	w := newWorld(t, rigOpts{captures: map[string]telegram.CaptureFunc{"factor": func(context.Context, users.User, string, string) (string, bool, error) { return "", false, nil }}})
+	w := newWorld(t, rigOpts{captures: map[string]telegram.CaptureFunc{"factor": func(context.Context, users.User, string, string) (i18n.Msg, bool, error) {
+		return i18n.Msg{}, false, nil
+	}}})
 	a, ta := w.user("Ana", users.Approver)
-	if err := w.bot.Ask(w.ctx, a.ID, "factor", "r", "Código", time.Hour); err != nil {
+	if err := w.bot.Ask(w.ctx, a.ID, "factor", "r", i18n.Text("Código"), time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	w.flush()
@@ -611,7 +616,7 @@ func TestTheQueueSurvivesAParseErrorARevokedTokenAndAQuietWeek(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
 	u, tg := w.user("Ana", users.Approver)
-	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: "**oi**"}); err != nil {
+	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Msg: i18n.Text("**oi**")}); err != nil {
 		t.Fatal(err)
 	}
 	w.fake.FailNext("sendMessage", faketelegram.Failure{Status: 400, Description: "Bad Request: can't parse entities"})
@@ -620,7 +625,7 @@ func TestTheQueueSurvivesAParseErrorARevokedTokenAndAQuietWeek(t *testing.T) {
 		t.Fatalf("sent %+v, want the plain text", got)
 	}
 	w.clk.Advance(time.Second)
-	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: "segunda"}); err != nil {
+	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Msg: i18n.Text("segunda")}); err != nil {
 		t.Fatal(err)
 	}
 	w.fake.FailNext("sendMessage", faketelegram.Failure{Status: 401})
