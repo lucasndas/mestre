@@ -72,7 +72,10 @@ func newSetupCode(ctx context.Context, paths Paths) (string, error) {
 		return "", err
 	}
 	defer mdb.Close()
-	id, _, err := guild.NewMember(mdb, vault.NewFileKeyStore(paths.engineKey()), clk).TLS(ctx)
+	member := guild.NewMember(mdb, vault.NewFileKeyStore(paths.engineKey()), clk)
+	// the pending key of a renewal under way in the running engine
+	member.UsePendingKey(vault.NewFileKeyStore(paths.pendingKey()))
+	id, _, err := member.TLS(ctx)
 	if err != nil {
 		return "", fmt.Errorf("this instance is in no Guild: %w", err)
 	}

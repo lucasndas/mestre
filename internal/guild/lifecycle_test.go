@@ -15,6 +15,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/protocol"
 	"github.com/mestre-ia/mestre/internal/store/machine"
 	"github.com/mestre-ia/mestre/internal/transport"
+	"github.com/mestre-ia/mestre/internal/vault"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
@@ -605,4 +606,49 @@ func TestLeavingEmptiesWhatTheMachineDatabaseHeldOfTheGuildAndKeepsTheLocalProfi
 	if count("account_profiles") != 1 {
 		t.Error("the account profile was erased: its login stays in contas/")
 	}
+}
+
+// hookKeys runs onLoad before each read of the key, to land a renewal
+// between the read of the certificate and the read of the key.
+type hookKeys struct {
+	vault.KeyStore
+	onLoad func()
+}
+
+func (h *hookKeys) Load(ctx context.Context) ([]byte, error) {
+	if f := h.onLoad; f != nil {
+		h.onLoad = nil
+		f()
+	}
+	return h.KeyStore.Load(ctx)
+}
+
+// A reader that has no pending file (mestre setup-code) and reads the
+// certificate just before a renewal lands, or the key just after it, reads
+// the pair again instead of failing with a mismatch.
+func TestAReaderMeetingARenewalBetweenItsTwoReadsGetsAMatchingPair(t *testing.T) {
+	t.Parallel()
+	bubble(t, func(t *testing.T, r *rig, w *pworld) {
+		n := r.newNode("tower1")
+		j := r.enroll(n)
+		key, _ := transport.GenerateKey()
+		csr, _ := transport.NewCSR(key)
+		cert, err := r.citadel.Renew(t.Context(), j.MachineID, transport.KindMachine, csr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reader := &hookKeys{KeyStore: n.keys}
+		reader.onLoad = func() {
+			if err := n.member.SaveRenewal(t.Context(), cert, key); err != nil {
+				t.Error(err)
+			}
+		}
+		_, src, err := guild.NewMember(n.mach, reader, r.clk).TLS(t.Context())
+		if err != nil {
+			t.Fatalf("the reader met the renewal: %v", err)
+		}
+		if transport.Serial(src.Leaf()) != transport.Serial(cert) {
+			t.Error("the reader did not end with the renewed pair")
+		}
+	})
 }
