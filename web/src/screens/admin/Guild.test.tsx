@@ -410,6 +410,10 @@ test("with the Citadel suspended the timeline shows only what the snapshot says 
   renderApp("/guilda");
   const line = await screen.findByRole("region", { name: "Troca da Cidadela em andamento" });
   expect(within(line).getByText("casa parou de agir.")).toBeTruthy();
+  // each step says what it means, and the line promises the queue and not the clock
+  expect(within(line).getByText("Ela só termina o que já tinha começado.")).toBeTruthy();
+  expect(within(line).getByText(/Pode deixar esta página aberta/)).toBeTruthy();
+  expect(within(line).getByText(/Esta página volta sozinha/)).toBeTruthy();
   expect(line.textContent).not.toMatch(/\d+\s*(s|seg|min)/i);
   expect(line.textContent).not.toMatch(/prazo/i);
 });

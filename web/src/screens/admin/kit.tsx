@@ -204,7 +204,9 @@ export function LoadError({
       className="flex max-w-4xl flex-col gap-3 rounded-field border border-danger/40 bg-danger-wash p-4 text-danger"
     >
       <p className="font-semibold">{t("admin.loadFailed", { what })}</p>
-      <p>{errorText(te, error)}</p>
+      <p>
+        {errorText(te, error)} {t("admin.nothingChanged")}
+      </p>
       <div>
         <Button variant="secondary" onPress={onRetry}>
           {t("admin.retry")}
