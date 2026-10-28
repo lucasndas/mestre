@@ -1,6 +1,6 @@
 # Ordem de implementação
 
-> **Assunto:** marcos de desenvolvimento (M0 a M8, o M4+, que fecha o M4, o M5+, a fila de merge, e o M6+, o painel bilíngue), o marco de cada documento de funcionalidade, a auditoria que fecha cada marco, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-28
+> **Assunto:** marcos de desenvolvimento (M0 a M8, o M4+, que fecha o M4, o M5+, a fila de merge, e o M6+, o painel bilíngue e as mensagens por código), o marco de cada documento de funcionalidade, a auditoria que fecha cada marco, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-28
 
 Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento de funcionalidade (todo documento com a seção "Objetivo") pertence a exatamente um marco, listado no [mapa](#mapa-de-documentos-por-marco-e-etapa). A [verificação de docs](../qualidade/verificacao-de-docs.md) lê o mapa e confere a regra abaixo.
 
@@ -25,7 +25,7 @@ Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento
 | M5 | Integrações | 2026-10-25 | o motor hospedando a orquestração no `mestre run` ([antes da etapa 1](#regras-de-execução-da-ordem)), GitHub e a [trava no GitHub](../guilda/trava-no-github.md) (primeiro marco com ação externa; antes dele não há promoção), Telegram, usuários e níveis, decretos, aprovações (respostas, delegação, resumo e sugestões), Grão-Mestre, Mestre da mesa, anexos e transcrição, limites de uso, sincronia com a base, prova e devolução, pedido que bloqueia, dependência entre mesas |
 | M5+ | Fila de merge | 2026-10-26 | o repositório numa organização do GitHub, o módulo Go com o caminho novo, os Apps reinstalados e a fila de merge do GitHub no lugar do trem manual ([fluxo de PRs](fluxo-de-prs.md#a-fila-de-merge)). Não tem documento de funcionalidade nem linha no [mapa](#mapa-de-documentos-por-marco-e-etapa); o M6 só começa com o M5+ auditado |
 | M6 | Painel | 2026-10-28 | login, canvas, visão da campanha, conversa e aprovações, administração, `mestre attach` e, na etapa 4, o painel refeito em torno da [jornada de primeiro uso](../painel/primeira-jornada.md) (menu de quatro itens, migalhas, Início com Primeiros passos); a auditoria do M6 só acontece depois da etapa 4 |
-| M6+ | Painel bilíngue e mensagens por código |  | o motor devolve o motivo das recusas como código e parâmetros (não mais como texto), as mensagens humanas do Telegram e da CLI são traduzidas (pt-BR e en) e o Grão-Mestre responde no idioma do usuário ([ADR 0028](../decisoes/0028-painel-bilingue-e-marco-m6-mais.md)). Não tem documento de funcionalidade nem linha no [mapa](#mapa-de-documentos-por-marco-e-etapa); o M7 só começa com o M6+ auditado |
+| M6+ | Painel bilíngue e mensagens por código |  | o motor devolve o motivo das recusas como código e parâmetros (não mais como texto), as mensagens humanas do Telegram e da CLI são traduzidas (pt-BR e en) e o Grão-Mestre responde no idioma do usuário ([ADR 0028](../decisoes/0028-painel-bilingue-e-marco-m6-mais.md)). Documentos: [mensagens por código](../plataforma/mensagens-por-codigo.md) e [idioma por canal](../plataforma/idioma-por-canal.md), nas linhas `M6+` do [mapa](#mapa-de-documentos-por-marco-e-etapa); o M7 só começa com o M6+ auditado |
 | M7 | Plataforma, autocura e Operador do PC |  | a [ligação de produção que o M5 deixou](ligacao-de-producao.md#o-que-o-m7-fecha), instalação, checklist, Guardião, camadas, diagnóstico com IA, página reserva, Telegram reduzido, autoatualização, detecção de versão nova dos CLIs, teste de classe, [login em sites e segundo fator](../plataforma/cofre.md#login-em-sites); o [catálogo e o gateway MCP](../classes/mcp-por-classe.md); por último, o [Operador do PC](#operador-do-pc-no-m7); suíte pesada (MVP-1 a MVP-15) |
 | M8 | Classes sugeridas |  | as [classes sugeridas](../classes/classes-sugeridas.md) (Pesquisador, Investigador, Designer, Dev, Revisor, QA e Documentador), que vêm desligadas e o usuário ativa; as receitas de missão por tipo de pedido (com a de refino de UI), as fichas leve e pesada e a calibração; skills de apoio; ativação e propostas no painel; suíte pesada (MVP-16) |
 
@@ -91,7 +91,7 @@ O inverso da tabela acima: critérios de documento de marco posterior que um mar
 
 ## Mapa de documentos por marco e etapa
 
-Tabela lida pela verificação de docs; é a **única** lista de documentos por marco. Cada link é um documento de funcionalidade, em exatamente uma linha. Dentro de um marco, as etapas seguem os "Depende de": um documento fica numa etapa **maior** que a de cada dependência do mesmo marco, e documentos da mesma etapa podem ser feitos **em paralelo**. A ordem não é escrita à mão em outro lugar: quem muda um "Depende de" ajusta a etapa aqui na mesma alteração, e a [verificação de docs](../qualidade/verificacao-de-docs.md#checagem-da-ordem-de-implementação) falha se a tabela ficar incoerente.
+Tabela lida pela verificação de docs; é a **única** lista de documentos por marco (uma linha `M6+` é do marco entre o M6 e o M7). Cada link é um documento de funcionalidade, em exatamente uma linha. Dentro de um marco, as etapas seguem os "Depende de": um documento fica numa etapa **maior** que a de cada dependência do mesmo marco, e documentos da mesma etapa podem ser feitos **em paralelo**. A ordem não é escrita à mão em outro lugar: quem muda um "Depende de" ajusta a etapa aqui na mesma alteração, e a [verificação de docs](../qualidade/verificacao-de-docs.md#checagem-da-ordem-de-implementação) falha se a tabela ficar incoerente.
 
 | Marco | Etapa | Documentos |
 |---|---|---|
@@ -132,6 +132,8 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 | M6 | 2 | [administração](../painel/administracao.md) · [canvas](../painel/canvas.md) · [conversa e aprovações](../painel/conversa-e-aprovacoes.md) |
 | M6 | 3 | [visão da campanha](../painel/visao-do-workspace.md) · [campanhas no painel](../painel/workspaces.md) · [`mestre attach`](../cli/attach.md) |
 | M6 | 4 | [primeira jornada e Início](../painel/primeira-jornada.md) · [vida da mesa](../painel/vida-da-mesa.md) · [terminal no painel](../painel/terminal-no-painel.md) · [crescer a Guilda](../painel/crescer-a-guilda.md) |
+| M6+ | 1 | [mensagens por código](../plataforma/mensagens-por-codigo.md) |
+| M6+ | 2 | [idioma por canal](../plataforma/idioma-por-canal.md) |
 | M7 | 1 | [Guardião](../autocura/guardiao.md) · [instalação e atualização](../plataforma/instalacao-e-atualizacao.md) |
 | M7 | 2 | [camadas](../autocura/camadas.md) · [checklist](../plataforma/checklist.md) · [MCP por classe](../classes/mcp-por-classe.md) |
 | M7 | 3 | [página reserva](../autocura/pagina-reserva.md) · [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) · [autoatualização](../plataforma/autoatualizacao.md) · [teste de classe](../provedores/teste-de-classe.md) |

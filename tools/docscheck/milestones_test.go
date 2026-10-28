@@ -193,17 +193,32 @@ func TestM4PlusRowNeedsTheAuditCellToo(t *testing.T) {
 	}
 }
 
-// M4+ has no documents: a row of the map with it is not read, so the document
-// listed there is outside the map.
-func TestM4PlusHasNoDocumentsInTheMap(t *testing.T) {
+// CA-VERDOCS-25
+func TestADocumentOfM4PlusIsInTheMapAndClosesWithItsAudit(t *testing.T) {
 	t.Parallel()
-	plus := audited
-	tr := newTree().area("a").add("docs/a/m4.md", feature("M4", "D", nil))
-	tr.audit, tr.plus = map[int]string{0: audited, 1: audited, 2: audited, 3: audited, 4: audited}, &plus
-	tr.withOrder("| M4+ | 1 | [m4](../a/m4.md) |")
-	got := only(run1(t, tr), ckOrder)
-	if len(got) != 1 || !strings.Contains(got[0], "docs/a/m4.md:1: ordem: documento de funcionalidade fora do mapa") {
-		t.Fatalf("errors = %q", got)
+	build := func(plus string, depOfM4 string, files map[string]string) *tree {
+		tr := newTree().area("a").
+			add("docs/a/m4.md", feature("M4", "D", nil, depOfM4)).
+			add("docs/a/plus.md", feature("M4+", "P", nil, "m4.md"))
+		tr.audit, tr.plus = map[int]string{0: audited, 1: audited, 2: audited, 3: audited, 4: audited}, &plus
+		tr.withOrder("| M4 | 1 | [m4](../a/m4.md) |", "| M4+ | 1 | [plus](../a/plus.md) |")
+		for p, src := range files {
+			tr.set(p, src)
+		}
+		return tr
+	}
+	open := run1(t, build("", "", testFile("CA-D-01")))
+	if got := append(only(open, ckOrder), only(open, ckCoverage)...); len(got) != 0 {
+		t.Fatalf("M4+ open, its criterion without a test: errors = %q", got)
+	}
+	got := only(run1(t, build(audited, "", testFile("CA-D-01"))), ckCoverage)
+	if len(got) != 1 || !strings.Contains(got[0], "docs/a/plus.md:") || !strings.Contains(got[0], "CA-P-01 (M4+, *rápida*) não tem teste marcado") {
+		t.Fatalf("M4+ audited: errors = %q", got)
+	}
+	mustClean(t, run1(t, build(audited, "", testFile("CA-D-01", "CA-P-01"))))
+	got = only(run1(t, build("", "plus.md", testFile("CA-D-01"))), ckOrder)
+	if len(got) != 2 || !strings.Contains(got[0], "ciclo") || !strings.Contains(got[1], "a/m4.md (M4, etapa 1) depende de a/plus.md (M4+, etapa 1), de marco posterior") {
+		t.Fatalf("M4 depending on M4+: errors = %q", got)
 	}
 }
 

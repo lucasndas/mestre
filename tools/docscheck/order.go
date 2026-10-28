@@ -7,17 +7,31 @@ import (
 	"strings"
 )
 
-var mapRowRe = regexp.MustCompile(`^\| M([0-9]+) \| ([0-9]+) \| (.*)\|\s*$`)
+// mapRowRe reads a row of the map: `| M6 | 2 | …`, or `| M6+ | 1 | …` for a
+// document of the phase after M6.
+var mapRowRe = regexp.MustCompile(`^\| M([0-9]+)(\+)? \| ([0-9]+) \| (.*)\|\s*$`)
 
 type placement struct {
 	milestone, stage, line int
+	plus                   bool // M<milestone>+
+}
+
+// rank orders the milestone of the placement as the table of milestones does.
+func (p placement) rank() int { return rank(p.milestone, p.plus) }
+
+// name is the milestone as the map writes it: M6 or M6+.
+func (p placement) name() string {
+	if p.plus {
+		return "M" + strconv.Itoa(p.milestone) + "+"
+	}
+	return "M" + strconv.Itoa(p.milestone)
 }
 
 // rel shows a docs path relative to docs/.
 func rel(p string) string { return strings.TrimPrefix(p, docsDir+"/") }
 
 func (p placement) String() string {
-	return "M" + strconv.Itoa(p.milestone) + ", etapa " + strconv.Itoa(p.stage)
+	return p.name() + ", etapa " + strconv.Itoa(p.stage)
 }
 
 // Check 10: "Depende de" only backwards, no cycles, stages coherent with the
@@ -40,7 +54,7 @@ func (c *checker) checkOrder() {
 			continue
 		}
 		ms, _ := strconv.Atoi(m[1])
-		st, _ := strconv.Atoi(m[2])
+		st, _ := strconv.Atoi(m[3])
 		for _, l := range od.linksIn(i, i+1) {
 			r := resolve(od, l.target)
 			if r.file == "" {
@@ -50,7 +64,7 @@ func (c *checker) checkOrder() {
 				c.errf(orderPath, i+1, ckOrder, "%s aparece mais de uma vez no mapa (também na linha %d)", rel(r.file), prev.line)
 				continue
 			}
-			place[r.file] = placement{ms, st, i + 1}
+			place[r.file] = placement{milestone: ms, stage: st, line: i + 1, plus: m[2] != ""}
 			if d := c.docs[r.file]; d != nil && !d.hasSection("Objetivo") {
 				c.errf(orderPath, i+1, ckOrder, "%s está no mapa e não é documento de funcionalidade (sem a seção Objetivo)", rel(r.file))
 			}
@@ -82,9 +96,9 @@ func (c *checker) checkOrder() {
 			}
 			deps[f] = append(deps[f], r.file)
 			switch {
-			case dep.milestone > me.milestone:
+			case dep.rank() > me.rank():
 				c.errf(f, l.line, ckOrder, "%s (%s) depende de %s (%s), de marco posterior", rel(f), me, rel(r.file), dep)
-			case dep.milestone == me.milestone && dep.stage >= me.stage:
+			case dep.rank() == me.rank() && dep.stage >= me.stage:
 				c.errf(f, l.line, ckOrder, "%s (%s) depende de %s (%s): a etapa de quem depende deve ser maior", rel(f), me, rel(r.file), dep)
 			}
 		}

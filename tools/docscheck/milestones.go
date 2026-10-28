@@ -52,7 +52,7 @@ var (
 )
 
 // milestone is a row of the table of milestones. M<n>+ is the phase between
-// M<n> and M<n+1>: it has no documents in the map, only an audit.
+// M<n> and M<n+1>: an audit, and the documents of the map in rows M<n>+.
 type milestone struct {
 	n     int
 	plus  bool
@@ -333,14 +333,13 @@ func (c *checker) checkMilestones() {
 	scan := scanGo(c.fsys)
 	crits := c.criteriaIndex()
 
-	// The documents belong to M<n>, never to M4+: their rank is even.
 	milestoneOf := func(id string) (int, bool) {
 		cr, ok := crits[id]
 		if !ok {
 			return 0, false
 		}
 		p, ok := c.place[cr.file]
-		return rank(p.milestone, false), ok
+		return p.rank(), ok
 	}
 	audited := func(r int) bool { s := stones[r]; return s != nil && s.audit != "" }
 	nums := make([]int, 0, len(stones))
@@ -408,13 +407,13 @@ func (c *checker) checkMilestones() {
 		cr := crits[id]
 		// A document outside the map (a reference one) counts from M0.
 		p := c.place[cr.file]
-		if !audited(rank(p.milestone, false)) || cr.suite == "pesada" || tested[id] {
+		if !audited(p.rank()) || cr.suite == "pesada" || tested[id] {
 			continue
 		}
 		if target, ok := deferred[id]; ok && !audited(target) {
 			continue // put off, and the milestone where it closes is still open
 		}
-		c.errf(cr.file, cr.line, ckCoverage, "%s (M%d, *%s*) não tem teste marcado: ponha `// %s` acima do teste (`Part of` não basta), ou ponha o critério em %q de %s com o marco em que fecha, que ainda não foi auditado", id, p.milestone, cr.suite, id, deferredHeader, rel(orderPath))
+		c.errf(cr.file, cr.line, ckCoverage, "%s (%s, *%s*) não tem teste marcado: ponha `// %s` acima do teste (`Part of` não basta), ou ponha o critério em %q de %s com o marco em que fecha, que ainda não foi auditado", id, p.name(), cr.suite, id, deferredHeader, rel(orderPath))
 	}
 
 	// Check 3, in code: the anchor of a document in a comment or a config file.

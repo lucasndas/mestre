@@ -1,6 +1,6 @@
 # ADR 0028: Painel bilíngue e o marco M6+
 
-> **Assunto:** o painel em português do Brasil e inglês no M6, a conversão das recusas do motor em código e parâmetros, a tradução do Telegram e da CLI e o Grão-Mestre no idioma do usuário (marco M6+) · **Componente:** Painel · **Atualizado:** 2026-10-26
+> **Assunto:** o painel em português do Brasil e inglês no M6, a conversão das recusas do motor em código e parâmetros, a tradução do Telegram e da CLI e o Grão-Mestre no idioma do usuário (marco M6+) · **Componente:** Painel · **Atualizado:** 2026-10-28
 
 ## Status
 
@@ -31,3 +31,4 @@ Opção 2.
 
 - Todo texto novo do painel nasce nos dois catálogos; chave faltando reprova a suíte rápida.
 - O M7 só começa com o M6+ auditado.
+- **Atualização de 2026-10-28:** no levantamento do M6+ o Dono pediu critérios testáveis para a auditoria, e o M6+ ganhou documentos de funcionalidade, ao contrário do M4+ e do M5+: [mensagens por código](../plataforma/mensagens-por-codigo.md) e [idioma por canal](../plataforma/idioma-por-canal.md).
