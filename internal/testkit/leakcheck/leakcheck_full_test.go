@@ -3,6 +3,7 @@
 package leakcheck_test
 
 import (
+	"bufio"
 	"bytes"
 	"os/exec"
 	"strings"
@@ -22,14 +23,24 @@ func TestTheGuardFailsWhenAProcessOfTheTestIsLeftAlive(t *testing.T) {
 		t.Fatalf("nothing alive: Main = %d, wrote %q", got, none.String())
 	}
 
-	// The shell stays alive until its stdin closes.
-	cmd := exec.Command("sh", "-c", "cat >/dev/null; :", needle+"/leaked")
+	// The shell stays alive until its stdin closes. It says it is running before
+	// it waits: Start returns when the exec took the descriptors of the parent,
+	// before the kernel has the command line in place (/proc/<pid>/cmdline is
+	// empty in that window), so the test looks for the shell only after hearing it.
+	cmd := exec.Command("sh", "-c", "echo up; cat >/dev/null; :", needle+"/leaked")
 	in, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	up, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
+	}
+	if line, err := bufio.NewReader(up).ReadString('\n'); err != nil || line != "up\n" {
+		t.Fatalf("the shell did not say it is up: %q, %v", line, err)
 	}
 	waited := make(chan struct{})
 	go func() { _ = cmd.Wait(); close(waited) }()

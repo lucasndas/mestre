@@ -378,17 +378,26 @@ func TestTheCitadelStartsACharacterOnATowerAndHearsItBack(t *testing.T) {
 	if err := sk.Notify(ctx, characters.Notice{Kind: characters.NoticeStuck, To: characters.Recipient{Kind: characters.ToTableMaster}, Character: dev.ID, Name: "outro nome", Text: "Dev-1 travou"}); err != nil {
 		t.Fatalf("the notice of the Tower: %v", err)
 	}
+	// The inbox of the master may hold other items (the supervision of the Tower
+	// may tell the master something of its own under load): the one looked at is
+	// the notice that was sent, found by its text, not by a count.
+	var notice inbox.Item
 	r.waitFor("the master of the table to hear the Tower", func() bool {
-		n, err := orc.Inbox.Pending(ctx, master.ID)
-		return err == nil && n > 0
+		items, err := orc.Inbox.Store().All(ctx, master.ID)
+		if err != nil {
+			return false
+		}
+		for _, it := range items {
+			if strings.Contains(it.Text, "Dev-1 travou") {
+				notice = it
+				return true
+			}
+		}
+		return false
 	})
 	// the item is the one the registry makes it: for the master, in the table of
 	// the character, naming Dev-1 (the registry's name) and not the decoy
-	items, err := orc.Inbox.Store().All(ctx, master.ID)
-	if err != nil || len(items) != 1 {
-		t.Fatalf("the inbox of the master has %d items (err %v), want the notice", len(items), err)
-	}
-	if it := items[0]; it.Target != master.ID || it.Refs.Table != "t1" || it.Kind != inbox.KindSystem ||
+	if it := notice; it.Target != master.ID || it.Refs.Table != "t1" || it.Kind != inbox.KindSystem ||
 		!strings.Contains(it.Text, "Dev-1") || strings.Contains(it.Text+it.Sender, "outro nome") {
 		t.Errorf("the item of the notice = %+v, want a system item for %s, of table t1, naming Dev-1 and not the decoy name", it, master.ID)
 	}
