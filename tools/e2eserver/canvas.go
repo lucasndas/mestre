@@ -44,11 +44,13 @@ func newFakeCanvas() *fakeCanvas {
 }
 
 func (f *fakeCanvas) State(_ context.Context, ws, table string) (panel.CanvasState, error) {
-	tableState := "working"
+	// the characters of a table of `loja` are its own (their terminal says that table, so the screen
+	// shows it paused or not as its card does); the ones of the table of the smoke test keep "e2e"
+	tableState, who := "working", "e2e"
 	switch {
 	case ws == fakeWorkspace && table == fakeTable:
 	case ws == lojaWorkspace && lojaState(table) != "":
-		tableState = lojaState(table)
+		tableState, who = lojaState(table), table
 	default:
 		return panel.CanvasState{}, panel.ErrCanvasNotFound
 	}
@@ -57,25 +59,34 @@ func (f *fakeCanvas) State(_ context.Context, ws, table string) (panel.CanvasSta
 	char := func(id, name, class, role string, terminal bool) panel.CanvasCharacter {
 		return panel.CanvasCharacter{ID: id, Name: name, Class: class, Kind: "character", Role: role, Machine: "e2e", MachineName: "e2e", State: "idle", Pinned: f.pinned[id], HasTerminal: terminal}
 	}
-	dev := char("e2e-dev", "Dev-1", "Dev", "character", true)
+	dev := char(who+"-dev", "Dev-1", "Dev", "character", true)
 	dev.State = "busy"
-	rev := char("e2e-rev", "Revisor", "Revisor", "character", false)
+	rev := char(who+"-rev", "Revisor", "Revisor", "character", false)
 	rev.State, rev.Reason = "waiting", "Dev-1"
+	conns := slices.Clone(f.conns)
+	if who != "e2e" {
+		c := func(id string) panel.CanvasRef { return panel.CanvasRef{Kind: "character", ID: who + "-" + id} }
+		conns = []panel.CanvasConnection{
+			{A: c("master"), B: c("dev"), Reasons: []string{"mesa"}},
+			{A: c("master"), B: c("rev"), Reasons: []string{"mesa"}},
+			{A: c("dev"), B: c("rev"), Reasons: []string{"manual"}, Manual: true},
+		}
+	}
 	st := panel.CanvasState{
 		Workspace: ws, Table: table, TableState: tableState,
-		Characters:  []panel.CanvasCharacter{char("e2e-master", "Mestre", "", "table_master", false), dev, rev},
+		Characters:  []panel.CanvasCharacter{char(who+"-master", "Mestre", "", "table_master", false), dev, rev},
 		Scrolls:     []panel.CanvasScroll{f.scroll},
 		Tomes:       []panel.CanvasTome{},
-		Connections: slices.Clone(f.conns),
+		Connections: conns,
 		Quests: []panel.CanvasQuest{{ID: "q1", Name: "entrega", State: "running", Round: 1, Steps: []panel.CanvasStep{
-			{ID: "dev", Title: "Dev", State: "running", Character: "e2e-dev", Current: true},
-			{ID: "rev", Title: "Revisão", State: "pending", Character: "e2e-rev", After: []string{"dev"}, ReturnTo: "dev"},
+			{ID: "dev", Title: "Dev", State: "running", Character: who + "-dev", Current: true},
+			{ID: "rev", Title: "Revisão", State: "pending", Character: who + "-rev", After: []string{"dev"}, ReturnTo: "dev"},
 		}}},
-		Waits:     []panel.CanvasWait{{ID: "w1", Waiter: "e2e-rev", Target: "e2e-dev", Kind: "step", Reason: "Dev-1"}},
+		Waits:     []panel.CanvasWait{{ID: "w1", Waiter: who + "-rev", Target: who + "-dev", Kind: "step", Reason: "Dev-1"}},
 		Deadlocks: []panel.CanvasDeadlock{},
 	}
 	// the places: the ones the person set, else a row
-	for i, k := range []string{"character:e2e-master", "character:e2e-dev", "character:e2e-rev", "scroll:e2e/p0001"} {
+	for i, k := range []string{"character:" + who + "-master", "character:" + who + "-dev", "character:" + who + "-rev", "scroll:e2e/p0001"} {
 		it, ok := f.layout[k]
 		if !ok {
 			it = panel.CanvasItem{Key: k, X: float64(i * 820), Y: 0}
