@@ -116,7 +116,8 @@ function PendingJoin({
       {j.code ? (
         <>
           <p>
-            {t("pending.instruction")} <Term name="Código de entrada" />
+            {t("pending.instructionBefore")} <Term name="Código de entrada" />{" "}
+            {t("pending.instructionAfter")}
           </p>
           <Field
             label={t("pending.typeLabel", { name: j.name })}

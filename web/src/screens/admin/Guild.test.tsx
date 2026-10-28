@@ -227,7 +227,9 @@ test("a request to join is announced by the strip and the card says who, when an
   ).closest("li") as HTMLElement;
   expect(screen.getAllByText("notebook quer entrar na Guilda").length).toBe(2);
   expect(screen.getByText("Compare o código de entrada e decida.")).toBeTruthy();
-  expect(within(card).getByText(/Olhe a tela da máquina nova/)).toBeTruthy();
+  // the term of the vocabulary is a word of the sentence, not a tail after it
+  const line = within(card).getByText(/Olhe a tela da máquina nova/);
+  expect(line.textContent).toMatch(/digite o Código de entrada que aparece nela\.$/);
   expect(within(card).getByPlaceholderText("000 000")).toBeTruthy();
   expect(within(card).getByText(/Chegou mais de um pedido ao mesmo tempo/)).toBeTruthy();
   expect(within(card).getByText(/No Telegram a pergunta é a mesma/)).toBeTruthy();

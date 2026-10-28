@@ -18,7 +18,8 @@ export default {
     noCode: "Waiting for the machine to show its code. It cannot be accepted before that.",
     cardTitle: "{{name}} wants to join the Guild",
     cardMeta: "asked at {{when}}",
-    instruction: "Look at the screen of the new machine and type the entry code that shows on it.",
+    instructionBefore: "Look at the screen of the new machine and type the",
+    instructionAfter: "that shows on it.",
     placeholder: "000 000",
     moreHint:
       "More than one request arrived at the same time? Refuse them all and ask them to try again: a request you did not expect may come from someone else on the network.",
