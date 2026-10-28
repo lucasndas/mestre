@@ -112,8 +112,9 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
     // the room of the controls (bottom-left) is left free so that they never hide the card
     void flow.fitView({
       ...view,
+      minZoom: 1,
       maxZoom: 1,
-      padding: { top: "16px", right: "16px", bottom: "124px", left: "16px" },
+      padding: { top: "0px", right: "16px", bottom: "124px", left: "16px" },
     });
   }, [ready, state, nodes, flow]);
 

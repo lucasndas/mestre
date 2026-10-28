@@ -289,24 +289,17 @@ export function focusCharacter(st: CanvasState): string {
   return c ? keyOf("character", c.id) : "";
 }
 
-/** The smallest zoom at which the focus character may open: a little under 100% when its card is taller than the frame. */
-export const FOCUS_MIN_ZOOM = 0.85;
-
-/** The smallest zoom at which the whole table may open: below it the text of the cards is not legible. */
-export const OPENING_MIN_ZOOM = 0.6;
-
 /**
- * What the board opens on (docs/painel/canvas.md#canvas-infinito): the whole table when it fits in the
- * frame at a zoom of OPENING_MIN_ZOOM or more (never beyond 100%), else the focus character, whose node is centered at 100%
- * (down to FOCUS_MIN_ZOOM when the card is taller than the frame). `minZoom` is the zoom the opening may use.
+ * What the board opens on, at zoom 100% (docs/painel/canvas.md#canvas-infinito): the whole
+ * table when it fits in the frame, else the focus character, whose node is centered.
  */
 export function initialView(
   nodes: CanvasNode[],
   focus: string,
   frame: { width: number; height: number },
-): { nodes?: { id: string }[]; minZoom: number } {
+): { nodes?: { id: string }[] } {
   const own = nodes.filter((n) => !n.parentId);
-  if (own.length === 0) return { minZoom: FOCUS_MIN_ZOOM };
+  if (own.length === 0) return {};
   const w = (n: CanvasNode) => n.width ?? 0;
   const h = (n: CanvasNode) => n.height ?? 0;
   const minX = Math.min(...own.map((n) => n.position.x));
@@ -314,7 +307,6 @@ export function initialView(
   const maxX = Math.max(...own.map((n) => n.position.x + w(n)));
   const maxY = Math.max(...own.map((n) => n.position.y + h(n)));
   const zoom = Math.min(frame.width / (maxX - minX), frame.height / (maxY - minY));
-  if (zoom >= OPENING_MIN_ZOOM || !own.some((n) => n.id === focus))
-    return { minZoom: OPENING_MIN_ZOOM };
-  return { nodes: [{ id: focus }], minZoom: FOCUS_MIN_ZOOM };
+  if (zoom >= 1 || !own.some((n) => n.id === focus)) return {};
+  return { nodes: [{ id: focus }] };
 }
