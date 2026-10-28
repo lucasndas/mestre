@@ -5,8 +5,15 @@ const approvals: Widen<typeof pt> = {
   title: "Approvals",
   intro:
     "The requests that wait for a decision of yours, from every campaign you act in. Whoever answers first decides.",
-  tabs: { label: "Approval sections", pending: "Pending", history: "History" },
+  tabs: {
+    label: "Approval sections",
+    pending: "Pending",
+    pendingCount: "Pending ({{count}})",
+    history: "History",
+  },
   filters: {
+    toggle: "Filter",
+    toggleActive: "Filter (active)",
     label: "Filters",
     workspace: "Campaign",
     table: "Table",

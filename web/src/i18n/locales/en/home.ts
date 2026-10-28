@@ -74,7 +74,6 @@ const home: Widen<typeof pt> = {
     openTable: "Open table {{table}} of campaign {{workspace}}",
     decide: "Decide",
     open: "Decide request {{id}}: {{about}}",
-    item: "Request {{id}} · {{where}}",
   },
   deliveries: {
     title: "Recent deliveries",

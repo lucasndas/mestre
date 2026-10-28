@@ -40,12 +40,17 @@ const workspace: Widen<typeof ptBR> = {
   },
   ended: {
     show: "show ended",
-    hidden_one: "{{count}} ended table hidden.",
-    hidden_other: "{{count}} ended tables hidden.",
   },
   gm: {
     node: "Grand Master {{name}}",
     machine: "Machine {{machine}}",
+    states: {
+      none: "No Grand Master",
+      idle: "Idle",
+      waiting: "Waiting",
+      busy: "Working",
+      stopped: "Stopped",
+    },
     loadingTerminal: "Opening the terminal…",
     noTerminal: "No terminal open.",
     none: "This campaign has no Grand Master right now.",

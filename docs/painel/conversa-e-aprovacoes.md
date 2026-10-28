@@ -35,7 +35,7 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - Resposta dada em outro canal ou por outro usuário atualiza o item na hora: "Já respondido por <nome>: Aprovado às 14:32", sem botões.
 - Aprovações de cura (scripts de diagnóstico, volta de versão com restauração do banco) aparecem aqui, numa seção "Autocura" (desde o M7), só para Senhor da Guilda e Administradores ([diagnóstico com IA](../autocura/diagnostico-com-ia.md#proposta-e-aprovação)).
 - Aba **Histórico:** pedidos encerrados com filtros (estado, quem decidiu, nível da cadeia, risco, período), lidos da auditoria do fluxo; inclui o que os agentes decidiram sozinhos.
-- Contador de pendentes no topo de todas as telas.
+- Contador de pendentes no topo de todas as telas e na aba **Pendentes (n)**. No celular os filtros ficam recolhidos atrás do botão **Filtrar**, para o primeiro pedido caber na primeira tela.
 
 ### Avisos
 

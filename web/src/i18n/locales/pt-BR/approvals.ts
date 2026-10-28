@@ -5,8 +5,15 @@ export default {
   title: "Aprovações",
   intro:
     "Os pedidos que esperam por uma decisão sua, de todas as campanhas em que você atua. Quem responde primeiro decide.",
-  tabs: { label: "Seções de aprovações", pending: "Pendentes", history: "Histórico" },
+  tabs: {
+    label: "Seções de aprovações",
+    pending: "Pendentes",
+    pendingCount: "Pendentes ({{count}})",
+    history: "Histórico",
+  },
   filters: {
+    toggle: "Filtrar",
+    toggleActive: "Filtrar (ativo)",
     label: "Filtros",
     workspace: "Campanha",
     table: "Mesa",

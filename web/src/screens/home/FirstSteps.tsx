@@ -208,12 +208,19 @@ export function FirstSteps() {
         {t("steps.title")}
       </h2>
       <p className="text-muted">{t("steps.count", { done, total: steps.length })}</p>
-      <progress
-        className="mt-2 h-1.5 w-full accent-signal"
+      <div
+        role="progressbar"
         aria-label={t("steps.progress")}
-        max={steps.length}
-        value={done}
-      />
+        aria-valuemin={0}
+        aria-valuemax={steps.length}
+        aria-valuenow={done}
+        className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-accent-wash"
+      >
+        <div
+          className="h-full rounded-full bg-signal"
+          style={{ width: `${(done / steps.length) * 100}%` }}
+        />
+      </div>
       <ol aria-label={t("steps.list")} className="mt-3">
         <Item
           n={1}

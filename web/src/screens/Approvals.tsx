@@ -5,26 +5,27 @@ import { useTranslation } from "react-i18next";
 import { ApprovalCard, useDynamicT } from "../components/ApprovalCard";
 import { BlockingCard } from "../components/BlockingCard";
 import { SelectField } from "../components/SelectField";
-import { Alert } from "../components/ui";
+import { Alert, Button } from "../components/ui";
 import type { ApprovalClosed, ApprovalEvent, ApprovalItem } from "../gen/panel";
-import { type ApprovalFilters, approvalsQuery } from "../lib/approvalQueries";
+import { type ApprovalFilters, approvalCountQuery, approvalsQuery } from "../lib/approvalQueries";
 import { errorText } from "../lib/errors";
 import { useLiveEvents } from "../lib/live";
 
 /** The two sections of the area of approvals: what waits, and what ended. */
 export function ApprovalTabs({ current }: { current: "pending" | "history" }) {
   const { t } = useTranslation("approvals");
+  const { data: count } = useQuery(approvalCountQuery);
   const cls =
-    "min-h-11 rounded-field px-3 py-2.5 font-semibold text-muted hover:bg-accent-wash aria-[current=page]:bg-accent-wash aria-[current=page]:text-ink";
+    "-mb-px min-h-11 border-b-2 border-transparent px-3 py-2.5 font-semibold text-muted hover:text-ink aria-[current=page]:border-accent aria-[current=page]:text-ink";
   return (
-    <nav aria-label={t("tabs.label")} className="mb-5 flex gap-2">
+    <nav aria-label={t("tabs.label")} className="mb-5 flex gap-2 border-b border-line">
       <Link
         to="/aprovacoes"
         search={{}}
         className={cls}
         aria-current={current === "pending" ? "page" : undefined}
       >
-        {t("tabs.pending")}
+        {count ? t("tabs.pendingCount", { count: count.pending }) : t("tabs.pending")}
       </Link>
       <Link
         to="/aprovacoes/historico"
@@ -80,6 +81,8 @@ export function Approvals({
     type: "",
   });
   const { data, error } = useQuery(approvalsQuery(filters));
+  // on a phone the filters fold away, so the first request is on the first screen
+  const [showFilters, setShowFilters] = useState(false);
 
   // what the screen showed, so that a request that ended meanwhile does not vanish
   const seen = useRef(new Map<number, ApprovalItem>());
@@ -132,9 +135,17 @@ export function Approvals({
       <h1 className="text-3xl">{t("title")}</h1>
       <p className="mt-1 mb-5 max-w-2xl text-muted">{t("intro")}</p>
       <ApprovalTabs current="pending" />
+      <Button
+        variant="secondary"
+        className="mb-3 sm:hidden"
+        aria-expanded={showFilters}
+        onPress={() => setShowFilters(!showFilters)}
+      >
+        {t(filtered ? "filters.toggleActive" : "filters.toggle")}
+      </Button>
       <form
         aria-label={t("filters.label")}
-        className="mb-6 grid max-w-3xl gap-3 sm:grid-cols-3"
+        className={`mb-6 max-w-3xl gap-3 sm:grid sm:grid-cols-3 ${showFilters ? "grid" : "hidden"}`}
         onSubmit={(e) => e.preventDefault()}
       >
         <SelectField

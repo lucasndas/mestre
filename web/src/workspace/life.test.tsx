@@ -150,7 +150,7 @@ test("the filters by situation count the tables, and the ended ones come only wi
   expect(screen.queryByRole("article", { name: "Mesa d" })).toBeNull();
   await user.click(chip(/^Todas/));
   expect(screen.queryByRole("article", { name: "Mesa d" })).toBeNull();
-  await user.click(screen.getByRole("checkbox", { name: "mostrar encerradas" }));
+  await user.click(screen.getByRole("button", { name: /^Mostrar encerradas/ }));
   expect((await block("d")).textContent).toContain("Entregue");
 });
 
@@ -192,7 +192,7 @@ test("the cycle marks the step of a table in review and has none for a cancelled
     null,
   ]);
   expect(r.textContent).toContain("Etapa do ciclo: Em revisão");
-  await user.click(screen.getByRole("checkbox", { name: "mostrar encerradas" }));
+  await user.click(screen.getByRole("button", { name: /^Mostrar encerradas/ }));
   const c = await block("c");
   expect(c.textContent).toContain("Cancelada");
   expect(within(c).queryByRole("list", { name: "Ciclo da mesa" })).toBeNull();
@@ -316,6 +316,8 @@ test("on a narrow screen there is only the list: Precisa de você on top, then t
   renderApp("/workspaces/loja");
   const first = await screen.findByRole("article", { name: "Mesa 42-login" });
   const gm = screen.getByRole("article", { name: "Grão-Mestre Alvorada" });
+  expect(gm.textContent).toContain("Parado");
+  expect(gm.textContent).not.toContain("idle");
   const band = screen.getByRole("region", { name: "Precisa de você (1)" });
   const before = (a: Element, b: Element) =>
     Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);

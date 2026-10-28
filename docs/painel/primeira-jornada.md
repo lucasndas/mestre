@@ -43,6 +43,7 @@ Da esquerda para a direita e de cima para baixo, sempre nesta ordem; uma parte s
 - **Precisa de você:** o único nome das pendências, igual ao da campanha ([vida da mesa](vida-da-mesa.md#campanha-o-que-se-vê-e-em-que-ordem)): os pedidos de aprovação que o usuário pode decidir (só quem decide), as mesas Travadas e as sem entrega, cada um levando ao pedido ou à mesa. Vazio: "Nada espera por você agora."
 - **Entregas recentes:** as mesas encerradas há pouco, com o PR mesclado.
 - **Saúde da Guilda** (só para quem vê a Guilda): Cidadela e Torres, com "sem sinal desde HH:MM" ([Guilda](administracao.md#guilda-e-saúde-das-máquinas)).
+- **Colunas:** a Saúde da Guilda fica ao lado do conteúdo só quando a área do Início é larga; com a conversa aberta ela passa para baixo, para os cartões não ficarem espremidos.
 - O Início se atualiza pelos tópicos que as telas já seguem (`workspaces:all`, `approvals:<usuário>`, `chat:<usuário>`); o horário vai no fuso da Guilda.
 
 ### O que o servidor ainda não dá (nenhuma rota nova nesta rodada)

@@ -2,8 +2,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useCan } from "../../app/session";
+import { useDynamicT } from "../../components/ApprovalCard";
 import { approvalsQuery } from "../../lib/approvalQueries";
 import { useLiveEvents } from "../../lib/live";
+import { useFormatTime } from "../../lib/time";
 import { SituationChip } from "../../workspace/SituationChip";
 import { situationOf } from "../../workspace/situation";
 import { Badge } from "../admin/kit";
@@ -16,7 +18,9 @@ const ALL = { workspace: "", table: "", type: "" };
  * section is not even asked for who cannot decide) and the tables that are stuck or deliver nothing.
  */
 export function Waiting({ tables }: { tables: HomeTable[] }) {
-  const { t } = useTranslation("home");
+  const { t, i18n } = useTranslation("home");
+  const ta = useDynamicT("approvals");
+  const fmt = useFormatTime();
   const can = useCan("decide_approvals");
   const qc = useQueryClient();
   const { data } = useQuery({ ...approvalsQuery(ALL), enabled: can });
@@ -55,27 +59,34 @@ export function Waiting({ tables }: { tables: HomeTable[] }) {
             </Link>
           </li>
         ))}
-        {(can ? pending : []).map((r) => (
-          <li key={r.id} className="border-t border-line first:border-t-0">
-            <Link
-              to="/aprovacoes"
-              search={{ pedido: r.id }}
-              aria-label={t("waiting.open", { id: r.id, about: r.about })}
-              className="flex min-h-16 flex-wrap items-center justify-between gap-2 rounded-field px-1 py-3 hover:bg-accent-wash"
-            >
-              <span className="min-w-0">
-                <strong>{r.about}</strong>
-                <span className="block text-sm text-muted">
-                  {t("waiting.item", {
-                    id: r.id,
-                    where: [r.workspace, r.table].filter(Boolean).join(" · "),
-                  })}
+        {(can ? pending : []).map((r) => {
+          // the words of the catalog, as on the card of the central; the `about` only for a type it lacks
+          const known = i18n.exists(`approvals:readable.${r.type}.title`);
+          const where = [
+            r.workspace,
+            r.table,
+            ta(`riskBand.${r.risk}`, { defaultValue: r.risk }).toLowerCase(),
+            r.deadline ? ta("card.timeLeft", { time: fmt(r.deadline) }) : "",
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <li key={r.id} className="border-t border-line first:border-t-0">
+              <Link
+                to="/aprovacoes"
+                search={{ pedido: r.id }}
+                aria-label={t("waiting.open", { id: r.id, about: r.about })}
+                className="flex min-h-16 flex-wrap items-center justify-between gap-2 rounded-field px-1 py-3 hover:bg-accent-wash"
+              >
+                <span className="min-w-0">
+                  <strong>{known ? ta(`readable.${r.type}.title`) : r.about}</strong>
+                  <span className="block text-sm text-muted">{where}</span>
                 </span>
-              </span>
-              <Badge tone="warn">{t("waiting.decide")}</Badge>
-            </Link>
-          </li>
-        ))}
+                <Badge tone="warn">{t("waiting.decide")}</Badge>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

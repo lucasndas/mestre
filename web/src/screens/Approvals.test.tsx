@@ -597,3 +597,25 @@ test("the history lists what ended with the filters and loads more", async () =>
   // an empty state says what to expect, not only that it is empty
   expect(screen.getByText(/Quando um pedido for decidido, ele aparece aqui/)).toBeTruthy();
 });
+
+// docs/painel/conversa-e-aprovacoes.md#cartão-legível: the `about` is said once, the tabs carry the count and the filters fold on a phone
+test("the card says the about once, the tab counts what waits and the filters fold behind a button", async () => {
+  fakeServer(
+    base([
+      item({
+        type: "custo_extra",
+        about: "mais US$ 20 de uso este mês",
+        text: "Pedido de aprovação #7 · tipo custo_extra\nSobre: mais US$ 20 de uso este mês",
+      }),
+    ]),
+  );
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/aprovacoes");
+  const card = await screen.findByRole("article", { name: "Pedido #7" });
+  expect(within(card).getAllByText(/mais US\$ 20 de uso este mês/)).toHaveLength(1);
+  expect(await screen.findByRole("link", { name: "Pendentes (1)" })).toBeTruthy();
+  const toggle = screen.getByRole("button", { name: "Filtrar" });
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  await user.click(toggle);
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+});

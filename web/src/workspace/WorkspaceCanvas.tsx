@@ -74,7 +74,9 @@ function GmNodeView({ data, id }: NodeProps<ViewNode>) {
             <span className="rounded-field border border-line px-2 text-sm" title={gm.machine}>
               {t("gm.machine", { machine: gm.machine_name })}
             </span>
-            <span className="rounded-field bg-accent-wash px-2 text-sm">{gm.state}</span>
+            <span className="rounded-field bg-accent-wash px-2 text-sm">
+              {t(`gm.states.${gm.state}`, { defaultValue: gm.state })}
+            </span>
           </>
         ) : null}
       </header>
@@ -120,7 +122,7 @@ function TableNodeView({ data }: NodeProps<ViewNode>) {
 
 const nodeTypes = { gm: GmNodeView, table: TableNodeView };
 
-/** The canvas of the workspace: the Grand Master at the center and a block for each table around it. */
+/** The canvas of the workspace: the Grand Master at the top and a block for each table in rows below it. */
 export function WorkspaceCanvas({
   view,
   showEnded,

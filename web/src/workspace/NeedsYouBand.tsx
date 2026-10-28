@@ -18,7 +18,14 @@ export function NeedsYouBand({ items, workspace }: { items: Pending[]; workspace
   const { t } = useTranslation("workspace");
   const line = useSituationLine();
   if (items.length === 0) {
-    return <p className="m-0 text-muted">{t("life.need.none")}</p>;
+    return (
+      <p className="m-0 flex items-center gap-2 text-muted">
+        <span aria-hidden="true" className="font-bold text-signal">
+          ✓
+        </span>
+        {t("life.need.none")}
+      </p>
+    );
   }
   return (
     <section

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { emit, installFakeSocket, openSocket } from "../test-socket";
 import { fakeServer, renderApp } from "../test-utils";
-import { buildNodes, circle, layoutOf, quietParts } from "./model";
+import { BLOCK_SIZE, buildNodes, GM_SIZE, layoutOf, quietParts, rows } from "./model";
 import { as, base, block, row, table, view } from "./test-fixtures";
 
 beforeEach(() => installFakeSocket());
@@ -46,7 +46,7 @@ test("a workspace with three tables shows two blocks, and the ended one only wit
   expect(b.textContent).toContain("Em revisão");
   expect(within(b).getByRole("link", { name: "PR #7 no GitHub" })).toBeTruthy();
   expect(screen.queryByRole("article", { name: "Mesa 40-old" })).toBeNull();
-  await user.click(screen.getByRole("checkbox", { name: "mostrar encerradas" }));
+  await user.click(screen.getByRole("button", { name: /^Mostrar encerradas/ }));
   expect((await block("40-old")).textContent).toContain("Encerrada");
 });
 
@@ -264,17 +264,24 @@ test("the shortcuts open the chat and show the pending approvals; the workspace 
       workspace: "loja",
     }),
   );
-  await user.click(screen.getByRole("button", { name: "Conversar com o Grão-Mestre" }));
+  await user.click(screen.getByRole("button", { name: "Falar com o Grão-Mestre" }));
   expect(
     await screen.findByRole("complementary", { name: "Conversa com o Grão-Mestre" }),
   ).toBeTruthy();
 });
 
-test("the circle puts the tables around the Grand Master, apart from each other", () => {
-  const p = circle(["a", "b", "c", "d"]);
+test("the rows put the tables below the Grand Master, apart from each other and wrapping", () => {
+  const p = rows(["a", "b", "c", "d"]);
   const pts = [...p.values()];
   expect(new Set(pts.map((q) => `${q.x},${q.y}`)).size).toBe(4);
-  // the saved place wins over the circle
+  // every table is under the Grand Master, which stands at the origin
+  expect(Math.min(...pts.map((q) => q.y))).toBeGreaterThanOrEqual(GM_SIZE.h);
+  // three to a row, the fourth wraps to a new row
+  expect(p.get("a")?.y).toBe(p.get("c")?.y);
+  expect(p.get("d")?.y).toBeGreaterThan(p.get("a")?.y ?? 0);
+  // a single table is centered under the Grand Master
+  expect(rows(["x"]).get("x")?.x).toBe(Math.round((GM_SIZE.w - BLOCK_SIZE.w) / 2));
+  // the saved place wins over the rows
   const nodes = buildNodes(
     view([table({ id: "a" }), table({ id: "b" })], { layout: [{ key: "table:a", x: 5, y: 6 }] }),
     false,
