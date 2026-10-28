@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // Level is the level of a user. The table of what each one can do is Can: it is
@@ -35,7 +37,23 @@ func rank(l Level) int {
 	return 0
 }
 
-// Name is how the level is said to people.
+// Msg is the name of the level as a message, translated by whoever shows it.
+func (l Level) Msg() i18n.Msg {
+	switch l {
+	case Owner:
+		return i18n.M("level.owner")
+	case Administrator:
+		return i18n.M("level.administrator")
+	case Approver:
+		return i18n.M("level.approver")
+	case Observer:
+		return i18n.M("level.observer")
+	}
+	return i18n.M("level.unknown", "level", string(l))
+}
+
+// Name is how the level is said to people (in pt-BR, for the places that have
+// no language yet: use Msg).
 func (l Level) Name() string {
 	switch l {
 	case Owner:
@@ -120,6 +138,15 @@ func (e *LevelError) Error() string {
 		return fmt.Sprintf("exige o nível %s; o seu é %s", e.Need.Name(), e.Have.Name())
 	}
 	return fmt.Sprintf("exige o nível %s ou acima; o seu é %s", e.Need.Name(), e.Have.Name())
+}
+
+// Msg is the refusal as a message: the level that is required and the one the
+// user has, translated by whoever shows it.
+func (e *LevelError) Msg() i18n.Msg {
+	if e.Need == Owner {
+		return i18n.M("level.required", "need", e.Need.Msg(), "have", e.Have.Msg())
+	}
+	return i18n.M("level.required_or_above", "need", e.Need.Msg(), "have", e.Have.Msg())
 }
 
 // ErrLevel is what errors.Is finds in every LevelError.

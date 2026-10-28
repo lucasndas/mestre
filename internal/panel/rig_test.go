@@ -90,6 +90,8 @@ func newRig(t *testing.T) *rig {
 type opts struct {
 	cookie, pin, origin, addr string
 	noOrigin                  bool
+	// acceptLanguage is the Accept-Language header of the request.
+	acceptLanguage string
 }
 
 func (r *rig) request(method, path string, body any, o opts) *http.Request {
@@ -121,6 +123,9 @@ func (r *rig) request(method, path string, body any, o opts) *http.Request {
 	}
 	if o.pin != "" {
 		req.Header.Set(panel.PINHeader, o.pin)
+	}
+	if o.acceptLanguage != "" {
+		req.Header.Set("Accept-Language", o.acceptLanguage)
 	}
 	req.Header.Set("User-Agent", "rig-browser")
 	return req

@@ -322,7 +322,7 @@ func (h *Hub) remove(c *uiConn) {
 func (p *Panel) serveWS(w http.ResponseWriter, r *http.Request) {
 	if !originOK(r) {
 		p.auditOriginRefused(r)
-		WriteError(w, Err(CodeBadOrigin, "origem não permitida", nil))
+		WriteError(w, Err(CodeBadOrigin, "api.bad_origin", nil))
 		return
 	}
 	ctx, apiErr := p.authenticate(r)
@@ -387,6 +387,11 @@ func (p *Panel) serveWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Hub) reply(c *uiConn, typ, replyTo string, payload any) {
+	if e, ok := payload.(*APIError); ok {
+		// the message of an error is in the language of the user of the socket
+		localized := e.In(c.user.Language)
+		payload = &localized
+	}
 	if b, err := h.envelope(typ, replyTo, payload); err == nil {
 		c.enqueue(websocket.MessageText, b)
 	}
@@ -410,7 +415,7 @@ func (h *Hub) handle(ctx context.Context, c *uiConn, data []byte) {
 		f := h.msgs[env.Type]
 		h.mu.Unlock()
 		if f == nil {
-			h.reply(c, TypeUIError, env.ID, Err(CodeBadRequest, "tipo de mensagem desconhecido", map[string]any{"type": env.Type}))
+			h.reply(c, TypeUIError, env.ID, Err(CodeBadRequest, "api.unknown_message_type", map[string]any{"type": env.Type}))
 			return
 		}
 		f(ctx, Socket{h, c}, env)

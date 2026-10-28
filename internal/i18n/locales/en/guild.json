@@ -1,0 +1,15 @@
+{
+  "guild.bad_priority": "The priority goes from 0 to 1000.",
+  "guild.bad_timezone": "That time zone is not in the IANA database.",
+  "guild.citadel_protected": "The Citadel cannot be excluded or removed: pass the Citadel to another machine first.",
+  "guild.confirm_required": "Read the warning of the removal and confirm.",
+  "guild.excluded_machine": "An excluded machine never becomes the Citadel.",
+  "guild.handover_in_progress": "A Citadel switch is already under way: wait for it to end.",
+  "guild.no_lock": "The Guild has no lock at GitHub configured: the switch is not possible yet.",
+  "guild.not_active": "The machine is no longer in the Guild.",
+  "guild.not_online": "The machine is not online now.",
+  "guild.not_pending": "This request was already decided or expired.",
+  "guild.not_revealed": "The machine has not shown its code yet: wait for the installer to display it.",
+  "guild.outside_local_network": "This machine is outside the local network: nobody in the Guild reaches it through mestre.local, so it cannot receive the Citadel.",
+  "guild.suspended": "The Citadel is suspended and takes no changes now."
+}

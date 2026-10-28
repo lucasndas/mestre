@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -43,7 +44,7 @@ func (f *fakeWorkspaces) Sheets(context.Context) ([]panel.SheetOption, error) {
 }
 
 func (f *fakeWorkspaces) Create(context.Context, users.User, panel.CreateWorkspaceRequest) (panel.WorkspaceRow, error) {
-	return panel.WorkspaceRow{}, &panel.Refusal{Reason: "creation_failed", Message: "the e2e Guild has no GitHub"}
+	return panel.WorkspaceRow{}, &panel.Refusal{Msg: i18n.M("workspace.creation_failed")}
 }
 
 func (f *fakeWorkspaces) Retry(context.Context, string) error  { return nil }

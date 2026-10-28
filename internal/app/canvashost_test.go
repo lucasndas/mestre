@@ -97,11 +97,11 @@ func TestCanvasRemovesTheManualConnectionAndRefusesTheAutomaticOne(t *testing.T)
 
 	err := host.Disconnect(w.ctx, canvasAdmin, w.slug, w.table.ID, char(w.master.ID), char(w.gm.ID))
 	var ref *panel.Refusal
-	if !errors.As(err, &ref) || ref.Reason != "automatic_connection" {
+	if !errors.As(err, &ref) || ref.Msg.Code != "canvas.automatic_connection" {
 		t.Fatalf("removing the automatic connection = %v; want the refusal automatic_connection", err)
 	}
-	if got, _ := ref.Params["reasons"].([]string); !slices.Contains(got, "mestre") {
-		t.Errorf("the refusal carries the reasons %v; want mestre", ref.Params["reasons"])
+	if got, _ := ref.Msg.Params["reasons"].([]string); !slices.Contains(got, "mestre") {
+		t.Errorf("the refusal carries the reasons %v; want mestre", ref.Msg.Params["reasons"])
 	}
 	if err := host.Disconnect(w.ctx, canvasAdmin, w.slug, w.table.ID, char(dev.ID), char(rev.ID)); err != nil {
 		t.Fatalf("removing the manual connection: %v", err)
@@ -131,7 +131,7 @@ func TestCanvasDoesNotDisconnectWhatBelongsToAnotherTable(t *testing.T) {
 		err := host.Disconnect(w.ctx, canvasAdmin, path[0], path[1], char(dev.ID), char(rev.ID))
 		var ref *panel.Refusal
 		isRef := errors.As(err, &ref)
-		if !errors.Is(err, panel.ErrCanvasNotFound) && (!isRef || ref.Reason != "not_found") {
+		if !errors.Is(err, panel.ErrCanvasNotFound) && (!isRef || ref.Msg.Code != "canvas.not_found") {
 			t.Errorf("%s: disconnect = %v; want not found", name, err)
 		}
 		st, _ := host.State(w.ctx, w.slug, w.table.ID)
@@ -161,7 +161,7 @@ func TestCanvasRefusesWhatTheEngineRefuses(t *testing.T) {
 	for name, c := range cases {
 		err := host.Connect(w.ctx, c.by, w.slug, w.table.ID, c.a, c.b)
 		var ref *panel.Refusal
-		if !errors.As(err, &ref) || ref.Reason != c.want {
+		if !errors.As(err, &ref) || ref.Msg.Code != "canvas."+c.want {
 			t.Errorf("%s: %v; want the refusal %s", name, err, c.want)
 		}
 	}
@@ -212,7 +212,7 @@ func TestCanvasPinsACharacterOnlyForAnAdministrator(t *testing.T) {
 	dev := w.recruit("Dev-1", "Dev Claude")
 	host := app.NewCanvasHostForTest(w.orc, w.clk)
 	var ref *panel.Refusal
-	if err := host.Pin(w.ctx, canvasObserver, w.slug, w.table.ID, dev.ID, true); !errors.As(err, &ref) || ref.Reason != "level_denied" {
+	if err := host.Pin(w.ctx, canvasObserver, w.slug, w.table.ID, dev.ID, true); !errors.As(err, &ref) || ref.Msg.Code != "canvas.level_denied" {
 		t.Fatalf("an observer pinning = %v", err)
 	}
 	if err := host.Pin(w.ctx, canvasAdmin, w.slug, w.table.ID, dev.ID, true); err != nil {
@@ -263,10 +263,10 @@ func TestCanvasDrawsAndRedrawsAMission(t *testing.T) {
 	}
 	// a step that names nobody is refused, and so is an Observer
 	var ref *panel.Refusal
-	if _, err := host.CreateQuest(w.ctx, canvasAdmin, w.slug, w.table.ID, panel.QuestRequest{Name: "x", Steps: []panel.QuestStepDrawn{{ID: "a", Character: "Ninguém"}}}); !errors.As(err, &ref) || ref.Reason != "invalid" {
+	if _, err := host.CreateQuest(w.ctx, canvasAdmin, w.slug, w.table.ID, panel.QuestRequest{Name: "x", Steps: []panel.QuestStepDrawn{{ID: "a", Character: "Ninguém"}}}); !errors.As(err, &ref) || ref.Msg.Code != "canvas.invalid" {
 		t.Errorf("a step with no character = %v", err)
 	}
-	if _, err := host.CreateQuest(w.ctx, canvasObserver, w.slug, w.table.ID, panel.QuestRequest{Name: "y"}); !errors.As(err, &ref) || ref.Reason != "level_denied" {
+	if _, err := host.CreateQuest(w.ctx, canvasObserver, w.slug, w.table.ID, panel.QuestRequest{Name: "y"}); !errors.As(err, &ref) || ref.Msg.Code != "canvas.level_denied" {
 		t.Errorf("an observer drawing a mission = %v", err)
 	}
 }
@@ -312,7 +312,7 @@ func TestCanvasSavesASelectionAsAGrimoire(t *testing.T) {
 		t.Fatalf("list = %+v, %v", list, err)
 	}
 	var ref *panel.Refusal
-	if _, err := host.SaveGrimoire(w.ctx, canvasAdmin, w.slug, w.table.ID, panel.GrimoireSaveRequest{Name: "time", Selection: []panel.CanvasItem{{Key: canvas.Key(canvas.KindCharacter, dev.ID)}}}); !errors.As(err, &ref) || ref.Reason != "name_taken" {
+	if _, err := host.SaveGrimoire(w.ctx, canvasAdmin, w.slug, w.table.ID, panel.GrimoireSaveRequest{Name: "time", Selection: []panel.CanvasItem{{Key: canvas.Key(canvas.KindCharacter, dev.ID)}}}); !errors.As(err, &ref) || ref.Msg.Code != "canvas.name_taken" {
 		t.Errorf("a repeated name = %v", err)
 	}
 	if _, err := host.Grimoires(w.ctx, canvasObserver); err == nil {

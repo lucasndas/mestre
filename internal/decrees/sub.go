@@ -68,15 +68,15 @@ type Sub struct {
 func (s *Service) Subdelegate(ctx context.Context, in SubRequest) (Sub, error) {
 	switch {
 	case in.By.Role != characters.RoleGrandMaster:
-		return Sub{}, refuse(CodeLevelDenied, "só o Grão-Mestre subdelega; o Mestre da mesa não passa adiante o que recebeu")
+		return Sub{}, refuse(CodeLevelDenied, "decree.sub_grand_master_only")
 	case in.Grantee.Role != characters.RoleTableMaster || in.Grantee.Workspace != in.By.Workspace || in.Mesa == "" || in.Grantee.Table != in.Mesa:
-		return Sub{}, refuse(CodeTooWide, "a subdelegação é para o Mestre da mesa %q, só na mesa dele", in.Mesa)
+		return Sub{}, refuse(CodeTooWide, "decree.sub_own_table_only", "mesa", in.Mesa)
 	case in.Type == "" || fixedTypes[in.Type] || in.Type == string(classes.RequestClassPermission):
-		return Sub{}, refuse(CodeTooWide, "o tipo %q não se subdelega", in.Type)
+		return Sub{}, refuse(CodeTooWide, "decree.sub_type_not_allowed", "type", in.Type)
 	}
 	now := s.clk.Now()
 	if !in.Until.After(now) || in.Until.Sub(now) > MaxDelegation {
-		return Sub{}, refuse(CodeTooWide, "a validade da subdelegação vai até 30 dias, e nunca além da origem")
+		return Sub{}, refuse(CodeTooWide, "decree.sub_validity_too_long")
 	}
 	if s.o.TableOpen != nil {
 		open, err := s.o.TableOpen(ctx, in.By.Workspace, in.Mesa)
@@ -84,7 +84,7 @@ func (s *Service) Subdelegate(ctx context.Context, in SubRequest) (Sub, error) {
 			return Sub{}, err
 		}
 		if !open {
-			return Sub{}, refuse(CodeTooWide, "a mesa %q não está aberta: a subdelegação nunca dura mais que a mesa", in.Mesa)
+			return Sub{}, refuse(CodeTooWide, "decree.sub_table_not_open", "mesa", in.Mesa)
 		}
 	}
 	var origin int64
@@ -94,10 +94,10 @@ func (s *Service) Subdelegate(ctx context.Context, in SubRequest) (Sub, error) {
 			return Sub{}, err
 		}
 		if !ok {
-			return Sub{}, refuse(CodeTooWide, "o Grão-Mestre não tem delegação do Senhor da Guilda para %q na mesa %q: não há o que subdelegar", in.Type, in.Mesa)
+			return Sub{}, refuse(CodeTooWide, "decree.sub_no_origin", "type", in.Type, "mesa", in.Mesa)
 		}
 		if !d.Until.IsZero() && in.Until.After(d.Until) {
-			return Sub{}, refuse(CodeTooWide, "a subdelegação não vai além da origem (decreto %d, até %s)", d.Number, s.Moment(ctx, d.Until))
+			return Sub{}, refuse(CodeTooWide, "decree.sub_beyond_origin", "number", d.Number, "until", s.inGuildZone(ctx, d.Until))
 		}
 		origin = d.Number
 	}
@@ -110,7 +110,7 @@ func (s *Service) Subdelegate(ctx context.Context, in SubRequest) (Sub, error) {
 				return err
 			}
 			if d.State != Active {
-				return refuse(CodeTooWide, "a delegação de origem acabou")
+				return refuse(CodeTooWide, "decree.sub_origin_ended")
 			}
 		}
 		res, err := tx.ExecContext(ctx, `INSERT INTO subdelegations (workspace, mesa, request_type, grantor, grantee, origin, reason, state, created_at, until) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,

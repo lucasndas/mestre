@@ -11,6 +11,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/providers"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -512,7 +513,7 @@ func TestADecreeThatFreesThePushIsFulfilledByTheEngineAndRegisteredInTheDecree(t
 	bad := decrees.Proposal{Author: ana.ID, Kind: decrees.KindRule, Workspace: "meu-app", Target: decrees.Target{Kind: decrees.TargetClass, Name: "qa"},
 		Effect: decrees.Effect{Kind: decrees.EffectPolicy, Setting: "revisao_obrigatoria", Loosens: true}, Text: "o dev pode ignorar a revisão obrigatória"}
 	var ref *decrees.Refusal
-	if _, err := ds.Propose(r.ctx, bad); !errors.As(err, &ref) || ref.Code != decrees.CodeInvariant || !strings.Contains(ref.Message, "revisao_obrigatoria") {
+	if _, err := ds.Propose(r.ctx, bad); !errors.As(err, &ref) || ref.Code != decrees.CodeInvariant || !strings.Contains(i18n.Render(i18n.PtBR, ref.Msg), "revisao_obrigatoria") {
 		t.Fatalf("a decree to ignore the required review = %v, want the refusal with the explanation", err)
 	}
 }

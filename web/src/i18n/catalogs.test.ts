@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { messages } from "../gen/messages";
 import { en } from "./locales/en";
 import { ptBR } from "./locales/pt-BR";
 
@@ -45,7 +46,7 @@ test("no text shown in Portuguese names a campaign, the highest level or the par
     expect(left, key).not.toMatch(/\b(Workspaces?|workspaces?|Party|Dono)\b/);
   }
   expect(ptBR.shell.nav.workspaces).toBe("Campanhas");
-  expect(ptBR.errors.level_owner).toBe("Senhor da Guilda");
+  expect(messages["pt-BR"]["level.owner"]).toBe("Senhor da Guilda");
   expect(ptBR.shell.settings.entries.ceiling.name).toBe("Teto da campanha");
   expect(ptBR.workspace.block.party).toBe("Companhia");
 });
@@ -59,8 +60,18 @@ test("the English panel says Guildmaster and Campaign, and keeps Party", () => {
       .replaceAll("Owner: ", "");
     expect(left, key).not.toMatch(/\b(Workspaces?|workspaces?|Owner)\b/);
   }
-  expect(en.errors.level_owner).toBe("Guildmaster");
+  expect(messages.en["level.owner"]).toBe("Guildmaster");
   expect(en.shell.nav.workspaces).toBe("Campaigns");
   expect(en.shell.settings.entries.ceiling.name).toBe("Campaign ceiling");
   expect(en.workspace.block.party).toBe("Party");
+});
+
+// CA-MSG-11 (the guard of the vocabulary also holds for the catalogs of the engine, generated here)
+test("the texts of the engine keep the vocabulary in both languages", () => {
+  for (const [key, text] of Object.entries(messages["pt-BR"])) {
+    expect(text.replace(/{{\w+}}/g, ""), key).not.toMatch(/\b(Workspaces?|workspaces?|Dono)\b/);
+  }
+  for (const [key, text] of Object.entries(messages.en)) {
+    expect(text.replace(/{{\w+}}/g, ""), key).not.toMatch(/\b(Workspaces?|workspaces?|Owner)\b/);
+  }
 });

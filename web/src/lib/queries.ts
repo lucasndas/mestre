@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { Me, SessionList, Status, TerminalInfo } from "../gen/panel";
 import { api } from "./api";
+import { setGuildZone } from "./messages";
 
 export const statusQuery = queryOptions({
   queryKey: ["status"],
@@ -10,7 +11,11 @@ export const statusQuery = queryOptions({
 
 export const meQuery = queryOptions({
   queryKey: ["me"],
-  queryFn: () => api<Me>("GET", "/api/me", undefined, { expect401: true }),
+  queryFn: async () => {
+    const me = await api<Me>("GET", "/api/me", undefined, { expect401: true });
+    setGuildZone(me.timezone); // the instants in the messages of the engine come out in it
+    return me;
+  },
   retry: false,
   staleTime: Number.POSITIVE_INFINITY,
 });

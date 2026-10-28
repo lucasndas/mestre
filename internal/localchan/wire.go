@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // Versions of the channel. The engine accepts the current version and the
@@ -81,8 +83,11 @@ func (r Request) Strings() ([]string, bool) {
 
 // Error is the error of a response.
 type Error struct {
-	Code    string         `json:"code"`
-	Message string         `json:"message"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	// Params are the parameters of the message the engine said it with: names,
+	// numbers and instants (RFC 3339), never a sentence in another language.
+	Params  map[string]any `json:"params"`
 	Hint    string         `json:"hint,omitempty"`
 	Details map[string]any `json:"details"`
 }
@@ -129,7 +134,17 @@ func OK(data any) Response {
 
 // Fail is an error response.
 func Fail(code, message, hint string) Response {
-	return Response{Error: &Error{Code: code, Message: message, Hint: hint, Details: map[string]any{}}}
+	return Response{Error: &Error{Code: code, Message: message, Params: map[string]any{}, Hint: hint, Details: map[string]any{}}}
+}
+
+// FailMsg is an error response whose message comes from the catalog, always in
+// English: an agent reads it (docs/plataforma/idioma-por-canal.md#cli). The
+// code of the error stays the one the command had; the parameters of the
+// message go in params.
+func FailMsg(code string, m i18n.Msg, hint string) Response {
+	r := Fail(code, i18n.Render(i18n.En, m), hint)
+	r.Error.Params = i18n.PlainParams(i18n.En, m)
+	return r
 }
 
 // WithExit returns r with an explicit exit code.

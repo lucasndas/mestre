@@ -71,7 +71,7 @@ func (a *workspaceArea) handleView(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !found {
-		WriteError(w, Err(CodeNotFound, "campanha não encontrada", nil))
+		WriteError(w, Err(CodeNotFound, "api.workspace_not_found", nil))
 		return
 	}
 	if out.Workspace.State != "preparing" {
@@ -100,7 +100,7 @@ func (a *workspaceArea) handleViewLayout(w http.ResponseWriter, r *http.Request)
 	}
 	vs := a.p.viewSource()
 	if vs == nil {
-		WriteError(w, Err(CodeUnavailable, "a visão da campanha não está disponível agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.view_unavailable", nil))
 		return
 	}
 	var in ViewLayoutRequest
@@ -131,7 +131,7 @@ func (a *workspaceArea) handlePauseTable(w http.ResponseWriter, r *http.Request)
 	}
 	vs := a.p.viewSource()
 	if vs == nil {
-		WriteError(w, Err(CodeUnavailable, "a visão da campanha não está disponível agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.view_unavailable", nil))
 		return
 	}
 	var in PauseTableRequest
@@ -140,7 +140,7 @@ func (a *workspaceArea) handlePauseTable(w http.ResponseWriter, r *http.Request)
 	}
 	reason := cleanReason(in.Reason)
 	if reason == "" {
-		WriteError(w, Err(CodeBadRequest, "diga por que pausar a mesa", nil))
+		WriteError(w, Err(CodeBadRequest, "api.pause_reason", nil))
 		return
 	}
 	table := r.PathValue("table")

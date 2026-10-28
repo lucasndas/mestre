@@ -23,7 +23,7 @@ func TestTheReasonOfAPauseGoesThroughTheFilterOfSecrets(t *testing.T) {
 	for _, held := range []string{"a senha é abc123", "minha senha do banco", "   \U0000202e  "} {
 		_, err := h.PauseTable(context.Background(), by, "loja", "42-login", held)
 		var ref *panel.Refusal
-		if !errors.As(err, &ref) || ref.Reason != "secret" {
+		if !errors.As(err, &ref) || ref.Msg.Code != "table.secret" {
 			t.Errorf("%q: err = %v, want a refusal for a secret", held, err)
 		}
 	}

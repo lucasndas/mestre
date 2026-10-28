@@ -204,7 +204,7 @@ func (s *Service) audience(ctx context.Context, workspace string, only func(user
 	return out
 }
 
-func notFound() *panel.APIError { return panel.Err(panel.CodeNotFound, "não encontrado", nil) }
+func notFound() *panel.APIError { return panel.Err(panel.CodeNotFound, "api.not_found", nil) }
 
 // Overview implements panel.ChatSource.
 func (s *Service) Overview(ctx context.Context, u users.User) (panel.ChatOverview, error) {

@@ -41,7 +41,7 @@ export const grimoiresQuery = queryOptions({
   retry: false,
 });
 
-/** The actions of the canvas: each one asks the engine, which may refuse (ApiError "refused"). */
+/** The actions of the canvas: each one asks the engine, which may refuse (an ApiError with the code of the refusal, "canvas.name_taken"). */
 export const actions = (ws: string, table: string) => ({
   saveLayout: (req: LayoutRequest) => api<void>("PUT", `${base(ws, table)}/layout`, req),
   connect: (a: CanvasRef, b: CanvasRef) =>

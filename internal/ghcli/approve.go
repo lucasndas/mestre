@@ -111,7 +111,7 @@ func (h *Handlers) approve(ctx context.Context, c *localchan.Call) localchan.Res
 	switch {
 	case err == nil:
 	case errors.As(err, &ref) && ref.Code == approvals.CodeNoDelegation:
-		return localchan.Fail(approvals.CodeNoDelegation, ref.Message, "the credential of a person is used only with a decree of delegation").WithExit(localchan.ExitDenied)
+		return localchan.FailMsg(approvals.CodeNoDelegation, ref.Msg, "the credential of a person is used only with a decree of delegation").WithExit(localchan.ExitDenied)
 	case errors.Is(err, approvals.ErrHeadChanged):
 		return localchan.Fail("head_changed", err.Error(), "read the pull request again with `mestre gh review <pr>`").WithExit(localchan.ExitConflict)
 	case errors.Is(err, approvals.ErrPRClosed):
@@ -119,7 +119,7 @@ func (h *Handlers) approve(ctx context.Context, c *localchan.Call) localchan.Res
 	case errors.Is(err, github.ErrNotFound):
 		return localchan.Fail("not_found", fmt.Sprintf("#%d does not exist", n), "").WithExit(localchan.ExitNotFound)
 	case errors.As(err, &ref) && ref.Code == chain.CodeHumanRequired:
-		return localchan.Fail("human_required", ref.Message, "ask the people with `mestre approval ask`; nothing was sent to GitHub").WithExit(localchan.ExitDenied)
+		return localchan.FailMsg("human_required", ref.Msg, "ask the people with `mestre approval ask`; nothing was sent to GitHub").WithExit(localchan.ExitDenied)
 	default:
 		return refusal(err)
 	}
@@ -292,7 +292,7 @@ func askRefusal(err error) *localchan.Response {
 	case errors.Is(err, chain.ErrWrongRepo):
 		r = localchan.Fail("wrong_repo", err.Error(), "the repository of the request is not the one of the workspace").WithExit(localchan.ExitDenied)
 	case errors.As(err, &ref):
-		r = localchan.Fail(ref.Code, ref.Message, "the policy sends this to the people; nothing was done").WithExit(localchan.ExitDenied)
+		r = localchan.FailMsg(ref.Code, ref.Msg, "the policy sends this to the people; nothing was done").WithExit(localchan.ExitDenied)
 	case strings.Contains(err.Error(), "the request has no table"):
 		r = localchan.Fail("no_table", "the pull request does not come from a table of the workspace, so the gate of freshness has nothing to check", "its merge is a decision of the people, outside this command").WithExit(localchan.ExitDenied)
 	default:

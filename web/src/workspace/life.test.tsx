@@ -241,7 +241,7 @@ test("a pause the server refuses says who refused and why, and the card does not
     base(view([table({ stalled: true, quiet_seconds: 4 * 3600 })]), {
       "POST /api/workspaces/loja/tables/42-login/pause": () => ({
         status: 403,
-        body: { error: { code: "refused", message: "x", params: { reason: "level_denied" } } },
+        body: { error: { code: "table.level_denied", message: "x", params: {} } },
       }),
     }),
   );

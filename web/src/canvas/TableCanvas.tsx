@@ -46,23 +46,10 @@ import { nodeTypes } from "./nodes";
 import { SidePanel } from "./SidePanel";
 import { Legend, SelectionStrip } from "./Strip";
 
-/** What a refused action says, in the language of the user: the engine's reason, else its own words. */
+/** What a refused action says, in the language of the user: the text of the engine's code (gen/messages.ts). */
 export function useRefusalText() {
-  const { t } = useTranslation("canvas");
   const { t: te } = useTranslation("errors");
-  return (err: unknown): string => {
-    if (err instanceof ApiError && err.code === "refused") {
-      const reason = String(err.params.reason ?? "");
-      const key = `refusal.${reason}`;
-      const params = {
-        ...err.params,
-        reasons: Array.isArray(err.params.reasons) ? err.params.reasons.join(", ") : "",
-      };
-      const text = t(key, { ...params, defaultValue: "" });
-      return text || err.message || errorText(te, err);
-    }
-    return errorText(te, err);
-  };
+  return (err: unknown): string => errorText(te, err);
 }
 
 /** The canvas of one table: the live state of the engine, drawn and acted on (docs/painel/canvas.md). */
@@ -468,12 +455,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
                 });
                 setNotice("");
               } catch (err) {
-                if (
-                  err instanceof ApiError &&
-                  err.code === "refused" &&
-                  err.params.reason === "name_taken"
-                )
-                  return "taken";
+                if (err instanceof ApiError && err.code === "canvas.name_taken") return "taken";
                 fail(err);
                 return undefined;
               }

@@ -228,9 +228,9 @@ func (h *ProposeHandler) propose(ctx context.Context, c *localchan.Call) localch
 		if errors.As(err, &ref) {
 			code := map[string]string{CodeLevel: "level_denied", CodeWorkspace: "level_denied"}[ref.Code]
 			if code != "" {
-				return localchan.Fail(code, ref.Message, "").WithExit(localchan.ExitDenied)
+				return localchan.FailMsg(code, ref.Msg, "").WithExit(localchan.ExitDenied)
 			}
-			return localchan.Fail(ref.Code, ref.Message, "").WithExit(localchan.ExitUsage)
+			return localchan.FailMsg(ref.Code, ref.Msg, "").WithExit(localchan.ExitUsage)
 		}
 		return localchan.Fail(localchan.CodeInternal, "the proposal could not be kept", "")
 	}

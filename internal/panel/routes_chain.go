@@ -121,7 +121,7 @@ func (p *Panel) handlePause(pause bool) http.HandlerFunc {
 		ctx, me := r.Context(), UserOf(r)
 		reason := strings.TrimSpace(in.Reason)
 		if reason == "" {
-			WriteError(w, Err(CodeReasonRequired, "diga o motivo", nil))
+			WriteError(w, Err(CodeReasonRequired, "api.reason_required", nil))
 			return
 		}
 		req := chain.PauseRequest{Workspace: ws, Table: table, Reason: reason,
@@ -144,19 +144,19 @@ func (p *Panel) handlePause(pause bool) http.HandlerFunc {
 		switch {
 		case err == nil:
 		case errors.Is(err, chain.ErrCharacterPause):
-			WriteError(w, Err(CodeGrandMasterOnly, "a pausa do Grão-Mestre só ele retoma", nil))
+			WriteError(w, Err(CodeGrandMasterOnly, "api.grand_master_pause", nil))
 			return
 		case errors.Is(err, chain.ErrLevelDenied):
-			WriteError(w, Err(CodeForbiddenLevel, "ação não permitida a este nível", nil))
+			WriteError(w, Err(CodeForbiddenLevel, "api.level_not_allowed", nil))
 			return
 		case errors.Is(err, chain.ErrReasonRequired):
-			WriteError(w, Err(CodeReasonRequired, "diga o motivo", nil))
+			WriteError(w, Err(CodeReasonRequired, "api.reason_required", nil))
 			return
 		case errors.Is(err, chain.ErrTableOver):
-			WriteError(w, Err(CodeTableOver, "a mesa já acabou", nil))
+			WriteError(w, Err(CodeTableOver, "api.table_over", nil))
 			return
 		case errors.Is(err, chain.ErrNoTable):
-			WriteError(w, Err(CodeNoTable, "mesa não encontrada", nil))
+			WriteError(w, Err(CodeNoTable, "api.table_not_found", nil))
 			return
 		default:
 			p.log.Error("panel: the pause of the autonomy", "err", err)

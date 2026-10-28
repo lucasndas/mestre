@@ -12,7 +12,6 @@ import (
 
 // The codes of the errors of those screens.
 const (
-	CodeDecreeRefused   Code = "decree_refused"
 	CodeDecreeEnded     Code = "decree_ended"
 	CodeDecreeLocked    Code = "mestre_locked"
 	CodeNoProposal      Code = "no_proposal"
@@ -29,7 +28,6 @@ const (
 
 func init() {
 	for c, st := range map[Code]int{
-		CodeDecreeRefused:   http.StatusUnprocessableEntity,
 		CodeDecreeEnded:     http.StatusConflict,
 		CodeDecreeLocked:    http.StatusLocked,
 		CodeNoProposal:      http.StatusNotFound,

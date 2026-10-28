@@ -28,13 +28,13 @@ func (s *Service) Ask(ctx context.Context, a AskRequest) (Outcome, error) {
 	case err != nil:
 		return Outcome{}, err
 	case r.State != Open:
-		return Outcome{}, refuse(CodeNoRequest, "the request #%d is already %s", r.ID, r.State)
+		return Outcome{}, refuse(CodeNoRequest, "approval.already_closed", "id", r.ID, "state", r.State)
 	case r.Level.Kind == LevelPeople:
-		return Outcome{}, s.refused(ctx, r, a.By, AnswerClimb, refuse(CodeAlreadyAsked, "the request #%d already waits on the people", r.ID))
+		return Outcome{}, s.refused(ctx, r, a.By, AnswerClimb, refuse(CodeAlreadyAsked, "approval.already_asked", "id", r.ID))
 	case r.Level.Agent != a.By:
-		return Outcome{}, s.refused(ctx, r, a.By, AnswerClimb, refuse(CodeNotAtLevel, "the request #%d is not at your level: it waits on %s", r.ID, r.Level.Label()))
+		return Outcome{}, s.refused(ctx, r, a.By, AnswerClimb, refuse(CodeNotAtLevel, "approval.not_at_your_level", "id", r.ID, "level", r.Level.Label()))
 	case r.Deciding != nil:
-		return Outcome{}, refuse(CodeBusy, "the request #%d is being decided: try again in a moment", r.ID)
+		return Outcome{}, refuse(CodeBusy, "approval.being_decided", "id", r.ID)
 	}
 	level := r.Level
 	note := a.Note
@@ -43,7 +43,7 @@ func (s *Service) Ask(ctx context.Context, a AskRequest) (Outcome, error) {
 	cur, err := s.st.Get(ctx, a.Request)
 	if err != nil || cur.State != Open || cur.Deciding != nil || !cur.Level.same(level) {
 		s.mu.Unlock()
-		return Outcome{}, refuse(CodeBusy, "the request #%d changed meanwhile: look at it again", a.Request)
+		return Outcome{}, refuse(CodeBusy, "approval.changed_look_again", "id", a.Request)
 	}
 	cur.Ask = &note
 	err = s.st.Save(ctx, cur)
@@ -62,7 +62,7 @@ func (s *Service) Ask(ctx context.Context, a AskRequest) (Outcome, error) {
 			_ = s.st.Save(ctx, back)
 		}
 		s.mu.Unlock()
-		return out, refuse(CodeBusy, "the request #%d did not reach the people: look at it again", cur.ID)
+		return out, refuse(CodeBusy, "approval.not_reached_people", "id", cur.ID)
 	}
 	s.audit(ctx, cur, AuditEntry{Approver: a.By, Level: level.Kind, Answer: AnswerClimb, Outcome: "accepted", Reason: "approval ask: " + oneLine(note.Summary)})
 	return out, nil
@@ -75,7 +75,7 @@ func (s *Service) Ask(ctx context.Context, a AskRequest) (Outcome, error) {
 // then acts by the normal commands; the engine does nothing else.
 func (s *Service) AskAction(ctx context.Context, by characters.Character, tableID string, note AskNote) (int64, error) {
 	if by.Role != characters.RoleGrandMaster || by.Workspace == "" {
-		return 0, refuse(CodeNotAtLevel, "only the Grand Master asks the people about an action")
+		return 0, refuse(CodeNotAtLevel, "approval.only_grand_master_asks")
 	}
 	note.By = by.ID
 	return s.Request(ctx, OpenRequest{Type: classes.RequestGMAction, Workspace: by.Workspace, Table: tableID, Requester: by.ID, About: "pergunta do Grão-Mestre sobre uma ação",

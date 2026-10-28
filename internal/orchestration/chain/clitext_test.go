@@ -146,13 +146,13 @@ func TestTheRefusalsOfAnAnswerNameTheOptionsOfTheCLI(t *testing.T) {
 		c.d.Request, c.d.By, c.d.Reason = id, w.master.ID, "motivo"
 		ref := w.refusal(c.d)
 		for _, s := range c.wants {
-			if !strings.Contains(ref.Message, s) {
-				t.Errorf("%s: the refusal %q lacks %q", c.d.Answer, ref.Message, s)
+			if !strings.Contains(ref.Text(), s) {
+				t.Errorf("%s: the refusal %q lacks %q", c.d.Answer, ref.Text(), s)
 			}
 		}
 		for _, s := range c.forbid {
-			if strings.Contains(ref.Message, s) {
-				t.Errorf("%s: the refusal %q has %q, which the CLI does not have", c.d.Answer, ref.Message, s)
+			if strings.Contains(ref.Text(), s) {
+				t.Errorf("%s: the refusal %q has %q, which the CLI does not have", c.d.Answer, ref.Text(), s)
 			}
 		}
 	}

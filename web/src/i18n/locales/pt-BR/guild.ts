@@ -214,21 +214,4 @@ export default {
     save: "Salvar o fuso",
     saved: "O fuso da Guilda agora é {{zone}}.",
   },
-  refusal: {
-    excluded_machine: "Uma máquina excluída não vira Cidadela.",
-    outside_local_network:
-      "Esta máquina está fora da rede local: ninguém da Guilda a alcança pelo mestre.local, então ela não pode receber a Cidadela.",
-    citadel_protected:
-      "A Cidadela não pode ser excluída nem removida: passe a Cidadela a outra máquina antes.",
-    not_active: "A máquina não está mais na Guilda.",
-    not_online: "A máquina não está online agora.",
-    no_lock: "A Guilda não tem a trava no GitHub configurada: a troca ainda não é possível.",
-    suspended: "A Cidadela está suspensa e não aceita mudanças agora.",
-    not_pending: "Este pedido já foi decidido ou venceu.",
-    not_revealed: "A máquina ainda não mostrou o código dela: espere o instalador exibi-lo.",
-    handover_in_progress: "A troca da Cidadela já está em andamento: espere ela terminar.",
-    bad_priority: "A prioridade vai de 0 a 1000.",
-    bad_timezone: "Esse fuso não existe na base IANA.",
-    confirm_required: "Leia o aviso da remoção e confirme.",
-  },
 } as const;

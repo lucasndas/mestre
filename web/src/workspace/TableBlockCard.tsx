@@ -127,9 +127,7 @@ export function PauseForm({
       await qc.invalidateQueries({ queryKey: ["workspaces"] });
       onClose();
     } catch (err) {
-      const why = (err as { params?: { reason?: string } }).params?.reason ?? "";
-      const known = why ? (t as unknown as Say)(`refusal.${why}`, { defaultValue: "" }) : "";
-      setError(known || errorText(te, err));
+      setError(errorText(te, err));
     } finally {
       setBusy(false);
     }

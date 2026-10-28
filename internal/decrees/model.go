@@ -3,10 +3,11 @@ package decrees
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
+	"github.com/mestre-ia/mestre/internal/users"
 )
 
 // Kind tells a permanent rule from a one-time exception.
@@ -198,16 +199,33 @@ type View struct {
 func (d Decree) Summary() string { return describeEffect(d.Effect, d.Target, d.Kind, d.Action) }
 
 // Refusal is a proposal or an action the engine does not take, with the
-// reason in plain words.
+// reason as a message (a code and its parameters) that whoever shows it
+// translates (docs/plataforma/mensagens-por-codigo.md).
 type Refusal struct {
-	Code    string
-	Message string
+	Code string
+	Msg  i18n.Msg
 }
 
-func (r *Refusal) Error() string { return r.Message }
+// Error is the form of the refusal for a log: never translated.
+func (r *Refusal) Error() string { return r.Msg.String() }
 
-func refuse(code, format string, a ...any) *Refusal {
-	return &Refusal{Code: code, Message: fmt.Sprintf(format, a...)}
+// refuse makes a refusal from the code of the kind, the code of the message
+// and pairs of name and value for its parameters.
+func refuse(code, msg string, kv ...any) *Refusal {
+	return &Refusal{Code: code, Msg: i18n.M(msg, kv...)}
+}
+
+// refuseMsg is refuse with a message that is already made.
+func refuseMsg(code string, m i18n.Msg) *Refusal { return &Refusal{Code: code, Msg: m} }
+
+// levelMsg is the message of a refusal of level (users.Require), or a plain
+// one for any other error.
+func levelMsg(err error) i18n.Msg {
+	var le *users.LevelError
+	if errors.As(err, &le) {
+		return le.Msg()
+	}
+	return i18n.M("decree.level_denied", "reason", err.Error())
 }
 
 // The codes of a refusal.

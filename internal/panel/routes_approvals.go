@@ -13,6 +13,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/blocking"
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -35,7 +36,6 @@ const (
 	CodeApprovalNoVerify Code = "approval_no_verify"
 	CodeApprovalExpired  Code = "approval_expired"
 	CodeApprovalQuorum   Code = "approval_quorum"
-	CodeApprovalRefused  Code = "approval_refused"
 	CodeNoticeUnknown    Code = "notice_unknown"
 )
 
@@ -48,7 +48,6 @@ func init() {
 		CodeApprovalNoVerify: http.StatusConflict,
 		CodeApprovalExpired:  http.StatusConflict,
 		CodeApprovalQuorum:   http.StatusConflict,
-		CodeApprovalRefused:  http.StatusUnprocessableEntity,
 		CodeNoticeUnknown:    http.StatusNotFound,
 	} {
 		status[c] = s
@@ -248,7 +247,7 @@ func (p *Panel) blockingView(u users.User, n blocking.Saved) BlockingView {
 
 func (p *Panel) needApprovals(w http.ResponseWriter) bool {
 	if p.appr == nil || p.appr.Flow == nil {
-		WriteError(w, Err(CodeUnavailable, "as aprovações não estão disponíveis agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.approvals_unavailable", nil))
 		return false
 	}
 	return true
@@ -307,7 +306,7 @@ func (p *Panel) handleApprovalCount(w http.ResponseWriter, r *http.Request) {
 func requestID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
-		WriteError(w, Err(CodeNotFound, "pedido não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.request_not_found", nil))
 		return 0, false
 	}
 	return id, true
@@ -407,13 +406,13 @@ func (p *Panel) handleApprovalAnswer(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &le) {
 			params["need"], params["have"] = string(le.Need), string(le.Have)
 		}
-		WriteError(w, Err(CodeForbiddenLevel, "ação não permitida: "+err.Error(), params))
+		WriteError(w, errForbidden(err, params))
 		return
 	}
 	// the answers of the type of the request, as the screen gives them: a rule for the
 	// class only for a permission with an action, Delegar only for risk alto or medio
 	if !pd.Request.State.Closed() && !slices.Contains(p.appr.Flow.AnswersOf(u, pd.Request, pd), ans) {
-		WriteError(w, Err(CodeApprovalRefused, "essa resposta não existe para este pedido", map[string]any{"reason": "not_offered", "message": "essa resposta não existe para este pedido"}))
+		WriteError(w, ErrMsg(i18n.M("approval.answer_not_offered")).WithStatus(http.StatusUnprocessableEntity))
 		return
 	}
 	in := approvals.Input{Request: id, Answer: ans}
@@ -468,27 +467,27 @@ func (p *Panel) writeApprovalError(w http.ResponseWriter, err error) {
 	var ref *chain.Refusal
 	switch {
 	case errors.Is(err, approvals.ErrNotYours):
-		WriteError(w, Err(CodeNotFound, "pedido não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.request_not_found", nil))
 	case errors.Is(err, approvals.ErrNotOpen):
-		WriteError(w, Err(CodeApprovalClosed, err.Error(), nil))
+		WriteError(w, Err(CodeApprovalClosed, "api.approval_closed", nil))
 	case errors.Is(err, approvals.ErrAnswered):
-		WriteError(w, Err(CodeApprovalAnswered, err.Error(), nil))
+		WriteError(w, Err(CodeApprovalAnswered, "api.approval_answered", nil))
 	case errors.Is(err, approvals.ErrLevel):
-		WriteError(w, Err(CodeForbiddenLevel, err.Error(), nil))
+		WriteError(w, Err(CodeForbiddenLevel, "api.approval_level", nil))
 	case errors.Is(err, approvals.ErrLocked):
-		WriteError(w, Err(CodeApprovalLocked, err.Error(), nil))
+		WriteError(w, Err(CodeApprovalLocked, "api.approval_locked", nil))
 	case errors.Is(err, approvals.ErrTargetChanged):
-		WriteError(w, Err(CodeApprovalTarget, err.Error(), nil))
+		WriteError(w, Err(CodeApprovalTarget, "api.approval_target", nil))
 	case errors.Is(err, approvals.ErrNoVerify):
-		WriteError(w, Err(CodeApprovalNoVerify, err.Error(), nil))
+		WriteError(w, Err(CodeApprovalNoVerify, "api.approval_no_verify", nil))
 	case errors.Is(err, approvals.ErrExpired):
-		WriteError(w, Err(CodeApprovalExpired, err.Error(), nil))
+		WriteError(w, Err(CodeApprovalExpired, "api.approval_expired", nil))
 	case errors.Is(err, approvals.ErrQuorumEffect):
-		WriteError(w, Err(CodeApprovalQuorum, err.Error(), nil))
+		WriteError(w, Err(CodeApprovalQuorum, "api.approval_quorum", nil))
 	case errors.Is(err, approvals.ErrPINNeeded), errors.Is(err, approvals.ErrPIN):
-		WriteError(w, Err(CodePINRequired, "PIN obrigatório", nil))
+		WriteError(w, Err(CodePINRequired, "api.pin_required", nil))
 	case errors.As(err, &ref):
-		WriteError(w, Err(CodeApprovalRefused, ref.Message, map[string]any{"reason": ref.Code, "message": ref.Message}))
+		WriteError(w, ErrMsg(ref.Msg).WithStatus(http.StatusUnprocessableEntity))
 	default:
 		p.log.Error("panel: answering an approval", "err", err)
 		WriteError(w, errInternal())

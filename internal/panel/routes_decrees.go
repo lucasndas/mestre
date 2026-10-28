@@ -11,6 +11,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/providers"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -39,7 +40,7 @@ func mountDecrees(r *Router) {
 func (p *Panel) backend(w http.ResponseWriter) (RulesBackend, bool) {
 	b := p.rulesBackend()
 	if b == nil {
-		WriteError(w, Err(CodeUnavailable, "as regras não estão disponíveis agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.rules_unavailable", nil))
 		return nil, false
 	}
 	return b, true
@@ -64,7 +65,7 @@ func (p *Panel) workspaceOf(w http.ResponseWriter, r *http.Request, slug string)
 		return false
 	}
 	if !slices.Contains(slugs, slug) {
-		WriteError(w, Err(CodeNotFound, "campanha não encontrada", nil))
+		WriteError(w, Err(CodeNotFound, "api.workspace_not_found", nil))
 		return false
 	}
 	return true
@@ -167,23 +168,27 @@ func (p *Panel) decreeError(w http.ResponseWriter, err error) {
 	var ref *decrees.Refusal
 	switch {
 	case errors.As(err, &ref):
-		WriteError(w, Err(CodeDecreeRefused, ref.Message, map[string]any{"reason": ref.Message, "code": ref.Code}))
+		WriteError(w, ErrMsg(ref.Msg).WithStatus(http.StatusUnprocessableEntity))
 	case errors.Is(err, decrees.ErrPINRequired):
-		WriteError(w, Err(CodePINRequired, "PIN obrigatório", nil))
+		WriteError(w, Err(CodePINRequired, "api.pin_required", nil))
 	case errors.Is(err, decrees.ErrPINFailed):
-		WriteError(w, Err(CodePINInvalid, "PIN incorreto", nil))
+		WriteError(w, Err(CodePINInvalid, "api.pin_invalid", nil))
 	case errors.Is(err, decrees.ErrNotAllowed), errors.Is(err, decrees.ErrNotAuthor):
-		WriteError(w, Err(CodeForbiddenLevel, "ação não permitida a este nível", nil))
+		WriteError(w, Err(CodeForbiddenLevel, "api.level_not_allowed", nil))
 	case errors.Is(err, decrees.ErrEnded):
-		WriteError(w, Err(CodeDecreeEnded, "o decreto já acabou", nil))
+		WriteError(w, Err(CodeDecreeEnded, "api.decree_ended", nil))
 	case errors.Is(err, decrees.ErrLocked):
-		WriteError(w, Err(CodeDecreeLocked, "o Mestre está travado", nil))
+		WriteError(w, Err(CodeDecreeLocked, "api.mestre_locked", nil))
 	case errors.Is(err, decrees.ErrNoDecree):
-		WriteError(w, Err(CodeNotFound, "decreto não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.decree_not_found", nil))
 	case errors.Is(err, decrees.ErrNoProposal):
-		WriteError(w, Err(CodeNoProposal, "a proposta não existe ou venceu", nil))
-	case errors.Is(err, decrees.ErrTargetChanged), errors.Is(err, decrees.ErrWrongRequest), errors.Is(err, decrees.ErrNoVerify):
-		WriteError(w, Err(CodeDecreeRefused, err.Error(), nil))
+		WriteError(w, Err(CodeNoProposal, "api.proposal_gone", nil))
+	case errors.Is(err, decrees.ErrTargetChanged):
+		WriteError(w, ErrMsg(i18n.M("decree.target_changed")).WithStatus(http.StatusUnprocessableEntity))
+	case errors.Is(err, decrees.ErrWrongRequest):
+		WriteError(w, ErrMsg(i18n.M("decree.wrong_request")).WithStatus(http.StatusUnprocessableEntity))
+	case errors.Is(err, decrees.ErrNoVerify):
+		WriteError(w, ErrMsg(i18n.M("decree.no_verify")).WithStatus(http.StatusUnprocessableEntity))
 	default:
 		p.log.Error("panel: the decrees", "err", err)
 		WriteError(w, errInternal())
@@ -215,7 +220,7 @@ func grantOf(field, value string) *classes.Grant {
 // the shape; the level, the workspaces and the invariants are the engine's.
 func proposalOf(me users.User, in DecreeInput) (decrees.Proposal, *APIError) {
 	bad := func(field string) (decrees.Proposal, *APIError) {
-		return decrees.Proposal{}, Err(CodeBadRequest, "campo inválido: "+field, map[string]any{"field": field})
+		return decrees.Proposal{}, Err(CodeBadRequest, "api.invalid_field", map[string]any{"field": field})
 	}
 	text := strings.TrimSpace(in.Text)
 	if text == "" || len(text) > maxOrder {
@@ -344,7 +349,7 @@ func (p *Panel) handleRevokeDecree(w http.ResponseWriter, r *http.Request) {
 	ctx, me := r.Context(), UserOf(r)
 	before, err := b.Get(ctx, n)
 	if err != nil || !me.Acts(before.Workspace) {
-		WriteError(w, Err(CodeNotFound, "decreto não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.decree_not_found", nil))
 		return
 	}
 	revoke := func(w http.ResponseWriter, r *http.Request, pinRequest string) {
@@ -378,7 +383,7 @@ func (p *Panel) handleRenewDelegation(w http.ResponseWriter, r *http.Request) {
 	ctx, me := r.Context(), UserOf(r)
 	before, err := b.Get(ctx, n)
 	if err != nil || !me.Acts(before.Workspace) {
-		WriteError(w, Err(CodeNotFound, "decreto não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.decree_not_found", nil))
 		return
 	}
 	pending, err := b.Renew(ctx, n, me.ID)

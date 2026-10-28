@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"sync"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // The reserved labels (docs/github/acoes-por-nivel.md#árvore-do-épico).
@@ -36,16 +38,20 @@ const (
 	CodeNotAllowed    = "not_allowed"
 )
 
-// Refusal is an action the engine does not do, with the reason in plain words.
+// Refusal is an action the engine does not do, with the reason as a message (a
+// code and its parameters) that whoever shows it translates.
 type Refusal struct {
-	Code    string
-	Message string
+	Code string
+	Msg  i18n.Msg
 }
 
-func (r *Refusal) Error() string { return r.Code + ": " + r.Message }
+// Error is the form of the refusal for a log: never translated.
+func (r *Refusal) Error() string { return r.Code + ": " + r.Msg.String() }
 
-func refuse(code, format string, a ...any) *Refusal {
-	return &Refusal{Code: code, Message: fmt.Sprintf(format, a...)}
+// refuse makes a refusal from the code of the kind, the code of the message and
+// pairs of name and value for its parameters.
+func refuse(code, msg string, kv ...any) *Refusal {
+	return &Refusal{Code: code, Msg: i18n.M(msg, kv...)}
 }
 
 // ActorKind is who asks.
@@ -114,21 +120,21 @@ func (g *Guard) Authorize(ctx context.Context, a Actor, t Target) error {
 	}
 	repo, err := NormalizeRepo(t.Repo)
 	if err != nil {
-		return refuse(CodeNotAllowed, "repositório inválido")
+		return refuse(CodeNotAllowed, "github.invalid_repo")
 	}
 	t.Repo = repo
 	if t.Kind != KindIssue && t.Kind != KindPR {
-		return refuse(CodeNotAllowed, "o alvo é uma issue ou um PR; um comentário vale pelo que o contém")
+		return refuse(CodeNotAllowed, "github.target_kind")
 	}
 	ref, ok, err := g.Tables.Epic(ctx, a.Table)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return refuse(CodeNotAllowed, "a mesa %s não tem épico registrado", a.Table)
+		return refuse(CodeNotAllowed, "github.no_epic", "table", a.Table)
 	}
 	if want, err := NormalizeRepo(ref.Repo); err != nil || want != t.Repo {
-		return refuse(CodeOtherTable, "a mesa %s trabalha em %s, não em %s; peça ao Grão-Mestre", a.Table, ref.Repo, t.Repo)
+		return refuse(CodeOtherTable, "github.other_repo", "table", a.Table, "tableRepo", ref.Repo, "repo", t.Repo)
 	}
 	if obj, found, err := g.Objects.Get(ctx, t.Repo, t.Kind, t.Number); err != nil {
 		return err
@@ -146,25 +152,25 @@ func (g *Guard) Authorize(ctx context.Context, a Actor, t Target) error {
 	pr, err := g.GH.Pull(ctx, t.Repo, t.Number)
 	switch {
 	case err == nil && t.Kind == KindIssue:
-		return refuse(CodeNotAllowed, "#%d é um PR, não uma issue", t.Number)
+		return refuse(CodeNotAllowed, "github.is_pr_not_issue", "number", t.Number)
 	case err == nil:
 		if ref.Branch != "" && pr.HeadRef == ref.Branch && strings.EqualFold(pr.HeadRepo, t.Repo) {
 			return g.register(ctx, a, t, 0)
 		}
-		return refuse(CodeOtherTable, "o PR #%d não é da mesa %s; peça ao Grão-Mestre", t.Number, a.Table)
+		return refuse(CodeOtherTable, "github.pr_not_of_table", "number", t.Number, "table", a.Table)
 	case !errors.Is(err, ErrNotFound):
 		return err
 	case t.Kind == KindPR:
-		return refuse(CodeNotAllowed, "#%d não é um PR", t.Number)
+		return refuse(CodeNotAllowed, "github.not_a_pr", "number", t.Number)
 	}
 	return g.climb(ctx, a, t, ref.Epic)
 }
 
 func (g *Guard) otherTable(ctx context.Context, t Target, owner string) error {
 	if r, ok, err := g.Tables.Epic(ctx, owner); err == nil && ok && owner != "" {
-		return refuse(CodeOtherTable, "a issue #%d pertence ao épico #%d, de outra mesa; peça ao Grão-Mestre", t.Number, r.Epic)
+		return refuse(CodeOtherTable, "github.issue_in_other_epic", "number", t.Number, "epic", r.Epic)
 	}
-	return refuse(CodeOtherTable, "#%d pertence a outra mesa; peça ao Grão-Mestre", t.Number)
+	return refuse(CodeOtherTable, "github.belongs_to_other_table", "number", t.Number)
 }
 
 // climb goes up the parents of an issue nobody registered, to the first issue
@@ -176,7 +182,7 @@ func (g *Guard) climb(ctx context.Context, a Actor, t Target, epic int) error {
 		return err
 	}
 	if isEpic(self.Labels) {
-		return refuse(CodeOtherTable, "a issue #%d é um épico de outra mesa; peça ao Grão-Mestre", t.Number)
+		return refuse(CodeOtherTable, "github.issue_is_other_epic", "number", t.Number)
 	}
 	n := t.Number
 	for range maxClimb {
@@ -193,19 +199,19 @@ func (g *Guard) climb(ctx context.Context, a Actor, t Target, epic int) error {
 		}
 		if isEpic(info.Labels) {
 			if p != epic {
-				return refuse(CodeOtherTable, "a issue #%d pertence ao épico #%d, de outra mesa; peça ao Grão-Mestre", t.Number, p)
+				return refuse(CodeOtherTable, "github.issue_in_other_epic", "number", t.Number, "epic", p)
 			}
 			return g.register(ctx, a, t, n)
 		}
 		n = p
 	}
-	return refuse(CodeNotInEpic, "a issue #%d não está na árvore do épico #%d da mesa; peça ao Grão-Mestre", t.Number, epic)
+	return refuse(CodeNotInEpic, "github.issue_not_in_tree", "number", t.Number, "epic", epic)
 }
 
 func (g *Guard) register(ctx context.Context, a Actor, t Target, parent int) error {
 	err := g.Objects.Register(ctx, Object{Repo: t.Repo, Kind: t.Kind, Number: t.Number, Table: a.Table, ParentNumber: parent})
 	if errors.Is(err, ErrOtherTable) {
-		return refuse(CodeOtherTable, "#%d pertence a outra mesa; peça ao Grão-Mestre", t.Number)
+		return refuse(CodeOtherTable, "github.belongs_to_other_table", "number", t.Number)
 	}
 	return err
 }
@@ -220,13 +226,13 @@ func CheckLabels(a Actor, add, remove []string) error {
 		return slices.ContainsFunc(l, func(s string) bool { return strings.EqualFold(strings.TrimSpace(s), want) })
 	}
 	if (has(add, EpicLabel) || has(remove, EpicLabel)) && a.Kind == ActorTable {
-		return refuse(CodeReservedLabel, "o rótulo %s é reservado: só o Grão-Mestre o põe ou tira", EpicLabel)
+		return refuse(CodeReservedLabel, "github.label_grand_master", "label", EpicLabel)
 	}
 	if has(add, HumanLabel) && a.Kind == ActorTable {
-		return refuse(CodeReservedLabel, "o rótulo %s é reservado: só o Grão-Mestre e as pessoas o põem", HumanLabel)
+		return refuse(CodeReservedLabel, "github.label_grand_master_and_people", "label", HumanLabel)
 	}
 	if has(remove, HumanLabel) && a.Kind != ActorPerson {
-		return refuse(CodeReservedLabel, "o rótulo %s é reservado: só as pessoas o tiram, pelo GitHub ou pelo painel", HumanLabel)
+		return refuse(CodeReservedLabel, "github.label_people_remove", "label", HumanLabel)
 	}
 	return nil
 }
@@ -257,13 +263,13 @@ func (g *Guard) EnsureLabels(ctx context.Context, repo string, labels []string) 
 func CheckForce(a Actor, branch, tableBranch, defaultBranch string) error {
 	switch {
 	case defaultBranch == "" || strings.EqualFold(tableBranch, defaultBranch):
-		return refuse(CodeForce, "sem a branch principal conhecida, ou a da mesa é a principal, o push forçado não é feito")
+		return refuse(CodeForce, "github.force_unknown_main")
 	case branch == "" || strings.EqualFold(branch, defaultBranch) || strings.EqualFold(branch, "main") || strings.EqualFold(branch, "master"):
-		return refuse(CodeForce, "o push forçado na branch principal não é feito")
+		return refuse(CodeForce, "github.force_on_main")
 	case a.Kind != ActorTable || !a.MestreDaMesa:
-		return refuse(CodeForce, "o push forçado é só do Mestre da mesa")
+		return refuse(CodeForce, "github.force_master_only")
 	case tableBranch == "" || branch != tableBranch:
-		return refuse(CodeForce, "o push forçado é só na branch da mesa (%s)", tableBranch)
+		return refuse(CodeForce, "github.force_table_branch", "branch", tableBranch)
 	}
 	return nil
 }

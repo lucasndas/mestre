@@ -13,6 +13,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/ghcli"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
 )
@@ -158,14 +159,14 @@ func TestGhApproveIsForTheCommitReadTheWorkspaceOfWhoAsksAndTellsTheRefusalsApar
 		t.Errorf("approve without a reason: %+v", got)
 	}
 	// the policy does not let the Grand Master approve alone
-	ap.reply = &chain.Refusal{Code: chain.CodeHumanRequired, Message: "o PR precisa da aprovação de uma pessoa"}
+	ap.reply = &chain.Refusal{Code: chain.CodeHumanRequired, Msg: i18n.M("approval.gh_no_registered_person")}
 	// even with --on-behalf, a refusal that is not about the delegation stays human_required
 	for _, flags := range []map[string]any{{"reason": "x"}, {"reason": "x", "on-behalf": "Ana"}} {
 		if got = r.run("gm", "gh approve", flags, itoa(pr)); got.OK || got.Code != "human_required" || got.Exit != 3 {
 			t.Errorf("human required (%v): %+v", flags, got)
 		}
 	}
-	ap.reply = &chain.Refusal{Code: approvals.CodeNoDelegation, Message: "Ana não delegou"}
+	ap.reply = &chain.Refusal{Code: approvals.CodeNoDelegation, Msg: i18n.M("approval.detail", "detail", "Ana não delegou")}
 	if got = r.run("gm", "gh approve", map[string]any{"reason": "x", "on-behalf": "Ana"}, itoa(pr)); got.OK || got.Code != "no_delegation" || got.Exit != 3 {
 		t.Errorf("on behalf without a delegation: %+v", got)
 	}
@@ -271,7 +272,7 @@ func TestGhMergeTellsApartWhatGitHubRefusesAndWhatTheChainRefuses(t *testing.T) 
 	}
 	// the chain says the people decide: nothing is merged
 	mg.approved = 0
-	mg.askErr = &chain.Refusal{Code: chain.CodeHumanRequired, Message: "o gate de frescor não passou"}
+	mg.askErr = &chain.Refusal{Code: chain.CodeHumanRequired, Msg: i18n.M("approval.detail", "detail", "o gate de frescor não passou")}
 	if got := r.run("gm", "gh merge", nil, itoa(pr)); got.OK || got.Code != "human_required" || got.Exit != 3 {
 		t.Errorf("the chain refuses: %+v", got)
 	}
@@ -283,7 +284,7 @@ func TestGhMergeTellsApartWhatGitHubRefusesAndWhatTheChainRefuses(t *testing.T) 
 		{&chain.FreshnessError{Reason: "a base andou e a verificação falhou"}, "not_mergeable", 7},
 		{chain.ErrWrongRepo, "wrong_repo", 3},
 		{errors.New("chain: the gate of freshness could not be checked: the request has no table"), "no_table", 3},
-		{&chain.Refusal{Code: "above_ceiling", Message: "acima do teto"}, "above_ceiling", 3},
+		{&chain.Refusal{Code: "above_ceiling", Msg: i18n.M("approval.detail", "detail", "acima do teto")}, "above_ceiling", 3},
 	} {
 		mg.askErr = c.err
 		if got := r.run("gm", "gh merge", nil, itoa(pr)); got.OK || got.Code != c.code || got.Exit != c.exit {

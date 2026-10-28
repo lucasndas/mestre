@@ -158,7 +158,7 @@ func TestWrongLoginAndWrongPasswordSayTheSame(t *testing.T) {
 	if a.Code != b.Code || a.Body.String() != b.Body.String() {
 		t.Fatalf("the answers differ:\n%s\n%s", a.Body, b.Body)
 	}
-	if !contains(a.Body.String(), "usuário ou senha inválidos") {
+	if !contains(a.Body.String(), "Usuário ou senha inválidos") {
 		t.Fatalf("the message is %s", a.Body)
 	}
 	// the login typed (maybe a password) is not written in the audit when it is nobody's
@@ -178,7 +178,7 @@ func TestASuspendedUserGetsTheSameMessageAndIsAudited(t *testing.T) {
 	}
 	w := r.login("ana", otherPass, opts{})
 	r.wantErr(w, 401, panel.CodeInvalidCredentials)
-	if !contains(w.Body.String(), "usuário ou senha inválidos") || r.audited("panel.login.suspended") != 1 {
+	if !contains(w.Body.String(), "Usuário ou senha inválidos") || r.audited("panel.login.suspended") != 1 {
 		t.Fatalf("answer %s, audited %d", w.Body, r.audited("panel.login.suspended"))
 	}
 }

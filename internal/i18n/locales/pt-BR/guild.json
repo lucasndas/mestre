@@ -1,0 +1,15 @@
+{
+  "guild.bad_priority": "A prioridade vai de 0 a 1000.",
+  "guild.bad_timezone": "Esse fuso não existe na base IANA.",
+  "guild.citadel_protected": "A Cidadela não pode ser excluída nem removida: passe a Cidadela a outra máquina antes.",
+  "guild.confirm_required": "Leia o aviso da remoção e confirme.",
+  "guild.excluded_machine": "Uma máquina excluída não vira Cidadela.",
+  "guild.handover_in_progress": "A troca da Cidadela já está em andamento: espere ela terminar.",
+  "guild.no_lock": "A Guilda não tem a trava no GitHub configurada: a troca ainda não é possível.",
+  "guild.not_active": "A máquina não está mais na Guilda.",
+  "guild.not_online": "A máquina não está online agora.",
+  "guild.not_pending": "Este pedido já foi decidido ou venceu.",
+  "guild.not_revealed": "A máquina ainda não mostrou o código dela: espere o instalador exibi-lo.",
+  "guild.outside_local_network": "Esta máquina está fora da rede local: ninguém da Guilda a alcança pelo mestre.local, então ela não pode receber a Cidadela.",
+  "guild.suspended": "A Cidadela está suspensa e não aceita mudanças agora."
+}

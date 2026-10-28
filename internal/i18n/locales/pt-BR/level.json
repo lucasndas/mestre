@@ -1,0 +1,9 @@
+{
+  "level.administrator": "Administrador",
+  "level.approver": "Aprovador",
+  "level.observer": "Observador",
+  "level.owner": "Senhor da Guilda",
+  "level.required": "Exige o nível {{need}}; o seu é {{have}}.",
+  "level.required_or_above": "Exige o nível {{need}} ou acima; o seu é {{have}}.",
+  "level.unknown": "{{level}}"
+}

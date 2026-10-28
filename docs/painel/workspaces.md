@@ -32,7 +32,7 @@ Código: `internal/panel/routes_workspaces.go` e `types_workspaces.go` (`Workspa
 | `POST /api/workspaces/{slug}/retry`, `/pause`, `/resume`, `/versioning` | Administrador, na campanha dele | tentar de novo, pausar, retomar, responder (`local` ou `versioned`) |
 | `GET`, `PUT /api/workspaces/{slug}/verification` | leitura: quem vê a campanha; `PUT`: Administrador | a visão e a confirmação |
 
-Auditoria `panel.workspace.*` (`created`, `retry`, `pause`, `resume`, `versioning`, `verification_confirmed`, esta com o antes e o depois do documento). O que o motor recusa volta como `refused` com `reason` (`unknown_sheet`, `bad_grand_master_sheet`, `repo_taken`, `invalid_slug`, `not_ready`, `invalid_document`…), e nada é auditado como feito.
+Auditoria `panel.workspace.*` (`created`, `retry`, `pause`, `resume`, `versioning`, `verification_confirmed`, esta com o antes e o depois do documento). O que o motor recusa volta com o código da área em `code` (`workspace.unknown_sheet`, `workspace.bad_grand_master_sheet`, `workspace.repo_taken`, `workspace.invalid_slug`, `workspace.not_ready`, `workspace.invalid_document`…), e nada é auditado como feito.
 
 ## Regras e erros
 

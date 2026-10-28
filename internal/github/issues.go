@@ -100,7 +100,7 @@ func Impression(text string) string {
 func (s *IssueService) Create(ctx context.Context, a Actor, repo string, in IssueCreate) (IssueCreated, error) {
 	repo, err := NormalizeRepo(repo)
 	if err != nil {
-		return IssueCreated{}, refuse(CodeNotAllowed, "repositório inválido")
+		return IssueCreated{}, refuse(CodeNotAllowed, "github.invalid_repo")
 	}
 	g := s.guard()
 	parent := in.Parent
@@ -124,7 +124,7 @@ func (s *IssueService) Create(ctx context.Context, a Actor, repo string, in Issu
 			return IssueCreated{}, err
 		}
 		if !ok {
-			return IssueCreated{}, refuse(CodeNotAllowed, "a mesa %s não tem épico registrado", a.Table)
+			return IssueCreated{}, refuse(CodeNotAllowed, "github.no_epic", "table", a.Table)
 		}
 		if parent == 0 {
 			parent = ref.Epic
@@ -217,7 +217,7 @@ type IssueUpdate struct {
 func (s *IssueService) Update(ctx context.Context, a Actor, repo string, n int, in IssueUpdate) (IssueData, error) {
 	repo, err := NormalizeRepo(repo)
 	if err != nil {
-		return IssueData{}, refuse(CodeNotAllowed, "repositório inválido")
+		return IssueData{}, refuse(CodeNotAllowed, "github.invalid_repo")
 	}
 	g := s.guard()
 	if err := g.Authorize(ctx, a, Target{Repo: repo, Kind: KindIssue, Number: n}); err != nil {
@@ -228,7 +228,7 @@ func (s *IssueService) Update(ctx context.Context, a Actor, repo string, n int, 
 	if obj, found, err := s.Objects.Get(ctx, repo, KindIssue, n); err != nil {
 		return IssueData{}, err
 	} else if found && obj.Kind == KindPR {
-		return IssueData{}, refuse(CodeNotAllowed, "#%d é um PR, não uma issue; use mestre pr", n)
+		return IssueData{}, refuse(CodeNotAllowed, "github.is_pr_use_pr", "number", n)
 	}
 	if err := CheckLabels(a, in.AddLabels, in.RemoveLabel); err != nil {
 		return IssueData{}, err
@@ -282,7 +282,7 @@ func (s *IssueService) Comment(ctx context.Context, a Actor, repo string, n int,
 func (s *IssueService) ListTree(ctx context.Context, repo string, epic int) ([]IssueNode, error) {
 	repo, err := NormalizeRepo(repo)
 	if err != nil {
-		return nil, refuse(CodeNotAllowed, "repositório inválido")
+		return nil, refuse(CodeNotAllowed, "github.invalid_repo")
 	}
 	root, err := s.API.IssueData(ctx, repo, epic)
 	if err != nil {

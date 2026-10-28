@@ -9,6 +9,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
 	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -255,7 +256,7 @@ func TestAPolicyDecreeNeverLoosensAHighType(t *testing.T) {
 	if ref.Code != decrees.CodePolicy {
 		t.Fatalf("%+v", ref)
 	}
-	contains(t, ref.Message, "delegation")
+	contains(t, i18n.Render(i18n.PtBR, ref.Msg), "delegation")
 	for _, typ := range []string{"configuracao_repositorio", "envio_workflows", "ativacao_operador", "entrada_na_guilda"} {
 		if ref := w.refusal(pol(typ, true)); ref.Code != decrees.CodePolicy {
 			t.Fatalf("%s: %+v", typ, ref)

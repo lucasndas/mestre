@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -150,10 +151,10 @@ func TestPassingTheCitadelToAnExcludedOrOffNetworkMachineIsRefusedWithTheReason(
 	f.machines = append(f.machines, panel.GuildMachineRow{ID: "t1", Name: "torre", Online: true}, panel.GuildMachineRow{ID: "t2", Name: "longe", Online: true})
 	tok := r.ownerSession()
 	for _, reason := range []string{"excluded_machine", "outside_local_network"} {
-		f.passErr = &panel.Refusal{Reason: reason, Message: "recusada"}
+		f.passErr = &panel.Refusal{Msg: i18n.M("guild." + reason)}
 		w := r.call("POST", "/api/guild/machines/t1/pass-citadel", nil, opts{cookie: tok, pin: ownerPIN})
 		e := decodeInto[panel.ErrorBody](t, w).Error
-		if w.Code != 409 || e.Code != panel.CodeRefused || e.Params["reason"] != reason {
+		if w.Code != 409 || string(e.Code) != "guild."+reason {
 			t.Errorf("%s: %d %s", reason, w.Code, w.Body)
 		}
 	}
@@ -181,7 +182,7 @@ func TestRemovingAMachineNeedsTheWarningToBeConfirmedAndListsTheAgents(t *testin
 		t.Fatalf("removal = %+v", rm)
 	}
 	w := r.call("POST", "/api/guild/machines/t1/remove", panel.GuildRemoveRequest{}, opts{cookie: tok, pin: ownerPIN})
-	if e := decodeInto[panel.ErrorBody](t, w).Error; e.Params["reason"] != "confirm_required" || len(f.done()) != 0 {
+	if e := decodeInto[panel.ErrorBody](t, w).Error; string(e.Code) != "guild.confirm_required" || len(f.done()) != 0 {
 		t.Fatalf("remove without confirm = %d %s", w.Code, w.Body)
 	}
 	r.wantOK(r.call("POST", "/api/guild/machines/t1/remove", panel.GuildRemoveRequest{Confirm: true}, opts{cookie: tok, pin: ownerPIN}))

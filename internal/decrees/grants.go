@@ -108,7 +108,7 @@ func (s *Service) Decree(ctx context.Context, g chain.DecreeGrant) error {
 			return err
 		}
 		if !p.Until.IsZero() && !p.Until.After(now) {
-			return refuse(CodeInvalid, "a validade já passou")
+			return refuse(CodeInvalid, "decree.validity_passed")
 		}
 		why, ref := check(p, u, now)
 		if ref != nil {

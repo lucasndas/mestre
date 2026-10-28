@@ -100,20 +100,4 @@ export default {
     confirmedNow: "Versão confirmada. Ela já vale.",
     readOnly: "Um Administrador confirma os comandos.",
   },
-  refusals: {
-    unknown_sheet: "Essa ficha não existe ou não roda um agente. Nada foi criado.",
-    bad_grand_master_sheet:
-      "Essa ficha não serve para o Grão-Mestre: use um agente, que não seja o Operador do PC e que rode em toda máquina não excluída.",
-    repo_taken: "Esse repositório já é a campanha {{slug}}.",
-    invalid_repo: "O repositório precisa estar no formato dono/nome.",
-    invalid_slug: "O apelido não vale. Sugestão: {{suggestion}}.",
-    creation_failed:
-      "Não foi possível criar a campanha: o GitHub ou o Mestre recusou. Nada foi criado.",
-    not_preparing: "A campanha já passou da sessão zero.",
-    preparing: "Uma campanha em preparação não pode ser pausada.",
-    bad_state: "O estado da campanha não permite isso agora.",
-    not_ready: "O clone principal da campanha ainda não existe. Espere a etapa do espelho.",
-    invalid_document:
-      "O arquivo de verificação não vale: confira o formato, os comandos e o tempo. Nada foi confirmado.",
-  },
 } as const;

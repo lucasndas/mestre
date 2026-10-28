@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -124,7 +125,7 @@ func (f *fakeCanvas) Connect(_ context.Context, _ users.User, _, _ string, a, b 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if a == b {
-		return &panel.Refusal{Reason: "same_item", Message: "um item não se conecta a ele mesmo"}
+		return &panel.Refusal{Msg: i18n.M("canvas.same_item")}
 	}
 	for _, c := range f.conns {
 		if same(a, b, c) {
@@ -143,12 +144,12 @@ func (f *fakeCanvas) Disconnect(_ context.Context, _ users.User, _, _ string, a,
 			continue
 		}
 		if !c.Manual {
-			return &panel.Refusal{Reason: "automatic_connection", Message: "a conexão é automática", Params: map[string]any{"reasons": c.Reasons}}
+			return &panel.Refusal{Msg: i18n.M("canvas.automatic_connection", "reasons", c.Reasons)}
 		}
 		f.conns = slices.Delete(f.conns, i, i+1)
 		return nil
 	}
-	return &panel.Refusal{Reason: "no_connection", Message: "não há conexão"}
+	return &panel.Refusal{Msg: i18n.M("canvas.no_connection")}
 }
 
 func (f *fakeCanvas) Pin(_ context.Context, _ users.User, _, _, id string, pinned bool) error {
@@ -169,25 +170,25 @@ func (f *fakeCanvas) WriteScroll(_ context.Context, _ users.User, _, _, _ string
 }
 
 func (*fakeCanvas) CreateQuest(context.Context, users.User, string, string, panel.QuestRequest) (panel.CanvasQuest, error) {
-	return panel.CanvasQuest{}, &panel.Refusal{Reason: "invalid_state", Message: "não nesta demonstração"}
+	return panel.CanvasQuest{}, &panel.Refusal{Msg: i18n.M("canvas.invalid_state")}
 }
 
 func (*fakeCanvas) EditQuest(context.Context, users.User, string, string, string, panel.QuestRequest) (panel.CanvasQuest, error) {
-	return panel.CanvasQuest{}, &panel.Refusal{Reason: "invalid_state", Message: "não nesta demonstração"}
+	return panel.CanvasQuest{}, &panel.Refusal{Msg: i18n.M("canvas.invalid_state")}
 }
 func (*fakeCanvas) Grimoires(context.Context, users.User) ([]panel.GrimoireInfo, error) {
 	return []panel.GrimoireInfo{}, nil
 }
 func (*fakeCanvas) SaveGrimoire(context.Context, users.User, string, string, panel.GrimoireSaveRequest) (panel.GrimoireInfo, error) {
-	return panel.GrimoireInfo{}, &panel.Refusal{Reason: "invalid_state", Message: "não nesta demonstração"}
+	return panel.GrimoireInfo{}, &panel.Refusal{Msg: i18n.M("canvas.invalid_state")}
 }
 func (*fakeCanvas) RestoreGrimoire(context.Context, users.User, string, string, panel.GrimoireRestoreRequest) (panel.GrimoirePlan, error) {
-	return panel.GrimoirePlan{}, &panel.Refusal{Reason: "invalid_state", Message: "não nesta demonstração"}
+	return panel.GrimoirePlan{}, &panel.Refusal{Msg: i18n.M("canvas.invalid_state")}
 }
 func (*fakeCanvas) Rituals(context.Context, string, string) ([]panel.RitualInfo, error) {
 	next := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
 	return []panel.RitualInfo{{ID: "r1", Name: "bom-dia", Target: "Mestre", Action: "prompt", Content: "Resuma o dia.", Schedule: "todo dia 09:00", Enabled: true, NextRun: &next}}, nil
 }
 func (*fakeCanvas) EditRitual(context.Context, users.User, string, string, string, panel.RitualEditRequest) (panel.RitualInfo, error) {
-	return panel.RitualInfo{}, &panel.Refusal{Reason: "invalid_state", Message: "não nesta demonstração"}
+	return panel.RitualInfo{}, &panel.Refusal{Msg: i18n.M("canvas.invalid_state")}
 }

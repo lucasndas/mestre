@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -118,23 +119,23 @@ func TestTheCanvasAnswersARefusalWithItsReason(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	f := &fakeCanvas{
-		connect:    &panel.Refusal{Reason: "different_tables", Message: "os itens estão em mesas diferentes"},
-		disconnect: &panel.Refusal{Reason: "automatic_connection", Message: "a conexão é automática", Params: map[string]any{"reasons": []string{"mestre"}}},
+		connect:    &panel.Refusal{Msg: i18n.M("canvas.different_tables")},
+		disconnect: &panel.Refusal{Msg: i18n.M("canvas.automatic_connection", "reasons", []string{"mestre"})},
 	}
 	r.panel.SetCanvas(f)
 	_, adm := r.member("Ana", "ana", users.Administrator)
 
 	w := r.call("POST", canvasPath+"/connections", link, opts{cookie: adm})
-	r.wantErr(w, 409, panel.CodeRefused)
+	r.wantErr(w, 409, "canvas.different_tables")
 	var b panel.ErrorBody
 	_ = json.Unmarshal(w.Body.Bytes(), &b)
-	if b.Error.Params["reason"] != "different_tables" || b.Error.Message == "" {
+	if b.Error.Message != "Os dois elementos precisam estar na mesma mesa." {
 		t.Errorf("the refusal = %+v", b.Error)
 	}
 	w = r.call("DELETE", canvasPath+"/connections", link, opts{cookie: adm})
-	r.wantErr(w, 409, panel.CodeRefused)
+	r.wantErr(w, 409, "canvas.automatic_connection")
 	_ = json.Unmarshal(w.Body.Bytes(), &b)
-	if b.Error.Params["reason"] != "automatic_connection" || b.Error.Params["reasons"] == nil {
+	if b.Error.Params["reasons"] == nil {
 		t.Errorf("the refusal = %+v", b.Error)
 	}
 	if r.audited("panel.canvas_disconnect") != 0 {

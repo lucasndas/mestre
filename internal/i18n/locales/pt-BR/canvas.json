@@ -1,0 +1,17 @@
+{
+  "canvas.automatic_connection": "Esta conexão é automática e existe enquanto o motivo existir ({{reasons}}). Ela não pode ser removida aqui.",
+  "canvas.cancelled": "A restauração foi cancelada.",
+  "canvas.different_tables": "Os dois elementos precisam estar na mesma mesa.",
+  "canvas.grand_master": "O Grão-Mestre só é conectado pelo próprio Mestre.",
+  "canvas.invalid": "A missão não é válida: confira as etapas e os personagens.",
+  "canvas.invalid_state": "Isto não pode ser feito no estado em que está agora.",
+  "canvas.level_denied": "O seu nível não permite esta ação.",
+  "canvas.name_taken": "Já existe algo com este nome.",
+  "canvas.no_access": "Você não tem acesso à campanha.",
+  "canvas.no_connection": "Não há conexão entre os dois.",
+  "canvas.not_found": "Não achei esse elemento. Ele pode ter sido apagado.",
+  "canvas.same_item": "Um elemento não se conecta a ele mesmo.",
+  "canvas.selection": "A seleção não pode ser salva como está.",
+  "canvas.table_state": "A mesa não está num estado que aceite isto.",
+  "canvas.too_large": "O texto é grande demais para um pergaminho."
+}

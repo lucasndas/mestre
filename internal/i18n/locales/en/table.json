@@ -1,0 +1,6 @@
+{
+  "table.level_denied": "Your level does not allow pausing tables.",
+  "table.over": "This table is over already.",
+  "table.secret": "Do not write passwords in the reason; say only why to pause.",
+  "table.unavailable": "Pausing a table is not available right now."
+}

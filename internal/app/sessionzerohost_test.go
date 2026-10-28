@@ -494,7 +494,7 @@ func TestTheWorkspaceCreatedInThePanelKeepsTheSheetOfItsGrandMaster(t *testing.T
 	w.gh.AddRepo("lucas", "novo")
 	_, err = h.Create(w.ctx, w.owner, panel.CreateWorkspaceRequest{Repo: "lucas/novo", GrandMasterSheet: "nao-existe"})
 	var ref *panel.Refusal
-	if !errors.As(err, &ref) || ref.Reason != "unknown_sheet" {
+	if !errors.As(err, &ref) || ref.Msg.Code != "workspace.unknown_sheet" {
 		t.Fatalf("an unknown sheet = %v, want the refusal unknown_sheet", err)
 	}
 	before, _ := w.orc.Workspaces.List(w.ctx)
@@ -515,7 +515,7 @@ func TestTheWorkspaceCreatedInThePanelKeepsTheSheetOfItsGrandMaster(t *testing.T
 		t.Errorf("the new workspace is %+v", row)
 	}
 	_, err = h.Create(w.ctx, w.owner, panel.CreateWorkspaceRequest{Repo: "lucas/novo", GrandMasterSheet: sheets[0].Name})
-	if !errors.As(err, &ref) || ref.Reason != "repo_taken" {
+	if !errors.As(err, &ref) || ref.Msg.Code != "workspace.repo_taken" {
 		t.Fatalf("the same repository twice = %v, want repo_taken", err)
 	}
 }

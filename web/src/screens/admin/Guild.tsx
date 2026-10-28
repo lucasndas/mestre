@@ -6,7 +6,7 @@ import { useFormatDateTime } from "../../app/session";
 import { SensitiveButton } from "../../components/PinField";
 import { Alert, Button, Field } from "../../components/ui";
 import type { GuildAgent, GuildMachineRow, GuildRemoval, GuildView } from "../../gen/panel";
-import { ApiError, api } from "../../lib/api";
+import { api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
 import { formatNumber } from "../../lib/format";
 import { useLive, useLiveEvents } from "../../lib/live";
@@ -22,18 +22,10 @@ export const guildQuery = {
   queryFn: () => api<GuildView>("GET", "/api/guild"),
 };
 
-/** The text of an error of this screen: a refusal of the Citadel says its reason. */
+/** The text of an error of this screen: a refusal of the Citadel says its reason (gen/messages.ts). */
 function useGuildError() {
-  const { t } = useTranslation("guild");
   const { t: te } = useTranslation("errors");
-  const say = t as unknown as Say;
-  return (err: unknown): string => {
-    if (err instanceof ApiError && err.code === "refused") {
-      const text = say(`refusal.${String(err.params.reason ?? "")}`, { defaultValue: "" });
-      return text || err.message || errorText(te, err);
-    }
-    return errorText(te, err);
-  };
+  return (err: unknown): string => errorText(te, err);
 }
 
 function bytes(n: number, language: string): string {

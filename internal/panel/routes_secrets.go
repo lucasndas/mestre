@@ -96,7 +96,7 @@ func secretSnapshot(i vault.Info) map[string]any {
 
 func (p *Panel) needVault(w http.ResponseWriter) bool {
 	if p.vault == nil {
-		WriteError(w, Err(CodeUnavailable, "o cofre não está disponível agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.vault_unavailable", nil))
 		return false
 	}
 	return true
@@ -105,9 +105,9 @@ func (p *Panel) needVault(w http.ResponseWriter) bool {
 func (p *Panel) vaultError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, vault.ErrClosed):
-		WriteError(w, Err(CodeVaultClosed, "o cofre está fechado; veja o alerta grave", nil))
+		WriteError(w, Err(CodeVaultClosed, "api.vault_closed", nil))
 	case errors.Is(err, vault.ErrNotFound):
-		WriteError(w, Err(CodeNotFound, "segredo não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.secret_not_found", nil))
 	default:
 		p.log.Error("panel: the vault", "err", err)
 		WriteError(w, errInternal())
@@ -134,7 +134,7 @@ func (p *Panel) handleSecrets(w http.ResponseWriter, r *http.Request) {
 // siteMeta checks the credential and makes what the vault keeps of it.
 func (p *Panel) siteMeta(ctx context.Context, in *SiteCredentialInput) (*vault.SiteMeta, []byte, *APIError) {
 	bad := func(field string) (*vault.SiteMeta, []byte, *APIError) {
-		return nil, nil, Err(CodeInvalidSecret, "campo inválido: "+field, map[string]any{"field": field})
+		return nil, nil, Err(CodeInvalidSecret, "api.invalid_field", map[string]any{"field": field})
 	}
 	if u, err := url.Parse(strings.TrimSpace(in.URL)); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
 		return bad("url")
@@ -201,11 +201,11 @@ func (p *Panel) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validSecretName(in.Name) {
-		WriteError(w, Err(CodeInvalidSecret, "campo inválido: name", map[string]any{"field": "name"}))
+		WriteError(w, Err(CodeInvalidSecret, "api.invalid_field", map[string]any{"field": "name"}))
 		return
 	}
 	if _, err := p.vault.Info(ctx, in.Name); err == nil {
-		WriteError(w, Err(CodeSecretExists, "já existe um segredo com este nome; use Substituir", nil))
+		WriteError(w, Err(CodeSecretExists, "api.secret_exists", nil))
 		return
 	} else if !errors.Is(err, vault.ErrNotFound) {
 		p.vaultError(w, err)
@@ -241,7 +241,7 @@ func (p *Panel) changeableSecret(w http.ResponseWriter, r *http.Request) (vault.
 		return vault.Info{}, false
 	}
 	if !changeable(info.Type) {
-		WriteError(w, Err(CodeSecretManaged, "este segredo é guardado pelo próprio Mestre e não se muda por aqui", map[string]any{"type": string(info.Type)}))
+		WriteError(w, Err(CodeSecretManaged, "api.secret_managed", map[string]any{"type": string(info.Type)}))
 		return vault.Info{}, false
 	}
 	return info, true
@@ -263,7 +263,7 @@ func (p *Panel) handleReplaceSecret(w http.ResponseWriter, r *http.Request) {
 	)
 	if before.Type == vault.TypeSiteCredential {
 		if in.Site == nil {
-			WriteError(w, Err(CodeInvalidSecret, "campo inválido: site", map[string]any{"field": "site"}))
+			WriteError(w, Err(CodeInvalidSecret, "api.invalid_field", map[string]any{"field": "site"}))
 			return
 		}
 		var apiErr *APIError
@@ -273,7 +273,7 @@ func (p *Panel) handleReplaceSecret(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		if in.Value == "" {
-			WriteError(w, Err(CodeInvalidSecret, "campo inválido: value", map[string]any{"field": "value"}))
+			WriteError(w, Err(CodeInvalidSecret, "api.invalid_field", map[string]any{"field": "value"}))
 			return
 		}
 		val = []byte(in.Value)
@@ -319,7 +319,7 @@ func (p *Panel) handleRecoveryKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !in.Acknowledged {
-		WriteError(w, Err(CodeAckRequired, "confirme que leu o aviso sobre os backups antigos", nil))
+		WriteError(w, Err(CodeAckRequired, "api.ack_required", nil))
 		return
 	}
 	rk, err := vault.NewRecoveryKey()

@@ -166,7 +166,7 @@ func (s *Service) Propose(ctx context.Context, p Proposal) (Pending, error) {
 	p = normalize(p)
 	u, err := readUser(ctx, s.o.DB.Reader(), p.Author)
 	if err != nil {
-		return Pending{}, refuse(CodeLevel, "o autor da ordem não é um usuário do Mestre")
+		return Pending{}, refuse(CodeLevel, "decree.author_not_user")
 	}
 	now := s.clk.Now()
 	why, ref := check(p, u, now)

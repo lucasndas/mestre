@@ -1,0 +1,7 @@
+{
+  "cli.locked": "O Mestre está travado: este comando não é executado até o Senhor da Guilda destravar.",
+  "cli.locked_github": "O Mestre está travado: nada é feito no GitHub até o Senhor da Guilda destravar.",
+  "cli.locked_hint": "O Senhor da Guilda destrava com /destravar.",
+  "cli.typed_one": "{{count}} byte digitado em {{name}}",
+  "cli.typed_other": "{{count}} bytes digitados em {{name}}"
+}

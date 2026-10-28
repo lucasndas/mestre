@@ -3,10 +3,10 @@ package chain
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/providers"
 )
 
@@ -68,8 +68,43 @@ func (l Level) Label() string {
 	return "do superior"
 }
 
+// Msg is the level as a message, for "it waits on <level>".
+func (l Level) Msg() i18n.Msg {
+	switch l.Kind {
+	case LevelMesa:
+		return i18n.M("approval.level_mesa")
+	case LevelGrandMaster:
+		return i18n.M("approval.level_grand_master")
+	case LevelPeople:
+		return i18n.M("approval.level_people")
+	}
+	if l.Name != "" {
+		return i18n.M("approval.level_named", "name", l.Name)
+	}
+	return i18n.M("approval.level_superior")
+}
+
 // State is the state of a request.
 type State string
+
+// Msg is the state as a message.
+func (s State) Msg() i18n.Msg {
+	switch s {
+	case Open:
+		return i18n.M("approval.state_open")
+	case Approved:
+		return i18n.M("approval.state_approved")
+	case Denied:
+		return i18n.M("approval.state_denied")
+	case Expired:
+		return i18n.M("approval.state_expired")
+	case Cancelled:
+		return i18n.M("approval.state_cancelled")
+	case Invalidated:
+		return i18n.M("approval.state_invalidated")
+	}
+	return i18n.M("approval.detail", "detail", string(s))
+}
 
 // The states of a request.
 const (
@@ -248,11 +283,15 @@ type Closing struct {
 // request went up at once.
 type Refusal struct {
 	Code    string
-	Message string
+	Msg     i18n.Msg
 	Climbed bool
 }
 
-func (r *Refusal) Error() string { return fmt.Sprintf("%s: %s", r.Code, r.Message) }
+// Error is the form of the refusal for a log: never translated.
+func (r *Refusal) Error() string { return r.Code + ": " + r.Msg.String() }
+
+// Text is the refusal in English, for what is kept in the audit and the logs.
+func (r *Refusal) Text() string { return i18n.Render(i18n.En, r.Msg) }
 
 // The refusal codes
 // (docs/orquestracao/cadeia-de-aprovacao.md#salvaguardas, #respostas).
@@ -286,8 +325,10 @@ var (
 	ErrNoRequest = errors.New("no such request of approval")
 )
 
-func refuse(code, format string, a ...any) *Refusal {
-	return &Refusal{Code: code, Message: fmt.Sprintf(format, a...)}
+// refuse makes a refusal from the code of the kind, the code of the message
+// and pairs of name and value for its parameters.
+func refuse(code, msg string, kv ...any) *Refusal {
+	return &Refusal{Code: code, Msg: i18n.M(msg, kv...)}
 }
 
 // Decision is a decision of a character that is an agent.

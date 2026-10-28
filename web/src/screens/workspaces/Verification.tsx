@@ -5,9 +5,9 @@ import { useFormatDateTime } from "../../app/session";
 import { Alert, Button } from "../../components/ui";
 import type { VerificationView } from "../../gen/panel";
 import { api } from "../../lib/api";
+import { errorText } from "../../lib/errors";
 import { Badge } from "../admin/kit";
 import { verificationQuery } from "./queries";
-import { refusalText } from "./refusal";
 
 /**
  * The verification commands of a workspace (.mestre/regras/verificacao.yaml): the
@@ -16,10 +16,9 @@ import { refusalText } from "./refusal";
  * (docs/sessao-zero/workspace.md#comandos-de-verificação).
  */
 export function Verification({ slug, canConfirm }: { slug: string; canConfirm: boolean }) {
-  const { t } = useTranslation("workspaces");
   const { t: te } = useTranslation("errors");
   const q = useQuery(verificationQuery(slug));
-  if (q.error) return <Alert>{refusalText(t, te, q.error)}</Alert>;
+  if (q.error) return <Alert>{errorText(te, q.error)}</Alert>;
   if (!q.data) return <p className="text-muted">…</p>;
   return <Editor slug={slug} view={q.data} canConfirm={canConfirm} />;
 }
@@ -116,7 +115,7 @@ function Editor({
             />
           </label>
           <p className="text-sm text-muted">{t("verification.editorHint")}</p>
-          {error ? <Alert>{refusalText(t, te, error)}</Alert> : null}
+          {error ? <Alert>{errorText(te, error)}</Alert> : null}
           {done ? <Alert tone="ok">{t("verification.confirmedNow")}</Alert> : null}
           <div>
             <Button isDisabled={busy || doc.trim() === ""} onPress={() => void confirm()}>

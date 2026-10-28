@@ -276,7 +276,7 @@ func TestAReviewGitHubRefusesIsHumanRequired(t *testing.T) {
 			return l.grand, "outro[bot]", nil
 		}
 	})
-	if _, err := a.Approve(l.ctx, l.order()); !isHumanRequired(err) || !strings.Contains(err.Error(), "recusou") {
+	if _, err := a.Approve(l.ctx, l.order()); !isHumanRequired(err) || !strings.Contains(err.Error(), "gh_review_refused") {
 		t.Fatalf("Approve = %v; want human_required with the refusal of GitHub", err)
 	}
 }

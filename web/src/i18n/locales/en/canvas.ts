@@ -245,23 +245,5 @@ const canvas = {
     replace: "Replace",
     save: "Save",
   },
-  refusal: {
-    automatic_connection:
-      "This connection is automatic and lasts as long as its reason does ({{reasons}}). It cannot be removed here.",
-    level_denied: "Your level does not allow this action.",
-    same_item: "An element is not connected to itself.",
-    grand_master: "The Grand Master is connected only by the Master itself.",
-    different_tables: "Both elements must be in the same table.",
-    no_connection: "There is no connection between the two.",
-    not_found: "I could not find that element. It may have been deleted.",
-    too_large: "The text is too large for a scroll.",
-    name_taken: "Something already has this name.",
-    invalid_state: "This cannot be done in the state it is in now.",
-    table_state: "The table is not in a state that accepts this.",
-    no_access: "You do not have access to the campaign.",
-    cancelled: "The restoration was cancelled.",
-    selection: "The selection cannot be saved as it is.",
-    invalid: "The mission is not valid: check the steps and the characters.",
-  },
 };
 export default canvas;

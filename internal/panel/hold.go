@@ -25,7 +25,7 @@ var ErrInFailover = errors.New("panel: the Citadel is handing over the command")
 
 // errInFailover is the answer of the API to a request refused by the gate.
 func errInFailover() *APIError {
-	return Err(CodeCitadelInFailover, "outra máquina está assumindo a Cidadela; repita em alguns minutos", nil)
+	return Err(CodeCitadelInFailover, "api.citadel_in_failover", nil)
 }
 
 type heldKey struct{}

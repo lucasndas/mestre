@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/logging"
 )
@@ -105,7 +106,7 @@ var lockedRefuses = map[string]bool{
 
 // LockedResponse is the answer of a command the lock refuses.
 func LockedResponse() localchan.Response {
-	return localchan.Fail("locked", "o Mestre está travado: este comando não é executado até o Senhor da Guilda destravar", "o Senhor da Guilda destrava com /destravar")
+	return localchan.FailMsg("locked", i18n.M("cli.locked"), i18n.Render(i18n.En, i18n.M("cli.locked_hint")))
 }
 
 // RefusedWhenLocked says whether the lock refuses the command.

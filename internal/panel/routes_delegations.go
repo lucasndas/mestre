@@ -132,16 +132,16 @@ func (p *Panel) handleRevokeSub(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if before == nil {
-		WriteError(w, Err(CodeNotFound, "subdelegação não encontrada", nil))
+		WriteError(w, Err(CodeNotFound, "api.sub_not_found", nil))
 		return
 	}
 	switch err := b.RevokeSub(ctx, id, me.ID, true); {
 	case err == nil:
 	case errors.Is(err, decrees.ErrEnded):
-		WriteError(w, Err(CodeDecreeEnded, "a subdelegação já acabou", nil))
+		WriteError(w, Err(CodeDecreeEnded, "api.sub_ended", nil))
 		return
 	case errors.Is(err, decrees.ErrNotAllowed):
-		WriteError(w, Err(CodeForbiddenLevel, "ação não permitida a este nível", nil))
+		WriteError(w, Err(CodeForbiddenLevel, "api.level_not_allowed", nil))
 		return
 	default:
 		p.log.Error("panel: revoking a subdelegation", "err", err)
@@ -167,19 +167,19 @@ func (p *Panel) handleRevokeRule(w http.ResponseWriter, r *http.Request) {
 	ctx, me := r.Context(), UserOf(r)
 	before, err := b.Rule(ctx, id)
 	if err != nil || !me.Acts(before.Workspace) {
-		WriteError(w, Err(CodeNotFound, "regra não encontrada", nil))
+		WriteError(w, Err(CodeNotFound, "api.rule_not_found", nil))
 		return
 	}
 	switch err := b.RevokeRule(ctx, id, me.ID); {
 	case err == nil:
 	case errors.Is(err, tablerules.ErrEnded):
-		WriteError(w, Err(CodeDecreeEnded, "a regra já acabou", nil))
+		WriteError(w, Err(CodeDecreeEnded, "api.rule_ended", nil))
 		return
 	case errors.Is(err, tablerules.ErrNotAllowed):
-		WriteError(w, Err(CodeForbiddenLevel, "ação não permitida a este nível", nil))
+		WriteError(w, Err(CodeForbiddenLevel, "api.level_not_allowed", nil))
 		return
 	case errors.Is(err, tablerules.ErrNoRule):
-		WriteError(w, Err(CodeNotFound, "regra não encontrada", nil))
+		WriteError(w, Err(CodeNotFound, "api.rule_not_found", nil))
 		return
 	default:
 		p.log.Error("panel: revoking a temporary rule", "err", err)

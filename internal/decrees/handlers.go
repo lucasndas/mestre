@@ -103,7 +103,7 @@ func (h *SubHandler) handle(ctx context.Context, c *localchan.Call) localchan.Re
 	if err != nil {
 		var ref *Refusal
 		if errors.As(err, &ref) && (ref.Code == CodeLevelDenied || ref.Code == CodeTooWide) {
-			return localchan.Fail(ref.Code, ref.Message, "").WithExit(localchan.ExitDenied)
+			return localchan.FailMsg(ref.Code, ref.Msg, "").WithExit(localchan.ExitDenied)
 		}
 		return localchan.Fail(localchan.CodeInternal, "the delegation could not be made", "")
 	}

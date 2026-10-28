@@ -101,7 +101,7 @@ O [protótipo clicável](https://claude.ai/artifact/3EqrEGizKHmLPNT4oGkQiu) most
 
 ## Regras e erros
 
-- Ação recusada pelo motor (nível, regra do documento dono) → o canvas desfaz o gesto e mostra o motivo devolvido: a resposta é `refused` com `params.reason` (chave estável, traduzida pelo painel; sem tradução vale o texto do motor) e, na conexão automática, `params.reasons`. Nada é desenhado antes de o motor responder: a linha arrastada fica pontilhada até lá. Pergaminho editado por outra pessoa no meio é `conflict` (a revisão base não bate).
+- Ação recusada pelo motor (nível, regra do documento dono) → o canvas desfaz o gesto e mostra o motivo devolvido: a resposta leva como `code` o código do motivo (`canvas.name_taken`, `canvas.automatic_connection`…), traduzido pelo painel do catálogo gerado do Go ([mensagens por código](../plataforma/mensagens-por-codigo.md)); sem código conhecido vale o `message` do motor e, na conexão automática, `params.reasons`. Nada é desenhado antes de o motor responder: a linha arrastada fica pontilhada até lá. Pergaminho editado por outra pessoa no meio é `conflict` (a revisão base não bate).
 - WebSocket caiu → faixa "reconectando", com backoff; ao voltar, o estado é recarregado da Cidadela.
 - Máquina do personagem fora do ar → terminal em cinza com "máquina sem sinal desde HH:MM" (no fuso da Guilda); o retrato fica visível e, ao voltar o sinal, a Cidadela pede o fluxo de novo de onde parou. A digitação nessa máquina é recusada (`unavailable`).
 

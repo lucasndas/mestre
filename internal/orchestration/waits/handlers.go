@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/cli"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/connections"
@@ -255,7 +256,7 @@ func (s *Service) askRaw(ctx context.Context, x characters.Character, c *localch
 	if err := s.o.Terminals.Input(ctx, t.Machine, t.ID, data); err != nil {
 		return Refusal(err)
 	}
-	return localchan.OK(map[string]any{"text": fmt.Sprintf("%d bytes digitados em %s", len(data), t.Name), "to": t.Name, "status": "typed", "bytes": len(data)})
+	return localchan.OK(map[string]any{"text": i18n.Render(i18n.En, i18n.M("cli.typed", "count", len(data), "name", t.Name)), "to": t.Name, "status": "typed", "bytes": len(data)})
 }
 
 // UnescapeRaw reads the text of `ask --raw`: `\n`, `\r`, `\t`, `\\`, `\xNN`

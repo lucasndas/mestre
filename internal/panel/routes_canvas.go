@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/users"
 )
 
@@ -26,16 +27,17 @@ var (
 	ErrCanvasConflict = errors.New("panel: the element changed")
 )
 
-// Refusal is an action the engine refused, with the reason it gives: Reason is a
-// stable key the front end translates ("automatic_connection"), Message the text
-// of the engine and Params what the key needs (the reasons of the connection).
+// Refusal is an action the engine refused, with the reason as a message: its code is
+// the one the front end translates ("canvas.name_taken") and its params what the text needs.
 type Refusal struct {
-	Reason  string
-	Message string
-	Params  map[string]any
+	Msg i18n.Msg
 }
 
-func (r *Refusal) Error() string { return r.Reason + ": " + r.Message }
+// Error is the form of the refusal for a log: never translated.
+func (r *Refusal) Error() string { return r.Msg.String() }
+
+// Refuse makes a refusal from the code of the message and pairs of name and value.
+func Refuse(msg string, kv ...any) *Refusal { return &Refusal{Msg: i18n.M(msg, kv...)} }
 
 // CanvasSource is the engine, as the canvas sees it. A method that acts takes the
 // user whose level the engine checks again.
@@ -128,13 +130,13 @@ func (a *canvasArea) snapshot(ctx context.Context, u users.User, id string) (any
 func (a *canvasArea) source(w http.ResponseWriter, r *http.Request, edit bool) (src CanvasSource, ws, table string, ok bool) {
 	src = a.p.canvasSource()
 	if src == nil {
-		WriteError(w, Err(CodeUnavailable, "o canvas não está disponível agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.canvas_unavailable", nil))
 		return nil, "", "", false
 	}
 	ws, table = r.PathValue("ws"), r.PathValue("table")
 	u := UserOf(r)
 	if !visible(u, ws) || (edit && !u.Acts(ws)) {
-		WriteError(w, Err(CodeNotFound, "mesa não encontrada", nil))
+		WriteError(w, Err(CodeNotFound, "api.table_not_found", nil))
 		return nil, "", "", false
 	}
 	return src, ws, table, true
@@ -145,15 +147,11 @@ func (a *canvasArea) fail(w http.ResponseWriter, err error) {
 	var ref *Refusal
 	switch {
 	case errors.As(err, &ref):
-		params := map[string]any{"reason": ref.Reason}
-		for k, v := range ref.Params {
-			params[k] = v
-		}
-		WriteError(w, Err(CodeRefused, ref.Message, params))
+		WriteError(w, ErrMsg(ref.Msg))
 	case errors.Is(err, ErrCanvasNotFound):
-		WriteError(w, Err(CodeNotFound, "não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.not_found", nil))
 	case errors.Is(err, ErrCanvasConflict):
-		WriteError(w, Err(CodeConflict, "mudou desde que você abriu", nil))
+		WriteError(w, Err(CodeConflict, "api.changed_since_open", nil))
 	default:
 		a.p.log.Warn("panel: an action of the canvas failed", "err", err)
 		WriteError(w, errInternal())
@@ -314,7 +312,7 @@ func (a *canvasArea) quest(edit bool) http.HandlerFunc {
 func (a *canvasArea) grimoires(w http.ResponseWriter, r *http.Request) {
 	src := a.p.canvasSource()
 	if src == nil {
-		WriteError(w, Err(CodeUnavailable, "o canvas não está disponível agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.canvas_unavailable", nil))
 		return
 	}
 	list, err := src.Grimoires(r.Context(), UserOf(r))

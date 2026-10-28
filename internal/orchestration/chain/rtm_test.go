@@ -406,7 +406,7 @@ func TestApprovingForATimeIsRefusedForARequestTheEngineDoesNotAnalyseWholeAndFor
 		} {
 			d.Request, d.By, d.Reason = c.id, c.by.ID, "por um tempo"
 			ref := w.refusal(d)
-			if ref.Code != chain.CodeBadAnswer || ref.Climbed || !strings.Contains(ref.Message, "approve it now") {
+			if ref.Code != chain.CodeBadAnswer || ref.Climbed || !strings.Contains(ref.Text(), "approve it now") {
 				// the message tells the blocker from the other bad_answer ("the request has no mission to end with")
 				t.Errorf("#%d for a time %+v = %+v, want bad_answer from the blocker and the request kept at its level", c.id, d, ref)
 			}
