@@ -229,10 +229,31 @@ func (m *Member) SaveEngineKey(ctx context.Context, key *ecdsa.PrivateKey) error
 	return m.key.Save(ctx, pemKey)
 }
 
+// tlsReadAttempts bounds the re-reads of the pair when a renewal landed
+// between the two reads of TLS.
+const tlsReadAttempts = 3
+
+var errKeyMismatch = errors.New("guild: the engine key does not match the engine certificate")
+
 // TLS loads what the machine presents and trusts: the CA certificate and the
 // engine certificate with its private key as a CertSource, ready for the
-// transport.
+// transport. The certificate (machine database) and the key (a file) are two
+// stores, so a renewal running in another process (the Citadel's engine, while
+// "mestre setup-code" reads) can land between the two reads; a pair that does
+// not match is read again, a bounded number of times, before it is an error.
 func (m *Member) TLS(ctx context.Context) (Identity, *transport.CertSource, error) {
+	var err error
+	for range tlsReadAttempts {
+		var id Identity
+		var src *transport.CertSource
+		if id, src, err = m.readTLS(ctx); !errors.Is(err, errKeyMismatch) {
+			return id, src, err
+		}
+	}
+	return Identity{}, nil, err
+}
+
+func (m *Member) readTLS(ctx context.Context) (Identity, *transport.CertSource, error) {
 	id, err := m.Identity(ctx)
 	if err != nil {
 		return Identity{}, nil, err
@@ -255,7 +276,7 @@ func (m *Member) TLS(ctx context.Context) (Identity, *transport.CertSource, erro
 		}
 	}
 	if !matches(id.Motor, key) {
-		return Identity{}, nil, errors.New("guild: the engine key does not match the engine certificate")
+		return Identity{}, nil, errKeyMismatch
 	}
 	return id, transport.NewCertSource(id.Motor, key), nil
 }
