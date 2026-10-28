@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -204,6 +205,10 @@ func metaOf(o protocol.Object) (fileMeta, error) {
 	return m, nil
 }
 
+// snapshotLimit is the size up to which a file is read whole before it is
+// sent, so the file is not held open while the link moves it.
+const snapshotLimit = 8 << 20
+
 // stamp is what tells a file did not change since it was sent.
 type stamp struct {
 	size int64
@@ -283,12 +288,33 @@ func (s *fileSender) send(ctx context.Context, link *protocol.Link, excluded boo
 			return nil
 		}
 		st = stamp{size: info.Size(), mod: info.ModTime()}
+		src := protocol.Source{ReaderAt: f, Size: info.Size()}
+		if info.Size() <= snapshotLimit {
+			// Read it now and let go of the file. A transfer lasts as long as the
+			// link takes to move it, and Go opens files without FILE_SHARE_DELETE:
+			// on Windows an open handle makes every replacement of the file (a
+			// scroll written again, an attachment) fail with "Access is denied"
+			// until the transfer ends.
+			data, rerr := io.ReadAll(io.LimitReader(f, snapshotLimit+1))
+			_ = f.Close()
+			if rerr != nil {
+				return fmt.Errorf("replication: %s/%s: %w", ref.Root, ref.Path, rerr)
+			}
+			if int64(len(data)) > snapshotLimit {
+				return fmt.Errorf("replication: %s/%s grew while it was read", ref.Root, ref.Path)
+			}
+			src = protocol.Source{ReaderAt: bytes.NewReader(data), Size: int64(len(data))}
+			st.size = int64(len(data))
+			f = nil
+		}
 		lastErr = link.Transfer(ctx, protocol.Transfer{
 			Kind:   protocol.KindFile,
 			Meta:   fileMeta{Root: ref.Root, Path: ref.Path, Mode: uint32(info.Mode().Perm())}.object(),
-			Source: protocol.Source{ReaderAt: f, Size: info.Size()},
+			Source: src,
 		})
-		_ = f.Close()
+		if f != nil {
+			_ = f.Close()
+		}
 		if lastErr == nil {
 			s.mu.Lock()
 			s.sent[key] = st
