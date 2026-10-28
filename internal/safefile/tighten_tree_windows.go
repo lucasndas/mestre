@@ -47,11 +47,34 @@ func TightenRules(mestre string) error {
 	if name == "" {
 		return nil
 	}
-	sid, err := localAccountSID(name)
+	dir := filepath.Join(mestre, "regras")
+	if _, err := os.Lstat(dir); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil // nothing to lock, and no account lookup for it
+		}
+		return err
+	}
+	sid, err := cachedAccountSID(name)
 	if err != nil {
 		return err
 	}
-	return DenyWrite(filepath.Join(mestre, "regras"), sid)
+	return DenyWrite(dir, sid)
+}
+
+var sidCache sync.Map // account name -> *windows.SID
+
+// cachedAccountSID resolves the account once: the lookup asks the system, and the rules are
+// tightened on every discovery of a campaign and every opening of a rules screen.
+func cachedAccountSID(name string) (*windows.SID, error) {
+	if v, ok := sidCache.Load(name); ok {
+		return v.(*windows.SID), nil
+	}
+	sid, err := localAccountSID(name)
+	if err != nil {
+		return nil, err
+	}
+	sidCache.Store(name, sid)
+	return sid, nil
 }
 
 // DenyWrite adds to the folder an ACE that denies the write rights to sid, inherited by the
