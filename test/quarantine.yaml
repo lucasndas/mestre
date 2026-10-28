@@ -17,3 +17,11 @@ tests:
     issue: https://github.com/mestre-ia/mestre/issues/363
     added: 2026-10-26
     reason: on the Windows full suite of a PR that touched no conformance code the fake Claude Code step 4 did not see the denied pre_tool after 27 s
+  - test: TestTheHooksOfTheClassRunForACharacterOfATowerAndTheOutputReachesTheCitadel
+    issue: https://github.com/mestre-ia/mestre/issues/417
+    added: 2026-10-28
+    reason: on the Windows full suite under load the Tower took about 8 s to make its first hook call and the wait for the allowed write timed out
+  - test: TestThePreRunOfARitualRunsOnTheTowerOfItsTarget
+    issue: https://github.com/mestre-ia/mestre/issues/418
+    added: 2026-10-28
+    reason: on the Windows full suite under load the firing did not leave the queue in 50 s
