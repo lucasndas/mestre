@@ -64,6 +64,11 @@ export default {
   noExpiry: "sem validade",
   managed:
     "O Mestre guarda estes por conta própria: aparecem aqui só para você saber que existem, e não se mudam por aqui.",
+  noticeChip: {
+    expired: "venceu",
+    expiring: "vence em {{count}} dias",
+    stale: "sem troca",
+  },
   notice: {
     expired: "Venceu há {{count}} dia(s). Troque a credencial.",
     expiring: "Vence em {{count}} dia(s).",

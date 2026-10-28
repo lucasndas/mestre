@@ -20,7 +20,7 @@ import (
 // people the way the chain leaves it (the request, and the question that asks the PIN),
 // before the engine starts: the smoke test finds it in the central of approvals and
 // answers it. The Guild has no workspace and no agent; the request is the engine's own.
-func seedRequest(ctx context.Context, guildDB, workspacesDir string) error {
+func seedRequest(ctx context.Context, guildDB, workspacesDir string, rich bool) error {
 	clk := clock.Real{}
 	db, err := guilddb.Open(ctx, guildDB, store.Options{Clock: clk, Synchronous: "OFF"})
 	if err != nil {
@@ -52,7 +52,13 @@ func seedRequest(ctx context.Context, guildDB, workspacesDir string) error {
 	if err := insertRequest(ctx, db, now, "loja-revisao", classes.RequestMerge, "juntar o PR 21 (avaliações de clientes) ao projeto", classes.RiskHigh); err != nil {
 		return err
 	}
-	return seedPanel(ctx, db, now)
+	if err := seedPanel(ctx, db, now); err != nil {
+		return err
+	}
+	if rich {
+		return seedAdmin(ctx, db, now)
+	}
+	return nil
 }
 
 // seedPanel gives the bell its notices (a table that is stuck, the Grand Master, the engine, the

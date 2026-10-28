@@ -216,9 +216,15 @@ test("the secrets show name, type, fingerprint, dates and notices, with no value
     }),
   });
   renderApp("/segredos");
+  // the sentence under the card and the short chip beside the name
   expect(await screen.findByText("Vence em 3 dia(s).")).toBeTruthy();
+  expect(screen.getByText("vence em 3 dias")).toBeTruthy();
   expect(screen.getByText("a1b2c3d4")).toBeTruthy();
-  expect(screen.getByText("Credencial de site")).toBeTruthy();
+  // the card is a header (name, the kind of the credential, the actions) and a row of cells
+  const card = screen.getByText("vence em 3 dias").closest("li") as HTMLElement;
+  for (const cell of ["Classes", "Domínios", "Último uso", "Impressão"])
+    expect(within(card).getByText(cell)).toBeTruthy();
+  expect(within(card).queryByText("Criado em")).toBeNull();
   expect(screen.getAllByText("Chave de um App do GitHub").length).toBeGreaterThan(0);
   // what the Mestre keeps is not changed here; no screen has a button that shows a value
   expect(screen.getAllByRole("button", { name: /Substituir/ })).toHaveLength(1);

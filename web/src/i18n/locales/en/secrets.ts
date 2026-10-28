@@ -66,6 +66,11 @@ const secrets: Widen<typeof pt> = {
   noExpiry: "no expiry",
   managed:
     "The Mestre keeps these on its own: they are shown only so you know they exist, and are not changed here.",
+  noticeChip: {
+    expired: "expired",
+    expiring: "expires in {{count}} days",
+    stale: "not replaced",
+  },
   notice: {
     expired: "Expired {{count}} day(s) ago. Replace the credential.",
     expiring: "Expires in {{count}} day(s).",

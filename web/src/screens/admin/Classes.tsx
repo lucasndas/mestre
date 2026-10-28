@@ -22,7 +22,7 @@ import { classesQuery, labelOr, type Say } from "./manage";
 /** The tone of the label of an App state ("em criação", "pronto", "com erro"). */
 export function appTone(state: string): "plain" | "ok" | "warn" | "danger" {
   if (state === "pronto") return "ok";
-  if (state === "com erro") return "danger";
+  if (state === "com erro" || state === "link vencido") return "danger";
   return "warn";
 }
 

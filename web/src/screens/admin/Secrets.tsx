@@ -92,37 +92,16 @@ export function Secrets() {
         <ul className="flex flex-col gap-3">
           {sites.map((s) => (
             <li key={s.name} className="rounded-field border border-line bg-surface p-4">
-              <p className="flex flex-wrap items-center gap-2 font-semibold">
-                {s.name}
-                <Badge>{typeLabel(say, s.type)}</Badge>
-                {s.notice ? (
-                  <Badge tone={s.notice.kind === "expiring" ? "warn" : "danger"}>
-                    {say(`notice.${s.notice.kind}`, { count: s.notice.days })}
-                  </Badge>
-                ) : null}
-              </p>
-              <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-                <Row label={t("fingerprint")}>
-                  <code>{s.fingerprint}</code>
-                </Row>
-                <Row label={t("created")}>{fmt(s.created_at)}</Row>
-                <Row label={t("updated")}>{fmt(s.updated_at)}</Row>
-                <Row label={t("lastUsed")}>
-                  {s.last_used_at ? fmt(s.last_used_at) : t("neverUsed")}
-                </Row>
-                {s.site ? (
-                  <>
-                    <Row label={t("owner")}>{nameOf(s.site.owner_user)}</Row>
-                    <Row label={t("classes")}>{s.site.classes.join(", ")}</Row>
-                    <Row label={t("domains")}>{s.site.domains.join(", ")}</Row>
-                    <Row label={t("kind")}>{say(`kinds.${s.site.kind}`)}</Row>
-                    <Row label={t("expiresAt")}>
-                      {s.site.expires_at ? fmt(s.site.expires_at) : t("noExpiry")}
-                    </Row>
-                  </>
-                ) : null}
-              </dl>
-              <div className="mt-3 flex flex-col gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <p className="flex min-w-0 flex-wrap items-center gap-2 text-lg font-semibold">
+                  {s.name}
+                  <Badge>{s.site ? say(`kinds.${s.site.kind}`) : typeLabel(say, s.type)}</Badge>
+                  {s.notice ? (
+                    <Badge tone={s.notice.kind === "expiring" ? "warn" : "danger"}>
+                      {say(`noticeChip.${s.notice.kind}`, { count: s.notice.days })}
+                    </Badge>
+                  ) : null}
+                </p>
                 <LevelGate need="owner" label={t("replace.open")}>
                   <div className="flex flex-wrap items-start gap-3">
                     <Button
@@ -142,6 +121,29 @@ export function Secrets() {
                     />
                   </div>
                 </LevelGate>
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
+                <Cell label={t("classes")}>{s.site?.classes.join(", ") || "—"}</Cell>
+                <Cell label={t("domains")}>{s.site?.domains.join(", ") || "—"}</Cell>
+                <Cell label={t("owner")}>{s.site ? nameOf(s.site.owner_user) : "—"}</Cell>
+                <Cell label={t("lastUsed")}>
+                  {s.last_used_at ? fmt(s.last_used_at) : t("neverUsed")}
+                </Cell>
+                <Cell label={t("fingerprint")}>
+                  <code>{s.fingerprint}</code>
+                </Cell>
+                {s.site?.expires_at ? (
+                  <Cell label={t("expiresAt")}>{fmt(s.site.expires_at)}</Cell>
+                ) : null}
+              </dl>
+              {s.notice ? (
+                <p
+                  className={`mt-3 text-sm font-semibold ${s.notice.kind === "expiring" ? "text-warn-ink" : "text-danger"}`}
+                >
+                  {say(`notice.${s.notice.kind}`, { count: s.notice.days })}
+                </p>
+              ) : null}
+              <div className="mt-3 flex flex-col gap-3">
                 {replacing === s.name ? (
                   <Replace
                     s={s}
@@ -282,6 +284,15 @@ function typeLabel(say: Say, type: string): string {
   const k = `types.${type}`;
   const text = say(k);
   return text === k ? type : text;
+}
+
+function Cell({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-muted">{label}</dt>
+      <dd className="break-words">{children}</dd>
+    </div>
+  );
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
