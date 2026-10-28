@@ -3,6 +3,7 @@ export default {
   intro:
     "Os robôs do Mestre no GitHub: cada ação dos agentes aparece com o nome de um deles, e você pode cortar o acesso quando quiser.",
   what: "os Apps do GitHub",
+  why: "O GitHub não respondeu ao Mestre. O que já foi criado continua valendo.",
   loading: "Carregando os Apps…",
   strip: {
     none: "Nenhum App criado ainda",

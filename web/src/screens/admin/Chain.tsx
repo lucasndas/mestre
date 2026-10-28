@@ -47,7 +47,12 @@ export function Chain() {
       <div className="flex max-w-4xl flex-col gap-5">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
         {error ? (
-          <LoadError what={t("loadWhat.chain")} error={error} onRetry={() => void refetch()} />
+          <LoadError
+            what={t("loadWhat.chain")}
+            why={t("loadWhy.chain")}
+            error={error}
+            onRetry={() => void refetch()}
+          />
         ) : null}
         {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
         {data && data.workspaces.length === 0 ? (

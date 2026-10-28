@@ -4,6 +4,7 @@ export default {
     "O registro de quem mudou o quê e quando. Segredos nunca aparecem aqui, só o que mudou ao redor deles.",
   loading: "Carregando a trilha…",
   loadWhat: "o registro",
+  loadWhy: "O registro não respondeu.",
   strip_one: "{{count}} registro à vista",
   strip_other: "{{count}} registros à vista",
   stripMore: "Há registros mais antigos: use Carregar mais no fim da lista.",

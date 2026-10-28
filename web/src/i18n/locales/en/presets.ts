@@ -6,6 +6,7 @@ const presets: Widen<typeof pt> = {
   intro:
     "Bases say which program each terminal runs; sheets describe each character. Create, edit, delete, export and import in YAML or JSON.",
   what: "the bases and sheets",
+  why: "Could not read the bases and sheets. Nothing was changed.",
   loading: "Loading the bases and sheets…",
   editShort: "Edit",
   deleteShort: "Delete",

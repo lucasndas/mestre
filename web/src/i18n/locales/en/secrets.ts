@@ -7,6 +7,7 @@ const secrets: Widen<typeof pt> = {
     "The passwords and keys the Mestre keeps in the vault. The value is never shown again, not even to the Guildmaster: you can only replace or delete, with your PIN.",
   loading: "Loading the secrets…",
   loadWhat: "the vault",
+  loadWhy: "The Citadel did not open the vault now. No secret was shown or changed.",
   strip_one: "{{count}} site credential, {{expiring}} close to expiring",
   strip_other: "{{count}} site credentials, {{expiring}} close to expiring",
   stripNone: "No secret of yours in the vault yet",

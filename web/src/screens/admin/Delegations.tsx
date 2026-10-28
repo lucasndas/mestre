@@ -82,6 +82,7 @@ export function Delegations() {
         {error ? (
           <LoadError
             what={t("loadWhat.delegations")}
+            why={t("loadWhy.delegations")}
             error={error}
             onRetry={() => void refetch()}
           />

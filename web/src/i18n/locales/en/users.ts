@@ -7,6 +7,7 @@ const users: Widen<typeof pt> = {
     "Who uses the Mestre, the level of each one and the campaigns they act in. Only the Guildmaster changes things here, and every change asks for your PIN.",
   loading: "Loading the users…",
   loadWhat: "the users",
+  loadWhy: "The server did not answer in time. Nothing was changed.",
   levels: {
     owner: "Guildmaster",
     administrator: "Administrator",

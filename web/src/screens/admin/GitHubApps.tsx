@@ -47,7 +47,9 @@ export function GitHubApps() {
     <section>
       <PageHeader title={t("title")} intro={t("intro")} />
       <VocabLine terms={["App do GitHub", "Classe"]} />
-      {error ? <LoadError what={t("what")} error={error} onRetry={() => void refetch()} /> : null}
+      {error ? (
+        <LoadError what={t("what")} why={t("why")} error={error} onRetry={() => void refetch()} />
+      ) : null}
       {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
       {data && !error ? (
         <div className="flex max-w-4xl flex-col gap-6">

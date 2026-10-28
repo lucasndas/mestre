@@ -7,6 +7,7 @@ const audit: Widen<typeof pt> = {
     "The record of who changed what and when. Secrets never show up here, only what changed around them.",
   loading: "Loading the trail…",
   loadWhat: "the record",
+  loadWhy: "The record did not answer.",
   strip_one: "{{count}} record in view",
   strip_other: "{{count}} records in view",
   stripMore: "There are older records: use Load more at the end of the list.",

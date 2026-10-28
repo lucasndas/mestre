@@ -4,6 +4,7 @@ export default {
     "Quem usa o Mestre, o nível de cada um e em quais campanhas atua. Só o Senhor da Guilda mexe aqui, e cada mudança pede o seu PIN.",
   loading: "Carregando os usuários…",
   loadWhat: "os usuários",
+  loadWhy: "O servidor não respondeu a tempo. Nada foi alterado.",
   levels: {
     owner: "Senhor da Guilda",
     administrator: "Administrador",

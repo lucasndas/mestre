@@ -6,6 +6,7 @@ const profiles: Widen<typeof pt> = {
   intro:
     "The AI accounts (Claude, Codex, Antigravity) the agents use to work on this machine. With no account signed in, no agent runs.",
   what: "the account profiles",
+  why: "The engine did not answer. Nothing was changed.",
   loading: "Loading the profiles…",
   machineNote:
     "This list is the one of the machine the panel runs on (the Citadel). The accounts of the other machines show on the sheet of each one, in the Guild; they come here soon.",

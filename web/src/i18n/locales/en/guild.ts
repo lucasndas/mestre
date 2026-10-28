@@ -4,6 +4,7 @@ export default {
     "One row per machine of the Guild, live. Only the Guildmaster changes anything here, and every change asks for your PIN.",
   loading: "Loading the Guild…",
   loadWhat: "the Guild",
+  loadWhy: "The Guild did not answer. Nothing was changed.",
   more: "More…",
   epoch: "Epoch {{epoch}}",
   single: {

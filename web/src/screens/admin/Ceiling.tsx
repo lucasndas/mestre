@@ -83,7 +83,12 @@ function CeilingOf({ workspace, picker }: { workspace: string; picker: React.Rea
       {picker}
       {notice ? <Alert tone="ok">{notice}</Alert> : null}
       {error ? (
-        <LoadError what={t("loadWhat.ceiling")} error={error} onRetry={() => void refetch()} />
+        <LoadError
+          what={t("loadWhat.ceiling")}
+          why={t("loadWhy.ceiling")}
+          error={error}
+          onRetry={() => void refetch()}
+        />
       ) : null}
       {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
       {data ? (

@@ -116,7 +116,12 @@ function PolicyOf({ workspace, picker }: { workspace: string; picker: React.Reac
       {picker}
       {notice ? <Alert tone="ok">{notice}</Alert> : null}
       {error ? (
-        <LoadError what={t("loadWhat.policy")} error={error} onRetry={() => void refetch()} />
+        <LoadError
+          what={t("loadWhat.policy")}
+          why={t("loadWhy.policy")}
+          error={error}
+          onRetry={() => void refetch()}
+        />
       ) : null}
       {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
       {data ? (
