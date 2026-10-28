@@ -34,8 +34,8 @@ export function SelectionStrip({
     );
   if (count === 0)
     return (
-      <div className="flex min-h-11 items-center gap-3 border-b border-line bg-surface px-3 py-1 text-base text-muted">
-        <p className="m-0 min-w-0 flex-1">{t("selection.hint")}</p>
+      <div className="flex min-h-11 flex-wrap items-center gap-x-3 border-b border-line bg-surface px-3 py-1 text-base text-muted">
+        <p className="m-0 min-w-0 flex-1 basis-80">{t("selection.hint")}</p>
         <Button
           variant="secondary"
           aria-pressed={multi}

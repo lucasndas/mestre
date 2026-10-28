@@ -114,7 +114,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
       ...view,
       minZoom: 1,
       maxZoom: 1,
-      padding: { top: "0px", right: "16px", bottom: "124px", left: "16px" },
+      padding: { top: "8px", right: "16px", bottom: "76px", left: "16px" },
     });
   }, [ready, state, nodes, flow]);
 
@@ -329,7 +329,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
 
   return (
     <CanvasEnvContext.Provider value={env}>
-      <div className="relative flex w-full flex-col border border-line bg-paper md:h-[calc(100dvh-19rem)] md:min-h-[28rem] md:flex-row">
+      <div className="relative flex w-full flex-col border border-line bg-paper md:h-[calc(100dvh-19.5rem)] md:min-h-[36rem] md:flex-row">
         <section
           aria-label={t("region", { table })}
           className="hidden min-h-[18rem] min-w-0 flex-1 md:flex md:flex-col"
@@ -350,7 +350,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
               setMulti(false);
             }}
           />
-          <div ref={frame} className="relative min-h-0 flex-1">
+          <div ref={frame} className="@container relative min-h-0 flex-1">
             <EdgeMarkers />
             <ReactFlow<CanvasNode, CanvasEdge>
               nodes={nodes}
@@ -520,10 +520,15 @@ function BoardControls({
   const zoom = useStore((s) => s.transform[2]);
   const box =
     "flex items-stretch divide-x divide-line rounded-field border border-line bg-surface shadow-pop";
+  // the words of the controls give way to the icons when the board is narrow, so that they stay in one row
+  const label = "hidden @min-[50rem]:inline";
   const btn =
     "inline-flex min-h-11 items-center justify-center gap-2 px-3 text-ink first:rounded-l-field last:rounded-r-field hover:bg-accent-wash data-pressed:bg-accent-wash";
   return (
-    <Panel position="bottom-left" className="flex flex-col items-start gap-2">
+    <Panel
+      position="bottom-left"
+      className="flex max-w-[calc(100%-1rem)] flex-wrap items-end gap-2"
+    >
       <div role="toolbar" aria-label={t("controls")} className={box}>
         <AriaButton
           className={`${btn} !px-0 size-11`}
@@ -548,22 +553,33 @@ function BoardControls({
         </AriaButton>
         <AriaButton
           className={btn}
+          aria-label={t("fit")}
           onPress={() => void flow.fitView({ padding: 0.12, minZoom: 0.05, maxZoom: 1 })}
         >
           {controlIcon("M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5")}
-          {t("fit")}
+          <span className={label}>{t("fit")}</span>
         </AriaButton>
       </div>
       <div className={box}>
-        <AriaButton className={btn} onPress={toggleLegend} aria-expanded={legend}>
+        <AriaButton
+          className={btn}
+          aria-label={t("legend.open")}
+          onPress={toggleLegend}
+          aria-expanded={legend}
+        >
           {controlIcon(
             "M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
           )}
-          {t("legend.open")}
+          <span className={label}>{t("legend.open")}</span>
         </AriaButton>
-        <AriaButton className={btn} onPress={toggleSide} aria-expanded={side}>
+        <AriaButton
+          className={btn}
+          aria-label={side ? t("toolbar.hideSide") : t("toolbar.showSide")}
+          onPress={toggleSide}
+          aria-expanded={side}
+        >
           {controlIcon("M4 5h16v14H4zM15 5v14")}
-          {side ? t("toolbar.hideSide") : t("toolbar.showSide")}
+          <span className={label}>{side ? t("toolbar.hideSide") : t("toolbar.showSide")}</span>
         </AriaButton>
       </div>
     </Panel>
