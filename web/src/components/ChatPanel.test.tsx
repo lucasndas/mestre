@@ -235,6 +235,12 @@ test("a refusal keeps what was typed and says why", async () => {
     /bloqueado por tentativas de mandar segredos\. Tente de novo em 10 min/,
   );
   expect((field as HTMLTextAreaElement).value).toBe("meu token é segredo");
+  // the sending is blocked: the field and Enviar are off, and the notice has its first sentence in bold
+  expect((field as HTMLTextAreaElement).disabled).toBe(true);
+  expect(within(panel).getByRole("button", { name: "Enviar" }).hasAttribute("disabled")).toBe(true);
+  expect(within(panel).getByRole("alert").querySelector("strong")?.textContent).toMatch(
+    /bloqueado/,
+  );
 });
 
 // With the system locked the send says "guardado até destravar", on the screen and on the message.
@@ -384,6 +390,9 @@ test("the question shows a button per option and the choice goes once", async ()
   const panel = await openPanel(user);
   online();
   const group = await within(panel).findByRole("group", { name: "Opções da pergunta" });
+  // the card of a question has the border of the accent, the question in bold and the options in a row
+  expect(group.closest("li")?.className).toContain("border-accent");
+  expect(group.className).toContain("flex-wrap");
   expect(
     within(group)
       .getAllByRole("button")

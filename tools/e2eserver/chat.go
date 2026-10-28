@@ -34,6 +34,8 @@ const (
 	askToThink  = "só pensando"
 	askToLock   = "travar o sistema"
 	askToUnlock = "destravar o sistema"
+	// the Grão-Mestre asks the user to choose among options, as `mestre choose` does
+	askToChoose = "me dê uma escolha"
 )
 
 // thinking and locked are the two switches of the double of the Grão-Mestre.
@@ -91,6 +93,14 @@ func startFakeChat(ctx context.Context, guildDB, filesDir string, mask func(stri
 				case strings.Contains(low, askToUnlock):
 					locked.Store(false)
 					svc.LockChanged(ctx)
+				}
+				if strings.Contains(low, askToChoose) {
+					q := panelchat.Question{Workspace: it.Workspace, Asker: fakeGrandMaster, UserID: n.Origin.User, Text: "Por qual caminho eu começo o login?",
+						Options: []string{"Só com Google", "Google e e-mail com senha", "Deixe para depois"}}
+					if _, err := svc.AskChoice(ctx, q, 2); err != nil {
+						return it, err
+					}
+					return it, nil
 				}
 				if strings.Contains(low, askToThink) {
 					thinking.Store(true)

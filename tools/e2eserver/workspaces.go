@@ -34,7 +34,8 @@ func (f *fakeWorkspaces) List(context.Context) ([]panel.WorkspaceRow, error) {
 		return panel.WorkspaceRow{Slug: slug, Repo: repo, DefaultBranch: "main", State: "active", Stages: stages, CanAct: true,
 			Versioning: "local", VersioningAsked: true, GrandMasterSheet: "Grão-Mestre", GrandMaster: "idle", CreatedAt: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)}
 	}
-	return []panel.WorkspaceRow{row(fakeWorkspace, "acme/e2e"), row(lojaWorkspace, "acme/loja")}, nil
+	// the third has no Grão-Mestre: the conversation says so
+	return []panel.WorkspaceRow{row(fakeWorkspace, "acme/e2e"), row(lojaWorkspace, "acme/loja"), row("sem-grao-mestre", "lucas/sem-grao-mestre")}, nil
 }
 
 func (f *fakeWorkspaces) Sheets(context.Context) ([]panel.SheetOption, error) {

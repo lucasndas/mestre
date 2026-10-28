@@ -39,6 +39,11 @@ func seedRequest(ctx context.Context, guildDB, workspacesDir string, rich bool) 
 		VALUES (?, 'acme/e2e', 'acme/e2e', 'https://example.test/e2e.git', 'main', 'active', '', ?, ?)`, fakeWorkspace, now.UnixMilli(), now.UnixMilli()); err != nil {
 		return fmt.Errorf("the campaign of the double: %w", err)
 	}
+	// a campaign with no Grão-Mestre (the double of the conversation has none for it): the conversation says so
+	if _, err := db.Writer().ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+		VALUES (?, 'lucas/sem-grao-mestre', 'lucas/sem-grao-mestre', 'https://example.test/sem.git', 'main', 'active', '', ?, ?)`, "sem-grao-mestre", now.UnixMilli(), now.UnixMilli()); err != nil {
+		return fmt.Errorf("the campaign without Grão-Mestre: %w", err)
+	}
 	if err := seedManage(ctx, db, workspacesDir, now); err != nil {
 		return err
 	}
