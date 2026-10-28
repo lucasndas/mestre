@@ -104,7 +104,15 @@ function Strip({
 }) {
   const { t } = useTranslation("apps");
   if (page.apps.length === 0)
-    return <StatusStrip tone="warn" title={t("strip.none")} hint={t("strip.noneHint")} />;
+    return (
+      <StatusStrip tone="warn" title={t("strip.none")} hint={t("strip.noneHint")}>
+        {owner && page.next_fixed ? (
+          <SensitiveButton onConfirm={(pin) => onLink(page.next_fixed ?? "", pin)}>
+            {t("strip.action", { name: page.next_fixed })}
+          </SensitiveButton>
+        ) : null}
+      </StatusStrip>
+    );
   const pending = page.apps.filter((a) => a.state_label !== "pronto").length;
   const target =
     page.apps.find((a) => a.can_link) ??
@@ -152,7 +160,7 @@ function Count({ count }: { count: AppCount }) {
       {/* biome-ignore lint/a11y/useSemanticElements: a native <meter> cannot take the colors of the panel */}
       <div
         role="meter"
-        className="mt-2 h-3 w-full max-w-md overflow-hidden rounded-full bg-accent-wash"
+        className="mt-2 h-3 w-full overflow-hidden rounded-full bg-accent-wash"
         aria-valuemin={0}
         aria-valuemax={count.limit}
         aria-valuenow={Math.min(count.total, count.limit)}

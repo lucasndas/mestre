@@ -16,7 +16,6 @@ import { api } from "../../lib/api";
 import {
   Badge,
   ChoiceGroup,
-  EmptyState,
   LevelGate,
   LoadError,
   NativeSelect,
@@ -60,13 +59,9 @@ export function Secrets() {
       <VocabLine terms={["Cofre", "Impressão"]} />
       {data ? (
         <StatusStrip
-          tone={expiring > 0 ? "warn" : "ok"}
-          title={
-            sites.length > 0
-              ? t("strip", { count: sites.length, expiring })
-              : t("stripNone", { count: managed.length })
-          }
-          hint={t("stripHint")}
+          tone={expiring > 0 ? "warn" : sites.length > 0 ? "ok" : "neutral"}
+          title={sites.length > 0 ? t("strip", { count: sites.length, expiring }) : t("stripNone")}
+          hint={sites.length > 0 ? t("stripHint") : t("stripNoneHint", { count: managed.length })}
         >
           {openButton}
         </StatusStrip>
@@ -91,9 +86,6 @@ export function Secrets() {
             }}
             withName
           />
-        ) : null}
-        {data && sites.length === 0 && !creating ? (
-          <EmptyState title={t("emptyTitle")} why={t("empty")} />
         ) : null}
         {data ? <WhereKeysGo /> : null}
         {sites.length > 0 ? <h2 className="text-2xl">{t("sitesTitle")}</h2> : null}
@@ -200,7 +192,7 @@ export function Secrets() {
                         <td className="px-3 py-2">
                           <code>{s.fingerprint}</code>
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2 break-all">
                           <code>{s.name}</code>
                         </td>
                       </tr>
@@ -580,6 +572,7 @@ function RecoveryKey() {
           <Button variant="secondary" onPress={() => setOpen(true)}>
             {t("recovery.open")}
           </Button>
+          <p className="mt-2 text-sm text-muted">{t("recovery.oldBackups")}</p>
         </div>
       )}
     </section>

@@ -6,13 +6,11 @@ export default {
   loadWhat: "o cofre",
   strip_one: "{{count}} credencial de site, {{expiring}} perto de vencer",
   strip_other: "{{count}} credenciais de site, {{expiring}} perto de vencer",
-  stripNone_one: "Só há {{count}} segredo do próprio Mestre no cofre",
-  stripNone_other: "Só há {{count}} segredos do próprio Mestre no cofre",
+  stripNone: "Nenhum segredo seu no cofre ainda",
+  stripNoneHint_one: "Só {{count}} segredo, o que o próprio Mestre guarda.",
+  stripNoneHint_other: "Só {{count}} segredos, os que o próprio Mestre guarda.",
   stripHint:
     "Credenciais de site são as senhas que os agentes usam para entrar em páginas por você.",
-  emptyTitle: "Nenhuma credencial de site ainda",
-  empty:
-    "Quando um agente precisar entrar numa página (um painel de hospedagem, um serviço de e-mail), a senha dele fica aqui, no cofre, e nunca na conversa. Cadastre uma quando precisar.",
   sitesTitle: "Credenciais de site",
   managedTitle: "Guardados pelo Mestre",
   technicalName: "nome técnico",
@@ -110,6 +108,7 @@ export default {
     done: "Segredo apagado.",
   },
   recovery: {
+    oldBackups: "Os backups que já existem continuam exigindo a chave antiga.",
     title: "Cópia de segurança do cofre",
     intro:
       "A chave de recuperação abre o backup do cofre. O Mestre não a guarda: quem a perde e perde as máquinas fica sem os segredos.",

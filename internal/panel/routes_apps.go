@@ -61,6 +61,9 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 			open[q.App] = q.Status
 		}
 	}
+	if owner && p.creation != nil {
+		page.NextFixed = nextFixed(apps)
+	}
 	// the Owner sees every App; the others, the fixed ones and the ones installed on the
 	// repositories of the workspaces they act in, with only those repositories
 	list, all := actingIn(me)
@@ -88,6 +91,22 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 			Repos: orEmpty(repos), Request: open[a.Name], CanLink: owner && p.creation != nil && linkable})
 	}
 	WriteJSON(w, http.StatusOK, page)
+}
+
+// fixedApps are the two Apps every repository has, in the order the screen offers them.
+var fixedApps = []struct{ name, role string }{
+	{"Grão-Mestre", github.RoleGrandMaster},
+	{"Mestre", github.RoleMestre},
+}
+
+// nextFixed is the name of the first fixed App that is not in the registry yet.
+func nextFixed(apps []github.App) string {
+	for _, f := range fixedApps {
+		if !slices.ContainsFunc(apps, func(a github.App) bool { return a.Role == f.role }) {
+			return f.name
+		}
+	}
+	return ""
 }
 
 // repoSet is the repositories (lower case) of the workspaces.
@@ -173,7 +192,20 @@ func (p *Panel) handleAppLink(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, Err(CodeUnavailable, "a criação de Apps não está disponível agora", nil))
 		return
 	}
-	link, err := p.creation.Begin(ctx, r.PathValue("name"), me.ID)
+	name := r.PathValue("name")
+	link, err := p.creation.Begin(ctx, name, me.ID)
+	if errors.Is(err, github.ErrNoApp) || errors.Is(err, sql.ErrNoRows) {
+		// a fixed App is born with its first link: the registry has no row of it before
+		if f := slices.IndexFunc(fixedApps, func(f struct{ name, role string }) bool { return f.name == name }); f >= 0 {
+			reg := &github.Registry{DB: p.db, Clock: p.clk}
+			_, rerr := reg.Request(ctx, github.App{Name: name, Role: fixedApps[f].role})
+			if rerr == nil || errors.Is(rerr, github.ErrNameTaken) {
+				link, err = p.creation.Begin(ctx, name, me.ID)
+			} else {
+				err = rerr
+			}
+		}
+	}
 	switch {
 	case err == nil:
 		p.audit(ctx, "panel.github_apps.link", map[string]any{"user_id": me.ID, "app": link.App, "expires_at": link.ExpiresAt, "ip": clientIP(r)})

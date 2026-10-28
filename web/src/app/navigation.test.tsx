@@ -167,6 +167,41 @@ test("who does not decide approvals has three items and no counter", async () =>
   ).toEqual(["Início", "Campanhas", "Configurações"]);
 });
 
+test("the foot of the menu says how the Guild stands, for who sees it, and the time zone of every hour", async () => {
+  const machine = (id: string, online: boolean) => ({
+    id,
+    name: id,
+    citadel: id === "m1",
+    self: id === "m1",
+    online,
+    excluded: false,
+  });
+  let machines = [machine("m1", true), machine("m2", false)];
+  fakeServer(
+    base({
+      "GET /api/guild": () => ({
+        body: { epoch: 1, timezone: "America/Sao_Paulo", single: false, pending: [], machines },
+      }),
+    }),
+  );
+  const { unmount } = renderApp("/");
+  const nav = within(await screen.findByRole("navigation", { name: "Navegação principal" }));
+  expect(await nav.findByText("Guilda: 1 máquina sem sinal")).toBeTruthy();
+  expect(nav.getByText("Horários no fuso America/Sao_Paulo")).toBeTruthy();
+  unmount();
+  machines = [machine("m1", true)];
+  renderApp("/");
+  expect(await screen.findByText("Guilda: tudo conectado")).toBeTruthy();
+});
+
+test("who does not see the machines hears only the time zone at the foot of the menu", async () => {
+  fakeServer(base(as("observer", ["status"])));
+  renderApp("/");
+  const nav = within(await screen.findByRole("navigation", { name: "Navegação principal" }));
+  await nav.findByText("Horários no fuso America/Sao_Paulo");
+  expect(nav.queryByText(/^Guilda: /)).toBeNull();
+});
+
 test("the item Aprovações carries the number of pending requests", async () => {
   fakeServer(base());
   renderApp("/");

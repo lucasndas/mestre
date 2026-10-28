@@ -393,6 +393,29 @@ func TestTheAppsAreScopedToTheWorkspacesOfTheUser(t *testing.T) {
 	}
 }
 
+// A new Guild has no row of the fixed Apps: the Owner's screen offers the first of them, and its link
+// registers it; the next one is offered after that, and the Administrator is offered none.
+func TestAFixedAppIsOfferedToTheOwnerAndBornWithItsFirstLink(t *testing.T) {
+	t.Parallel()
+	m := newManage(t)
+	_, adm := m.member("Bruno", "bruno", users.Administrator)
+	owner := m.ownerSession()
+	next := func(c string) string {
+		return decodeInto[panel.AppsPage](t, m.call("GET", "/api/github/apps", nil, opts{cookie: c})).NextFixed
+	}
+	if got := next(owner); got != "Grão-Mestre" {
+		t.Fatalf("the Owner is offered %q, want the Grão-Mestre", got)
+	}
+	if got := next(adm); got != "" {
+		t.Fatalf("the Administrator is offered %q", got)
+	}
+	m.wantOK(m.call("POST", "/api/github/apps/Gr%C3%A3o-Mestre/link", nil, opts{cookie: owner, pin: ownerPIN}))
+	if got := next(owner); got != "Mestre" {
+		t.Fatalf("after the first link the Owner is offered %q, want the Mestre", got)
+	}
+	m.wantErr(m.call("POST", "/api/github/apps/Outro/link", nil, opts{cookie: owner, pin: ownerPIN}), 404, panel.CodeNotFound)
+}
+
 // The session cookie is SameSite=Strict: the return of GitHub arrives without it. The panel
 // answers that request with a page that continues by itself and exchanges nothing; the same
 // address, now with the session, reaches the page of the return.

@@ -140,7 +140,6 @@ function Editor({
       <Area
         label={heading}
         hideLabel
-        description={hint}
         value={text}
         onChange={onChange}
         rows={8}

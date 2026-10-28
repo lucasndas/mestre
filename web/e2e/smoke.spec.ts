@@ -96,24 +96,26 @@ test("the Owner invites a person, who does the first access once with the code",
   await page.getByRole("button", { name: "Entrar" }).click();
   await openSetting(page, /^Usuários/);
   await expect(page.getByRole("heading", { name: "Usuários", level: 1 })).toBeVisible();
-  await page.getByRole("button", { name: "Convidar pessoa" }).first().click();
-  await page.getByLabel("Nome", { exact: true }).fill("Ana Lima");
+  await page.getByRole("link", { name: "Convidar pessoa" }).first().click();
+  await expect(page.getByRole("heading", { name: "Convidar pessoa", level: 1 })).toBeVisible();
+  await page.getByLabel("Nome da pessoa").fill("Ana Lima");
   await page.getByRole("radiogroup").locator("label", { hasText: "Observador" }).click();
   await page.getByRole("button", { name: "Criar convite" }).click();
   await page.getByRole("textbox", { name: "PIN" }).fill("123456");
   await page.getByRole("button", { name: "Criar convite" }).click();
 
   // the three parts: the check code is computed from /ca.crt, the secret waits for the word
-  const p2 = page.getByRole("region", { name: "2. Código de conferência do certificado" });
+  const p2 = page.getByRole("region", { name: "Parte 2 · O código de conferência do certificado" });
   await expect(p2.locator("pre")).toHaveText(/^([0-9a-f]{8} ){7}[0-9a-f]{8}$/);
-  await expect(page.getByRole("region", { name: "1. Instruções" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Parte 1 · As instruções" })).toBeVisible();
   await expect(page.getByTestId("shown-once")).toHaveCount(0);
   await page.locator("label", { hasText: "conferiu o código" }).click();
   const code = (await page.getByTestId("shown-once").textContent()) ?? "";
   expect(code).toMatch(/^[A-Z0-9]{8,}$/);
-  await expect(page.getByText("Ana Lima").first()).toBeVisible();
-  // the code is shown once: after it is written down, it is gone
-  await page.getByRole("button", { name: "Já enviei e anotei" }).click();
+  await expect(page.getByRole("heading", { name: "Convite de Ana Lima", level: 1 })).toBeVisible();
+  // the code is shown once: after it is written down, the page goes back to the list
+  await page.getByRole("button", { name: "Anotei, pode sumir" }).click();
+  await expect(page.getByRole("heading", { name: "Usuários", level: 1 })).toBeVisible();
   await expect(page.getByTestId("shown-once")).toHaveCount(0);
   await expect(page.getByText("Ainda não entrou", { exact: true })).toBeVisible();
 
@@ -233,7 +235,7 @@ test("the Owner makes a decree and revokes it", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Decretos", level: 1 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Para que serve um decreto?" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Novo decreto" }).click();
+  await page.getByRole("button", { name: "Criar decreto" }).click();
   await page.getByLabel("Nome", { exact: true }).fill("dev");
   await page.getByLabel("Padrão").fill("npm test*");
   await page

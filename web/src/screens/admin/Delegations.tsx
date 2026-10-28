@@ -70,9 +70,11 @@ export function Delegations() {
                 : undefined
           }
         >
-          <Link to="/decretos" className={linkButton}>
-            {t("delegations.toDecrees")}
-          </Link>
+          {total > 0 ? (
+            <Link to="/decretos" className={linkButton}>
+              {t("delegations.toDecrees")}
+            </Link>
+          ) : null}
         </StatusStrip>
       ) : null}
       <div className="flex max-w-4xl flex-col gap-5">
@@ -97,7 +99,11 @@ export function Delegations() {
         ) : null}
         {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
         {data && (data.workspaces.length === 0 || total === 0) ? (
-          <EmptyState title={t("delegations.emptyTitle")} why={t("delegations.empty")} />
+          <EmptyState title={t("delegations.emptyTitle")} why={t("delegations.empty")}>
+            <Link to="/decretos" className={linkButton}>
+              {t("delegations.toDecrees")}
+            </Link>
+          </EmptyState>
         ) : null}
         {data?.workspaces
           .filter((g) => g.delegations.length + g.subdelegations.length + g.rules.length > 0)

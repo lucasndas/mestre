@@ -5,6 +5,10 @@ export default {
     approvals: "Aprovações",
     workspaces: "Campanhas",
     settings: "Configurações",
+    guildOk: "Guilda: tudo conectado",
+    guildDown_one: "Guilda: {{count}} máquina sem sinal",
+    guildDown_other: "Guilda: {{count}} máquinas sem sinal",
+    zone: "Horários no fuso {{zone}}",
   },
   top: {
     home: "Mestre, ir para o Início",
@@ -21,8 +25,7 @@ export default {
   },
   settings: {
     title: "Configurações",
-    intro:
-      "Tudo o que se ajusta uma vez e raramente muda. O trabalho do dia a dia fica em Início, Aprovações e Campanhas.",
+    intro: "Tudo que se ajusta no Mestre, por assunto.",
     none: "O seu nível não tem telas de configuração além das da conta.",
     groups: {
       account: { name: "Conta", blurb: "Você e o seu acesso" },

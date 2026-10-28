@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormatDateTime, useMe } from "../../app/session";
@@ -11,12 +12,12 @@ import type {
   UserRow,
 } from "../../gen/panel";
 import { api } from "../../lib/api";
-import { InviteDelivery, InviteForm } from "./Invite";
 import {
   Badge,
   ChoiceGroup,
   EmptyState,
   LoadError,
+  linkButtonPrimary,
   MultiChoice,
   PageHeader,
   ShownOnce,
@@ -26,12 +27,6 @@ import {
 } from "./kit";
 
 type Say = (k: string, o?: object) => string;
-
-interface Delivery {
-  name: string;
-  code: string;
-  expires: string;
-}
 
 interface Shown {
   title: string;
@@ -48,10 +43,8 @@ export function Users() {
   const fmt = useFormatDateTime();
   const qc = useQueryClient();
   const { data, error, refetch } = useQuery(usersQuery);
-  const [creating, setCreating] = useState(false);
   const [managing, setManaging] = useState<string | null>(null);
   const [shown, setShown] = useState<Shown | null>(null);
-  const [invite, setInvite] = useState<Delivery | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin"] });
   const showCode = (title: string, c: { code: string; expires_at: string }) =>
@@ -59,10 +52,11 @@ export function Users() {
   const people = data?.users ?? [];
   const alone = people.length <= 1;
   const waiting = people.filter((u) => u.level !== "owner" && !u.login).length;
-  const openButton =
-    creating || invite ? null : (
-      <Button onPress={() => setCreating(true)}>{t("create.open")}</Button>
-    );
+  const openButton = (
+    <Link to="/usuarios/convidar" className={linkButtonPrimary}>
+      {t("create.open")}
+    </Link>
+  );
 
   return (
     <section>
@@ -83,7 +77,6 @@ export function Users() {
           {openButton}
         </StatusStrip>
       ) : null}
-      {invite ? <InviteDelivery {...invite} onDone={() => setInvite(null)} /> : null}
       {shown ? <ShownOnce {...shown} onDone={() => setShown(null)} /> : null}
       <div className="flex max-w-4xl flex-col gap-4">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
@@ -113,19 +106,7 @@ export function Users() {
             </div>
           </div>
         ) : null}
-        {data && creating ? (
-          <InviteForm
-            workspaces={data.workspaces}
-            onClose={() => setCreating(false)}
-            onCreated={async (r) => {
-              setCreating(false);
-              setNotice(null);
-              setInvite({ name: r.user.name, code: r.code.code, expires: fmt(r.code.expires_at) });
-              await refresh();
-            }}
-          />
-        ) : null}
-        {data && alone && !creating && !invite ? (
+        {data && alone ? (
           <EmptyState
             title={t("emptyTitle")}
             why={t("empty")}

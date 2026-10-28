@@ -1,9 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useApprovalsCount } from "../components/TopBarSlots";
+import { guildQuery } from "../screens/admin/Guild";
 import { type Section, sectionOf } from "../screens/settingsMap";
-import { useCan } from "./session";
+import { useCan, useMe } from "./session";
 
 const ICONS: Record<Section, ReactNode> = {
   home: <path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />,
@@ -63,6 +65,26 @@ function Count({ n }: { n: number }) {
 }
 
 /**
+ * What the foot of the menu says (docs/painel/design.md#estrutura-da-tela): how the Guild stands, for
+ * who sees it, and the time zone every hour of the panel is in.
+ */
+function Foot() {
+  const { t } = useTranslation("shell");
+  const { timezone } = useMe();
+  const can = useCan("manage_machines");
+  const read = useQuery({ ...guildQuery, enabled: can, retry: false });
+  // a disabled query still hands back what an earlier one cached: who cannot see it hears nothing
+  const data = can ? read.data : undefined;
+  const down = data ? data.machines.filter((m) => !m.excluded && !m.online).length : 0;
+  return (
+    <div className="hidden border-t border-line p-3 text-[0.9375rem] text-muted md:mt-auto md:block">
+      {data ? <p>{down > 0 ? t("nav.guildDown", { count: down }) : t("nav.guildOk")}</p> : null}
+      <p>{t("nav.zone", { zone: timezone })}</p>
+    </div>
+  );
+}
+
+/**
  * The menu of four items (docs/painel/design.md#estrutura-da-tela): a column at the left on the
  * computer, four tabs at the bottom on the phone. The item of the section of the screen is marked.
  */
@@ -117,6 +139,7 @@ export function Nav({ path }: { path: string }) {
         <Icon section="settings" />
         <span>{t("nav.settings")}</span>
       </Link>
+      <Foot />
     </nav>
   );
 }

@@ -35,5 +35,5 @@ export type Say = (k: string, o?: object) => string;
 
 export function labelOr(say: Say, key: string, raw: string): string {
   const text = say(key);
-  return text === key || raw === "" ? raw : text;
+  return text === key ? raw : text;
 }
