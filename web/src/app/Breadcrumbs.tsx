@@ -13,6 +13,12 @@ const LINK_QUIET =
 const LINK =
   "inline-flex min-h-11 items-center rounded-field px-1.5 text-accent underline underline-offset-4";
 
+/** The pages under Usuários that are steps of one task, and the catalog key of each in the trail. */
+const INVITE_STEPS: Record<string, "invite" | "invitation"> = {
+  "/usuarios/convidar": "invite",
+  "/usuarios/convite": "invitation",
+};
+
 function Trail({ items }: { items: ReactNode[] }) {
   const { t } = useTranslation("shell");
   return (
@@ -105,6 +111,25 @@ export function Breadcrumbs({ path }: { path: string }) {
   const { t } = useTranslation("shell");
   const say = t as unknown as (k: string) => string;
   const cfg = settingsOf(path);
+  // the two steps of the invite sit under Usuários: the screen is a link and the step is the page
+  const step = INVITE_STEPS[path.replace(/\/$/, "")];
+  if (cfg && step)
+    return (
+      <Trail
+        items={[
+          <Link key="c" to="/configuracoes" className={LINK}>
+            {t("nav.settings")}
+          </Link>,
+          <Link key="g" to="/configuracoes" hash={`grupo-${cfg.group.key}`} className={LINK_QUIET}>
+            {say(`settings.groups.${cfg.group.key}.name`)}
+          </Link>,
+          <Link key="e" to="/usuarios" className={LINK_QUIET}>
+            {say(`settings.entries.${cfg.entry.key}.name`)}
+          </Link>,
+          <Here key="s">{say(`crumbs.${step}`)}</Here>,
+        ]}
+      />
+    );
   if (cfg)
     return (
       <Trail
