@@ -286,7 +286,12 @@ function MachineRow({
 
       {m.citadel ? null : (
         <div className="mt-4 flex flex-col gap-4 border-t border-line pt-4">
-          <TowerCheck m={m} />
+          <details>
+            <summary className="min-h-11 cursor-pointer py-2 font-semibold">
+              {t("check.title", { name: m.name })}
+            </summary>
+            <TowerCheck m={m} />
+          </details>
           <PassCitadel
             m={m}
             citadel={citadel}

@@ -341,7 +341,10 @@ test("two requests at once bring the notice to refuse them all", async () => {
 // CA-CRESC-12
 test("a Tower that just came in shows the AI accounts as 'não sei' with a link, never as done", async () => {
   fakeServer({ ...base, ...owner });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/guilda");
+  // the check is folded until it is asked for: the row says how the machine is and the button passes the Citadel
+  await user.click(await screen.findByText("Conferir torre", { selector: "summary" }));
   const check = await screen.findByRole("region", { name: "Conferir torre" });
   expect(within(check).getByText(/Contas de IA: não sei/)).toBeTruthy();
   expect(

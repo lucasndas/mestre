@@ -136,6 +136,7 @@ export function Secrets() {
                   <Cell label={t("expiresAt")}>{fmt(s.site.expires_at)}</Cell>
                 ) : null}
               </dl>
+              <p className="mt-3 text-sm text-muted">{t("delete.hint")}</p>
               {s.notice ? (
                 <p
                   className={`mt-3 text-sm font-semibold ${s.notice.kind === "expiring" ? "text-warn-ink" : "text-danger"}`}
@@ -298,18 +299,15 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
 function DeleteSecret({ s, onDone }: { s: SecretRow; onDone: () => Promise<void> }) {
   const { t } = useTranslation("secrets");
   return (
-    <div className="flex flex-col items-start gap-1">
-      <SensitiveButton
-        variant="danger"
-        onConfirm={async (pin) => {
-          await api("DELETE", `/api/secrets/${encodeURIComponent(s.name)}`, undefined, { pin });
-          await onDone();
-        }}
-      >
-        {t("delete.open")}
-      </SensitiveButton>
-      <p className="text-sm text-muted">{t("delete.hint")}</p>
-    </div>
+    <SensitiveButton
+      variant="danger"
+      onConfirm={async (pin) => {
+        await api("DELETE", `/api/secrets/${encodeURIComponent(s.name)}`, undefined, { pin });
+        await onDone();
+      }}
+    >
+      {t("delete.open")}
+    </SensitiveButton>
   );
 }
 
