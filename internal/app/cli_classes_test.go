@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mestre-ia/mestre/internal/app"
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
@@ -83,6 +84,11 @@ func (w *commWorld) theGrandMasterClassOfTheWorkspaceIsAProposalForTheAdministra
 	}
 	if _, ok := w.class("p3"); ok {
 		t.Error("the class is in use before it is approved")
+	}
+	// the proposal shows in the panel for the Administrators of the campaign, with its origin
+	_, props, err := app.NewClassPanelForTest(w.orc).Classes(w.ctx, []string{w.slug}, false)
+	if err != nil || len(props) != 1 || props[0].Name != "p3" || props[0].Workspace != w.slug || props[0].Origin != "request" {
+		t.Fatalf("the proposals of the panel = %+v, %v", props, err)
 	}
 	// the Grand Master never approves what he proposed; an Administrator does
 	gm := classes.Author{Level: classes.LevelGrandMaster, ID: w.gm.ID}
@@ -408,7 +414,8 @@ func (w *commWorld) ritualListShowEditDisableEnableAndDeleteWork(t *testing.T, d
 //
 // CA-CLI-CLR-01
 // CA-CLI-CLR-02
-// Part of CA-CLI-CLR-03: the proposal is made, goes to the Administrators and the Grand Master cannot approve it; its appearing in Telegram and the panel is milestones 5 and 6.
+// CA-CLI-CLR-03
+// (exit 9, the proposal listed in the panel for the Administrators, never approved by the Grand Master)
 // CA-CLI-CLR-04
 // CA-CLI-CLR-07
 // CA-CLI-CLR-10

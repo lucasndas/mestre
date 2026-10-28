@@ -85,7 +85,7 @@ test("the Owner creates the Guild, signs out and signs in again", async ({ page 
 // as the server demands) and the invite comes in three parts; the person, in another browser,
 // does the first access with the code, sees the welcome of their level, and the same code does
 // not serve a second time.
-// Part of CA-CRESC-18 (the criterion is *completa*: this e2e is the whole journey)
+// Part of CA-CRESC-18 (the browser half; the criterion is proved in Go by tools/e2eserver/main_full_test.go)
 test("the Owner invites a person, who does the first access once with the code", async ({
   page,
   browser,

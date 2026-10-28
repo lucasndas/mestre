@@ -416,7 +416,9 @@ const blocking = (can: boolean): BlockingView => ({
   created_at: "2026-10-26T16:00:00Z",
 });
 
-// CA-CONV-08 and CA-CONV-10 (the screen): the whole evidence, the text of the agent in the
+// CA-CONV-08
+// CA-CONV-10
+// (the screen; the Administrator's half is the next test): the whole evidence, the text of the agent in the
 // block "não verificado", and the step of the vault is a button only when the server says
 // the user may do it; it opens Segredos.
 test("a blocking notice shows the whole evidence and the text of the agent apart; the vault step is a button only for who may do it", async () => {

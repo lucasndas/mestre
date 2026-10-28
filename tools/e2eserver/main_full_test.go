@@ -257,3 +257,39 @@ func TestARequestThatWaitedThroughARestartIsApprovedThroughThePanelAndAudited(t 
 		t.Fatalf("the audit of the panel: %d %v", n, err)
 	}
 }
+
+// CA-CRESC-18
+// The Owner invites a person at the real server (the PIN is demanded), the invite carries the single
+// code and the level, the person does the first access with the code and is an Observer, and the same
+// code does not serve a second time.
+func TestTheOwnerInvitesAPersonWhoDoesTheFirstAccessOnceWithTheCode(t *testing.T) {
+	t.Parallel()
+	url, code, stop := serve(t, runOptions{Seed: true})
+	defer stop()
+	setup := panel.SetupRequest{Code: code, Name: "Lucas", Login: "lucas", Password: "uma senha bem longa", PIN: "123456"}
+	st, body, ck := panelCall(t, url, "POST", "/api/setup", setup, "", "")
+	if st != 200 || ck == nil {
+		t.Fatalf("setup = %d %s", st, body)
+	}
+	invite := panel.CreateUserRequest{Name: "Ana Lima", Level: "observer", Workspaces: []string{"loja"}}
+	if st, body, _ := panelCall(t, url, "POST", "/api/users", invite, ck.Value, ""); st != 403 || !strings.Contains(string(body), `"pin_required"`) {
+		t.Fatalf("an invite without the PIN = %d %s", st, body)
+	}
+	st, body, _ = panelCall(t, url, "POST", "/api/users", invite, ck.Value, "123456")
+	var created panel.CreateUserResponse
+	if err := json.Unmarshal(body, &created); err != nil || st != 201 || created.User.Name != "Ana Lima" || created.User.Level != "observer" || created.Code.Kind != "first" || len(created.Code.Code) < 8 {
+		t.Fatalf("the invite = %d %s", st, body)
+	}
+	first := panel.FirstAccessRequest{Code: created.Code.Code, Login: "ana", Password: "uma senha bem longa", PIN: "654321"}
+	st, body, ana := panelCall(t, url, "POST", "/api/first-access", first, "", "")
+	if st != 200 || ana == nil {
+		t.Fatalf("the first access = %d %s", st, body)
+	}
+	if st, body, _ := panelCall(t, url, "GET", "/api/me", nil, ana.Value, ""); st != 200 || !strings.Contains(string(body), `"level":"observer"`) {
+		t.Fatalf("me = %d %s", st, body)
+	}
+	again := panel.FirstAccessRequest{Code: created.Code.Code, Login: "ana2", Password: "uma senha bem longa", PIN: "654321"}
+	if st, body, c := panelCall(t, url, "POST", "/api/first-access", again, "", ""); st == 200 || c != nil {
+		t.Fatalf("the same code served twice = %d %s", st, body)
+	}
+}
