@@ -15,7 +15,8 @@ import { useTerminalContext } from "./useTerminalContext";
 
 /** The path of a table with its terminal tab open on one character. */
 export function tableTerminalPath(workspace: string, table: string, character: string): string {
-  return `/workspaces/${encodeURIComponent(workspace)}/mesas/${encodeURIComponent(table)}?aba=terminal&personagem=${encodeURIComponent(character)}`;
+  const who = character ? `&personagem=${encodeURIComponent(character)}` : "";
+  return `/workspaces/${encodeURIComponent(workspace)}/mesas/${encodeURIComponent(table)}?aba=terminal${who}`;
 }
 
 /** The terminal of one character, as the page of the terminal and the tab of a table show it. */

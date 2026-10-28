@@ -20,6 +20,8 @@ test("the help of Companhia is exactly the short help of the glossary", async ()
   expect(dialog.textContent).toContain(party.help);
   expect(dialog.textContent).toContain(party.real);
   expect(dialog.textContent).toContain("No mundo real");
+  // the sentence of the real world is a line of its own, with the label in bold, not a caps heading
+  expect(dialog.querySelector("strong")?.textContent).toBe("No mundo real:");
 });
 
 // CA-CANVAS-02

@@ -753,16 +753,24 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
   return (
     <aside aria-label={t("title")} className="flex h-dvh min-h-0 flex-col bg-surface">
       <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
-        <h2 className="text-lg">
-          <Term name="Grão-Mestre" />
-          <span className="sr-only"> · {t("title")}</span>
-        </h2>
+        <h2 className="text-xl font-semibold">{t("title")}</h2>
         <AriaButton
           aria-label={t("close")}
           onPress={onClose}
-          className="grid size-11 place-items-center rounded-full text-lg hover:bg-accent-wash"
+          className="grid size-11 place-items-center rounded-full hover:bg-accent-wash"
         >
-          <span aria-hidden="true">×</span>
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
         </AriaButton>
       </header>
       {isPending ? <p className="p-4 text-muted">{t("loading")}</p> : null}

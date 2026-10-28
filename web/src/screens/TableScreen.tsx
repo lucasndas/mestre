@@ -7,8 +7,9 @@ import { useChatControl } from "../app/chatControl";
 import { useCan, useFormatDateTime } from "../app/session";
 import { canvasQuery } from "../canvas/api";
 import { focusCharacter } from "../canvas/model";
-import { Term } from "../components/Term";
 import { Alert, Button } from "../components/ui";
+import type { CanvasState } from "../gen/panel";
+import { useGoto } from "../lib/links";
 import { TerminalPane, tableTerminalPath } from "../terminal/TerminalPane";
 import { viewQuery } from "../workspace/queries";
 import { SituationChip } from "../workspace/SituationChip";
@@ -21,6 +22,19 @@ const TableCanvas = lazy(() =>
 
 const tabClass =
   "min-h-11 cursor-pointer border-b-2 border-transparent px-4 text-lg outline-none data-hovered:bg-accent-wash data-selected:border-accent data-selected:font-semibold data-focus-visible:ring-2 data-focus-visible:ring-accent";
+
+/** The character whose terminal the tab shows: the one asked for, else who works, else the first with a terminal. */
+function chooseTerminal(state: CanvasState, character?: string) {
+  const withTerminal = state.characters.filter((c) => c.has_terminal);
+  const focused = focusCharacter(state).replace(/^character:/, "");
+  return {
+    withTerminal,
+    chosen:
+      withTerminal.find((c) => c.id === character) ??
+      withTerminal.find((c) => c.id === focused) ??
+      withTerminal[0],
+  };
+}
 
 /** The terminal tab: one terminal at a time, with a choice among the characters of the table that have one. */
 function TerminalTab({
@@ -42,10 +56,7 @@ function TerminalTab({
         {t("loading")}
       </p>
     );
-  const withTerminal = state.characters.filter((c) => c.has_terminal);
-  const wanted = withTerminal.find((c) => c.id === character);
-  const focused = focusCharacter(state).replace(/^character:/, "");
-  const chosen = wanted ?? withTerminal.find((c) => c.id === focused) ?? withTerminal[0];
+  const { withTerminal, chosen } = chooseTerminal(state, character);
   if (!chosen) return <p className="text-muted">{t("head.noTerminal")}</p>;
   return (
     // the header of the table is above the window: the window gives it that much of the height of the screen
@@ -87,6 +98,9 @@ export function TableScreen({
   const chat = useChatControl();
   const canDecide = useCan("decide_approvals");
   const fmt = useFormatDateTime();
+  const goto = useGoto();
+  const { data: canvas } = useQuery(canvasQuery(workspace, table));
+  const chosen = canvas ? chooseTerminal(canvas, character).chosen : undefined;
   const { data: view } = useQuery({ ...viewQuery(workspace) });
   const block = view?.tables.find((b) => b.id === table);
   const base = `/workspaces/${encodeURIComponent(workspace)}/mesas/${encodeURIComponent(table)}`;
@@ -96,24 +110,38 @@ export function TableScreen({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="m-0 text-2xl">{block?.epic_title || table}</h1>
           {block ? <SituationChip s={situationOf(block, canDecide)} /> : null}
-          <span
-            title={t("head.identifier")}
-            className="inline-flex items-center gap-1.5 rounded-field border border-line px-2 text-base"
-          >
-            <Term name="Mesa" />
-            <code>{table}</code>
-          </span>
           <div className="flex-1" />
+          <Button
+            variant="secondary"
+            onPress={() => goto(`/workspaces/${encodeURIComponent(workspace)}`)}
+          >
+            {t("head.back")}
+          </Button>
           <Button variant="secondary" onPress={chat.show}>
+            <svg
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5" />
+            </svg>
             {t("head.talk")}
           </Button>
         </div>
         <p className="m-0 flex flex-wrap items-center gap-x-4 text-base text-muted">
-          <span>{t("workspace", { workspace })}</span>
           {block?.branch ? (
             <span>
               {t("head.branch")}: <code className="text-ink">{block.branch}</code>
             </span>
+          ) : null}
+          {block && block.epic > 0 && !block.issue_warning ? (
+            <span>{t("head.issue", { number: block.epic })}</span>
           ) : null}
           {block ? (
             <span>
@@ -133,7 +161,9 @@ export function TableScreen({
         selectedKey={tab}
         onSelectionChange={(k) =>
           router.history.push(
-            k === "terminal" ? tableTerminalPath(workspace, table, character ?? "") : base,
+            k === "terminal"
+              ? tableTerminalPath(workspace, table, character ?? chosen?.id ?? "")
+              : base,
           )
         }
       >
@@ -142,7 +172,7 @@ export function TableScreen({
             {t("head.board")}
           </Tab>
           <Tab id="terminal" className={tabClass}>
-            {t("head.terminal")}
+            {chosen ? t("head.terminalOf", { name: chosen.name }) : t("head.terminal")}
           </Tab>
         </TabList>
         <TabPanel id="board">

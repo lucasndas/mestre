@@ -43,12 +43,23 @@ test("the header says the title with the identifier, the state in words, the bra
   renderApp("/workspaces/loja/mesas/42-login");
   const h1 = await screen.findByRole("heading", { level: 1, name: "Login com Google" }, SLOW);
   const head = h1.closest("header") as HTMLElement;
-  expect(within(head).getByText("42-login")).toBeTruthy();
+  // no chip with the identifier of the table: the title and the issue say it
+  expect(within(head).queryByText("42-login")).toBeNull();
+  expect(head.textContent).toContain("issue #42");
   expect(head.textContent).toContain("Trabalhando");
   expect(head.textContent).not.toContain("working");
   expect(within(head).getByText("epico/42-login")).toBeTruthy();
   expect(head.textContent).toMatch(/Última entrega: .*26\/10/);
   expect(within(head).getByRole("button", { name: "Conversar sobre esta mesa" })).toBeTruthy();
+  expect(within(head).getByRole("button", { name: "Voltar para a campanha" })).toBeTruthy();
+});
+
+test("Voltar para a campanha leads to the campaign", async () => {
+  const u = user();
+  server();
+  const { router } = renderApp("/workspaces/loja/mesas/42-login");
+  await u.click(await screen.findByRole("button", { name: "Voltar para a campanha" }, SLOW));
+  await waitFor(() => expect(router.state.location.pathname).toBe("/workspaces/loja"), SLOW);
 });
 
 test("a table without a delivery says so", async () => {
@@ -76,11 +87,13 @@ test("Quadro and Terminal are the two tabs of the table; the terminal tab opens 
   expect(within(tabs).getByRole("tab", { name: "Quadro" }).getAttribute("aria-selected")).toBe(
     "true",
   );
-  await u.click(within(tabs).getByRole("tab", { name: "Terminal" }));
+  await u.click(await within(tabs).findByRole("tab", { name: "Terminal de Dev-1" }, SLOW));
   await waitFor(
     () => expect(router.state.location.search).toMatchObject({ aba: "terminal" }),
     SLOW,
   );
+  // the address names the character that works, never an empty one
+  expect(router.state.location.search).toMatchObject({ personagem: "dev" });
   // two characters have a terminal: the choice is offered, the one that works is open
   const pick = await screen.findByRole("toolbar", { name: "Terminal de qual personagem" }, SLOW);
   expect(within(pick).getByRole("button", { name: "Dev-1" }).getAttribute("aria-pressed")).toBe(

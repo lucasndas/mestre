@@ -306,6 +306,7 @@ export function initialView(
   const minY = Math.min(...own.map((n) => n.position.y));
   const maxX = Math.max(...own.map((n) => n.position.x + w(n)));
   const maxY = Math.max(...own.map((n) => n.position.y + h(n)));
-  const fits = maxX - minX <= frame.width && maxY - minY <= frame.height;
-  return fits || !own.some((n) => n.id === focus) ? {} : { nodes: [{ id: focus }] };
+  const zoom = Math.min(frame.width / (maxX - minX), frame.height / (maxY - minY));
+  if (zoom >= 1 || !own.some((n) => n.id === focus)) return {};
+  return { nodes: [{ id: focus }] };
 }

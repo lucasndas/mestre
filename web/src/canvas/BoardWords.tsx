@@ -4,17 +4,26 @@ import { Button as AriaButton } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { useCan } from "../app/session";
 import { Button } from "../components/ui";
-import type { CanvasCharacter, CanvasState } from "../gen/panel";
+import type { CanvasCharacter, CanvasState, TableBlock } from "../gen/panel";
+import { formatNumber } from "../lib/format";
 import { useGoto } from "../lib/links";
 import { terminalQuery } from "../lib/queries";
+import { PauseForm } from "../workspace/TableBlockCard";
 import { useCanvasEnv } from "./context";
 import { keyOf } from "./model";
 import { plainLines } from "./plain";
 import { StatusChip } from "./StatusChip";
 import { characterStatus, missionLine } from "./status";
 
-/** "Em palavras simples": a sentence for each character about what it does and waits for. */
-export function PlainWords({ state }: { state: CanvasState }) {
+/** "Em palavras simples": a sentence for each character about what it does and waits for, then what the table has proved and used, and Pausar mesa. */
+export function PlainWords({
+  state,
+  block,
+}: {
+  state: CanvasState;
+  /** The table as the view of the campaign shows it (absent while it loads). */
+  block?: TableBlock;
+}) {
   const { t } = useTranslation("canvas");
   const lines = plainLines(state);
   const say = t as unknown as (key: string, opts?: object) => string;
@@ -35,7 +44,52 @@ export function PlainWords({ state }: { state: CanvasState }) {
           ))}
         </ul>
       )}
+      {block ? <TableFacts block={block} workspace={state.workspace} /> : null}
     </aside>
+  );
+}
+
+/** What the table has proved and spent, and the way to pause it (the same form as its card in the campaign). */
+function TableFacts({ block, workspace }: { block: TableBlock; workspace: string }) {
+  const { t, i18n } = useTranslation("canvas");
+  const { t: tw } = useTranslation("workspace");
+  const canPause = useCan("pause_buttons");
+  const [pausing, setPausing] = useState(false);
+  const c = block.criteria;
+  const u = block.usage;
+  const percent = u?.has_data ? Math.round(u.percent) : undefined;
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-base">
+        <dt className="text-muted">{t("plain.proofs")}</dt>
+        <dd className="m-0">
+          {c && c.total > 0
+            ? t("plain.proofsOf", { proven: c.proven, total: c.total })
+            : t("plain.noProofs")}
+        </dd>
+        {u ? (
+          <>
+            <dt className="text-muted">{t("plain.usage")}</dt>
+            <dd className="m-0">
+              {percent !== undefined
+                ? t("plain.usageOf", { percent: formatNumber(percent, i18n.language) })
+                : t("plain.noUsage")}
+            </dd>
+          </>
+        ) : null}
+      </dl>
+      {canPause && !block.paused ? (
+        pausing ? (
+          <PauseForm workspace={workspace} block={block} onClose={() => setPausing(false)} />
+        ) : (
+          <div>
+            <Button variant="secondary" onPress={() => setPausing(true)}>
+              {tw("block.pause")}
+            </Button>
+          </div>
+        )
+      ) : null}
+    </div>
   );
 }
 

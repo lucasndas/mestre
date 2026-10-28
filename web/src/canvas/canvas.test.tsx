@@ -19,6 +19,7 @@ import { setupI18n } from "../i18n";
 import { ApiError } from "../lib/api";
 import { UiSocket } from "../lib/ws";
 import { fakeServer, ME } from "../test-utils";
+import { base, table as tableBlock, view as workspaceView } from "../workspace/test-fixtures";
 import { actions } from "./api";
 import { tableState } from "./fixtures";
 import { useGestures } from "./gestures";
@@ -343,6 +344,57 @@ test("'Em palavras simples' says in a sentence what each character does and wait
   expect(words.textContent).toContain("Dev-1 está trabalhando agora.");
   expect(words.textContent).toContain("Revisor espera por Dev-1.");
   expect(words.textContent).toContain("Mestre está parado e pronto para o próximo trabalho.");
+});
+
+// the prototype of the table: below the sentences, what the table proved and spent, and Pausar mesa
+test("'Em palavras simples' also says the proofs and the use of the table, and Pausar mesa asks why", async () => {
+  fakeServer(
+    base(
+      workspaceView([
+        tableBlock({
+          id: "m1",
+          criteria: { total: 4, proven: 1, verified: 0 },
+          usage: { used: 62, limit: 100, unit: "usd", percent: 62, has_data: true },
+        }),
+      ]),
+      { [`GET ${path}`]: () => ({ body: tableState() }) },
+    ),
+  );
+  const { Wrapper } = wrap("pt-BR", null, {
+    ...ME,
+    capabilities: [...ME.capabilities, "pause_buttons"],
+  });
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  const words = await screen.findByRole("complementary", { name: "Em palavras simples" });
+  await waitFor(() => expect(words.textContent).toContain("1 de 4 com prova"));
+  expect(words.textContent).toContain("62% do limite");
+  await userEvent
+    .setup({ delay: null })
+    .click(within(words).getByRole("button", { name: "Pausar mesa" }));
+  expect(within(words).getByRole("textbox")).toBeTruthy();
+});
+
+test("a table with no criteria says there are no proofs yet", async () => {
+  fakeServer(
+    base(workspaceView([tableBlock({ id: "m1" })]), {
+      [`GET ${path}`]: () => ({ body: tableState() }),
+    }),
+  );
+  const { Wrapper } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  const words = await screen.findByRole("complementary", { name: "Em palavras simples" });
+  await waitFor(() => expect(words.textContent).toContain("ainda sem provas"));
+});
+
+test("the controls are at the bottom-left, with Ajustar à tela in the zoom group and no minimap over the cards", async () => {
+  fakeServer({ [`GET ${path}`]: () => ({ body: tableState() }) });
+  const { Wrapper } = wrap();
+  const { container } = render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  await screen.findByRole("article", { name: "Personagem Dev-1" });
+  const zoom = screen.getByRole("toolbar", { name: "Zoom do canvas" });
+  expect(within(zoom).getByRole("button", { name: "Ajustar à tela" })).toBeTruthy();
+  expect(container.querySelector(".react-flow__minimap")).toBeNull();
+  expect(container.querySelector(".react-flow__panel.top.left")).toBeNull();
 });
 
 test("on a phone the board is a list of characters joined by a line, dashed where one waits, each with Ver terminal", async () => {

@@ -31,7 +31,7 @@ O terminal da mesa tem de parecer um terminal e ser mais que um: a tela do agent
 
 ### Linha de status
 
-- À esquerda, o **modo**: **LEITURA** (cadeado quando o nível não deixa digitar), **MENSAGEM** ou **TECLADO DIRETO**, cada um uma palavra de termo (`Term`): sublinhada com pontos, abre o balão com "No mundo real:" ao passar o mouse e o fixa ao tocar, clicar ou apertar Enter; sem "?" ao lado. Os termos Leitura, Mensagem e Teclado direto entram no glossário, em pt-BR e en.
+- À esquerda, o **modo**: **LEITURA** (olho; cadeado quando o nível não deixa digitar), **MENSAGEM** ou **TECLADO DIRETO** (teclado), em caixa alta, cada um uma palavra de termo (`Term`): sublinhada com pontos, abre o balão claro com "No mundo real:" em negrito, na mesma linha da frase, ao passar o mouse e o fixa ao tocar, clicar ou apertar Enter; sem "?" ao lado. Os termos Leitura, Mensagem e Teclado direto entram no glossário, em pt-BR e en.
 - Depois, na tela cheia, a **missão** e a **etapa atual** (a mesma linha que o cartão da 4F mostra, num componente só) ("Etapa 2 de 4: Implementar login", com uma barrinha por etapa: feita, atual, a fazer), as **aprovações pendentes** deste personagem como botão **Decidir** (leva à [aprovação](conversa-e-aprovacoes.md)) e a **última entrega** da mesa. Sem missão, a parte some.
 - À direita, o botão **Digitar** (ou **Parar de digitar**) e uma frase de apoio: o que digita vai ao agente, o motivo de o botão estar desligado, ou "200 × 50 fixo".
 

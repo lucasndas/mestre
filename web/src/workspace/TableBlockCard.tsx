@@ -98,7 +98,7 @@ function Cycle({ s }: { s: Situation }) {
 }
 
 /** What pausing a table asks: why, written by the user; the server refuses an empty reason too. */
-function PauseForm({
+export function PauseForm({
   workspace,
   block,
   onClose,

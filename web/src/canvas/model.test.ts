@@ -160,4 +160,15 @@ test("the board opens on the whole table when it fits the frame, else centered o
   expect(small.nodes).toBeUndefined();
   const tight = initialView(nodes, "character:dev", { width: 800, height: 600 });
   expect(tight.nodes).toEqual([{ id: "character:dev" }]);
+  // never shrunk to fit: a table that needs less than 100% opens on the focus
+  const bounds = nodes.filter((n) => !n.parentId);
+  const w =
+    Math.max(...bounds.map((n) => n.position.x + (n.width ?? 0))) -
+    Math.min(...bounds.map((n) => n.position.x));
+  const h =
+    Math.max(...bounds.map((n) => n.position.y + (n.height ?? 0))) -
+    Math.min(...bounds.map((n) => n.position.y));
+  expect(initialView(nodes, "character:dev", { width: w * 0.7, height: h * 0.7 }).nodes).toEqual([
+    { id: "character:dev" },
+  ]);
 });
