@@ -397,7 +397,8 @@ func (s *Service) belongs(ctx context.Context, workspace, table string, x Ref) e
 		switch {
 		case err != nil:
 			return err
-		case !ok, sc.Table != table:
+		// the key is workspace/table/id: a table of the same name in another campaign is not this one
+		case !ok, sc.Table != table, !strings.HasPrefix(sc.ID, workspace+"/"+table+"/"):
 			return notFound(x.ID)
 		}
 		return nil
