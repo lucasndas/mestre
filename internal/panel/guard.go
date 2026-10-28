@@ -129,10 +129,22 @@ func (p *Panel) failSetup(ctx context.Context, ip string) error {
 // audit writes a line of the audit trail (audit_log). The detail never holds a
 // password, a PIN or a code.
 func (p *Panel) audit(ctx context.Context, action string, detail map[string]any) {
+	_ = p.auditGated(ctx, action, detail)
+}
+
+// auditGated is audit that says why a line was not written: ErrInFailover when the gate of
+// the handover refused it (the Citadel drains), or the error of the database.
+func (p *Panel) auditGated(ctx context.Context, action string, detail map[string]any) error {
 	b, err := json.Marshal(detail)
 	if err != nil {
 		b = []byte("{}")
 	}
+	release, err := p.admit(ctx)
+	if err != nil {
+		p.log.Warn("panel: the audit line was not written, the Citadel is handing over the command", "action", action)
+		return err
+	}
+	defer release()
 	err = p.db.WriteDurable(context.WithoutCancel(ctx), func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `INSERT INTO audit_log (id, at, machine_id, action, detail) VALUES (?, ?, ?, ?, ?)`,
 			p.ids.NewString(), p.clk.Now().UnixMilli(), p.machine, action, string(b))
@@ -141,4 +153,5 @@ func (p *Panel) audit(ctx context.Context, action string, detail map[string]any)
 	if err != nil {
 		p.log.Warn("panel: the audit line was not written", "action", action, "err", err)
 	}
+	return err
 }

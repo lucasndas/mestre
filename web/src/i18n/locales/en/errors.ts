@@ -26,6 +26,8 @@ const errors: Widen<typeof pt> = {
   permission_prompt:
     "The agent is waiting for your decision on a permission screen. Answer through the approval, not the terminal keyboard.",
   too_many_streams: "Too many terminals are open on this account. Close one and try again.",
+  citadel_in_failover:
+    "Another machine is taking over the Citadel. Nothing was done; try again in a few minutes.",
   internal: "Something went wrong in the Citadel. Try again.",
   approval_closed: "This request already ended. The screen will update.",
   approval_answered: "You already answered this request.",

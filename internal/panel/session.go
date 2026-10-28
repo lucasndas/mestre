@@ -44,6 +44,21 @@ type Sessions struct {
 	rnd io.Reader
 	// ended is told the id of every session this object ended.
 	ended func(id string)
+	// admit holds the gate of the handover for a write; nil admits every write.
+	admit func(ctx context.Context) (release func(), err error)
+}
+
+// write is db.WriteDurable through the gate of the handover: ErrInFailover while the
+// Citadel drains, with nothing written.
+func (s *Sessions) write(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	if s.admit != nil {
+		release, err := s.admit(ctx)
+		if err != nil {
+			return err
+		}
+		defer release()
+	}
+	return s.db.WriteDurable(ctx, fn)
 }
 
 func tokenHash(token string) string {
@@ -69,7 +84,7 @@ func (s *Sessions) Create(ctx context.Context, userID, device, ip string) (strin
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	now := s.clk.Now()
 	ss := Session{ID: s.ids.NewString(), UserID: userID, Device: clip(device, 300), IP: ip, CreatedAt: now, LastUsedAt: now}
-	err := s.db.WriteDurable(ctx, func(tx *sql.Tx) error {
+	err := s.write(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `INSERT INTO panel_sessions (id, token_hash, user_id, device, ip, created_at, last_used_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			ss.ID, tokenHash(token), userID, ss.Device, ip, now.UnixMilli(), now.UnixMilli())
 		return err
@@ -125,7 +140,7 @@ func (s *Sessions) use(ctx context.Context, where string, arg string) (Session, 
 		return Session{}, ErrNoSession
 	}
 	if now.Sub(ss.LastUsedAt) >= touchEvery {
-		if err := s.db.WriteDurable(ctx, func(tx *sql.Tx) error {
+		if err := s.write(ctx, func(tx *sql.Tx) error {
 			_, err := tx.ExecContext(ctx, `UPDATE panel_sessions SET last_used_at = ? WHERE id = ?`, now.UnixMilli(), ss.ID)
 			return err
 		}); err != nil {
@@ -148,7 +163,7 @@ func (s *Sessions) Exists(ctx context.Context, id string) bool {
 
 // End ends a session.
 func (s *Sessions) End(ctx context.Context, id string) error {
-	err := s.db.WriteDurable(ctx, func(tx *sql.Tx) error {
+	err := s.write(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `DELETE FROM panel_sessions WHERE id = ?`, id)
 		return err
 	})
@@ -161,7 +176,7 @@ func (s *Sessions) End(ctx context.Context, id string) error {
 // EndUser ends every session of a user, except the one named in keep.
 func (s *Sessions) EndUser(ctx context.Context, userID, keep string) error {
 	var gone []string
-	err := s.db.WriteDurable(ctx, func(tx *sql.Tx) error {
+	err := s.write(ctx, func(tx *sql.Tx) error {
 		gone = gone[:0]
 		rows, err := tx.QueryContext(ctx, `SELECT id FROM panel_sessions WHERE user_id = ? AND id <> ?`, userID, keep)
 		if err != nil {
@@ -191,7 +206,7 @@ func (s *Sessions) EndUser(ctx context.Context, userID, keep string) error {
 func (s *Sessions) Sweep(ctx context.Context) (int, error) {
 	now := s.clk.Now()
 	var gone []string
-	err := s.db.WriteDurable(ctx, func(tx *sql.Tx) error {
+	err := s.write(ctx, func(tx *sql.Tx) error {
 		gone = gone[:0]
 		rows, err := tx.QueryContext(ctx, `SELECT id FROM panel_sessions WHERE last_used_at <= ? OR created_at <= ?`,
 			now.Add(-IdleTimeout).UnixMilli(), now.Add(-MaxAge).UnixMilli())

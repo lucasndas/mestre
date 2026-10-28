@@ -39,6 +39,79 @@ type Files interface {
 	Receive(ctx context.Context, r attachments.Request) (attachments.Stored, error)
 }
 
+// Prefetching is the part of Files that lets the bot download the file of an update before it
+// holds the gate of the handover of the Citadel: Fetch only downloads, ReceiveData keeps the
+// bytes (attachments.Service has both).
+type Prefetching interface {
+	Fetch(ctx context.Context, f attachments.Ref) ([]byte, error)
+	ReceiveData(ctx context.Context, r attachments.Request, data []byte) (attachments.Stored, error)
+}
+
+// Prefetcher is the part of a Router that downloads, outside the gate of the handover, the files an
+// update will need; the context it returns carries them to Deliver and to the actions.
+type Prefetcher interface {
+	Prefetch(ctx context.Context, up Update) context.Context
+}
+
+type prefetchKey struct{}
+
+// prefetched is what a download gave, by the id of the file.
+type prefetched struct {
+	data []byte
+	err  error
+}
+
+// Prefetch implements Prefetcher: the file of a message of a user who may talk to the Grand Master, and
+// the files that wait for the choice of a workspace when the click is that choice. Anything else
+// downloads nothing.
+func (r *Routing) Prefetch(ctx context.Context, up Update) context.Context {
+	pf, ok := r.Files.(Prefetching)
+	if !ok || r.bot == nil {
+		return ctx
+	}
+	var refs []attachments.Ref
+	switch {
+	case up.Message != nil && up.Message.From != nil:
+		ref := up.Message.FileOf()
+		if ref == nil {
+			return ctx
+		}
+		u, err := r.bot.o.Users.ByTelegram(ctx, up.Message.From.ID)
+		if err != nil || u.State != users.Active || users.Require(u.Level, users.TalkToGrandMaster) != nil {
+			return ctx
+		}
+		refs = append(refs, *ref)
+	case up.CallbackQuery != nil:
+		cq := up.CallbackQuery
+		u, err := r.bot.o.Users.ByTelegram(ctx, cq.From.ID)
+		if err != nil || u.State != users.Active {
+			return ctx
+		}
+		cb, found, err := r.bot.Store().Callback(ctx, cq.Data)
+		if err != nil || !found || cb.Action != WorkspaceAction || cb.UserID != u.ID || cb.State != "open" {
+			return ctx
+		}
+		parked, err := r.bot.Store().Parked(ctx, u.ID)
+		if err != nil {
+			return ctx
+		}
+		for _, h := range parked {
+			if h.File != nil {
+				refs = append(refs, *h.File)
+			}
+		}
+	}
+	if len(refs) == 0 {
+		return ctx
+	}
+	set := make(map[string]prefetched, len(refs))
+	for _, ref := range refs {
+		data, err := pf.Fetch(ctx, ref)
+		set[ref.ID] = prefetched{data: data, err: err}
+	}
+	return context.WithValue(ctx, prefetchKey{}, set)
+}
+
 // Deliverer takes a routed message to the inbox of the Grand Master.
 type Deliverer interface {
 	Deliver(ctx context.Context, d Delivery) error
@@ -166,8 +239,25 @@ func (r *Routing) receive(ctx context.Context, in Inbound, ws string) (attachmen
 		r.say(ctx, in, "Não consigo receber arquivos agora.")
 		return attachments.Stored{}, false
 	}
-	stored, err := r.Files.Receive(ctx, attachments.Request{Workspace: ws, UserID: in.User.ID, File: *in.File, Caption: in.Text,
-		Origin: attachments.Origin{Channel: "telegram", ChatID: in.ChatID, MessageID: in.MessageID}})
+	req := attachments.Request{Workspace: ws, UserID: in.User.ID, File: *in.File, Caption: in.Text,
+		Origin: attachments.Origin{Channel: "telegram", ChatID: in.ChatID, MessageID: in.MessageID}}
+	var stored attachments.Stored
+	var err error
+	set, _ := ctx.Value(prefetchKey{}).(map[string]prefetched)
+	if got, ok := set[in.File.ID]; ok {
+		// downloaded before the gate of the handover was held: here it is only kept
+		if pf, isPf := r.Files.(Prefetching); isPf {
+			if got.err != nil {
+				err = got.err
+			} else {
+				stored, err = pf.ReceiveData(ctx, req, got.data)
+			}
+		} else {
+			stored, err = r.Files.Receive(ctx, req)
+		}
+	} else {
+		stored, err = r.Files.Receive(ctx, req)
+	}
 	var big *attachments.TooLargeError
 	switch {
 	case errors.As(err, &big):

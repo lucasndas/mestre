@@ -101,6 +101,10 @@ export const CodeTooManyStreams: Code = "too_many_streams";
  */
 export const CodeInternal: Code = "internal";
 /**
+ * CodeCitadelInFailover: the Citadel hands over the command; the request changed nothing.
+ */
+export const CodeCitadelInFailover: Code = "citadel_in_failover";
+/**
  * CodeRefused: the engine refused an action of the canvas; params.reason says why.
  */
 export const CodeRefused: Code = "refused";

@@ -188,11 +188,21 @@ func (s *Service) Receive(ctx context.Context, r Request) (Stored, error) {
 	if root, err := s.o.Root(ctx, r.Workspace); err != nil || root == "" {
 		return Stored{}, ErrWorkspace
 	}
-	data, err := s.fetch(ctx, r.File)
+	data, err := s.Fetch(ctx, r.File)
 	if err != nil {
 		return Stored{}, err
 	}
 	return s.keep(ctx, r, data)
+}
+
+// Fetch downloads the file of a channel and nothing else: the size is checked before the
+// download, with three attempts. It needs no workspace and changes nothing, so a channel does it
+// before it takes the lock of the handover of the Citadel, and gives the bytes to ReceiveData.
+func (s *Service) Fetch(ctx context.Context, f Ref) ([]byte, error) {
+	if f.Size > s.o.Limit {
+		return nil, &TooLargeError{Limit: s.o.Limit}
+	}
+	return s.fetch(ctx, f)
 }
 
 // ReceiveData keeps a file whose bytes the channel already has: the upload of the

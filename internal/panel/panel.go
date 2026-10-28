@@ -73,10 +73,13 @@ type Options struct {
 	// Mask hides the secrets in the text the audit keeps of what a person wrote
 	// (nil: the text goes as it is).
 	Mask func(string) string
+	// Hold is the gate of the handover of the Citadel (nil: every write is admitted).
+	Hold HoldFunc
 }
 
 // Panel is the panel of the acting Citadel.
 type Panel struct {
+	hold         HoldFunc
 	db           *store.DB
 	clk          clock.Clock
 	users        *users.Service
@@ -135,11 +138,11 @@ func New(o Options) (*Panel, error) {
 	if o.Rand == nil {
 		o.Rand = newRand()
 	}
-	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, github: o.GitHub, vault: o.Vault, vaultChanged: o.VaultChanged, log: o.Logger, ids: protocol.NewIDGen(o.Clock), appr: o.Approvals, notes: o.Notices, chat: o.Chat, creation: o.Creation, mask: o.Mask}
+	p := &Panel{db: o.DB, clk: o.Clock, users: o.Users, alerts: o.Alerts, machine: o.Machine, github: o.GitHub, vault: o.Vault, vaultChanged: o.VaultChanged, log: o.Logger, ids: protocol.NewIDGen(o.Clock), appr: o.Approvals, notes: o.Notices, chat: o.Chat, creation: o.Creation, mask: o.Mask, hold: o.Hold}
 	if p.mask == nil {
 		p.mask = func(s string) string { return s }
 	}
-	p.sessions = &Sessions{db: o.DB, clk: o.Clock, ids: p.ids, rnd: o.Rand}
+	p.sessions = &Sessions{db: o.DB, clk: o.Clock, ids: p.ids, rnd: o.Rand, admit: p.admit}
 	p.hub = newHub(p)
 	p.slots = make(chan struct{}, hashSlots)
 	p.sessions.ended = p.hub.closeSession
@@ -159,7 +162,7 @@ func New(o Options) (*Panel, error) {
 		// the three pages of the creation of an App: the link, the return of the manifest
 		// and the return of the installation; they say who is logged in through the panel
 		web := &github.Web{Creation: o.Creation, Who: p.whoIs}
-		mux.Handle("/github/", continueCrossSite(web.Handler()))
+		mux.Handle("/github/", continueCrossSite(p.holdSignedIn(web.Handler())))
 	}
 	mux.Handle("/api/", p.require(func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, Err(CodeNotFound, "não encontrado", nil))
@@ -188,7 +191,7 @@ func (p *Panel) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C():
-			if _, err := p.sessions.Sweep(ctx); err != nil && ctx.Err() == nil {
+			if _, err := p.sessions.Sweep(ctx); err != nil && ctx.Err() == nil && !errors.Is(err, ErrInFailover) {
 				p.log.Warn("panel: the sessions that are over were not swept", "err", err)
 			}
 		}
@@ -266,13 +269,17 @@ func (p *Panel) authenticate(r *http.Request) (context.Context, *APIError) {
 	switch {
 	case errors.Is(err, ErrNoSession):
 		return nil, errUnauthenticated()
+	case errors.Is(err, ErrInFailover):
+		return nil, errInFailover()
 	case err != nil:
 		p.log.Error("panel: reading the session", "err", err)
 		return nil, errInternal()
 	}
 	u, err := p.users.Get(r.Context(), ss.UserID)
 	if err != nil || u.State != users.Active {
-		_ = p.sessions.End(r.Context(), ss.ID)
+		if errors.Is(p.sessions.End(r.Context(), ss.ID), ErrInFailover) {
+			return nil, errInFailover()
+		}
 		return nil, errUnauthenticated()
 	}
 	ctx := context.WithValue(r.Context(), keyUser, u)
@@ -293,11 +300,14 @@ func (p *Panel) whoIs(r *http.Request) (users.User, bool) {
 // (401 without one), then, when cap is not "", the level of the user in the table
 // of levels, read from the database at each request.
 func (p *Panel) require(h http.HandlerFunc, public bool, caps ...users.Capability) http.Handler {
-	return p.requireLimit(maxBody, h, public, caps...)
+	return p.requireLimit(maxBody, false, h, public, caps...)
 }
 
-// requireLimit is require with its own limit for the body: the routes that take a file.
-func (p *Panel) requireLimit(limit int64, h http.HandlerFunc, public bool, caps ...users.Capability) http.Handler {
+// requireLimit is require with its own limit for the body: the routes that take a file. A
+// request that changes something holds the gate of the handover once it is authenticated and
+// its body is read (hold.go); stream is a route that reads its own body, which holds it itself
+// (holdRequest) when the body is read.
+func (p *Panel) requireLimit(limit int64, stream bool, h http.HandlerFunc, public bool, caps ...users.Capability) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		if mutating(r.Method) && !originOK(r) {
@@ -308,7 +318,7 @@ func (p *Panel) requireLimit(limit int64, h http.HandlerFunc, public bool, caps 
 			return
 		}
 		if public {
-			h(w, r)
+			p.serveHeld(w, r, stream, h)
 			return
 		}
 		ctx, apiErr := p.authenticate(r)
@@ -328,8 +338,26 @@ func (p *Panel) requireLimit(limit int64, h http.HandlerFunc, public bool, caps 
 				return
 			}
 		}
-		h(w, r)
+		p.serveHeld(w, r, stream, h)
 	})
+}
+
+// serveHeld runs h; for a request that changes something it reads the body first and holds
+// the gate of the handover for the length of h.
+func (p *Panel) serveHeld(w http.ResponseWriter, r *http.Request, stream bool, h http.HandlerFunc) {
+	if !mutating(r.Method) || stream {
+		h(w, r)
+		return
+	}
+	if !bufferBody(w, r) {
+		return
+	}
+	r, release, ok := p.holdRequest(w, r)
+	if !ok {
+		return
+	}
+	defer release()
+	h(w, r)
 }
 
 // Router registers the routes of an area. Patterns are those of http.ServeMux
@@ -362,7 +390,7 @@ func (r *Router) Require(pattern string, h http.HandlerFunc, caps ...users.Capab
 // RequireLimit is Require for a route whose body may be as large as limit bytes (the
 // others take 1 MiB): the one that takes the files of a message.
 func (r *Router) RequireLimit(pattern string, limit int64, h http.HandlerFunc, caps ...users.Capability) {
-	r.mux.Handle(pattern, r.p.requireLimit(limit, h, false, caps...))
+	r.mux.Handle(pattern, r.p.requireLimit(limit, true, h, false, caps...))
 }
 
 // Sensitive registers a route of an action that asks for the PIN, in the same
