@@ -207,10 +207,14 @@ func TestARequestThatWaitedThroughARestartIsApprovedThroughThePanelAndAudited(t 
 	}
 	st, body, _ = panelCall(t, url, "GET", "/api/approvals", nil, ck.Value, "")
 	var list panel.ApprovalList
-	if err := json.Unmarshal(body, &list); err != nil || st != 200 || len(list.Requests) != 1 || list.Pending != 1 {
+	if err := json.Unmarshal(body, &list); err != nil || st != 200 || len(list.Requests) != 3 || list.Pending != 3 {
 		t.Fatalf("after the restart: %d %s", st, body)
 	}
-	item := list.Requests[0]
+	// the seed leaves three: the one with no table and one on each table of `loja` that waits for people
+	item := list.Requests[len(list.Requests)-1]
+	if item.Table != "" {
+		t.Fatalf("the oldest request has a table: %+v", item)
+	}
 	if item.Type != "custo_extra" || len(item.Answers) == 0 {
 		t.Fatalf("the request after the restart: %+v", item)
 	}
@@ -226,9 +230,9 @@ func TestARequestThatWaitedThroughARestartIsApprovedThroughThePanelAndAudited(t 
 	if st != 200 || !strings.Contains(string(body), `"approved"`) {
 		t.Fatalf("approve = %d %s", st, body)
 	}
-	// nothing is left waiting, and the history tells who decided
+	// the two of the tables are left waiting, and the history tells who decided
 	st, body, _ = panelCall(t, url, "GET", "/api/approvals", nil, ck.Value, "")
-	if err := json.Unmarshal(body, &list); err != nil || st != 200 || len(list.Requests) != 0 || list.Pending != 0 {
+	if err := json.Unmarshal(body, &list); err != nil || st != 200 || len(list.Requests) != 2 || list.Pending != 2 {
 		t.Fatalf("after the answer: %d %s", st, body)
 	}
 	var hist panel.ApprovalHistory

@@ -44,7 +44,12 @@ func newFakeCanvas() *fakeCanvas {
 }
 
 func (f *fakeCanvas) State(_ context.Context, ws, table string) (panel.CanvasState, error) {
-	if ws != fakeWorkspace || table != fakeTable {
+	tableState := "working"
+	switch {
+	case ws == fakeWorkspace && table == fakeTable:
+	case ws == lojaWorkspace && lojaState(table) != "":
+		tableState = lojaState(table)
+	default:
 		return panel.CanvasState{}, panel.ErrCanvasNotFound
 	}
 	f.mu.Lock()
@@ -57,7 +62,7 @@ func (f *fakeCanvas) State(_ context.Context, ws, table string) (panel.CanvasSta
 	rev := char("e2e-rev", "Revisor", "Revisor", "character", false)
 	rev.State, rev.Reason = "waiting", "Dev-1"
 	st := panel.CanvasState{
-		Workspace: ws, Table: table, TableState: "working",
+		Workspace: ws, Table: table, TableState: tableState,
 		Characters:  []panel.CanvasCharacter{char("e2e-master", "Mestre", "", "table_master", false), dev, rev},
 		Scrolls:     []panel.CanvasScroll{f.scroll},
 		Tomes:       []panel.CanvasTome{},

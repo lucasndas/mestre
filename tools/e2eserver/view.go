@@ -7,6 +7,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/users"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // The workspace view the smoke test of the browser opens: the Grand Master of the
@@ -23,6 +24,16 @@ var _ panel.ViewSource = (*fakeView)(nil)
 func newFakeView() *fakeView { return &fakeView{layout: map[string]panel.CanvasItem{}} }
 
 func (f *fakeView) View(_ context.Context, ws string) (panel.ViewData, error) {
+	if ws == lojaWorkspace {
+		v := panel.ViewData{
+			GrandMaster: &panel.ViewGrandMaster{ID: fakeCharacter, Name: "Grão-Mestre", State: "idle", Machine: "e2e", MachineName: "e2e", HasTerminal: true},
+			Tables:      []panel.TableBlock{}, Layout: []panel.CanvasItem{},
+		}
+		for _, t := range lojaTables(clock.Real{}.Now()) {
+			v.Tables = append(v.Tables, t.block)
+		}
+		return v, nil
+	}
 	if ws != fakeWorkspace {
 		return panel.ViewData{Tables: []panel.TableBlock{}, Layout: []panel.CanvasItem{}}, nil
 	}

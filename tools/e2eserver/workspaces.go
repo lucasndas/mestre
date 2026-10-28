@@ -30,8 +30,11 @@ func (f *fakeWorkspaces) List(context.Context) ([]panel.WorkspaceRow, error) {
 	for _, k := range []string{"apps", "mirror", "files", "analysis", "approval_test"} {
 		stages = append(stages, panel.WorkspaceStage{Key: k, State: panel.StageDone})
 	}
-	return []panel.WorkspaceRow{{Slug: fakeWorkspace, Repo: "acme/e2e", DefaultBranch: "main", State: "active", Stages: stages,
-		Versioning: "local", VersioningAsked: true, GrandMasterSheet: "Grão-Mestre", GrandMaster: "idle", CreatedAt: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)}}, nil
+	row := func(slug, repo string) panel.WorkspaceRow {
+		return panel.WorkspaceRow{Slug: slug, Repo: repo, DefaultBranch: "main", State: "active", Stages: stages, CanAct: true,
+			Versioning: "local", VersioningAsked: true, GrandMasterSheet: "Grão-Mestre", GrandMaster: "idle", CreatedAt: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)}
+	}
+	return []panel.WorkspaceRow{row(fakeWorkspace, "acme/e2e"), row(lojaWorkspace, "acme/loja")}, nil
 }
 
 func (f *fakeWorkspaces) Sheets(context.Context) ([]panel.SheetOption, error) {
@@ -51,7 +54,7 @@ func (f *fakeWorkspaces) AnswerVersioning(context.Context, users.User, string, s
 }
 
 func (f *fakeWorkspaces) Verification(_ context.Context, slug string) (panel.VerificationView, error) {
-	if slug != fakeWorkspace {
+	if slug != fakeWorkspace && slug != lojaWorkspace {
 		return panel.VerificationView{}, panel.ErrWorkspaceNotFound
 	}
 	f.mu.Lock()
@@ -65,7 +68,7 @@ func (f *fakeWorkspaces) Verification(_ context.Context, slug string) (panel.Ver
 }
 
 func (f *fakeWorkspaces) ConfirmVerification(_ context.Context, by users.User, slug string, doc []byte) (string, error) {
-	if slug != fakeWorkspace {
+	if slug != fakeWorkspace && slug != lojaWorkspace {
 		return "", panel.ErrWorkspaceNotFound
 	}
 	f.mu.Lock()
