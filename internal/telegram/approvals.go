@@ -261,12 +261,14 @@ func ParseValidity(s string) (time.Duration, error) {
 	if n, ok := strings.CutSuffix(s, "d"); ok {
 		days, err := strconv.Atoi(n)
 		if err != nil || days <= 0 || days > 365 {
+			// mestre:allow pt-text: an internal error that is never shown to a person
 			return 0, errors.New("duração inválida")
 		}
 		return time.Duration(days) * 24 * time.Hour, nil
 	}
 	d, err := time.ParseDuration(s)
 	if err != nil || d <= 0 || d > 365*24*time.Hour {
+		// mestre:allow pt-text: an internal error that is never shown to a person
 		return 0, errors.New("duração inválida")
 	}
 	return d, nil

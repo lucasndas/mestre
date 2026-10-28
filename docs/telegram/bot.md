@@ -1,6 +1,6 @@
 # Bot do Telegram
 
-> **Assunto:** o bot único do Mestre: long polling, tipos de mensagem, comandos rápidos, mensagens de saída e explicação de termos · **Componente:** Motor · **Atualizado:** 2026-10-20
+> **Assunto:** o bot único do Mestre: long polling, tipos de mensagem, comandos rápidos, mensagens de saída e explicação de termos · **Componente:** Motor · **Atualizado:** 2026-10-28
 
 ## Objetivo
 
@@ -52,11 +52,12 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 ### Comandos rápidos
 
 - Os comandos são respondidos **pelo motor**, na hora, mesmo com o Grão-Mestre ocupado.
-- O motor registra a lista com `setMyCommands` ao iniciar.
+- O motor registra a lista com `setMyCommands` ao iniciar, duas vezes: a padrão em pt-BR e outra com `language_code` `en`, com os mesmos nomes; toda frase do bot, botões incluídos, vem do catálogo e sai no idioma de quem recebe ([idioma por canal](../plataforma/idioma-por-canal.md#telegram), [mensagens por código](../plataforma/mensagens-por-codigo.md)).
 - Quem pode usar cada comando está na [tabela de níveis](usuarios-e-niveis.md#níveis-e-capacidades).
 
 | Comando | O que faz |
 |---|---|
+| `/idioma`, `/language` | mostra o idioma em uso e dois botões, Português e English; o toque grava o idioma de quem tocou e responde já nele |
 | `/start [código]` | com código: pareamento ([usuários](usuarios-e-niveis.md#pareamento-por-código)); sem código: ajuda curta |
 | `/workspace` | escolhe a campanha ativa, com botões ([roteamento](roteamento.md)) |
 | `/status` | estado da Cidadela, das máquinas (online, último heartbeat) e dos agentes por campanha |
@@ -103,6 +104,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 ### Explicação de termos na primeira vez
 
 - Antes de enviar, o motor procura no texto os termos do [glossário](../produto/glossario.md) (coluna "Termo", sem diferenciar maiúsculas, palavra inteira, fora de blocos de código). Vale a **maior correspondência**: em "Mestre da mesa", "Cidadela suspensa" ou "Classe sugerida" só o termo inteiro é explicado, não "Mestre", "Cidadela" ou "Classe". Termo de uma palavra que também é verbo ou palavra comum (Vigia, Prova, Espera, Aceite) só conta com a inicial maiúscula fora do começo da frase.
+- Em en, o motor procura e explica os nomes e as ajudas em inglês do [glossário em inglês](../produto/glossario-en.md); o registro de "já visto" é o mesmo nos dois idiomas.
 - Na **primeira vez** que um termo aparece para aquele usuário, o motor acrescenta a "Ajuda curta" entre parênteses logo depois do termo.
 - O banco registra o par usuário+termo (tabela `glossary_seen`). O Senhor da Guilda pode zerar esse registro de um usuário no painel.
 

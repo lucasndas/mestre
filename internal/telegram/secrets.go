@@ -22,7 +22,9 @@ const (
 	RemovedSecret = secretscreen.Removed
 	// HeldNotice is all the Grand Master receives of a message with a password
 	// phrase: the notice, never the content. It tells him what to do.
+	// mestre:allow pt-text: the notice the Grand Master (an agent) receives instead of a secret
 	HeldNotice = "[mensagem retida: o usuário mandou uma senha pelo Telegram; o motor a apagou e não a entregou. " +
+		// mestre:allow pt-text: the notice the Grand Master (an agent) receives instead of a secret
 		"Recuse, peça o cadastro pelo painel e recomende trocar a senha.]"
 )
 

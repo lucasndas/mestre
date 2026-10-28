@@ -259,6 +259,31 @@ func TestAgentFilesGoThroughSafefile(t *testing.T) {
 	}
 }
 
+// CA-MSG-12
+func TestAPortugueseSentenceInTheCodeOfTheChannelsIsRefused(t *testing.T) {
+	t.Parallel()
+	mk := func(lit string) string { return "package x\n\nvar s = " + lit + "\n" }
+	cases := map[string]struct {
+		path, src string
+		want      []string
+	}{
+		"a sentence without accent": {"internal/telegram/a.go", mk(`"Mesa pausada."`), []string{"internal/telegram/a.go:3: pt-text:"}},
+		"accented in telegram":      {"internal/telegram/a.go", mk(`"Mesa não pausada."`), []string{"internal/telegram/a.go:3: pt-text:"}},
+		"in the panel":              {"internal/panel/a.go", mk(`"Código inválido"`), []string{"internal/panel/a.go:3: pt-text:"}},
+		"in the approvals":          {"internal/approvals/a.go", mk(`"não"`), []string{"internal/approvals/a.go:3: pt-text:"}},
+		"in a test":                 {"internal/telegram/a_test.go", mk(`"Mesa não pausada."`), nil},
+		"elsewhere":                 {"internal/decrees/a.go", mk(`"Mesa não pausada."`), nil},
+		"in English":                {"internal/telegram/a.go", mk(`"Table paused."`), nil},
+		"excused":                   {"internal/telegram/a.go", "package x\n\n// mestre:allow pt-text: a text for an agent\nvar s = \"não\"\n", nil},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			expect(t, run(t, map[string]string{c.path: c.src}), c.want...)
+		})
+	}
+}
+
 // CA-CODIGO-06
 func TestSecretsPrintThroughValueReceivers(t *testing.T) {
 	t.Parallel()

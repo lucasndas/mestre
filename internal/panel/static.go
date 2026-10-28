@@ -33,6 +33,7 @@ func static(fsys fs.FS) http.Handler {
 			return
 		}
 		if _, err := fs.Stat(fsys, "index.html"); err != nil {
+			// mestre:allow pt-text: the error of an install without the panel, for the operator
 			http.Error(w, "o painel não foi construído nesta instalação", http.StatusServiceUnavailable)
 			return
 		}

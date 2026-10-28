@@ -103,6 +103,7 @@ func (c *StallChannel) pause(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, 
 		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.table_not_yours")
 	}
 	changed, err := c.Pauser.PauseStalled(ctx, chain.PauseRequest{Workspace: ws, Table: table,
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		Reason: "a mesa trabalhava há horas sem entregar nada; pausada pelo botão do aviso",
 		By:     chain.Actor{User: u.ID, UserLevel: characters.UserLevel(u.Level)}})
 	switch {
@@ -162,6 +163,7 @@ func (c *StallChannel) pauseAutonomy(ctx context.Context, k Click) (i18n.Msg, i1
 		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.table_not_yours")
 	}
 	changed, err := c.Autonomy.PauseAutonomy(ctx, chain.PauseRequest{Workspace: ws, Table: table,
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		Reason: "a fila de aprovações da mesa acumulou; autonomia pausada pelo botão do aviso",
 		By:     chain.Actor{User: u.ID, UserLevel: characters.UserLevel(u.Level)}})
 	switch {

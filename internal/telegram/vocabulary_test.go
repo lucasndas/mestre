@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // CA-JORN-13: no text the Telegram or the CLI shows a person uses "Workspace", "Party" or "Dono" as a
@@ -58,5 +60,28 @@ func TestNoTextOfTheTelegramOrTheCLIUsesTheOldNames(t *testing.T) {
 	}
 	if scanned < 20 {
 		t.Fatalf("only %d files were swept", scanned)
+	}
+}
+
+// CA-JORN-13 (the catalogs): the texts the Telegram says come from the catalogs of the engine, in both
+// languages, and they keep the vocabulary too: pt-BR never says "Workspace", "Party" or "Dono"; en never says
+// "Workspace" or "Owner" (the words are Campanha, Companhia and Senhor da Guilda; Campaign, Party and
+// Guildmaster).
+func TestNoTextOfTheCatalogsUsesTheOldNames(t *testing.T) {
+	t.Parallel()
+	bad := map[string]*regexp.Regexp{
+		i18n.PtBR: regexp.MustCompile(`\b(Workspaces?|workspaces?|Party|Dono)\b`),
+		i18n.En:   regexp.MustCompile(`\b(Workspaces?|workspaces?|Owner)\b`),
+	}
+	for lang, re := range bad {
+		cat := i18n.Catalog(lang)
+		if len(cat) < 100 {
+			t.Fatalf("only %d texts in %s", len(cat), lang)
+		}
+		for code, text := range cat {
+			if m := re.FindString(regexp.MustCompile(`{{\s*\w+\s*}}`).ReplaceAllString(text, "")); m != "" {
+				t.Errorf("%s: %q says %q in %s", code, text, m, lang)
+			}
+		}
 	}
 }

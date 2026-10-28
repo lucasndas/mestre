@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -76,15 +77,21 @@ func canSeeProgress(u users.User, workspace string) bool {
 	return (u.Level == users.Owner || u.Level == users.Administrator) && u.Acts(workspace)
 }
 
-func (s *Service) progress(ctx context.Context, workspace string) (*panel.ChatProgress, error) {
-	var text string
+func (s *Service) progress(ctx context.Context, workspace, lang string) (*panel.ChatProgress, error) {
+	var text, msg string
 	var at int64
-	err := s.o.DB.Reader().QueryRowContext(ctx, `SELECT text, updated_at FROM panel_chat_progress WHERE workspace = ?`, workspace).Scan(&text, &at)
+	err := s.o.DB.Reader().QueryRowContext(ctx, `SELECT text, msg, updated_at FROM panel_chat_progress WHERE workspace = ?`, workspace).Scan(&text, &msg, &at)
 	if err != nil {
 		if isNoRows(err) {
 			return nil, nil
 		}
 		return nil, err
+	}
+	if msg != "" { // said in the language of who reads; a row from before the messages is shown as written
+		var m i18n.Msg
+		if json.Unmarshal([]byte(msg), &m) == nil {
+			text = i18n.Render(lang, m)
+		}
 	}
 	lines := []string{}
 	for _, l := range strings.Split(s.mask(text), "\n") {
@@ -122,7 +129,7 @@ func (s *Service) Conversation(ctx context.Context, u users.User, workspace stri
 		return out, err
 	}
 	if canSeeProgress(u, workspace) {
-		if out.Progress, err = s.progress(ctx, workspace); err != nil {
+		if out.Progress, err = s.progress(ctx, workspace, u.LanguageFor(u.TelegramLanguage)); err != nil {
 			return out, err
 		}
 	}

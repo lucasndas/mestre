@@ -16,7 +16,7 @@ var allowRe = regexp.MustCompile(`^mestre:allow\s+([a-z-]+)\s*(?::\s*(.*))?$`)
 
 var knownRules = map[string]bool{
 	ruleParallel: true, ruleSelect: true, ruleStdio: true,
-	ruleNilSA: true, rulePrivateDir: true, ruleSecret: true, ruleAgentFiles: true,
+	ruleNilSA: true, rulePrivateDir: true, ruleSecret: true, ruleAgentFiles: true, rulePtText: true,
 }
 
 type allowance struct {

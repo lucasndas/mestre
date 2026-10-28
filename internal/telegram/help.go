@@ -15,7 +15,9 @@ import (
 // sentence (docs/telegram/bot.md#explicação-de-termos-na-primeira-vez).
 var commonWords = map[string]bool{
 	"Aceite": true, "Vigia": true, "Prova": true, "Espera": true, "Base": true, "Ficha": true, "Etapa": true, "Receita": true,
+	// mestre:allow pt-text: the words of the glossary that are common Portuguese words: the filter of the first explanation, not a text for a person
 	"Risco": true, "Nível": true, "Superior": true, "Impressão": true, "Fixado": true, "Triagem": true, "Mesa": true, "Classe": true,
+	// mestre:allow pt-text: the words of the glossary that are common Portuguese words: the filter of the first explanation, not a text for a person
 	"Torre": true, "Época": true, "Espelho": true, "Ritual": true, "Terminal": true, "Missão": true, "Decreto": true, "Devolução": true,
 }
 

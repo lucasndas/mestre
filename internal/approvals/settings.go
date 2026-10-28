@@ -97,6 +97,7 @@ func (s *Settings) ProposePlanB(ctx context.Context, workspace string) (int64, e
 		return 0, err
 	}
 	return s.Requests.Request(ctx, chain.OpenRequest{Type: classes.RequestRepoSettings, Workspace: workspace, Target: target,
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		About: "plano B da aprovação: " + github.PlanBChange(rules)})
 }
 
@@ -192,11 +193,13 @@ func describeRuleset(body map[string]any) string {
 	for _, r := range body["rules"].([]any) {
 		rules = append(rules, r.(map[string]any)["type"].(string))
 	}
+	// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 	out := fmt.Sprintf("ruleset %q (%v, aplicação %v): regras [%s]", body["name"], orDefault(body["target"], "branch"), body["enforcement"], strings.Join(rules, ", "))
 	if c, ok := body["conditions"].(map[string]any); ok {
 		raw, _ := json.Marshal(c["ref_name"])
 		out += "; refs " + string(raw)
 	} else {
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		out += "; refs: as do GitHub por padrão (nenhuma condição dada)"
 	}
 	if ba, _ := body["bypass_actors"].([]any); len(ba) > 0 {
@@ -205,8 +208,10 @@ func describeRuleset(body map[string]any) string {
 			m := x.(map[string]any)
 			ex = append(ex, fmt.Sprintf("%v #%.0f (%v)", m["actor_type"], m["actor_id"], m["bypass_mode"]))
 		}
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		out += "; exceções: " + strings.Join(ex, ", ")
 	} else {
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		out += "; sem exceções"
 	}
 	return out
@@ -242,6 +247,7 @@ func (s *Settings) ProposeRuleset(ctx context.Context, workspace, proposer strin
 		return 0, err
 	}
 	return s.Requests.Request(ctx, chain.OpenRequest{Type: classes.RequestRepoSettings, Workspace: workspace, Proposer: proposer, Target: target,
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		About: describeRuleset(body) + " no repositório " + repo})
 }
 

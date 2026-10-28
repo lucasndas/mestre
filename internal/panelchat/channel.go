@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/mestre-ia/mestre/internal/blocking"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/panel"
@@ -62,16 +63,21 @@ func (s *Service) File(ctx context.Context, u users.User, workspace string, answ
 // SetProgress keeps the message of progress of a workspace as the card of the conversation, in
 // place of the one before (one row per workspace: never a second card), and tells the people
 // it is for.
-func (s *Service) SetProgress(ctx context.Context, workspace, text string) error {
-	text = s.mask(text)
+func (s *Service) SetProgress(ctx context.Context, workspace string, m i18n.Msg) error {
+	m = maskMsg(m, s.mask)
+	body, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	msg := string(body)
 	var same int
 	// the message goes once to each person it is for: the card is only rewritten when it changed
-	if err := s.o.DB.Reader().QueryRowContext(ctx, `SELECT COUNT(*) FROM panel_chat_progress WHERE workspace = ? AND text = ?`, workspace, text).Scan(&same); err == nil && same > 0 {
+	if err := s.o.DB.Reader().QueryRowContext(ctx, `SELECT COUNT(*) FROM panel_chat_progress WHERE workspace = ? AND msg = ?`, workspace, msg).Scan(&same); err == nil && same > 0 {
 		return nil
 	}
-	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO panel_chat_progress (workspace, text, updated_at) VALUES (?, ?, ?)
-			ON CONFLICT(workspace) DO UPDATE SET text = excluded.text, updated_at = excluded.updated_at`, workspace, text, s.clk.Now().UnixMilli())
+	err = s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO panel_chat_progress (workspace, text, msg, updated_at) VALUES (?, '', ?, ?)
+			ON CONFLICT(workspace) DO UPDATE SET text = '', msg = excluded.msg, updated_at = excluded.updated_at`, workspace, msg, s.clk.Now().UnixMilli())
 		return err
 	})
 	if err != nil {
@@ -194,4 +200,23 @@ func (s *Service) Choose(ctx context.Context, u users.User, id int64, option int
 	}
 	s.emit(panel.ChatEvent{User: u.ID, Workspace: q.Workspace, Kind: panel.EventChatChanged})
 	return nil
+}
+
+// maskMsg takes the secrets out of the text parameters of a message.
+func maskMsg(m i18n.Msg, mask func(string) string) i18n.Msg {
+	if len(m.Params) == 0 {
+		return m
+	}
+	out := i18n.Msg{Code: m.Code, Params: make(map[string]any, len(m.Params))}
+	for k, v := range m.Params {
+		switch x := v.(type) {
+		case string:
+			out.Params[k] = mask(x)
+		case i18n.Msg:
+			out.Params[k] = maskMsg(x, mask)
+		default:
+			out.Params[k] = v
+		}
+	}
+	return out
 }

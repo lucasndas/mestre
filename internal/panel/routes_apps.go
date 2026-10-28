@@ -95,6 +95,7 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 
 // fixedApps are the two Apps every repository has, in the order the screen offers them.
 var fixedApps = []struct{ name, role string }{
+	// mestre:allow pt-text: the proper name of the App of the Grand Master
 	{"Grão-Mestre", github.RoleGrandMaster},
 	{"Mestre", github.RoleMestre},
 }

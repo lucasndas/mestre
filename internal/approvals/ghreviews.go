@@ -138,6 +138,7 @@ func (g *GitHubReviews) one(ctx context.Context, rd ReviewReader, r chain.Reques
 		return g.dismissed(ctx, r, ev, state, commitOf(rv))
 	case "APPROVED":
 	default:
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		return g.record(ctx, r.ID, ev, state, "", commitOf(rv), outcomeIgnored, "o review é "+state+": só um review APPROVED vale como aprovação")
 	}
 	outcome, userID, reason, err := g.judge(ctx, rd, r, ev, rv)
@@ -154,14 +155,18 @@ func (g *GitHubReviews) judge(ctx context.Context, rd ReviewReader, r chain.Requ
 	}
 	switch {
 	case rv == nil:
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		return ignore("o review não está mais no PR")
 	case rv.State != "APPROVED":
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		return ignore("o review está %s agora", rv.State)
 	case github.EndsWithMarker(rv.Body):
 		// the review the engine itself posted (the Approver, in the name of a person) is
 		// the application of an approval, not another vote
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		return ignore("o review foi postado pelo próprio Mestre")
 	case r.PR == nil || rv.Commit != r.PR.SHA:
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		return ignore("o review é do commit %.8s, não do commit atual do pedido", rv.Commit)
 	}
 	u, found, err := g.userOf(ctx, rv.By)
@@ -169,10 +174,12 @@ func (g *GitHubReviews) judge(ctx context.Context, rd ReviewReader, r chain.Requ
 		return "", "", "", err
 	}
 	if !found {
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		return ignore("o autor %q não é um usuário ativo do Mestre", rv.By)
 	}
 	userID = u.ID
 	if rv.ByType != "User" {
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		return ignore("a conta %q é do tipo %s, não User", rv.By, orDash(rv.ByType))
 	}
 	write, err := g.canWrite(ctx, rd, ev.Repo, rv)
@@ -180,6 +187,7 @@ func (g *GitHubReviews) judge(ctx context.Context, rd ReviewReader, r chain.Requ
 		return "", "", "", err
 	}
 	if !write {
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		return ignore("%q não tem permissão de escrita no repositório agora", rv.By)
 	}
 	rep, aerr := g.Flow.Answer(ctx, u.ID, Input{Request: r.ID, Answer: chain.AnswerApprove, Reason: "review APPROVED no GitHub: " + ev.Link})
@@ -190,11 +198,14 @@ func (g *GitHubReviews) judge(ctx context.Context, rd ReviewReader, r chain.Requ
 		return ignore("%s", aerr.Error())
 	case rep.PIN != "":
 		if g.PIN == nil {
+			// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 			return ignore("o pedido exige o PIN e o canal não pode pedi-lo")
 		}
 		if perr := g.PIN.AskPIN(ctx, u.ID, rep); perr != nil {
+			// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 			return ignore("o pedido exige o PIN e ele não pôde ser pedido: %v", perr)
 		}
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		return outcomePIN, u.ID, "o review é válido e o pedido exige o PIN: ele foi pedido pelo canal", nil
 	}
 	return outcomeCounted, u.ID, i18n.Render(i18n.PtBR, rep.Msg), nil
@@ -251,6 +262,7 @@ func (g *GitHubReviews) dismissed(ctx context.Context, r chain.Request, ev githu
 			return err
 		}
 	}
+	// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 	return g.record(ctx, r.ID, ev, state, userID, commit, outcomeDismissed, "o review foi descartado: não conta")
 }
 

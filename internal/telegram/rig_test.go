@@ -103,6 +103,7 @@ type world struct {
 	dc        *telegram.DecreeChannel
 	rules     *tablerules.Service
 	routing   *telegram.Routing
+	lang      *telegram.LanguageChannel
 	bc        *telegram.BlockChannel
 	cc        *telegram.ChooseChannel
 	answers   []inbox.NewItem
@@ -326,10 +327,20 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 		w.opts.Actions = acts
 		w.opts.Captures = map[string]telegram.CaptureFunc{telegram.PINKind: pins.Capture()}
 	}
+	w.lang = &telegram.LanguageChannel{Users: w.users}
+	w.opts.Commands = append(append([]telegram.Command(nil), w.opts.Commands...), w.lang.Commands()...)
+	w.opts.Actions = maps.Clone(w.opts.Actions)
+	if w.opts.Actions == nil {
+		w.opts.Actions = map[string]telegram.Action{}
+	}
+	for k, v := range w.lang.Actions() {
+		w.opts.Actions[k] = v
+	}
 	w.bot, err = telegram.New(w.opts)
 	if err != nil {
 		t.Fatal(err)
 	}
+	w.lang.Bind(w.bot)
 	if w.oa != nil {
 		w.oa.Bind(w.bot)
 	}

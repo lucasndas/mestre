@@ -352,6 +352,7 @@ func (f *Flow) applyGroup(ctx context.Context, userID string, members []chain.Re
 		one.Request = m.ID
 		if in.Answer == chain.AnswerApprovePattern && done > 0 {
 			one.Answer, one.Pattern = chain.AnswerApprove, ""
+			// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 			one.Reason = strings.TrimSpace(in.Reason + fmt.Sprintf(" (coberto pelo padrão do pedido %d)", fitting[0].ID))
 		}
 		u, r, fr, err := f.check(ctx, userID, m.ID, one.Answer)

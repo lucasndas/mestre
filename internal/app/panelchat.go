@@ -159,7 +159,7 @@ var _ progress.Sender = progressFanout{}
 
 // Send implements progress.Sender.
 func (p progressFanout) Send(ctx context.Context, userID, workspace, text string) error {
-	if err := p.chat.SetProgress(ctx, workspace, text); err != nil && p.log != nil {
+	if err := p.chat.SetProgress(ctx, workspace, i18n.Text(text)); err != nil && p.log != nil {
 		p.log("app: the card of progress of the panel was not kept", err)
 	}
 	return p.bot.Send(ctx, userID, workspace, text)

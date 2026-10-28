@@ -733,6 +733,7 @@ func (f *Flow) verify(ctx context.Context, r chain.Request) error {
 		return ErrNoVerify
 	}
 	if imp != r.Impression {
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		if err := f.o.Chain.Invalidate(ctx, r.ID, "o alvo mudou antes de a aprovação ser aplicada"); err != nil {
 			f.log.Warn("approvals: the request was not invalidated", "request", r.ID, "err", err)
 		}

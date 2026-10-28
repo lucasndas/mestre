@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/mestre-ia/mestre/internal/attachments"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/panel"
@@ -105,7 +106,7 @@ func startFakeChat(ctx context.Context, guildDB, filesDir string, mask func(stri
 				if strings.Contains(low, askToThink) {
 					thinking.Store(true)
 					// the card of progress the Grão-Mestre keeps while he works
-					_ = svc.SetProgress(ctx, it.Workspace, "2 mesas em andamento, 1 precisa de você.")
+					_ = svc.SetProgress(ctx, it.Workspace, i18n.Text("2 mesas em andamento, 1 precisa de você."))
 					svc.Changed(ctx, fakeGrandMaster)
 					return it, nil
 				}

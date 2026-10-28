@@ -134,7 +134,9 @@ func (p *Panel) handleUsage(w http.ResponseWriter, r *http.Request) {
 	run(&page.Characters, "u.character_id", "COALESCE(MAX(c.name), u.character_id)", "u.workspace", "usage_records u LEFT JOIN characters c ON c.id = u.character_id", step+" AND u.character_id <> ''", false)
 	if err == nil && all {
 		// the accounts and the conformance have no workspace: only the Owner's view holds them
+		// mestre:allow pt-text: the label of the default profile in the grouping of the usage, a name of the data
 		page.Accounts, err = p.usageGroup(ctx, "u.provider || '/' || CASE WHEN u.profile = '' THEN 'padrão' ELSE u.profile END",
+			// mestre:allow pt-text: the label of the default profile in the grouping of the usage, a name of the data
 			"u.provider || ' · ' || CASE WHEN u.profile = '' THEN 'padrão' ELSE u.profile END", "''", "usage_records u", "at >= ?", []any{since}, false)
 	}
 	if err == nil {

@@ -50,6 +50,7 @@ O que fica no banco e alguém lê depois guarda o código e os parâmetros (colu
 | `panel_chat_progress` (progresso na conversa) | `msg` de cada linha |
 
 - Uma linha gravada antes da migração, só com `text`, é mostrada como está, em pt-BR.
+- Código: `notices.Feed.Add` e `Update` guardam o `Msg` em `panel_notices.msg` (e `text` vazio); `blocking.Store` guarda em `blocking_notices.msg` a moldura do aviso (resumo, texto inteiro, responsável, passos e bloco do agente, com o texto do agente como parâmetro já mascarado); `approvals.Flow` guarda o cartão em `approval_flow.msg`; `panelchat.SetProgress` guarda o progresso em `panel_chat_progress.msg`. A migração é `0059_stored_messages.sql`. O sino leva `text` (já no idioma do usuário) e `msg` (código e parâmetros, que a tela traduz pelo gerado); o cartão de aprovação e o aviso de bloqueio saem no idioma do `Language` do usuário.
 - Um aviso para várias pessoas (Senhor da Guilda e Administradores) é **um** registro e uma tradução por destinatário.
 - O que só agente lê (`inbox_messages.body`, os avisos do motor na caixa de entrada, as respostas do Grão-Mestre) não muda nesta etapa.
 

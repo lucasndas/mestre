@@ -232,6 +232,7 @@ func (a *Approver) Approve(ctx context.Context, o ApproveOrder) (Approval, error
 		return Approval{}, human("approval.gh_human_mode")
 	}
 	if gmLogin == "" {
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		return Approval{}, errors.New("approvals: the login of the App Grão-Mestre is not known")
 	}
 	openedByGM := strings.EqualFold(pr.Author, gmLogin)
@@ -265,9 +266,11 @@ func (a *Approver) required(ctx context.Context, o ApproveOrder) ([]string, erro
 func (a *Approver) asGrandMaster(ctx context.Context, gm ReviewClient, o ApproveOrder, r chain.Request, byPerson string) (Approval, error) {
 	text := strings.TrimSpace(o.Reason)
 	if byPerson != "" {
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		text = fmt.Sprintf("Aprovado pelo Grão-Mestre após aprovação de %s (pedido %d)", a.nameOf(ctx, byPerson), r.ID)
 	}
 	if text == "" {
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		text = fmt.Sprintf("Aprovado pelo Grão-Mestre (pedido %d)", r.ID)
 	}
 	id, err := gm.CreateReview(ctx, o.Repo, o.Number, o.SHA, github.ReviewApprove, github.WithMarker(text, github.NewOp()))
@@ -323,6 +326,7 @@ func (a *Approver) asPerson(ctx context.Context, o ApproveOrder, r chain.Request
 				ap, err := a.askPerson(ctx, o, r, p)
 				return ap, noDelegation(err)
 			}
+			// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 			ap, err := a.withCredential(ctx, o, p, fmt.Sprintf("Aprovado pelo Grão-Mestre em nome de %s, por delegação", plain(p.Name)), AsDelegate)
 			if err != nil {
 				if errors.Is(err, ErrNoCredential) {
@@ -434,6 +438,7 @@ func (a *Approver) askPerson(ctx context.Context, o ApproveOrder, from chain.Req
 	if typ == "" {
 		typ = classes.RequestMerge
 	}
+	// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 	id, err := a.Opener.Request(ctx, chain.OpenRequest{Type: typ, Workspace: o.Workspace, Table: from.Table, About: fmt.Sprintf("aprovação de %s para o PR #%d", plain(p.Name), o.Number),
 		PR: &chain.PRRef{Repo: o.Repo, Number: o.Number, SHA: o.SHA}, Require: []string{p.ID}, Target: from.Target, Risk: from.Risk})
 	if err != nil {

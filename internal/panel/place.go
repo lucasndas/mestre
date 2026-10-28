@@ -60,6 +60,7 @@ func Gate(pl Placement, next http.Handler) http.Handler {
 }
 
 // suspendedPage is all a suspended Citadel shows: no login, no actions.
+// mestre:allow pt-text: the page of a suspended Citadel, served before any language is known
 const suspendedPage = `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cidadela suspensa</title></head>
