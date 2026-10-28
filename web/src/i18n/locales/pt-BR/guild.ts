@@ -71,12 +71,13 @@ export default {
   },
   pass: {
     title: "Passar a Cidadela para {{name}}",
-    becomesTower: "{{from}} vira Torre.",
+    becomesTower: "{{from}} para de agir para fora e vira Torre.",
     waits:
-      "{{name}} espera 60 segundos antes de falar com o GitHub e o Telegram; o que chegar nesse tempo fica numa fila.",
-    panel: "O painel muda de máquina e reconecta sozinho.",
+      "{{name}} espera 60 segundos de segurança antes de falar com o GitHub e o Telegram. O que chegar nesse tempo fica na fila e sai depois.",
+    panel:
+      "O painel muda de máquina: o endereço dele passa a apontar para a nova Cidadela. Esta página reconecta sozinha.",
     agents: "Os {{count}} agentes de {{from}} ficam interrompidos, e a nova Cidadela os retoma.",
-    noUndo: "Não há desfazer: para voltar, é outra troca.",
+    noUndo: "Não há “desfazer”: para voltar, é outra troca igual.",
     cancel: "Agora não",
   },
   timeline: {

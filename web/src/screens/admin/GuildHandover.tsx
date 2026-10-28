@@ -28,8 +28,8 @@ export function PassCitadel({
   return (
     <div className="flex flex-col gap-2">
       {open && !reason ? (
-        <fieldset className="flex max-w-2xl flex-col gap-3 rounded-field border border-warn-ink/40 bg-warn p-4 text-warn-ink">
-          <legend className="px-1 text-lg">{t("pass.title", { name: m.name })}</legend>
+        <fieldset className="flex max-w-2xl flex-col gap-3 rounded-field border border-accent bg-accent-wash p-5">
+          <legend className="px-1 text-xl">{t("pass.title", { name: m.name })}</legend>
           <ul className="ml-5 list-disc text-sm">
             <li>{t("pass.becomesTower", { from: citadel?.name ?? "" })}</li>
             <li>{t("pass.waits", { name: m.name })}</li>
