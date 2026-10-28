@@ -47,7 +47,7 @@ func (e *Engine) servePanel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// the Citadel that acts, before its panel is up or while its period ends
-	panel.WriteError(w, panel.Err(panel.CodeUnavailable, "o painel não está disponível agora", nil))
+	panel.WriteError(w, panel.Err(panel.CodeUnavailable, "api.panel_unavailable", nil))
 }
 
 // openPanel makes the panel of the period over the main database and returns

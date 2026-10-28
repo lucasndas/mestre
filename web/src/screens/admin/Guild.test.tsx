@@ -165,7 +165,7 @@ test("passing the Citadel to a machine the server refuses shows the reason", asy
     "POST /api/guild/machines/m2/pass-citadel": () => ({
       status: 409,
       body: {
-        error: { code: "refused", message: "x", params: { reason: "outside_local_network" } },
+        error: { code: "guild.outside_local_network", message: "x", params: {} },
       },
     }),
   });

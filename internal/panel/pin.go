@@ -36,23 +36,23 @@ func (p *Panel) withPINRequest(action string, h func(w http.ResponseWriter, r *h
 		pin := r.Header.Get(PINHeader)
 		if pin == "" {
 			p.audit(ctx, "panel.pin.required", detail)
-			WriteError(w, Err(CodePINRequired, "PIN obrigatório", nil))
+			WriteError(w, Err(CodePINRequired, "api.pin_required", nil))
 			return
 		}
 		if !users.ValidPIN(pin) {
 			p.audit(ctx, "panel.pin.failed", detail)
-			WriteError(w, Err(CodePINInvalid, "PIN incorreto", nil))
+			WriteError(w, Err(CodePINInvalid, "api.pin_invalid", nil))
 			return
 		}
 		req, err := p.users.StartPIN(ctx, u.ID, action)
 		switch {
 		case errors.Is(err, users.ErrNoPIN):
 			p.audit(ctx, "panel.pin.none", detail)
-			WriteError(w, Err(CodeNoPIN, "defina um PIN antes de fazer esta ação", nil))
+			WriteError(w, Err(CodeNoPIN, "api.no_pin", nil))
 			return
 		case errors.Is(err, users.ErrPINLocked):
 			p.audit(ctx, "panel.pin.locked", detail)
-			WriteError(w, Err(CodePINLocked, "PIN bloqueado por excesso de erros", map[string]any{"until": u.PINLockedUntil}))
+			WriteError(w, Err(CodePINLocked, "api.pin_locked", map[string]any{"until": u.PINLockedUntil}))
 			return
 		case err != nil:
 			p.log.Error("panel: opening the request of PIN", "err", err)
@@ -64,15 +64,15 @@ func (p *Panel) withPINRequest(action string, h func(w http.ResponseWriter, r *h
 		case errors.Is(err, users.ErrBadPIN) && errors.Is(err, users.ErrPINLocked):
 			p.audit(ctx, "panel.pin.locked", detail)
 			_ = p.sessions.End(ctx, ss.ID) // the lock ends the session the errors came in
-			WriteError(w, Err(CodePINLocked, "PIN bloqueado por excesso de erros", nil))
+			WriteError(w, Err(CodePINLocked, "api.pin_locked", nil))
 			return
 		case errors.Is(err, users.ErrBadPIN):
 			p.audit(ctx, "panel.pin.failed", detail)
-			WriteError(w, Err(CodePINInvalid, "PIN incorreto", nil))
+			WriteError(w, Err(CodePINInvalid, "api.pin_invalid", nil))
 			return
 		case errors.Is(err, users.ErrPINLocked):
 			p.audit(ctx, "panel.pin.locked", detail)
-			WriteError(w, Err(CodePINLocked, "PIN bloqueado por excesso de erros", nil))
+			WriteError(w, Err(CodePINLocked, "api.pin_locked", nil))
 			return
 		case err != nil:
 			p.log.Error("panel: checking the PIN", "err", err)

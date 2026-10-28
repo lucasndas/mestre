@@ -56,7 +56,7 @@ func (p *Panel) handleEndSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if owner == "" || (owner != u.ID && !users.Can(u.Level, users.ManageUsers)) {
 		// somebody else's session is not there for those who may not end it
-		WriteError(w, Err(CodeNotFound, "sessão não encontrada", nil))
+		WriteError(w, Err(CodeNotFound, "api.session_not_found", nil))
 		return
 	}
 	if err := p.sessions.End(ctx, id); err != nil {

@@ -118,7 +118,7 @@ func (p *Panel) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !open { // once the Guild has a user the route is not there
-		WriteError(w, Err(CodeNotFound, "não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.not_found", nil))
 		return
 	}
 	var in SetupRequest
@@ -131,7 +131,7 @@ func (p *Panel) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if !until.IsZero() {
 		p.audit(ctx, "panel.setup.refused", map[string]any{"ip": ip})
-		WriteError(w, Err(CodeRateLimited, "muitas tentativas; tente mais tarde", map[string]any{"retry_after_seconds": retryAfter(p.clk.Now(), until)}))
+		WriteError(w, Err(CodeRateLimited, "api.rate_limited", map[string]any{"retry_after_seconds": retryAfter(p.clk.Now(), until)}))
 		return
 	}
 	var u users.User
@@ -147,7 +147,7 @@ func (p *Panel) handleSetup(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, errInvalidCode())
 		return
 	case errors.Is(err, users.ErrSetupDone):
-		WriteError(w, Err(CodeNotFound, "não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.not_found", nil))
 		return
 	case p.inputError(w, err):
 		return
@@ -165,15 +165,15 @@ func (p *Panel) inputError(w http.ResponseWriter, err error) bool {
 	case err == nil:
 		return false
 	case errors.Is(err, users.ErrBadPassword):
-		WriteError(w, Err(CodePasswordTooShort, fmt.Sprintf("a senha tem no mínimo %d caracteres", users.PasswordMin), map[string]any{"min": users.PasswordMin}))
+		WriteError(w, Err(CodePasswordTooShort, "api.password_too_short", map[string]any{"min": users.PasswordMin}))
 	case errors.Is(err, users.ErrBadLogin):
-		WriteError(w, Err(CodeInvalidLogin, "o nome de login tem de 3 a 32 caracteres: letras minúsculas, números, ponto, hífen e sublinhado", nil))
+		WriteError(w, Err(CodeInvalidLogin, "api.invalid_login", nil))
 	case errors.Is(err, users.ErrLoginTaken):
-		WriteError(w, Err(CodeLoginTaken, "este nome de login já existe", nil))
+		WriteError(w, Err(CodeLoginTaken, "api.login_taken", nil))
 	case errors.Is(err, users.ErrWrongPassword):
-		WriteError(w, Err(CodePasswordWrong, "a senha atual não confere", nil))
+		WriteError(w, Err(CodePasswordWrong, "api.password_wrong", nil))
 	case errors.Is(err, users.ErrBadPINFormat):
-		WriteError(w, Err(CodeInvalidPIN, "o PIN tem de 6 a 12 dígitos", nil))
+		WriteError(w, Err(CodeInvalidPIN, "api.invalid_pin", nil))
 	default:
 		return false
 	}
@@ -189,7 +189,7 @@ func (p *Panel) hashing(w http.ResponseWriter, f func()) bool {
 		f()
 		return true
 	default:
-		WriteError(w, Err(CodeRateLimited, "muitas tentativas ao mesmo tempo; tente de novo", map[string]any{"retry_after_seconds": 1}))
+		WriteError(w, Err(CodeRateLimited, "api.rate_limited_now", map[string]any{"retry_after_seconds": 1}))
 		return false
 	}
 }
@@ -217,7 +217,7 @@ func (p *Panel) handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		if !ok { // refused without looking at the password
 			p.audit(ctx, "panel.login.blocked", p.loginDetail(ctx, login, ip, r))
-			WriteError(w, Err(CodeLoginBlocked, "login bloqueado por excesso de erros; tente mais tarde", map[string]any{"retry_after_seconds": retryAfter(p.clk.Now(), until)}))
+			WriteError(w, Err(CodeLoginBlocked, "api.login_blocked", map[string]any{"retry_after_seconds": retryAfter(p.clk.Now(), until)}))
 			return
 		}
 	}
@@ -292,7 +292,7 @@ func (p *Panel) handleFirstAccess(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, errInternal())
 		return
 	} else if !until.IsZero() {
-		WriteError(w, Err(CodeRateLimited, "muitas tentativas; tente mais tarde", map[string]any{"retry_after_seconds": retryAfter(p.clk.Now(), until)}))
+		WriteError(w, Err(CodeRateLimited, "api.rate_limited", map[string]any{"retry_after_seconds": retryAfter(p.clk.Now(), until)}))
 		return
 	}
 	var (
@@ -347,7 +347,7 @@ func (p *Panel) handlePassword(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, errInternal())
 		return
 	} else if !ok {
-		WriteError(w, Err(CodeLoginBlocked, "muitos erros de senha; tente mais tarde", map[string]any{"retry_after_seconds": retryAfter(p.clk.Now(), until)}))
+		WriteError(w, Err(CodeLoginBlocked, "api.password_attempts", map[string]any{"retry_after_seconds": retryAfter(p.clk.Now(), until)}))
 		return
 	}
 	var err error
@@ -387,13 +387,13 @@ func (p *Panel) handleAccessCode(w http.ResponseWriter, r *http.Request) {
 		c, err := p.users.NewAccessCode(ctx, UserOf(r), target, in.Kind)
 		switch {
 		case errors.Is(err, users.ErrNoUser):
-			WriteError(w, Err(CodeNotFound, "usuário não encontrado", nil))
+			WriteError(w, Err(CodeNotFound, "api.user_not_found", nil))
 			return
 		case errors.Is(err, users.ErrLevel):
-			WriteError(w, Err(CodeForbiddenLevel, err.Error(), nil))
+			WriteError(w, errForbidden(err, nil))
 			return
 		case err != nil:
-			WriteError(w, Err(CodeBadRequest, err.Error(), nil))
+			WriteError(w, Err(CodeBadRequest, "api.detail", map[string]any{"detail": err.Error()}))
 			return
 		}
 		p.audit(ctx, "panel.access_code.created", map[string]any{"user_id": UserOf(r).ID, "target": target, "kind": c.Kind, "expires_at": c.ExpiresAt, "ip": clientIP(r)})
@@ -409,7 +409,7 @@ func (p *Panel) handleLanguage(w http.ResponseWriter, r *http.Request) {
 	}
 	switch err := p.users.SetLanguage(r.Context(), u.ID, in.Language); {
 	case errors.Is(err, users.ErrBadLanguage):
-		WriteError(w, Err(CodeBadRequest, "idioma inválido", nil))
+		WriteError(w, Err(CodeBadRequest, "api.bad_language", nil))
 		return
 	case err != nil:
 		WriteError(w, errInternal())
@@ -428,7 +428,7 @@ func (p *Panel) handleLastWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Workspace == "" || !visible(u, in.Workspace) {
-		WriteError(w, Err(CodeNotFound, "campanha não encontrada", nil))
+		WriteError(w, Err(CodeNotFound, "api.workspace_not_found", nil))
 		return
 	}
 	if err := p.users.SetLastWorkspace(r.Context(), u.ID, in.Workspace); err != nil {

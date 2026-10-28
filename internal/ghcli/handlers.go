@@ -228,16 +228,16 @@ func refusal(err error) localchan.Response {
 		code := ref.Code
 		switch code {
 		case github.CodeOtherTable, github.CodeNotInEpic, github.CodeNotAllowed:
-			return localchan.Fail("outside_epic", ref.Message, "ask the Grand Master")
+			return localchan.FailMsg("outside_epic", ref.Msg, "ask the Grand Master")
 		case github.CodeReservedLabel:
-			return localchan.Fail("reserved_label", ref.Message, "")
+			return localchan.FailMsg("reserved_label", ref.Msg, "")
 		case github.CodeForce:
-			if strings.Contains(ref.Message, "principal") {
-				return localchan.Fail("force_main_denied", ref.Message, "a forced push is only on the branch of the table")
+			if ref.Msg.Code == "github.force_on_main" || ref.Msg.Code == "github.force_unknown_main" || ref.Msg.Code == "github.push_to_main" {
+				return localchan.FailMsg("force_main_denied", ref.Msg, "a forced push is only on the branch of the table")
 			}
-			return localchan.Fail("level_denied", ref.Message, "")
+			return localchan.FailMsg("level_denied", ref.Msg, "")
 		}
-		return localchan.Fail(code, ref.Message, "")
+		return localchan.FailMsg(code, ref.Msg, "")
 	case errors.As(err, &lim):
 		return localchan.Fail("github_unavailable", lim.Error(), "try again after "+lim.RetryAfter.String())
 	case errors.Is(err, github.ErrUnavailable):

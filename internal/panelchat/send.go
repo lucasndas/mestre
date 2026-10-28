@@ -142,7 +142,7 @@ func (s *Service) releaseUpload(user string) {
 // user, in this very workspace, is one: the table the Grão-Mestre is told comes from here,
 // never from the browser.
 func (s *Service) quote(ctx context.Context, u users.User, workspace, id string) (table string, err error) {
-	bad := panel.Err(panel.CodeChatQuoteUnknown, "a mensagem citada não existe", nil)
+	bad := panel.Err(panel.CodeChatQuoteUnknown, "api.quoted_missing", nil)
 	switch {
 	case strings.HasPrefix(id, prefixIn):
 		it, err := s.o.Inbox.UserItem(ctx, workspace, u.ID, "m"+strings.TrimPrefix(id, prefixIn))
@@ -186,21 +186,21 @@ func (s *Service) Begin(ctx context.Context, u users.User, in panel.ChatDraftInp
 		return nil, notFound()
 	}
 	if err := users.Require(u.Level, users.TalkToGrandMaster); err != nil {
-		return nil, panel.Err(panel.CodeForbiddenLevel, "o seu nível não permite falar com o Grão-Mestre", map[string]any{"capability": string(users.TalkToGrandMaster)})
+		return nil, panel.Err(panel.CodeForbiddenLevel, "api.chat_level", map[string]any{"capability": string(users.TalkToGrandMaster)})
 	}
 	if !clientIDRe.MatchString(in.ClientID) {
-		return nil, panel.Err(panel.CodeChatMalformed, "mensagem malformada", nil)
+		return nil, panel.Err(panel.CodeChatMalformed, "api.message_malformed", nil)
 	}
 	if utf8.RuneCountInString(in.Text) > MaxText {
-		return nil, panel.Err(panel.CodeChatTooLong, "mensagem longa demais", map[string]any{"max": MaxText})
+		return nil, panel.Err(panel.CodeChatTooLong, "api.message_too_long", map[string]any{"max": MaxText})
 	}
 	// before anything is looked at: a user with too many secrets caught is refused whatever he sends,
 	// so a refusal never says whether a text was one
 	if s.secretBlocked(u.ID) {
-		return nil, panel.Err(panel.CodeChatBlocked, "envio bloqueado por tentativas de mandar segredos", map[string]any{"minutes": int(secretWindow / time.Minute)})
+		return nil, panel.Err(panel.CodeChatBlocked, "api.chat_blocked", map[string]any{"minutes": int(secretWindow / time.Minute)})
 	}
 	if !s.acquireUpload(u.ID) {
-		return nil, panel.Err(panel.CodeChatBusy, "há mensagens suas sendo enviadas; espere terminar", nil)
+		return nil, panel.Err(panel.CodeChatBusy, "api.chat_busy", nil)
 	}
 	d, err := s.begin(ctx, u, in)
 	if err != nil {
@@ -216,7 +216,7 @@ func (s *Service) begin(ctx context.Context, u users.User, in panel.ChatDraftInp
 		return nil, err
 	}
 	if !ok {
-		return nil, panel.Err(panel.CodeChatNoGrandMaster, "a campanha não tem Grão-Mestre agora", nil)
+		return nil, panel.Err(panel.CodeChatNoGrandMaster, "api.no_grand_master", nil)
 	}
 	var table string
 	if in.Quote != "" {
@@ -225,7 +225,7 @@ func (s *Service) begin(ctx context.Context, u users.User, in panel.ChatDraftInp
 		}
 	}
 	if !s.allowSend(u.ID) {
-		return nil, panel.Err(panel.CodeRateLimited, "mensagens demais; espere um instante", nil)
+		return nil, panel.Err(panel.CodeRateLimited, "api.chat_rate", nil)
 	}
 	// the filter of the Telegram: a phrase holds the message, a token of a known format is taken out
 	// of it, and the message that follows a held phrase is held too
@@ -303,9 +303,9 @@ func (d *draft) AddFile(ctx context.Context, name, mimeType string, r io.Reader)
 		return err
 	}
 	if len(d.stored) >= MaxFiles {
-		return panel.Err(panel.CodeChatTooManyFiles, "arquivos demais numa mensagem", map[string]any{"max": MaxFiles})
+		return panel.Err(panel.CodeChatTooManyFiles, "api.too_many_files", map[string]any{"max": MaxFiles})
 	}
-	tooLarge := panel.Err(panel.CodeChatFileTooLarge, "arquivo grande demais", map[string]any{"limit": limit})
+	tooLarge := panel.Err(panel.CodeChatFileTooLarge, "api.file_too_big", map[string]any{"limit": limit})
 	data, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil {
 		var big *http.MaxBytesError
@@ -343,7 +343,7 @@ func (d *draft) Send(ctx context.Context) (panel.ChatSent, error) {
 		}
 	}()
 	if d.text == "" && len(d.stored) == 0 {
-		return panel.ChatSent{}, panel.Err(panel.CodeChatEmpty, "escreva uma mensagem", nil)
+		return panel.ChatSent{}, panel.Err(panel.CodeChatEmpty, "api.write_message", nil)
 	}
 	lines := []string{}
 	if d.text != "" {
@@ -361,7 +361,7 @@ func (d *draft) Send(ctx context.Context) (panel.ChatSent, error) {
 	it, err := d.s.enqueue(ctx, n)
 	switch {
 	case errors.Is(err, ErrNoGrandMaster):
-		return panel.ChatSent{}, panel.Err(panel.CodeChatNoGrandMaster, "a campanha não tem Grão-Mestre agora", nil)
+		return panel.ChatSent{}, panel.Err(panel.CodeChatNoGrandMaster, "api.no_grand_master", nil)
 	case err != nil:
 		return panel.ChatSent{}, err
 	}

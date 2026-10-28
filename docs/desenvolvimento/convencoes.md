@@ -104,7 +104,7 @@ Exceções herdadas, mantidas como estão: identificadores de protocolo, variáv
 ## Código gerado
 
 - Tipos do protocolo e da API para o painel: gerados do Go para `web/src/gen/` com `go generate` e `github.com/gzuidhof/tygo`.
-- Textos de ajuda: `internal/glossary/terms_gen.go` é gerado a partir de `docs/produto/glossario.md` ([glossário](../produto/glossario.md)) com `go generate ./internal/glossary` (gerador em `internal/glossary/gen`); o teste `TestGeneratedFileMatchesTheGlossary` regenera em memória e falha se o arquivo estiver velho.
+- Textos de ajuda: `internal/glossary/terms_gen.go` é gerado a partir de `docs/produto/glossario.md` ([glossário](../produto/glossario.md)) com `go generate ./internal/glossary` (gerador em `internal/glossary/gen`); o teste `TestGeneratedFileMatchesTheGlossary` regenera em memória e falha se o arquivo estiver velho. O mesmo vale para `web/src/gen/messages.ts`, gerado dos catálogos `internal/i18n/locales` ([mensagens por código](../plataforma/mensagens-por-codigo.md)) com `go generate ./internal/i18n` (teste `TestGeneratedMessagesAreNotStale`).
 - Arquivos gerados **vão para o git**. Um teste da suíte rápida regenera em memória e falha se estiverem desatualizados.
 
 ## Commits

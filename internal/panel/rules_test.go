@@ -326,7 +326,7 @@ func TestTheDecreesScreenCreatesARuleAndAnExceptionAndRevokesThem(t *testing.T) 
 		t.Fatalf("list = %+v", list)
 	}
 	// an Approver does not make a permanent rule (the engine says the level) but makes an exception
-	r.wantErr(r.call("POST", "/api/decrees", rule, opts{cookie: apv}), 422, panel.CodeDecreeRefused)
+	r.wantErr(r.call("POST", "/api/decrees", rule, opts{cookie: apv}), 422, "level.required_or_above")
 	exc := panel.DecreeInput{Workspace: "loja", Kind: "exception", Effect: "permission", TargetKind: "workspace", Command: "make deploy-teste", Text: "libere make deploy-teste uma vez"}
 	w = r.call("POST", "/api/decrees", exc, opts{cookie: apv})
 	if w.Code != 201 {

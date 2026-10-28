@@ -76,7 +76,7 @@ func (p *Panel) ruleDir(w http.ResponseWriter, r *http.Request) (string, bool) {
 	}
 	root := b.Principal(ws)
 	if root == "" || !filepath.IsAbs(root) {
-		WriteError(w, Err(CodeNoFolder, "a campanha ainda não tem a pasta principal", nil))
+		WriteError(w, Err(CodeNoFolder, "api.no_main_folder", nil))
 		return "", false
 	}
 	// what an earlier version or a checkout left writable by the group is made right before it is read
@@ -122,11 +122,11 @@ func unchangedSince(read safefile.Info) safefile.Options {
 func (p *Panel) fileError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errChangedOnDisk):
-		WriteError(w, Err(CodeFileChanged, "o arquivo mudou desde que você o abriu; abra de novo", nil))
+		WriteError(w, Err(CodeFileChanged, "api.file_changed", nil))
 	case errors.Is(err, safefile.ErrTooLarge):
-		WriteError(w, Err(CodeTooLarge, "o arquivo é maior do que o limite", nil))
+		WriteError(w, Err(CodeTooLarge, "api.file_over_limit", nil))
 	case safefile.Refused(err):
-		WriteError(w, Err(CodeFileRefused, "o arquivo é um link ou não é um arquivo comum; o Mestre não o toca", nil))
+		WriteError(w, Err(CodeFileRefused, "api.file_refused", nil))
 	default:
 		p.log.Error("panel: a file of the rules", "err", err)
 		WriteError(w, errInternal())
@@ -288,15 +288,15 @@ func plainText(s string) bool {
 // line -1 and is not.
 func checkPolicyText(text string) (data []byte, apiErr *APIError, line int) {
 	if len(text) > chain.MaxPolicyBytes {
-		return nil, Err(CodeTooLarge, "o arquivo é maior do que o limite", map[string]any{"max_bytes": chain.MaxPolicyBytes}), -1
+		return nil, Err(CodeTooLarge, "api.file_over_limit", map[string]any{"max_bytes": chain.MaxPolicyBytes}), -1
 	}
 	data = []byte(text)
 	if !plainText(text) {
-		return nil, Err(CodeInvalidPolicy, "o arquivo precisa ser texto UTF-8", map[string]any{"line": 0}), -1
+		return nil, Err(CodeInvalidPolicy, "api.file_utf8", map[string]any{"line": 0}), -1
 	}
 	if _, _, err := chain.ParsePolicyFile(data); err != nil {
 		line = policyErrorLine(data, err)
-		return nil, Err(CodeInvalidPolicy, "arquivo de política inválido: "+err.Error(), map[string]any{"line": line, "reason": err.Error()}), line
+		return nil, Err(CodeInvalidPolicy, "api.policy_invalid", map[string]any{"line": line, "reason": err.Error()}), line
 	}
 	return data, nil, 0
 }
@@ -347,7 +347,7 @@ func (p *Panel) handleSavePolicy(w http.ResponseWriter, r *http.Request) {
 		current = []byte(sessionzero.DefaultPolicyYAML)
 	}
 	if versionOf(current) != in.Version {
-		WriteError(w, Err(CodeFileChanged, "o arquivo mudou desde que você o abriu; abra de novo", nil))
+		WriteError(w, Err(CodeFileChanged, "api.file_changed", nil))
 		return
 	}
 	if err := safefile.Write(path, data, unchangedSince(read)); err != nil {
@@ -406,7 +406,7 @@ func (p *Panel) handleSaveInstructions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(in.Text) > maxInstructions {
-		WriteError(w, Err(CodeTooLarge, "o texto passa de 4 KiB", map[string]any{"max_bytes": maxInstructions}))
+		WriteError(w, Err(CodeTooLarge, "api.text_over_4kib", map[string]any{"max_bytes": maxInstructions}))
 		return
 	}
 	ctx, me, ws := r.Context(), UserOf(r), r.PathValue("workspace")

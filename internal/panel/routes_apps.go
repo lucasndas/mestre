@@ -189,7 +189,7 @@ func (p *Panel) handleOthers(w http.ResponseWriter, r *http.Request) {
 func (p *Panel) handleAppLink(w http.ResponseWriter, r *http.Request) {
 	ctx, me := r.Context(), UserOf(r)
 	if p.creation == nil {
-		WriteError(w, Err(CodeUnavailable, "a criação de Apps não está disponível agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.apps_unavailable", nil))
 		return
 	}
 	name := r.PathValue("name")
@@ -211,9 +211,9 @@ func (p *Panel) handleAppLink(w http.ResponseWriter, r *http.Request) {
 		p.audit(ctx, "panel.github_apps.link", map[string]any{"user_id": me.ID, "app": link.App, "expires_at": link.ExpiresAt, "ip": clientIP(r)})
 		WriteJSON(w, http.StatusOK, AppLinkResponse{App: link.App, URL: link.URL, ExpiresAt: link.ExpiresAt})
 	case errors.Is(err, github.ErrNoApp), errors.Is(err, sql.ErrNoRows):
-		WriteError(w, Err(CodeNotFound, "App não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.app_not_found", nil))
 	case errors.Is(err, github.ErrAppState):
-		WriteError(w, Err(CodeAppState, "este App não espera um link agora", nil))
+		WriteError(w, Err(CodeAppState, "api.app_no_link", nil))
 	default:
 		p.log.Error("panel: the link of an App", "err", err)
 		WriteError(w, errInternal())

@@ -216,21 +216,4 @@ export default {
     save: "Save the time zone",
     saved: "The Guild time zone is now {{zone}}.",
   },
-  refusal: {
-    excluded_machine: "An excluded machine never becomes the Citadel.",
-    outside_local_network:
-      "This machine is outside the local network: nobody in the Guild reaches it through mestre.local, so it cannot receive the Citadel.",
-    citadel_protected:
-      "The Citadel cannot be excluded or removed: pass the Citadel to another machine first.",
-    not_active: "The machine is no longer in the Guild.",
-    not_online: "The machine is not online now.",
-    no_lock: "The Guild has no lock at GitHub configured: the switch is not possible yet.",
-    suspended: "The Citadel is suspended and takes no changes now.",
-    not_pending: "This request was already decided or expired.",
-    not_revealed: "The machine has not shown its code yet: wait for the installer to display it.",
-    handover_in_progress: "A Citadel switch is already under way: wait for it to end.",
-    bad_priority: "The priority goes from 0 to 1000.",
-    bad_timezone: "That time zone is not in the IANA database.",
-    confirm_required: "Read the warning of the removal and confirm.",
-  },
 } as const;

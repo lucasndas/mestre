@@ -70,7 +70,7 @@ Fazer estas três jornadas formarem um caminho só, em vez de telas soltas: quem
 
 - O servidor decide o que cada nível pode; o painel só esconde ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)). Toda ação sensível pede o PIN, no campo que aparece depois do botão ([PIN](login.md#pin-em-ações-sensíveis)).
 - Os termos (Nível, PIN, Cidadela, Torre, Máquina excluída, Certificado do Mestre, Código de conferência, Código de entrada, Código de primeiro acesso) vêm de `Term`, com o balão "No mundo real". PIN, Certificado do Mestre, Código de conferência e os dois códigos de entrada não têm linha no [glossário](../produto/glossario.md): a 4I as acrescenta (português e inglês, com os arquivos gerados).
-- Recusa do servidor (`forbidden_level`, `refused` com `reason`, `pin_locked`): a tela diz quem recusou e por quê e nada muda por baixo.
+- Recusa do servidor (`forbidden_level`, a recusa do motor com o código da área, `pin_locked`): a tela diz quem recusou e por quê e nada muda por baixo.
 - **Lacunas registradas** (fora do [escopo do MVP](../produto/escopo-mvp.md), sem rota nova): o prazo do convite na lista; o estado dos perfis de conta de outra máquina; passos internos da troca de Cidadela; recusar um pedido de posto.
 
 ## Critérios de aceite

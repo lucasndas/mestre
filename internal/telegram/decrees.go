@@ -9,6 +9,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/tablerules"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -161,7 +162,7 @@ func (c *DecreeChannel) say(err error) error {
 	var ref *decrees.Refusal
 	switch {
 	case errors.As(err, &ref):
-		return errors.New(ref.Message)
+		return errors.New(i18n.Render(i18n.PtBR, ref.Msg))
 	case errors.Is(err, decrees.ErrNotAuthor):
 		return errors.New("só o autor da ordem confirma")
 	case errors.Is(err, decrees.ErrNoProposal):

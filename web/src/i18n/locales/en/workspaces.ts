@@ -101,20 +101,4 @@ export default {
     confirmedNow: "Version confirmed. It is in force now.",
     readOnly: "An Administrator confirms the commands.",
   },
-  refusals: {
-    unknown_sheet: "That sheet does not exist or does not run an agent. Nothing was created.",
-    bad_grand_master_sheet:
-      "That sheet cannot be the Grand Master: use an agent that is not the PC Operator and runs on every machine that is not excluded.",
-    repo_taken: "That repository is already the campaign {{slug}}.",
-    invalid_repo: "The repository must be as owner/name.",
-    invalid_slug: "The nickname does not hold. Suggestion: {{suggestion}}.",
-    creation_failed:
-      "The campaign could not be created: GitHub or Mestre refused. Nothing was created.",
-    not_preparing: "The campaign is past the session zero.",
-    preparing: "A campaign that is preparing cannot be paused.",
-    bad_state: "The state of the campaign does not allow that now.",
-    not_ready: "The main clone of the campaign does not exist yet. Wait for the mirror stage.",
-    invalid_document:
-      "The verification file does not hold: check the format, the commands and the time. Nothing was confirmed.",
-  },
 };

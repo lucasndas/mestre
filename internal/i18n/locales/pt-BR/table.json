@@ -1,0 +1,6 @@
+{
+  "table.level_denied": "Seu nível não permite pausar mesas.",
+  "table.over": "Esta mesa já terminou.",
+  "table.secret": "Não escreva senhas no motivo; diga só por que pausar.",
+  "table.unavailable": "A pausa de mesa não está disponível agora."
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/decrees"
 	"github.com/mestre-ia/mestre/internal/ghcli"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/tables"
 	"github.com/mestre-ia/mestre/internal/sessionzero"
@@ -75,7 +76,7 @@ func (l lateSink) Decided(ctx context.Context, res chain.Result) error {
 			var ref *chain.Refusal
 			why := "veja o log do motor"
 			if errors.As(err, &ref) && ref.Code == chain.CodeHumanRequired {
-				why = ref.Message
+				why = i18n.Render(i18n.PtBR, ref.Msg)
 			}
 			l.alert(ctx, fmt.Sprintf("A aprovação do pedido #%d foi dada, mas não foi aplicada no GitHub: %s.", res.Request.ID, why))
 		}

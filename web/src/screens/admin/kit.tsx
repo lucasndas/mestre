@@ -8,7 +8,7 @@ import { Button } from "../../components/ui";
 import type { TermKey } from "../../gen/glossary";
 import type { AuditPage, GitHubMe, SecretList, TransferState, UserList } from "../../gen/panel";
 import { ApiError, api } from "../../lib/api";
-import { errorText } from "../../lib/errors";
+import { errorText, levelName } from "../../lib/errors";
 
 // What the administration screens ask the server; the keys are what a mutation
 // invalidates after it.
@@ -267,7 +267,7 @@ export function LevelGate({
   children: ReactNode;
 }) {
   const { t } = useTranslation("common");
-  const { t: te } = useTranslation("errors");
+  const { i18n } = useTranslation();
   const { level } = useMe().user;
   const reaches = useReaches(need);
   if (reaches) return <>{children}</>;
@@ -277,7 +277,10 @@ export function LevelGate({
         {label}
       </Button>
       <span className="text-sm text-muted">
-        {t("admin.needLevel", { need: te(`level_${need}`), have: te(`level_${level}` as never) })}
+        {t("admin.needLevel", {
+          need: levelName(i18n.language, need),
+          have: levelName(i18n.language, level),
+        })}
       </span>
     </span>
   );

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -59,7 +60,7 @@ func (f *fakeWorkspaces) Pause(_ context.Context, slug string) error {
 }
 
 func (f *fakeWorkspaces) Resume(context.Context, string) error {
-	return &panel.Refusal{Reason: "bad_state", Message: "a campanha não está pausada"}
+	return &panel.Refusal{Msg: i18n.M("workspace.bad_state")}
 }
 
 func (f *fakeWorkspaces) AnswerVersioning(_ context.Context, _ users.User, _, answer string) error {
@@ -84,7 +85,7 @@ func (f *fakeWorkspaces) ConfirmVerification(_ context.Context, by users.User, s
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if string(doc) == "ruim" {
-		return "", &panel.Refusal{Reason: "invalid_document", Message: "verification: the document does not hold"}
+		return "", &panel.Refusal{Msg: i18n.M("workspace.invalid_document")}
 	}
 	f.confirmed = append(f.confirmed, [2]string{by.ID, string(doc)})
 	f.doc = string(doc)
@@ -156,7 +157,7 @@ func TestCreatingAndRunningAWorkspaceNeedsAnAdministratorWhoActsInIt(t *testing.
 		t.Errorf("retried %v, paused %v", f.retried, f.paused)
 	}
 	// what the engine refuses is answered with the reason, and not audited as done
-	r.wantErr(r.call("POST", "/api/workspaces/loja/resume", nil, opts{cookie: adm}), 409, panel.CodeRefused)
+	r.wantErr(r.call("POST", "/api/workspaces/loja/resume", nil, opts{cookie: adm}), 409, "workspace.bad_state")
 	if r.audited("panel.workspace.resume") != 0 {
 		t.Error("a refused resume was audited as done")
 	}
@@ -185,7 +186,7 @@ func TestAnAdministratorConfirmsTheVerificationCommands(t *testing.T) {
 		t.Errorf("an approver reads %+v", v)
 	}
 	r.wantErr(r.call("PUT", path, panel.ConfirmVerificationRequest{Doc: "version: 1"}, opts{cookie: appr}), 403, panel.CodeForbiddenLevel)
-	r.wantErr(r.call("PUT", path, panel.ConfirmVerificationRequest{Doc: "ruim"}, opts{cookie: adm}), 409, panel.CodeRefused)
+	r.wantErr(r.call("PUT", path, panel.ConfirmVerificationRequest{Doc: "ruim"}, opts{cookie: adm}), 409, "workspace.invalid_document")
 	if len(f.confirmed) != 0 {
 		t.Fatalf("confirmed %v", f.confirmed)
 	}

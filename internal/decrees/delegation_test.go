@@ -10,6 +10,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -459,7 +460,7 @@ func TestRevokeAllEndsEveryDelegationAndIsTheOwnersOnly(t *testing.T) {
 // CA-DELEG-06: the types that are never delegated (the entry in the Guild, and
 // the extra cost, which a delegation would only ever open above the ceiling:
 // below it the type is medio and a decree of policy is the way) are refused
-// before the confirmation, with "tipo não delegável"; nothing is left to confirm.
+// before the confirmation, with "Tipo não delegável"; nothing is left to confirm.
 func TestTypesThatAreNeverDelegatedAreRefused(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -470,8 +471,8 @@ func TestTypesThatAreNeverDelegatedAreRefused(t *testing.T) {
 		if ref.Code != decrees.CodeDelegation {
 			t.Fatalf("%s: %+v", typ, ref)
 		}
-		contains(t, ref.Message, "tipo não delegável")
-		contains(t, ref.Message, typ)
+		contains(t, i18n.Render(i18n.PtBR, ref.Msg), "Tipo não delegável")
+		contains(t, i18n.Render(i18n.PtBR, ref.Msg), typ)
 	}
 	if n := w.count("decree_proposals"); n != 0 {
 		t.Fatalf("%d proposals left to confirm", n)

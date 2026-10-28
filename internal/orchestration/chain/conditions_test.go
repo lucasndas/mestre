@@ -40,7 +40,7 @@ func (w *world) prRequest(typ classes.RequestType, number int, f chain.PRFacts) 
 func (w *world) humanRequired(id int64, why ...string) {
 	w.t.Helper()
 	ref := w.refusal(chain.Decision{Request: id, By: w.gm.ID, Answer: chain.AnswerApprove, Reason: "parece certo"})
-	if ref.Code != chain.CodeHumanRequired || ref.Climbed || !contains(ref.Message, why...) {
+	if ref.Code != chain.CodeHumanRequired || ref.Climbed || !contains(ref.Text(), why...) {
 		w.t.Fatalf("approval of #%d = %+v, want human_required (not climbed) citing %v", id, ref, why)
 	}
 	if r := w.request(id); r.State != chain.Open || r.Level.Kind != chain.LevelGrandMaster {

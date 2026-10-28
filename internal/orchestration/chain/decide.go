@@ -21,15 +21,15 @@ func isPermission(t classes.RequestType) bool {
 
 // refused writes the refusal to the audit and returns it.
 func (s *Service) refused(ctx context.Context, r Request, approver string, ans Answer, ref *Refusal) *Refusal {
-	s.audit(ctx, r, AuditEntry{Approver: approver, Answer: ans, Outcome: "refused", Refusal: ref.Code, Reason: ref.Message})
+	s.audit(ctx, r, AuditEntry{Approver: approver, Answer: ans, Outcome: "refused", Refusal: ref.Code, Reason: ref.Text()})
 	return ref
 }
 
 // refusedAndClimbed is a refusal for a guardrail: the request goes up at once.
 func (s *Service) refusedAndClimbed(ctx context.Context, r Request, approver string, ans Answer, ref *Refusal) *Refusal {
-	s.audit(ctx, r, AuditEntry{Approver: approver, Answer: ans, Outcome: "refused", Refusal: ref.Code, Reason: ref.Message})
+	s.audit(ctx, r, AuditEntry{Approver: approver, Answer: ans, Outcome: "refused", Refusal: ref.Code, Reason: ref.Text()})
 	ref.Climbed = true
-	s.climb(ctx, r.ID, r.Level, answerGuardrail, ref.Code+": "+ref.Message)
+	s.climb(ctx, r.ID, r.Level, answerGuardrail, ref.Code+": "+ref.Text())
 	return ref
 }
 
@@ -42,37 +42,37 @@ func (s *Service) Decide(ctx context.Context, d Decision) (Outcome, error) {
 	r, err := s.st.Get(ctx, d.Request)
 	switch {
 	case errors.Is(err, ErrNoRequest):
-		return Outcome{}, refuse(CodeNoRequest, "no request #%d", d.Request)
+		return Outcome{}, refuse(CodeNoRequest, "approval.no_request", "id", d.Request)
 	case err != nil:
 		return Outcome{}, err
 	case r.State != Open:
-		return Outcome{}, refuse(CodeNoRequest, "the request #%d is already %s", r.ID, r.State)
+		return Outcome{}, refuse(CodeNoRequest, "approval.already_closed", "id", r.ID, "state", r.State.Msg())
 	}
 	if r.Level.Kind == LevelPeople {
 		// what waits on the people is not for an agent: the Grand Master was told
 		// it only to know, and the people answer it
-		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, refuse(CodeHumanRequired, "the request #%d waits on the people: only they decide it", r.ID))
+		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, refuse(CodeHumanRequired, "approval.waits_on_people", "id", r.ID))
 	}
 	if r.Level.Agent != d.By {
-		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, refuse(CodeNotAtLevel, "the request #%d is not at your level: it waits on %s", r.ID, r.Level.Label()))
+		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, refuse(CodeNotAtLevel, "approval.not_at_your_level", "id", r.ID, "level", r.Level.Msg()))
 	}
 	if !d.Answer.Valid() {
-		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, refuse(CodeBadAnswer, "unknown answer %q", d.Answer))
+		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, refuse(CodeBadAnswer, "approval.unknown_answer", "answer", string(d.Answer)))
 	}
 	if d.Answer == AnswerDelegate {
-		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, refuse(CodeHumanRequired, "delegating is for the people: the Owner or an Administrator"))
+		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, refuse(CodeHumanRequired, "approval.delegate_for_people"))
 	}
 	switch {
 	case d.By == r.Requester:
-		return Outcome{}, s.refusedAndClimbed(ctx, r, d.By, d.Answer, refuse(CodeSelfDecision, "nobody decides a request of its own"))
+		return Outcome{}, s.refusedAndClimbed(ctx, r, d.By, d.Answer, refuse(CodeSelfDecision, "approval.self_decision"))
 	case r.Designer != "" && d.By == r.Designer:
-		return Outcome{}, s.refusedAndClimbed(ctx, r, d.By, d.Answer, refuse(CodeSelfDecision, "the designer of the mission does not decide its points of approval"))
+		return Outcome{}, s.refusedAndClimbed(ctx, r, d.By, d.Answer, refuse(CodeSelfDecision, "approval.designer_decision"))
 	case r.Proposer != "" && d.By == r.Proposer:
-		return Outcome{}, s.refusedAndClimbed(ctx, r, d.By, d.Answer, refuse(CodeSelfDecision, "nobody decides a request that serves a proposal of its own"))
+		return Outcome{}, s.refusedAndClimbed(ctx, r, d.By, d.Answer, refuse(CodeSelfDecision, "approval.proposer_decision"))
 	}
 	instructed := d.Answer == AnswerDenyInstruction && strings.TrimSpace(d.Instruction) != ""
 	if (d.Answer.Approves() || d.Answer.Denies()) && strings.TrimSpace(d.Reason) == "" && !instructed {
-		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, refuse(CodeReasonRequired, "an agent gives the reason of its decision"))
+		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, refuse(CodeReasonRequired, "approval.reason_required"))
 	}
 	st, _ := s.settings(ctx, r.Workspace)
 	appr, err := s.o.Characters.Get(ctx, d.By)
@@ -100,14 +100,14 @@ func (s *Service) Decide(ctx context.Context, d Decision) (Outcome, error) {
 			if h.level.same(level) {
 				found = true
 				if v := s.can(ctx, h, r, st); !v.ok {
-					return Outcome{}, s.refusedAndClimbed(ctx, r, d.By, d.Answer, refuse(CodeAboveCeiling, "this level does not decide this request: %s", v.why))
+					return Outcome{}, s.refusedAndClimbed(ctx, r, d.By, d.Answer, refuse(CodeAboveCeiling, "approval.level_cannot_decide", "reason", v.why))
 				}
 			}
 		}
 		if !found {
 			// The holder left the path (replaced, ended, moved): nobody
 			// approves from a place that is no longer in the chain.
-			ref := s.refused(ctx, r, d.By, d.Answer, refuse(CodeNotAtLevel, "you are no longer in the chain of the request #%d", r.ID))
+			ref := s.refused(ctx, r, d.By, d.Answer, refuse(CodeNotAtLevel, "approval.no_longer_in_chain", "id", r.ID))
 			s.reroute(ctx, r, "quem decidia saiu da cadeia do pedido")
 			ref.Climbed = true
 			return Outcome{}, ref
@@ -133,7 +133,7 @@ func (s *Service) Decide(ctx context.Context, d Decision) (Outcome, error) {
 	// The request is claimed before anything is granted: a decision overtaken
 	// by a climb or an expiry grants nothing.
 	if _, ok := s.claim(ctx, d.Request, &level, c); !ok {
-		return Outcome{}, refuse(CodeNoRequest, "the request #%d was decided meanwhile", d.Request)
+		return Outcome{}, refuse(CodeNoRequest, "approval.decided_meanwhile", "id", d.Request)
 	}
 	applied, ref := s.effect(ctx, r, st, d.By, level, d.Answer, d.Pattern, d.For, d.UntilMissionEnd, true, d.Reason)
 	if ref != nil {
@@ -142,7 +142,7 @@ func (s *Service) Decide(ctx context.Context, d Decision) (Outcome, error) {
 	}
 	r, ok := s.closeRequest(ctx, d.Request, &level, c)
 	if !ok {
-		return Outcome{}, refuse(CodeNoRequest, "the request #%d was decided meanwhile", d.Request)
+		return Outcome{}, refuse(CodeNoRequest, "approval.decided_meanwhile", "id", d.Request)
 	}
 	if level.Kind == LevelGrandMaster && d.Answer.Approves() && r.Risk.Risk == classes.RiskHigh {
 		if rec, ok := s.o.Delegations.(DelegationRecorder); ok {
@@ -186,14 +186,14 @@ func (s *Service) attenuation(ctx context.Context, r Request, approver string) *
 	}
 	rules, err := s.o.Classes.Rules(ctx, approver)
 	if err != nil || rules == nil {
-		return refuse(CodeAttenuation, "the effective rules of the approver are not known: nothing is approved without them")
+		return refuse(CodeAttenuation, "approval.approver_rules_unknown")
 	}
 	env, err := s.o.Classes.Env(ctx, r.Requester)
 	if err != nil {
-		return refuse(CodeAttenuation, "the environment of whoever asked is not known")
+		return refuse(CodeAttenuation, "approval.requester_env_unknown")
 	}
 	if ok, dec := classes.Attenuates(ctx, env, rules, *r.Event); !ok {
-		return refuse(CodeAttenuation, "your own rules deny this action (%s): you do not approve what you could not do", dec.Reason)
+		return refuse(CodeAttenuation, "approval.attenuation", "reason", dec.Reason)
 	}
 	return nil
 }
@@ -204,17 +204,17 @@ func (s *Service) attenuation(ctx context.Context, r Request, approver string) *
 func (s *Service) effect(ctx context.Context, r Request, st Settings, by string, level Level, ans Answer, pattern string, dur time.Duration, untilEnd, agent bool, reason string) (string, *Refusal) {
 	if r.Type == classes.RequestGMAction && ans != AnswerApprove && !ans.Denies() || r.Type == classes.RequestGMAction && ans == AnswerDenyAlways {
 		// a question of the Grão-Mestre makes no rule, no decree and no delegation
-		return "", refuse(CodeBadAnswer, "this question is answered with approve or deny: it makes no rule and no decree")
+		return "", refuse(CodeBadAnswer, "approval.approve_or_deny_only")
 	}
 	switch ans {
 	case AnswerApprove, AnswerApproveAlways:
 		applied := "approved"
 		if isPermission(r.Type) && r.Action != nil {
 			if s.o.Grants == nil {
-				return "", refuse(CodeUnavailable, "this engine does not make exceptions yet")
+				return "", refuse(CodeUnavailable, "approval.no_exceptions_yet")
 			}
 			if err := s.o.Grants.Exception(ctx, ExceptionGrant{Request: r.ID, Character: r.Requester, Action: *r.Action, By: by, Level: level}); err != nil {
-				return "", refuse(CodeUnavailable, "the exception was not made: %v", err)
+				return "", refuse(CodeUnavailable, "approval.exception_failed", "reason", err.Error())
 			}
 			applied = "exception"
 		}
@@ -231,17 +231,17 @@ func (s *Service) effect(ctx context.Context, r Request, st Settings, by string,
 		return s.temp(ctx, r, st, by, level, nil, dur, untilEnd, agent)
 	case AnswerApprovePattern:
 		if strings.TrimSpace(pattern) == "" {
-			return "", refuse(CodeBadAnswer, "approve-pattern needs --pattern")
+			return "", refuse(CodeBadAnswer, "approval.pattern_needs_flag")
 		}
 		if r.Action == nil {
-			return "", refuse(CodeBadAnswer, "a pattern is for a request of an action")
+			return "", refuse(CodeBadAnswer, "approval.pattern_for_action")
 		}
 		ap, err := classes.CheckApprovablePattern(pattern, *r.Action, r.Class, r.Table)
 		switch {
 		case errors.Is(err, classes.ErrPatternTooBroad):
-			return "", refuse(CodePatternTooBroad, "%v", err)
+			return "", refuse(CodePatternTooBroad, "approval.detail", "detail", err.Error())
 		case err != nil:
-			return "", refuse(CodePatternNoMatch, "%v", err)
+			return "", refuse(CodePatternNoMatch, "approval.detail", "detail", err.Error())
 		}
 		return s.temp(ctx, r, st, by, level, &ap, dur, untilEnd, agent)
 	case AnswerDenyAlways:
@@ -266,14 +266,14 @@ func (s *Service) temp(ctx context.Context, r Request, st Settings, by string, l
 		return "decree", s.decree(ctx, r, by, level, AnswerApproveFor, patternOf(ap), dur)
 	}
 	if !isPermission(r.Type) || r.Action == nil {
-		return "", refuse(CodeBadAnswer, "a temporary rule is for a request of an action")
+		return "", refuse(CodeBadAnswer, "approval.temp_rule_for_action")
 	}
 	ceiling := classes.RiskLow
 	if level.Kind == LevelMesa || level.Kind == LevelGrandMaster {
 		ceiling = classes.RiskMedium
 	}
 	if !riskWithin(r.Risk.Risk, ceiling) {
-		return "", refuse(CodeAboveCeiling, "a temporary rule of this level covers up to %s; this request is %s", ceiling, r.Risk.Risk)
+		return "", refuse(CodeAboveCeiling, "approval.temp_rule_ceiling", "ceiling", ceiling, "risk", r.Risk.Risk)
 	}
 	if ap == nil {
 		// The same text of a command does another thing at each use when the
@@ -283,27 +283,27 @@ func (s *Service) temp(ctx context.Context, r Request, st Settings, by string, l
 			tool = r.Event.Tool
 		}
 		if why := classes.TableRuleBlocker(*r.Action, tool, r.Risk); why != "" {
-			return "", refuse(CodeBadAnswer, "no temporary rule is made for this request (%s): approve it now instead", why)
+			return "", refuse(CodeBadAnswer, "approval.temp_rule_blocked", "reason", why)
 		}
 	}
 	if ap != nil {
 		if !riskWithin(ap.Risk.Risk, ceiling) {
-			return "", refuse(CodeAboveCeiling, "the pattern reaches risk %s (%s), above the ceiling of this level (%s)", ap.Risk.Risk, ap.Risk.Rule, ceiling)
+			return "", refuse(CodeAboveCeiling, "approval.pattern_above_ceiling", "risk", ap.Risk.Risk, "rule", ap.Risk.Rule, "ceiling", ceiling)
 		}
 		if ap.Risk.Risk == classes.RiskMedium && level.Kind == LevelMesa {
 			if why := s.mesaPatternCan(ctx, r, st, ap); why != "" {
-				return "", refuse(CodeAboveCeiling, "%s", why)
+				return "", refuse(CodeAboveCeiling, "approval.detail", "detail", why)
 			}
 		}
 	}
 	if ap == nil && dur <= 0 && !untilEnd {
-		return "", refuse(CodeBadAnswer, "approve-for needs --for <duration> or --until-quest")
+		return "", refuse(CodeBadAnswer, "approval.approve_for_needs_duration")
 	}
 	if dur > st.TempRuleMax {
-		return "", refuse(CodeDurationTooLong, "a temporary rule goes up to %s", st.TempRuleMax)
+		return "", refuse(CodeDurationTooLong, "approval.temp_rule_max", "max", st.TempRuleMax.String())
 	}
 	if s.o.TempRules == nil {
-		return "", refuse(CodeUnavailable, "temporary table rules are not available in this engine")
+		return "", refuse(CodeUnavailable, "approval.temp_rules_unavailable")
 	}
 	now := s.clk.Now()
 	rule := TempRule{Request: r.ID, Workspace: r.Workspace, Table: r.Table, Class: r.Class, Requester: r.Requester, Pattern: ap, Action: *r.Action,
@@ -313,9 +313,9 @@ func (s *Service) temp(ctx context.Context, r Request, st Settings, by string, l
 	}
 	if err := s.o.TempRules.Create(ctx, rule); err != nil {
 		if errors.Is(err, ErrNoMission) {
-			return "", refuse(CodeBadAnswer, "the request has no mission to end with: use --for <duration>")
+			return "", refuse(CodeBadAnswer, "approval.no_mission_to_end")
 		}
-		return "", refuse(CodeUnavailable, "the temporary rule was not made: %v", err)
+		return "", refuse(CodeUnavailable, "approval.temp_rule_failed", "reason", err.Error())
 	}
 	return "temporary_rule", nil
 }
@@ -374,10 +374,10 @@ func patternOf(ap *classes.ApprovablePattern) string {
 // that only people give.
 func (s *Service) decree(ctx context.Context, r Request, by string, level Level, ans Answer, pattern string, dur time.Duration) *Refusal {
 	if s.o.Grants == nil {
-		return refuse(CodeUnavailable, "this engine does not make decrees yet")
+		return refuse(CodeUnavailable, "approval.no_decrees_yet")
 	}
 	if err := s.o.Grants.Decree(ctx, DecreeGrant{Request: r.ID, Answer: ans, Character: r.Requester, Class: r.Class, Table: r.Table, Pattern: pattern, For: dur, By: by, Level: level}); err != nil {
-		return refuse(CodeUnavailable, "the decree was not made: %v", err)
+		return refuse(CodeUnavailable, "approval.decree_failed", "reason", err.Error())
 	}
 	return nil
 }
@@ -399,9 +399,9 @@ func (s *Service) askBack(ctx context.Context, r Request, by string, level Level
 	question = strings.TrimSpace(question)
 	switch {
 	case r.Requester == "":
-		return Outcome{}, s.refused(ctx, r, by, AnswerAskBack, refuse(CodeBadAnswer, "nobody asked this request: there is no one to ask"))
+		return Outcome{}, s.refused(ctx, r, by, AnswerAskBack, refuse(CodeBadAnswer, "approval.nobody_asked"))
 	case question == "":
-		return Outcome{}, s.refused(ctx, r, by, AnswerAskBack, refuse(CodeBadAnswer, "ask-back needs the question (--text)"))
+		return Outcome{}, s.refused(ctx, r, by, AnswerAskBack, refuse(CodeBadAnswer, "approval.ask_back_needs_text"))
 	}
 	st, _ := s.settings(ctx, r.Workspace)
 	now := s.clk.Now()
@@ -409,7 +409,7 @@ func (s *Service) askBack(ctx context.Context, r Request, by string, level Level
 	cur, err := s.st.Get(ctx, r.ID)
 	if err != nil || cur.State != Open || cur.Deciding != nil || !cur.Level.same(level) {
 		s.mu.Unlock()
-		return Outcome{}, refuse(CodeNoRequest, "the request #%d changed meanwhile", r.ID)
+		return Outcome{}, refuse(CodeNoRequest, "approval.changed_meanwhile", "id", r.ID)
 	}
 	cur.AskedBack, cur.AskedAt = true, now
 	// While it waits for the requester the level's time stops; no answer at
@@ -443,16 +443,16 @@ func (s *Service) Reply(ctx context.Context, request int64, from, text string) e
 	case err != nil:
 		return err
 	case r.State != Open || !r.AskedBack:
-		return refuse(codeNothingToAnswer, "the request #%d asks nothing of you", request)
+		return refuse(codeNothingToAnswer, "approval.asks_nothing", "id", request)
 	case r.Requester != from:
-		return refuse(CodeNotRequester, "only who asked answers the question")
+		return refuse(CodeNotRequester, "approval.only_requester_answers")
 	}
 	st, _ := s.settings(ctx, r.Workspace)
 	s.mu.Lock()
 	cur, err := s.st.Get(ctx, request)
 	if err != nil || cur.State != Open || !cur.AskedBack {
 		s.mu.Unlock()
-		return refuse(codeNothingToAnswer, "the request #%d asks nothing of you", request)
+		return refuse(codeNothingToAnswer, "approval.asks_nothing", "id", request)
 	}
 	cur.AskedBack = false
 	if cur.Level.Kind != LevelPeople {
@@ -488,11 +488,11 @@ func (s *Service) DecideByPerson(ctx context.Context, d PersonDecision) (Outcome
 	r, err := s.st.Get(ctx, d.Request)
 	switch {
 	case errors.Is(err, ErrNoRequest):
-		return Outcome{}, refuse(CodeNoRequest, "no request #%d", d.Request)
+		return Outcome{}, refuse(CodeNoRequest, "approval.no_request", "id", d.Request)
 	case err != nil:
 		return Outcome{}, err
 	case r.State != Open:
-		return Outcome{}, refuse(CodeNoRequest, "the request #%d is already %s", r.ID, r.State)
+		return Outcome{}, refuse(CodeNoRequest, "approval.already_closed", "id", r.ID, "state", r.State.Msg())
 	}
 	who := "user:" + d.User
 	level := Level{Kind: LevelPeople, Name: d.User}
@@ -501,19 +501,19 @@ func (s *Service) DecideByPerson(ctx context.Context, d PersonDecision) (Outcome
 	// an alto, nor deny it for good). The quorum is counted by the flow.
 	rules, _ := s.rulesOf(r.Workspace)
 	if _, _, min := rules.Need(r); !peopleLevel(d.Level).AtLeast(min) {
-		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeHumanRequired, "the level of the user is below the minimum of this request (%s)", min))
+		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeHumanRequired, "approval.below_minimum", "min", min))
 	}
 	if (IsSystem(r.Type) || r.Type == classes.RequestGMAction) && !slices.Contains(AnswersFor(LevelPeople, r), d.Answer) {
-		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeBadAnswer, "a request of the engine is approved or denied, nothing else"))
+		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeBadAnswer, "approval.engine_request_binary"))
 	}
 	switch d.Answer {
 	case AnswerClimb:
-		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeBadAnswer, "the people have no level above"))
+		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeBadAnswer, "approval.no_level_above"))
 	case AnswerAskBack:
 		return s.askBack(ctx, r, who, r.Level, d.Instruction)
 	}
 	if !d.Answer.Valid() {
-		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeBadAnswer, "unknown answer %q", d.Answer))
+		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeBadAnswer, "approval.unknown_answer", "answer", string(d.Answer)))
 	}
 	st, _ := s.settings(ctx, r.Workspace)
 	c := Closing{State: Denied, By: who, Answer: d.Answer, Reason: strings.TrimSpace(d.Reason + " " + d.Instruction)}
@@ -521,7 +521,7 @@ func (s *Service) DecideByPerson(ctx context.Context, d PersonDecision) (Outcome
 		c.State = Approved
 	}
 	if _, ok := s.claim(ctx, d.Request, nil, c); !ok {
-		return Outcome{}, refuse(CodeNoRequest, "the request #%d was decided meanwhile", d.Request)
+		return Outcome{}, refuse(CodeNoRequest, "approval.decided_meanwhile", "id", d.Request)
 	}
 	applied, ref := s.effect(ctx, r, st, who, level, d.Answer, d.Pattern, d.For, false, false, d.Reason)
 	if ref != nil {
@@ -530,7 +530,7 @@ func (s *Service) DecideByPerson(ctx context.Context, d PersonDecision) (Outcome
 	}
 	r, ok := s.closeRequest(ctx, d.Request, nil, c)
 	if !ok {
-		return Outcome{}, refuse(CodeNoRequest, "the request #%d was decided meanwhile", d.Request)
+		return Outcome{}, refuse(CodeNoRequest, "approval.decided_meanwhile", "id", d.Request)
 	}
 	c.Level = level
 	s.audit(ctx, r, AuditEntry{Approver: who, Level: LevelPeople, Answer: d.Answer, Outcome: "accepted", Reason: c.Reason})
@@ -881,7 +881,7 @@ func (s *Service) cancel(ctx context.Context, r Request, why string) {
 func (s *Service) Invalidate(ctx context.Context, id int64, why string) error {
 	r, ok := s.closeRequest(ctx, id, nil, Closing{State: Invalidated, Reason: why})
 	if !ok {
-		return refuse(CodeNoRequest, "the request #%d is not open", id)
+		return refuse(CodeNoRequest, "approval.not_open", "id", id)
 	}
 	st, _ := s.settings(ctx, r.Workspace)
 	s.audit(ctx, r, AuditEntry{Level: r.Level.Kind, Answer: "invalidate", Outcome: "accepted", Reason: why})

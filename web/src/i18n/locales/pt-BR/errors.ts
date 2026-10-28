@@ -1,6 +1,7 @@
 // One text per code of the API (internal/panel/errors.go). The server's own
 // message is only the fallback for a code that is not here.
 export default {
+  locale: "pt-BR", // the language of these texts: the texts of the engine are said in it
   network: "Não consegui falar com a Cidadela. Confira a conexão e tente de novo.",
   invalid_credentials: "Usuário ou senha inválidos.",
   login_blocked: "Muitos erros de senha. Tente de novo em {{minutes}} min.",
@@ -35,7 +36,6 @@ export default {
   approval_no_verify: "Não consegui conferir o alvo do pedido, então nada foi aprovado.",
   approval_expired: "O prazo do pedido acabou. Nada foi aprovado.",
   approval_quorum: 'Com mais de uma aprovação exigida, só "Aprovar agora" vale.',
-  approval_refused: "O motor recusou a resposta: {{message}}",
   notice_unknown: "Esse aviso não existe mais.",
   chat_no_grand_master: "Esta campanha não tem Grão-Mestre agora. Nada foi enviado.",
   chat_file_too_large: "Um arquivo passa do limite permitido. Nada foi enviado.",
@@ -55,10 +55,6 @@ export default {
   mismatch_pin: "Os dois PINs não são iguais.",
   required: "Preencha este campo.",
   forbidden_level_need: "Esta ação exige o nível {{need}}; o seu é {{have}}.",
-  level_owner: "Senhor da Guilda",
-  level_administrator: "Administrador",
-  level_approver: "Aprovador",
-  level_observer: "Observador",
   owner_exists: "Só há um Senhor da Guilda. O posto passa por uma transferência.",
   self_action: "O Senhor da Guilda não pode suspender nem remover a si mesmo. Passe o posto antes.",
   bad_level: "Esse nível não existe.",
@@ -78,7 +74,6 @@ export default {
   github_no_flow: "Nenhuma conexão estava em andamento. Comece de novo.",
   github_not_ready: "O App Grão-Mestre ainda não está pronto para conectar o GitHub.",
   github_flow_off: "O App Grão-Mestre está com o device flow desligado no GitHub.",
-  decree_refused: "O Mestre recusou o decreto: {{reason}}",
   decree_ended: "Isto já acabou.",
   mestre_locked: "O Mestre está travado: nada muda agora.",
   no_proposal: "A proposta não existe mais ou venceu. Faça de novo.",
@@ -100,6 +95,5 @@ export default {
   profile_invalid: "O perfil não foi aceito: {{message}}",
   app_state: "Este App não espera um link agora.",
   app_limit: "A conta chegou ao limite de Apps do GitHub.",
-  refused: "A Cidadela recusou a ação.",
   conflict: "Isto mudou desde que você abriu. Veja a versão atual e tente de novo.",
 } as const;

@@ -5,7 +5,10 @@
 
 /**
  * Code is the stable code of an error of the API. The front end translates by
- * the code (and the params); Message is the Portuguese fallback.
+ * the code (and the params); Message is the same text, already translated in the
+ * language of the one who asked, for a client that has not the code. A refusal
+ * of the engine has the code of its area ("decree.scope_required") and its
+ * params (docs/plataforma/mensagens-por-codigo.md).
  */
 export type Code = string;
 /**
@@ -104,10 +107,6 @@ export const CodeInternal: Code = "internal";
  * CodeCitadelInFailover: the Citadel hands over the command; the request changed nothing.
  */
 export const CodeCitadelInFailover: Code = "citadel_in_failover";
-/**
- * CodeRefused: the engine refused an action of the canvas; params.reason says why.
- */
-export const CodeRefused: Code = "refused";
 /**
  * CodeConflict: the thing changed under the request (a scroll edited by somebody else).
  */
@@ -2058,10 +2057,6 @@ export interface UsagePage {
 //////////
 // source: types_rules.go
 
-/**
- * The codes of the errors of those screens.
- */
-export const CodeDecreeRefused: Code = "decree_refused";
 /**
  * The codes of the errors of those screens.
  */

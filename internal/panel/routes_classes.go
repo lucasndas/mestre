@@ -51,7 +51,7 @@ func (p *Panel) handleClasses(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	src := p.mg().Classes
 	if src == nil {
-		WriteError(w, Err(CodeUnavailable, "as classes não estão disponíveis agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.classes_unavailable", nil))
 		return
 	}
 	apps, err := p.appCount(ctx)
@@ -84,7 +84,7 @@ func (p *Panel) handleApproveProposal(w http.ResponseWriter, r *http.Request) {
 	ctx, me := r.Context(), UserOf(r)
 	src := p.mg().Classes
 	if src == nil {
-		WriteError(w, Err(CodeUnavailable, "as classes não estão disponíveis agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.classes_unavailable", nil))
 		return
 	}
 	var in ApproveProposalRequest
@@ -97,7 +97,7 @@ func (p *Panel) handleApproveProposal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if list, all := actingIn(me); in.Workspace != "" && !all && !slices.Contains(list, in.Workspace) {
-		WriteError(w, Err(CodeNotFound, "proposta não encontrada", nil))
+		WriteError(w, Err(CodeNotFound, "api.proposal_not_found", nil))
 		return
 	}
 	err = src.Approve(ctx, in.Workspace, id, in.Hash, me)
@@ -108,11 +108,11 @@ func (p *Panel) handleApproveProposal(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 	case errors.Is(err, classes.ErrNeedsAdministrator), errors.Is(err, classes.ErrNotAuthorized):
 		p.audit(ctx, "panel.class.approve_refused", detail)
-		WriteError(w, Err(CodeForbiddenLevel, "ação não permitida: "+err.Error(), map[string]any{"need": string(users.Administrator), "have": string(me.Level)}))
+		WriteError(w, errForbidden(err, map[string]any{"need": string(users.Administrator), "have": string(me.Level)}))
 	case errors.Is(err, classes.ErrClassChanged):
-		WriteError(w, Err(CodeProposalStale, err.Error(), nil))
+		WriteError(w, Err(CodeProposalStale, "api.proposal_stale", nil))
 	case errors.Is(err, classes.ErrProposalInvalid), errors.Is(err, classes.ErrNameTaken):
-		WriteError(w, Err(CodeProposalBad, err.Error(), nil))
+		WriteError(w, Err(CodeProposalBad, "api.proposal_bad", nil))
 	default:
 		p.log.Error("panel: approving a class", "proposal", id, "err", err)
 		WriteError(w, errInternal())

@@ -1,0 +1,14 @@
+{
+  "workspace.bad_grand_master_sheet": "That sheet cannot be the Grand Master: use an agent that is not the PC Operator and runs on every machine that is not excluded.",
+  "workspace.bad_state": "The state of the campaign does not allow that now.",
+  "workspace.creation_failed": "The campaign could not be created: GitHub or Mestre refused. Nothing was created.",
+  "workspace.invalid_document": "The verification file does not hold: check the format, the commands and the time. Nothing was confirmed.",
+  "workspace.invalid_repo": "The repository must be as owner/name.",
+  "workspace.invalid_slug": "The nickname does not hold. Suggestion: {{suggestion}}.",
+  "workspace.invalid_slug_plain": "The nickname is not valid.",
+  "workspace.not_preparing": "The campaign is past the session zero.",
+  "workspace.not_ready": "The main clone of the campaign does not exist yet. Wait for the mirror stage.",
+  "workspace.preparing": "A campaign that is preparing cannot be paused.",
+  "workspace.repo_taken": "That repository is already the campaign {{slug}}.",
+  "workspace.unknown_sheet": "That sheet does not exist or does not run an agent. Nothing was created."
+}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 )
 
@@ -59,7 +60,7 @@ func (h *Handlers) leaseHeld() *localchan.Response {
 func (h *Handlers) isLocked(ctx context.Context) bool { return h.Locked != nil && h.Locked(ctx) }
 
 func lockedResponse() localchan.Response {
-	return localchan.Fail("locked", "o Mestre está travado: nada é feito no GitHub até o Senhor da Guilda destravar", "o Senhor da Guilda destrava com /destravar")
+	return localchan.FailMsg("locked", i18n.M("cli.locked_github"), i18n.Render(i18n.En, i18n.M("cli.locked_hint")))
 }
 
 type handler func(ctx context.Context, c *localchan.Call) localchan.Response

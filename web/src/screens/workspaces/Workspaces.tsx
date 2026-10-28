@@ -13,13 +13,13 @@ import type {
   WorkspaceStage,
 } from "../../gen/panel";
 import { api } from "../../lib/api";
+import { errorText } from "../../lib/errors";
 import { useLive, useLiveEvents } from "../../lib/live";
 import { useRememberCampaign } from "../../workspace/current";
 import { situationOf } from "../../workspace/situation";
 import { Badge, ChoiceGroup, NativeSelect, PageHeader } from "../admin/kit";
 import { type HomeTable, useHomeTables } from "../home/reads";
 import { WORKSPACES_TOPIC, workspacesQuery } from "./queries";
-import { refusalText } from "./refusal";
 import { Verification } from "./Verification";
 
 type Say = (k: string, o?: object) => string;
@@ -61,7 +61,7 @@ export function Workspaces({ create = false }: { create?: boolean }) {
         ) : null}
       </div>
       <div className="flex max-w-3xl flex-col gap-4">
-        {error ? <Alert>{refusalText(t, te, error)}</Alert> : null}
+        {error ? <Alert>{errorText(te, error)}</Alert> : null}
         {!data && !error ? <p className="text-muted">…</p> : null}
         {data?.can_create ? (
           <Create sheets={data.sheets} open={creating} setOpen={setCreating} />
@@ -162,7 +162,7 @@ function Create({
         />
       )}
       <p className="text-sm text-muted">{t("create.sheetHint")}</p>
-      {error ? <Alert>{refusalText(t, te, error)}</Alert> : null}
+      {error ? <Alert>{errorText(te, error)}</Alert> : null}
       <div className="flex gap-2">
         <Button type="submit" isDisabled={busy || repo.trim() === "" || chosen === ""}>
           {t("create.submit")}
@@ -333,7 +333,7 @@ function Talk({ slug }: { slug: string }) {
       >
         {t("talk")}
       </Button>
-      {error ? <Alert>{refusalText(t, te, error)}</Alert> : null}
+      {error ? <Alert>{errorText(te, error)}</Alert> : null}
     </>
   );
 }
@@ -388,7 +388,7 @@ function StageDetail({
       <p className="text-danger">
         {t("stages.failure", { reason: s.failure.reason, count: s.failure.failures })}
       </p>
-      {error ? <Alert>{refusalText(t, te, error)}</Alert> : null}
+      {error ? <Alert>{errorText(te, error)}</Alert> : null}
       {canRetry ? (
         <div>
           <Button
@@ -443,7 +443,7 @@ function PauseButton({ w }: { w: WorkspaceRow }) {
       >
         {pausing ? t("pause") : t("resume")}
       </Button>
-      {error ? <Alert>{refusalText(t, te, error)}</Alert> : null}
+      {error ? <Alert>{errorText(te, error)}</Alert> : null}
     </>
   );
 }
@@ -488,7 +488,7 @@ function Versioning({ slug }: { slug: string }) {
           },
         ]}
       />
-      {error ? <Alert>{refusalText(t, te, error)}</Alert> : null}
+      {error ? <Alert>{errorText(te, error)}</Alert> : null}
       <div>
         <Button type="submit" isDisabled={busy}>
           {t("versioning.submit")}

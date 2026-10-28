@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/verification"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
@@ -143,9 +144,9 @@ func (h workspaceHost) Create(ctx context.Context, by users.User, req panel.Crea
 	}
 	if err := characters.GrandMasterSheetProblem(ctx, orc.Presets, req.GrandMasterSheet); err != nil {
 		if errors.Is(err, characters.ErrBadGrandMasterSheet) {
-			return panel.WorkspaceRow{}, &panel.Refusal{Reason: "bad_grand_master_sheet", Message: err.Error()}
+			return panel.WorkspaceRow{}, &panel.Refusal{Msg: i18n.M("workspace.bad_grand_master_sheet")}
 		}
-		return panel.WorkspaceRow{}, &panel.Refusal{Reason: "unknown_sheet", Message: "a ficha " + req.GrandMasterSheet + " não existe"}
+		return panel.WorkspaceRow{}, &panel.Refusal{Msg: i18n.M("workspace.unknown_sheet")}
 	}
 	w, err := orc.Workspaces.Create(ctx, workspaces.CreateRequest{Repo: req.Repo, Slug: req.Slug})
 	if err != nil {
@@ -172,15 +173,15 @@ func createRefusal(err error) error {
 	var slug *workspaces.SlugError
 	switch {
 	case errors.As(err, &taken):
-		return &panel.Refusal{Reason: "repo_taken", Message: err.Error(), Params: map[string]any{"slug": taken.Slug}}
+		return &panel.Refusal{Msg: i18n.M("workspace.repo_taken", "slug", taken.Slug)}
 	case errors.As(err, &slug):
-		return &panel.Refusal{Reason: "invalid_slug", Message: err.Error(), Params: map[string]any{"suggestion": slug.Suggestion}}
+		return &panel.Refusal{Msg: i18n.M("workspace.invalid_slug", "suggestion", slug.Suggestion)}
 	case errors.Is(err, workspaces.ErrInvalidRepo):
-		return &panel.Refusal{Reason: "invalid_repo", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("workspace.invalid_repo")}
 	case errors.Is(err, workspaces.ErrInvalidSlug), errors.Is(err, workspaces.ErrSlugTaken):
-		return &panel.Refusal{Reason: "invalid_slug", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("workspace.invalid_slug_plain")}
 	}
-	return &panel.Refusal{Reason: "creation_failed", Message: err.Error()}
+	return &panel.Refusal{Msg: i18n.M("workspace.creation_failed")}
 }
 
 func (h workspaceHost) Retry(ctx context.Context, slug string) error {
@@ -193,7 +194,7 @@ func (h workspaceHost) Retry(ctx context.Context, slug string) error {
 		return notFound(err)
 	}
 	if w.State != workspaces.StatePreparing {
-		return &panel.Refusal{Reason: "not_preparing", Message: "a campanha já passou da sessão zero"}
+		return &panel.Refusal{Msg: i18n.M("workspace.not_preparing")}
 	}
 	// the stage can take minutes (a clone): it runs on, and the screen follows the
 	// workspace as it changes; a failure is recorded in the stage
@@ -235,9 +236,9 @@ func transitionRefusal(err error) error {
 	case errors.Is(err, workspaces.ErrNotFound):
 		return panel.ErrWorkspaceNotFound
 	case errors.Is(err, workspaces.ErrPausePreparing):
-		return &panel.Refusal{Reason: "preparing", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("workspace.preparing")}
 	case errors.Is(err, workspaces.ErrBadTransition):
-		return &panel.Refusal{Reason: "bad_state", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("workspace.bad_state")}
 	}
 	return err
 }
@@ -252,7 +253,7 @@ func (h workspaceHost) AnswerVersioning(ctx context.Context, _ users.User, slug,
 	}
 	if err := zero.AnswerVersioning(ctx, slug, sessionzero.Versioning(answer)); err != nil {
 		if w, gerr := orc.Workspaces.Get(ctx, slug); gerr == nil && !w.MirrorReady() {
-			return &panel.Refusal{Reason: "not_ready", Message: err.Error()}
+			return &panel.Refusal{Msg: i18n.M("workspace.not_ready")}
 		}
 		return err
 	}
@@ -330,11 +331,11 @@ func (h workspaceHost) ConfirmVerification(ctx context.Context, by users.User, s
 		return "", notFound(err)
 	}
 	if !w.MirrorReady() {
-		return "", &panel.Refusal{Reason: "not_ready", Message: "o clone principal da campanha ainda não existe"}
+		return "", &panel.Refusal{Msg: i18n.M("workspace.not_ready")}
 	}
 	hash, err := h.verifications().Confirm(ctx, slug, by.ID, doc)
 	if errors.Is(err, verification.ErrInvalid) {
-		return "", &panel.Refusal{Reason: "invalid_document", Message: err.Error()}
+		return "", &panel.Refusal{Msg: i18n.M("workspace.invalid_document")}
 	}
 	if err != nil {
 		return "", err

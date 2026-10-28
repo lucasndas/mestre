@@ -85,7 +85,7 @@ test("a creation the engine refuses shows the reason in the words of the screen"
     "POST /api/workspaces": () => ({
       status: 409,
       body: {
-        error: { code: "refused", message: "x", params: { reason: "repo_taken", slug: "loja" } },
+        error: { code: "workspace.repo_taken", message: "x", params: { slug: "loja" } },
       },
     }),
   });
@@ -163,7 +163,7 @@ test("pausing and resuming ask the server and show the refusal", async () => {
     "GET /api/workspaces": () => ({ body: list([row({})]) }),
     "POST /api/workspaces/loja/pause": () => ({
       status: 409,
-      body: { error: { code: "refused", message: "x", params: { reason: "bad_state" } } },
+      body: { error: { code: "workspace.bad_state", message: "x", params: {} } },
     }),
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
@@ -278,7 +278,7 @@ test("a verification file that the engine refuses is not confirmed and says why"
     }),
     "PUT /api/workspaces/loja/verification": () => ({
       status: 409,
-      body: { error: { code: "refused", message: "x", params: { reason: "invalid_document" } } },
+      body: { error: { code: "workspace.invalid_document", message: "x", params: {} } },
     }),
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });

@@ -304,10 +304,10 @@ func (h *AskHandler) handle(ctx context.Context, c *localchan.Call) localchan.Re
 		var ref *chain.Refusal
 		switch {
 		case errors.As(err, &ref) && ref.Code == chain.CodeNotAtLevel:
-			return localchan.Fail("not_at_level", ref.Message, "see `mestre approval list --mine`").WithExit(localchan.ExitDenied)
+			return localchan.FailMsg("not_at_level", ref.Msg, "see `mestre approval list --mine`").WithExit(localchan.ExitDenied)
 		case errors.As(err, &ref) && (ref.Code == chain.CodeAlreadyAsked || ref.Code == chain.CodeNoRequest || ref.Code == chain.CodeBusy):
 			code := map[string]string{chain.CodeAlreadyAsked: "already_asked", chain.CodeNoRequest: "already_decided", chain.CodeBusy: "busy"}[ref.Code]
-			return localchan.Fail(code, ref.Message, "").WithExit(localchan.ExitConflict)
+			return localchan.FailMsg(code, ref.Msg, "").WithExit(localchan.ExitConflict)
 		}
 		return localchan.Fail(localchan.CodeInternal, "the request could not be taken to the users: "+err.Error(), "")
 	}

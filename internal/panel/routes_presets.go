@@ -39,7 +39,7 @@ func mountPresets(r *Router) {
 func (p *Panel) presets(w http.ResponseWriter) (PresetSource, bool) {
 	src := p.mg().Presets
 	if src == nil {
-		WriteError(w, Err(CodeUnavailable, "as bases e fichas não estão disponíveis agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.presets_unavailable", nil))
 		return nil, false
 	}
 	return src, true
@@ -115,9 +115,9 @@ func (p *Panel) presetError(w http.ResponseWriter, err error) {
 	var inUse *presets.InUseError
 	switch {
 	case errors.As(err, &inUse):
-		WriteError(w, Err(CodePresetInUse, err.Error(), nil))
+		WriteError(w, Err(CodePresetInUse, "api.detail", map[string]any{"detail": err.Error()}))
 	case errors.Is(err, presets.ErrInvalid), errors.Is(err, presets.ErrBuiltin), errors.Is(err, presets.ErrOperatorClassMissing):
-		WriteError(w, Err(CodePresetInvalid, err.Error(), nil))
+		WriteError(w, Err(CodePresetInvalid, "api.detail", map[string]any{"detail": err.Error()}))
 	default:
 		p.log.Error("panel: the bases and sheets", "err", err)
 		WriteError(w, errInternal())
@@ -136,11 +136,11 @@ func (p *Panel) handleSaveBase(w http.ResponseWriter, r *http.Request) {
 	}
 	var b presets.Base
 	if err := strictYAML(in.YAML, &b); err != nil {
-		WriteError(w, Err(CodePresetInvalid, "YAML ilegível: "+err.Error(), nil))
+		WriteError(w, Err(CodePresetInvalid, "api.yaml_unreadable", map[string]any{"detail": err.Error()}))
 		return
 	}
 	if name := r.PathValue("name"); b.Name != name && name != "novo" {
-		WriteError(w, Err(CodePresetInvalid, "o nome do YAML ("+b.Name+") não é o da base ("+name+"); renomear é criar outra e apagar esta", nil))
+		WriteError(w, Err(CodePresetInvalid, "api.base_rename", map[string]any{"yaml": b.Name, "name": name}))
 		return
 	}
 	before := p.baseYAML(ctx, src, b.Name)
@@ -190,11 +190,11 @@ func (p *Panel) handleSaveSheet(w http.ResponseWriter, r *http.Request) {
 	}
 	var s presets.Sheet
 	if err := strictYAML(in.YAML, &s); err != nil {
-		WriteError(w, Err(CodePresetInvalid, "YAML ilegível: "+err.Error(), nil))
+		WriteError(w, Err(CodePresetInvalid, "api.yaml_unreadable", map[string]any{"detail": err.Error()}))
 		return
 	}
 	if name := r.PathValue("name"); s.Name != name && name != "novo" {
-		WriteError(w, Err(CodePresetInvalid, "o nome do YAML ("+s.Name+") não é o da ficha ("+name+"); renomear é criar outra e apagar esta", nil))
+		WriteError(w, Err(CodePresetInvalid, "api.sheet_rename", map[string]any{"yaml": s.Name, "name": name}))
 		return
 	}
 	before := p.sheetYAML(ctx, src, s.Name)

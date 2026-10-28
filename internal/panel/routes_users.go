@@ -147,19 +147,19 @@ func (p *Panel) userError(w http.ResponseWriter, err error) bool {
 	case err == nil:
 		return false
 	case errors.As(err, &le):
-		WriteError(w, Err(CodeForbiddenLevel, "ação não permitida: "+err.Error(), map[string]any{"capability": string(le.Capability), "need": string(le.Need), "have": string(le.Have)}))
+		WriteError(w, errForbidden(err, map[string]any{"capability": string(le.Capability), "need": string(le.Need), "have": string(le.Have)}))
 	case errors.Is(err, users.ErrNoUser):
-		WriteError(w, Err(CodeNotFound, "usuário não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.user_not_found", nil))
 	case errors.Is(err, users.ErrOwnerExists):
-		WriteError(w, Err(CodeOwnerExists, "só há um Senhor da Guilda; o posto passa por transferência", nil))
+		WriteError(w, Err(CodeOwnerExists, "api.owner_exists", nil))
 	case errors.Is(err, users.ErrSelf):
-		WriteError(w, Err(CodeSelfAction, "o Senhor da Guilda não pode suspender nem remover a si mesmo: transfira o posto antes", nil))
+		WriteError(w, Err(CodeSelfAction, "api.self_action", nil))
 	case errors.Is(err, users.ErrBadLevel):
-		WriteError(w, Err(CodeBadLevel, "nível inválido", nil))
+		WriteError(w, Err(CodeBadLevel, "api.bad_level", nil))
 	case errors.Is(err, users.ErrTransferBad):
-		WriteError(w, Err(CodeTransferBad, "a transferência só vale para outro usuário ativo que já tem PIN", nil))
+		WriteError(w, Err(CodeTransferBad, "api.transfer_bad", nil))
 	case errors.Is(err, users.ErrNoTransfer):
-		WriteError(w, Err(CodeNoTransfer, "nenhuma transferência espera", nil))
+		WriteError(w, Err(CodeNoTransfer, "api.no_transfer", nil))
 	case p.inputError(w, err):
 	default:
 		return false
@@ -181,7 +181,7 @@ func (p *Panel) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, errInternal())
 		return
 	} else if !ok {
-		WriteError(w, Err(CodeInvalidWorkspace, "workspace desconhecido: "+bad, map[string]any{"workspace": bad}))
+		WriteError(w, Err(CodeInvalidWorkspace, "api.workspace_unknown", map[string]any{"workspace": bad}))
 		return
 	}
 	u, err := p.users.Create(ctx, me, users.NewUser{Name: in.Name, Level: users.Level(in.Level), Workspaces: in.Workspaces, GitHubLogin: in.GitHubLogin})
@@ -217,7 +217,7 @@ func (p *Panel) handleEditUser(w http.ResponseWriter, r *http.Request) {
 	}
 	before, err := p.users.Get(ctx, id)
 	if errors.Is(err, users.ErrNoUser) || err == nil && before.State == users.Removed {
-		WriteError(w, Err(CodeNotFound, "usuário não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.user_not_found", nil))
 		return
 	}
 	if err != nil {
@@ -234,7 +234,7 @@ func (p *Panel) handleEditUser(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, errInternal())
 			return
 		} else if !ok {
-			WriteError(w, Err(CodeInvalidWorkspace, "workspace desconhecido: "+bad, map[string]any{"workspace": bad}))
+			WriteError(w, Err(CodeInvalidWorkspace, "api.workspace_unknown", map[string]any{"workspace": bad}))
 			return
 		}
 	}
@@ -257,7 +257,7 @@ func (p *Panel) stateChange(kind string) http.HandlerFunc {
 		ctx, me, id := r.Context(), UserOf(r), r.PathValue("id")
 		before, err := p.users.Get(ctx, id)
 		if errors.Is(err, users.ErrNoUser) || err == nil && before.State == users.Removed {
-			WriteError(w, Err(CodeNotFound, "usuário não encontrado", nil))
+			WriteError(w, Err(CodeNotFound, "api.user_not_found", nil))
 			return
 		}
 		if err != nil {
@@ -388,23 +388,23 @@ func (p *Panel) handleGitHubMe(w http.ResponseWriter, r *http.Request) {
 func (p *Panel) githubError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, github.ErrLoginMismatch):
-		WriteError(w, Err(CodeGitHubMismatch, "a conta do GitHub que autorizou não é a cadastrada para você; o token foi descartado", nil))
+		WriteError(w, Err(CodeGitHubMismatch, "api.github_mismatch", nil))
 	case errors.Is(err, github.ErrDeviceDenied):
-		WriteError(w, Err(CodeGitHubDenied, "a autorização foi negada no GitHub", nil))
+		WriteError(w, Err(CodeGitHubDenied, "api.github_denied", nil))
 	case errors.Is(err, github.ErrDeviceExpired):
-		WriteError(w, Err(CodeGitHubExpired, "o código venceu; comece de novo", nil))
+		WriteError(w, Err(CodeGitHubExpired, "api.github_expired", nil))
 	case errors.Is(err, github.ErrNoGitHubLogin):
-		WriteError(w, Err(CodeGitHubNoLogin, "peça ao Senhor da Guilda para cadastrar o seu login do GitHub", nil))
+		WriteError(w, Err(CodeGitHubNoLogin, "api.github_no_login", nil))
 	case errors.Is(err, github.ErrNoDeviceFlow):
-		WriteError(w, Err(CodeGitHubNoFlow, "nenhuma conexão foi começada; comece de novo", nil))
+		WriteError(w, Err(CodeGitHubNoFlow, "api.github_no_flow", nil))
 	case errors.Is(err, github.ErrNoCredential):
-		WriteError(w, Err(CodeGitHubNoRight, "o seu nível ou as suas campanhas não permitem a credencial pessoal", nil))
+		WriteError(w, Err(CodeGitHubNoRight, "api.github_no_right", nil))
 	case errors.Is(err, github.ErrDeviceFlowOff):
-		WriteError(w, Err(CodeGitHubFlowOff, "o App Grão-Mestre está com o device flow desligado", nil))
+		WriteError(w, Err(CodeGitHubFlowOff, "api.github_flow_off", nil))
 	case errors.Is(err, github.ErrAppNotReady), errors.Is(err, github.ErrNoClientSecret):
-		WriteError(w, Err(CodeGitHubNotReady, "o App Grão-Mestre ainda não está pronto", nil))
+		WriteError(w, Err(CodeGitHubNotReady, "api.github_not_ready", nil))
 	case errors.Is(err, github.ErrUnavailable):
-		WriteError(w, Err(CodeUnavailable, "o GitHub não respondeu; tente de novo", nil))
+		WriteError(w, Err(CodeUnavailable, "api.github_no_answer", nil))
 	default:
 		p.log.Error("panel: the GitHub connection", "err", err)
 		WriteError(w, errInternal())
@@ -414,7 +414,7 @@ func (p *Panel) githubError(w http.ResponseWriter, err error) {
 func (p *Panel) handleGitHubBegin(w http.ResponseWriter, r *http.Request) {
 	ctx, me := r.Context(), UserOf(r)
 	if p.github == nil {
-		WriteError(w, Err(CodeUnavailable, "a conexão com o GitHub não está disponível agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.github_unavailable", nil))
 		return
 	}
 	if !me.MayHoldGitHub() {
@@ -434,7 +434,7 @@ func (p *Panel) handleGitHubBegin(w http.ResponseWriter, r *http.Request) {
 func (p *Panel) handleGitHubPoll(w http.ResponseWriter, r *http.Request) {
 	ctx, me := r.Context(), UserOf(r)
 	if p.github == nil {
-		WriteError(w, Err(CodeUnavailable, "a conexão com o GitHub não está disponível agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.github_unavailable", nil))
 		return
 	}
 	res, err := p.github.Poll(ctx, me.ID)

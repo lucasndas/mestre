@@ -30,7 +30,7 @@ func mountProfiles(r *Router) {
 func (p *Panel) profiles(w http.ResponseWriter) (ProfileSource, bool) {
 	src := p.mg().Profiles
 	if src == nil {
-		WriteError(w, Err(CodeUnavailable, "os perfis de conta não estão disponíveis agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.profiles_unavailable", nil))
 		return nil, false
 	}
 	return src, true
@@ -69,9 +69,9 @@ func (p *Panel) handleProfiles(w http.ResponseWriter, r *http.Request) {
 func (p *Panel) profileError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, accounts.ErrUnknown):
-		WriteError(w, Err(CodeNotFound, "perfil não encontrado nesta máquina", nil))
+		WriteError(w, Err(CodeNotFound, "api.profile_not_found", nil))
 	case errors.Is(err, accounts.ErrName), errors.Is(err, accounts.ErrExists):
-		WriteError(w, Err(CodeProfileInvalid, err.Error(), nil))
+		WriteError(w, Err(CodeProfileInvalid, "api.detail", map[string]any{"detail": err.Error()}))
 	default:
 		p.log.Error("panel: the account profiles", "err", err)
 		WriteError(w, errInternal())
@@ -95,7 +95,7 @@ func (p *Panel) handleAddProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// a provider that is not known is the user's slip, not a failure
-		WriteError(w, Err(CodeProfileInvalid, err.Error(), nil))
+		WriteError(w, Err(CodeProfileInvalid, "api.detail", map[string]any{"detail": err.Error()}))
 		return
 	}
 	p.audit(ctx, "panel.profile.added", map[string]any{"user_id": me.ID, "profile": pr.Name, "provider": string(pr.Provider), "machine": p.machine, "ip": clientIP(r)})
@@ -142,7 +142,7 @@ func (p *Panel) handleAdvanceProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	st, err := src.Advance(ctx, name)
 	if errors.Is(err, accounts.ErrNoProfile) {
-		WriteError(w, Err(CodeUnavailable, "a configuração guiada não está disponível nesta máquina", nil))
+		WriteError(w, Err(CodeUnavailable, "api.guided_setup_unavailable", nil))
 		return
 	}
 	if err != nil {

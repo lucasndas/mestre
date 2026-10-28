@@ -55,7 +55,7 @@ type PRStatus struct {
 func (s *PRService) authorize(ctx context.Context, a Actor, repo string, n int) (string, error) {
 	repo, err := NormalizeRepo(repo)
 	if err != nil {
-		return "", refuse(CodeNotAllowed, "repositório inválido")
+		return "", refuse(CodeNotAllowed, "github.invalid_repo")
 	}
 	if err := s.guard().Authorize(ctx, a, Target{Repo: repo, Kind: KindPR, Number: n}); err != nil {
 		return "", err

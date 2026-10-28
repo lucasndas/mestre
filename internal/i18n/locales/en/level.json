@@ -1,0 +1,9 @@
+{
+  "level.administrator": "Administrator",
+  "level.approver": "Approver",
+  "level.observer": "Observer",
+  "level.owner": "Guildmaster",
+  "level.required": "Requires the {{need}} level; yours is {{have}}.",
+  "level.required_or_above": "Requires the {{need}} level or above; yours is {{have}}.",
+  "level.unknown": "{{level}}"
+}

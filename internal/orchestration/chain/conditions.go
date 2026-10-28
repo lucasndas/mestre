@@ -213,7 +213,7 @@ func (r PolicyRules) wordsIn(file PRFile) []string {
 func (s *Service) policyGate(ctx context.Context, r Request) *Refusal {
 	rules := s.rulesFor(ctx, r)
 	if why := rules.ForcesPeople(r); why != "" {
-		return refuse(CodeHumanRequired, "%s", oneLine(why))
+		return refuse(CodeHumanRequired, "approval.detail", "detail", oneLine(why))
 	}
 	// An alto request is the Grão-Mestre's only inside a delegation of the Owner
 	// (checked by the level): the thresholds below are for medio, but the label
@@ -244,7 +244,7 @@ func (s *Service) policyGate(ctx context.Context, r Request) *Refusal {
 		for i := range why {
 			why[i] = oneLine(why[i])
 		}
-		return refuse(CodeHumanRequired, "%s", strings.Join(why, "; "))
+		return refuse(CodeHumanRequired, "approval.detail", "detail", strings.Join(why, "; "))
 	}
 	return nil
 }

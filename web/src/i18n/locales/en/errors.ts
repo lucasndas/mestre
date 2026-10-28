@@ -2,6 +2,7 @@ import type { Widen } from "../../shape";
 import type pt from "../pt-BR/errors";
 
 const errors: Widen<typeof pt> = {
+  locale: "en", // the language of these texts: the texts of the engine are said in it
   network: "I could not reach the Citadel. Check the connection and try again.",
   invalid_credentials: "Invalid user or password.",
   login_blocked: "Too many wrong passwords. Try again in {{minutes}} min.",
@@ -37,7 +38,6 @@ const errors: Widen<typeof pt> = {
   approval_no_verify: "I could not check the target of the request, so nothing was approved.",
   approval_expired: "The time of the request is over. Nothing was approved.",
   approval_quorum: 'With more than one approval required, only "Approve now" counts.',
-  approval_refused: "The engine refused the answer: {{message}}",
   chat_no_grand_master: "This campaign has no Grand Master right now. Nothing was sent.",
   chat_file_too_large: "A file is over the allowed limit. Nothing was sent.",
   chat_too_many_files: "There are too many files in the message (at most {{max}}).",
@@ -57,10 +57,6 @@ const errors: Widen<typeof pt> = {
   mismatch_pin: "The two PINs are not the same.",
   required: "Fill in this field.",
   forbidden_level_need: "This action needs the {{need}} level; yours is {{have}}.",
-  level_owner: "Guildmaster",
-  level_administrator: "Administrator",
-  level_approver: "Approver",
-  level_observer: "Observer",
   owner_exists: "There is only one Guildmaster. The post passes by a transfer.",
   self_action: "The Guildmaster cannot suspend or remove themselves. Pass the post first.",
   bad_level: "That level does not exist.",
@@ -80,7 +76,6 @@ const errors: Widen<typeof pt> = {
   github_no_flow: "No connection was in progress. Start again.",
   github_not_ready: "The Grand Master App is not ready to connect GitHub yet.",
   github_flow_off: "The Grand Master App has the device flow turned off on GitHub.",
-  decree_refused: "Mestre refused the decree: {{reason}}",
   decree_ended: "This is already over.",
   mestre_locked: "Mestre is locked: nothing changes now.",
   no_proposal: "The proposal no longer exists or expired. Do it again.",
@@ -102,7 +97,6 @@ const errors: Widen<typeof pt> = {
   profile_invalid: "The profile was not accepted: {{message}}",
   app_state: "This App is not waiting for a link now.",
   app_limit: "The account reached the GitHub limit of Apps.",
-  refused: "The Citadel refused the action.",
   conflict: "This changed since you opened it. Look at the current version and try again.",
 };
 export default errors;

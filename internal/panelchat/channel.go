@@ -44,7 +44,7 @@ func (c Outgoing) Redacted(o inbox.Origin) {
 
 // File implements panel.ChatSource: a file the Grão-Mestre sent to this user, in this workspace.
 func (s *Service) File(ctx context.Context, u users.User, workspace string, answer int64, index int) (panel.ChatDownload, error) {
-	gone := panel.Err(panel.CodeChatFileGone, "o arquivo não está disponível", nil)
+	gone := panel.Err(panel.CodeChatFileGone, "api.file_unavailable", nil)
 	if !u.Acts(workspace) {
 		return panel.ChatDownload{}, notFound()
 	}
@@ -148,7 +148,7 @@ func (s *Service) AskChoice(ctx context.Context, q Question, recommend int) (int
 // message of the user; a second click, from any tab, is refused. Only the user the question was
 // asked of, in the channel it was asked in, can answer it.
 func (s *Service) Choose(ctx context.Context, u users.User, id int64, option int) error {
-	unknown := panel.Err(panel.CodeChatChoiceUnknown, "essa pergunta não existe mais", nil)
+	unknown := panel.Err(panel.CodeChatChoiceUnknown, "api.choice_unknown", nil)
 	var q question
 	row := s.o.DB.Reader().QueryRowContext(ctx, `SELECT id, workspace, mesa, user_id, channel, question, options, state, answer, created_at FROM choose_questions
 		WHERE id = ? AND channel = ? AND user_id = ?`, id, inbox.ChannelPanel, u.ID)
@@ -163,7 +163,7 @@ func (s *Service) Choose(ctx context.Context, u users.User, id int64, option int
 		return unknown
 	}
 	if option < 0 || option >= len(q.Options) {
-		return panel.Err(panel.CodeBadRequest, "opção inválida", nil)
+		return panel.Err(panel.CodeBadRequest, "api.option_invalid", nil)
 	}
 	claimed := false
 	if err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
@@ -178,7 +178,7 @@ func (s *Service) Choose(ctx context.Context, u users.User, id int64, option int
 		return err
 	}
 	if !claimed {
-		return panel.Err(panel.CodeChatChoiceTaken, "essa pergunta já foi respondida", nil)
+		return panel.Err(panel.CodeChatChoiceTaken, "api.choice_taken", nil)
 	}
 	_, err = s.enqueue(ctx, inbox.NewItem{Workspace: q.Workspace, Kind: inbox.KindUser, Sender: u.Name,
 		Origin: &inbox.Origin{Channel: inbox.ChannelPanel, User: u.ID, UserName: u.Name, Level: characters.UserLevel(u.Level), Table: q.Mesa, Choice: q.ID},
@@ -190,7 +190,7 @@ func (s *Service) Choose(ctx context.Context, u users.User, id int64, option int
 			_, err := tx.ExecContext(ctx, `UPDATE choose_questions SET state = 'open', answer = '', answered_at = 0 WHERE id = ? AND state = 'answered'`, id)
 			return err
 		})
-		return panel.Err(panel.CodeChatChoiceLost, "não consegui entregar a resposta ao Grão-Mestre; clique de novo", nil)
+		return panel.Err(panel.CodeChatChoiceLost, "api.choice_lost", nil)
 	}
 	s.emit(panel.ChatEvent{User: u.ID, Workspace: q.Workspace, Kind: panel.EventChatChanged})
 	return nil

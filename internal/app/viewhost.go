@@ -3,11 +3,11 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/canvas"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
@@ -267,7 +267,7 @@ func (h viewHost) PauseTable(ctx context.Context, by users.User, workspace, tabl
 		return false, err
 	}
 	if o.Supervisor == nil {
-		return false, &panel.Refusal{Reason: "unavailable", Message: "a pausa de mesa não está disponível agora"}
+		return false, &panel.Refusal{Msg: i18n.M("table.unavailable")}
 	}
 	if _, err := o.Tables.Get(ctx, workspace, table); err != nil {
 		return false, panel.ErrCanvasNotFound
@@ -277,9 +277,9 @@ func (h viewHost) PauseTable(ctx context.Context, by users.User, workspace, tabl
 		By:     chain.Actor{User: by.ID, UserLevel: characters.UserLevel(by.Level)}})
 	switch {
 	case errors.Is(err, chain.ErrLevelDenied):
-		return false, &panel.Refusal{Reason: "level_denied", Message: err.Error()}
+		return false, &panel.Refusal{Msg: i18n.M("table.level_denied")}
 	case errors.Is(err, chain.ErrTableOver):
-		return false, &panel.Refusal{Reason: "table_over", Message: fmt.Sprintf("a mesa %s já terminou", table)}
+		return false, &panel.Refusal{Msg: i18n.M("table.over")}
 	}
 	return changed, err
 }
@@ -299,7 +299,7 @@ var _ panel.ViewSource = screenedViewHost{}
 func (h screenedViewHost) PauseTable(ctx context.Context, by users.User, workspace, table, reason string) (bool, error) {
 	kind, clean := secretscreen.Screen(h.mask, reason)
 	if kind.Held() || strings.TrimSpace(clean) == "" {
-		return false, &panel.Refusal{Reason: "secret", Message: "não escreva senhas no motivo; diga só por que pausar"}
+		return false, &panel.Refusal{Msg: i18n.M("table.secret")}
 	}
 	return h.viewHost.PauseTable(ctx, by, workspace, table, clean)
 }

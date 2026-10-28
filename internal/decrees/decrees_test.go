@@ -11,6 +11,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
 	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
@@ -415,7 +416,7 @@ func TestTheLevelAndTheWorkspacesAreCheckedBeforeAndAtTheClick(t *testing.T) {
 	if ref.Code != decrees.CodeLevel {
 		t.Fatalf("%+v", ref)
 	}
-	contains(t, ref.Message, "Administrador")
+	contains(t, i18n.Render(i18n.PtBR, ref.Msg), "Administrador")
 	// a decree outside the workspaces of the author
 	other := allowCmd(ana, "dev", "make test")
 	other.Workspace = "blog"
@@ -511,7 +512,7 @@ func TestADecreeThatFreesAnInvariantIsKeptButTheAgentStillHasNoPush(t *testing.T
 	if ref := w.refusal(p); ref.Code != decrees.CodeInvariant {
 		t.Fatalf("%+v", ref)
 	} else {
-		contains(t, ref.Message, "contornar a proteção do GitHub (revisao_obrigatoria) nem o motor pode")
+		contains(t, i18n.Render(i18n.PtBR, ref.Msg), "Contornar a proteção do GitHub (revisao_obrigatoria) nem o motor pode")
 	}
 	if n := w.count("decree_proposals"); n != 1 {
 		t.Fatalf("%d proposals: the refused one was kept to confirm", n)

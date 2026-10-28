@@ -165,7 +165,7 @@ func New(o Options) (*Panel, error) {
 		mux.Handle("/github/", continueCrossSite(p.holdSignedIn(web.Handler())))
 	}
 	mux.Handle("/api/", p.require(func(w http.ResponseWriter, r *http.Request) {
-		WriteError(w, Err(CodeNotFound, "não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.not_found", nil))
 	}, false))
 	mux.Handle("/", static(o.Assets))
 	p.handler = secure(mux)
@@ -322,10 +322,11 @@ func (p *Panel) require(h http.HandlerFunc, public bool, caps ...users.Capabilit
 // (holdRequest) when the body is read.
 func (p *Panel) requireLimit(limit int64, stream bool, h http.HandlerFunc, public bool, caps ...users.Capability) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w = &langWriter{ResponseWriter: w, accept: r.Header.Get("Accept-Language")}
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		if mutating(r.Method) && !originOK(r) {
 			p.auditOriginRefused(r)
-			WriteError(w, Err(CodeBadOrigin, "origem não permitida", nil))
+			WriteError(w, Err(CodeBadOrigin, "api.bad_origin", nil))
 			return
 		}
 		if public {
@@ -338,6 +339,7 @@ func (p *Panel) requireLimit(limit int64, stream bool, h http.HandlerFunc, publi
 			return
 		}
 		r = r.WithContext(ctx)
+		w.(*langWriter).user = UserOf(r).Language
 		for _, c := range caps {
 			if err := users.Require(UserOf(r).Level, c); err != nil {
 				var le *users.LevelError
@@ -345,7 +347,7 @@ func (p *Panel) requireLimit(limit int64, stream bool, h http.HandlerFunc, publi
 				if errors.As(err, &le) {
 					params["need"], params["have"] = string(le.Need), string(le.Have)
 				}
-				WriteError(w, Err(CodeForbiddenLevel, "ação não permitida: "+err.Error(), params))
+				WriteError(w, errForbidden(err, params))
 				return
 			}
 		}

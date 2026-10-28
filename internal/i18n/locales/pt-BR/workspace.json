@@ -1,0 +1,14 @@
+{
+  "workspace.bad_grand_master_sheet": "Essa ficha não serve para o Grão-Mestre: use um agente, que não seja o Operador do PC e que rode em toda máquina não excluída.",
+  "workspace.bad_state": "O estado da campanha não permite isso agora.",
+  "workspace.creation_failed": "Não foi possível criar a campanha: o GitHub ou o Mestre recusou. Nada foi criado.",
+  "workspace.invalid_document": "O arquivo de verificação não vale: confira o formato, os comandos e o tempo. Nada foi confirmado.",
+  "workspace.invalid_repo": "O repositório precisa estar no formato dono/nome.",
+  "workspace.invalid_slug": "O apelido não vale. Sugestão: {{suggestion}}.",
+  "workspace.invalid_slug_plain": "O apelido não vale.",
+  "workspace.not_preparing": "A campanha já passou da sessão zero.",
+  "workspace.not_ready": "O clone principal da campanha ainda não existe. Espere a etapa do espelho.",
+  "workspace.preparing": "Uma campanha em preparação não pode ser pausada.",
+  "workspace.repo_taken": "Esse repositório já é a campanha {{slug}}.",
+  "workspace.unknown_sheet": "Essa ficha não existe ou não roda um agente. Nada foi criado."
+}

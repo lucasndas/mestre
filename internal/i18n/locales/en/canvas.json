@@ -1,0 +1,17 @@
+{
+  "canvas.automatic_connection": "This connection is automatic and lasts as long as its reason does ({{reasons}}). It cannot be removed here.",
+  "canvas.cancelled": "The restoration was cancelled.",
+  "canvas.different_tables": "Both elements must be in the same table.",
+  "canvas.grand_master": "The Grand Master is connected only by the Master itself.",
+  "canvas.invalid": "The mission is not valid: check the steps and the characters.",
+  "canvas.invalid_state": "This cannot be done in the state it is in now.",
+  "canvas.level_denied": "Your level does not allow this action.",
+  "canvas.name_taken": "Something already has this name.",
+  "canvas.no_access": "You do not have access to the campaign.",
+  "canvas.no_connection": "There is no connection between the two.",
+  "canvas.not_found": "I could not find that element. It may have been deleted.",
+  "canvas.same_item": "An element is not connected to itself.",
+  "canvas.selection": "The selection cannot be saved as it is.",
+  "canvas.table_state": "The table is not in a state that accepts this.",
+  "canvas.too_large": "The text is too large for a scroll."
+}

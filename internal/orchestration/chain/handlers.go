@@ -80,33 +80,33 @@ func RefusalResponse(err error) localchan.Response {
 	}
 	switch ref.Code {
 	case CodeNotAtLevel:
-		return localchan.Fail("not_at_level", ref.Message, "see `mestre approval list --mine`").WithExit(localchan.ExitDenied)
+		return localchan.FailMsg("not_at_level", ref.Msg, "see `mestre approval list --mine`").WithExit(localchan.ExitDenied)
 	case CodeNoRequest:
-		return localchan.Fail("already_decided", ref.Message, "").WithExit(localchan.ExitConflict)
+		return localchan.FailMsg("already_decided", ref.Msg, "").WithExit(localchan.ExitConflict)
 	case CodeHumanRequired, CodeAboveCeiling, CodeSelfDecision, CodeAttenuation, CodeMesaCondition:
 		hint := "ask the users with `mestre approval ask`"
 		if ref.Climbed {
 			hint = "the request went up by itself"
 		}
-		return localchan.Fail("human_required", ref.Message, hint).WithExit(localchan.ExitDenied)
+		return localchan.FailMsg("human_required", ref.Msg, hint).WithExit(localchan.ExitDenied)
 	case CodeDurationTooLong:
-		return localchan.Fail("too_long", ref.Message, "").WithExit(localchan.ExitUsage)
+		return localchan.FailMsg("too_long", ref.Msg, "").WithExit(localchan.ExitUsage)
 	case CodePatternTooBroad:
-		return localchan.Fail("pattern_too_broad", ref.Message, "").WithExit(localchan.ExitUsage)
+		return localchan.FailMsg("pattern_too_broad", ref.Msg, "").WithExit(localchan.ExitUsage)
 	case CodePatternNoMatch:
-		return localchan.Fail("pattern_mismatch", ref.Message, "").WithExit(localchan.ExitUsage)
+		return localchan.FailMsg("pattern_mismatch", ref.Msg, "").WithExit(localchan.ExitUsage)
 	case CodeBadAnswer:
-		return localchan.Fail("bad_answer", ref.Message, "").WithExit(localchan.ExitUsage)
+		return localchan.FailMsg("bad_answer", ref.Msg, "").WithExit(localchan.ExitUsage)
 	case CodeReasonRequired:
-		return localchan.Fail(localchan.CodeUsage, ref.Message, `use --reason "<reason>"`)
+		return localchan.FailMsg(localchan.CodeUsage, ref.Msg, `use --reason "<reason>"`)
 	case CodeNotRequester:
-		return localchan.Fail("not_requester", ref.Message, "").WithExit(localchan.ExitDenied)
+		return localchan.FailMsg("not_requester", ref.Msg, "").WithExit(localchan.ExitDenied)
 	case codeNothingToAnswer:
-		return localchan.Fail("nothing_to_answer", ref.Message, "").WithExit(localchan.ExitConflict)
+		return localchan.FailMsg("nothing_to_answer", ref.Msg, "").WithExit(localchan.ExitConflict)
 	case CodePaused:
-		return localchan.Fail("character_paused", ref.Message, "").WithExit(localchan.ExitDenied)
+		return localchan.FailMsg("character_paused", ref.Msg, "").WithExit(localchan.ExitDenied)
 	}
-	return localchan.Fail(ref.Code, ref.Message, "")
+	return localchan.FailMsg(ref.Code, ref.Msg, "")
 }
 
 func (s *Service) handleDecide(ctx context.Context, c *localchan.Call) localchan.Response {

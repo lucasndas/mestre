@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/canvas"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/connections"
@@ -61,41 +62,41 @@ func refuse(err error) error {
 	case err == nil:
 		return nil
 	case errors.As(err, &auto):
-		return &panel.Refusal{Reason: "automatic_connection", Message: err.Error(), Params: map[string]any{"reasons": auto.Reasons}}
+		return &panel.Refusal{Msg: i18n.M("canvas.automatic_connection", "reasons", auto.Reasons)}
 	case errors.As(err, &sel):
-		return &panel.Refusal{Reason: "selection", Message: err.Error(), Params: map[string]any{"problems": sel.Problems}}
+		return &panel.Refusal{Msg: i18n.M("canvas.selection", "problems", sel.Problems)}
 	case errors.Is(err, connections.ErrLevelDenied), errors.Is(err, grimoires.ErrLevelDenied), errors.Is(err, scrolls.ErrLevelDenied), errors.Is(err, characters.ErrLevelDenied):
-		return &panel.Refusal{Reason: "level_denied", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.level_denied")}
 	case errors.Is(err, connections.ErrSame):
-		return &panel.Refusal{Reason: "same_item", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.same_item")}
 	case errors.Is(err, connections.ErrGrandMaster):
-		return &panel.Refusal{Reason: "grand_master", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.grand_master")}
 	case errors.Is(err, connections.ErrDifferentTables):
-		return &panel.Refusal{Reason: "different_tables", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.different_tables")}
 	case errors.Is(err, connections.ErrNoConnection):
-		return &panel.Refusal{Reason: "no_connection", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.no_connection")}
 	case errors.Is(err, connections.ErrNotFound), errors.Is(err, characters.ErrNoCharacter), errors.Is(err, scrolls.ErrNotVisible):
-		return &panel.Refusal{Reason: "not_found", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.not_found")}
 	case errors.Is(err, scrolls.ErrRevision):
 		return panel.ErrCanvasConflict
 	case errors.Is(err, scrolls.ErrTooLarge):
-		return &panel.Refusal{Reason: "too_large", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.too_large")}
 	case errors.Is(err, quests.ErrNameTaken), errors.Is(err, grimoires.ErrNameTaken):
-		return &panel.Refusal{Reason: "name_taken", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.name_taken")}
 	case errors.Is(err, quests.ErrInvalidState):
-		return &panel.Refusal{Reason: "invalid_state", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.invalid_state")}
 	case errors.Is(err, grimoires.ErrTableState), errors.Is(err, characters.ErrTableClosed):
-		return &panel.Refusal{Reason: "table_state", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.table_state")}
 	case errors.Is(err, grimoires.ErrNoGrimoire):
-		return &panel.Refusal{Reason: "not_found", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.not_found")}
 	case errors.Is(err, grimoires.ErrNoAccess):
-		return &panel.Refusal{Reason: "no_access", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.no_access")}
 	case errors.Is(err, grimoires.ErrCancelled):
-		return &panel.Refusal{Reason: "cancelled", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.cancelled")}
 	}
 	var val *quests.ValidationError
 	if errors.As(err, &val) {
-		return &panel.Refusal{Reason: "invalid", Message: err.Error()}
+		return &panel.Refusal{Msg: i18n.M("canvas.invalid")}
 	}
 	var conflict *scrolls.ConflictError
 	if errors.As(err, &conflict) {

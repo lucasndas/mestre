@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/machinesheet"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -58,32 +59,32 @@ func (g *guildHost) acting() (*guild.Citadel, *citadelRun, error) {
 
 // refusalOf turns what the registry refuses into the refusal the screen shows.
 func refusalOf(err error) error {
-	r := func(reason string) error { return &panel.Refusal{Reason: reason, Message: err.Error()} }
+	refuse := func(code string) error { return &panel.Refusal{Msg: i18n.M(code)} }
 	switch {
 	case err == nil:
 		return nil
 	case errors.Is(err, guild.ErrNoMachine):
 		return panel.ErrGuildNotFound
 	case errors.Is(err, guild.ErrCitadelProtected):
-		return r("citadel_protected")
+		return refuse("guild.citadel_protected")
 	case errors.Is(err, guild.ErrExcludedMachine):
-		return r("excluded_machine")
+		return refuse("guild.excluded_machine")
 	case errors.Is(err, guild.ErrOutsideLocalNetwork):
-		return r("outside_local_network")
+		return refuse("guild.outside_local_network")
 	case errors.Is(err, guild.ErrNotActive):
-		return r("not_active")
+		return refuse("guild.not_active")
 	case errors.Is(err, guild.ErrNoLock):
-		return r("no_lock")
+		return refuse("guild.no_lock")
 	case errors.Is(err, guild.ErrSuspended):
-		return r("suspended")
+		return refuse("guild.suspended")
 	case errors.Is(err, guild.ErrNotPending), errors.Is(err, guild.ErrExpired):
-		return r("not_pending")
+		return refuse("guild.not_pending")
 	case errors.Is(err, guild.ErrNotRevealed):
-		return r("not_revealed")
+		return refuse("guild.not_revealed")
 	case errors.Is(err, guild.ErrBadPriority):
-		return r("bad_priority")
+		return refuse("guild.bad_priority")
 	case errors.Is(err, guild.ErrBadTimezone):
-		return r("bad_timezone")
+		return refuse("guild.bad_timezone")
 	}
 	return err
 }
@@ -285,7 +286,7 @@ func (g *guildHost) PassCitadel(ctx context.Context, by users.User, machineID, a
 	}
 	switch {
 	case run == nil || run.srv == nil || !run.srv.Link(machineID).Connected():
-		return &panel.Refusal{Reason: "not_online", Message: "a máquina não está online: a troca planejada só passa a Cidadela a uma máquina conectada"}
+		return &panel.Refusal{Msg: i18n.M("guild.not_online")}
 	case g.e.lockOf(run) == nil:
 		return refusalOf(guild.ErrNoLock)
 	}
@@ -330,7 +331,7 @@ func (g *guildHost) SetTimezone(ctx context.Context, zone string) error {
 // not act, are refused with their reason. The caller frees it when the handover ends.
 func (r *citadelRun) claimHandover(acting bool) error {
 	if !r.handing.CompareAndSwap(false, true) {
-		return &panel.Refusal{Reason: "handover_in_progress", Message: "a troca da Cidadela já está em andamento"}
+		return &panel.Refusal{Msg: i18n.M("guild.handover_in_progress")}
 	}
 	if r.gate.isDraining() || !acting {
 		r.handing.Store(false)

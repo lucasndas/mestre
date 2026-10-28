@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/users"
 )
 
@@ -182,7 +183,7 @@ func (p *Panel) watchGuild(ctx context.Context) {
 func (p *Panel) needGuild(w http.ResponseWriter) (GuildSource, bool) {
 	src := p.guildSource()
 	if src == nil {
-		WriteError(w, Err(CodeUnavailable, "a Guilda não está disponível agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.guild_unavailable", nil))
 		return nil, false
 	}
 	return src, true
@@ -193,15 +194,11 @@ func (p *Panel) failGuild(w http.ResponseWriter, err error) {
 	var ref *Refusal
 	switch {
 	case errors.As(err, &ref):
-		params := map[string]any{"reason": ref.Reason}
-		for k, v := range ref.Params {
-			params[k] = v
-		}
-		WriteError(w, Err(CodeRefused, ref.Message, params))
+		WriteError(w, ErrMsg(ref.Msg))
 	case errors.Is(err, ErrGuildUnavailable):
-		WriteError(w, Err(CodeUnavailable, "a Guilda não está disponível agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.guild_unavailable", nil))
 	case errors.Is(err, ErrGuildNotFound):
-		WriteError(w, Err(CodeNotFound, "máquina ou pedido não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.machine_not_found", nil))
 	default:
 		p.log.Warn("panel: an action of the Guild failed", "err", err)
 		WriteError(w, errInternal())
@@ -287,7 +284,7 @@ func (p *Panel) handleGuildRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !in.Confirm {
-		WriteError(w, Err(CodeRefused, "confirme a remoção depois de ler quem roda na máquina", map[string]any{"reason": "confirm_required"}))
+		WriteError(w, ErrMsg(i18n.M("guild.confirm_required")))
 		return
 	}
 	res, err := src.Remove(r.Context(), UserOf(r), id)

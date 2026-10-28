@@ -39,3 +39,12 @@ func momentIn(t time.Time, loc *time.Location) string {
 	l := t.In(loc)
 	return l.Format(layout) + " (" + loc.String() + ", UTC" + l.Format("-07:00") + ")"
 }
+
+// inGuildZone is the instant put in the time zone of the Guild (in UTC when that
+// zone is not available), so that the message that carries it shows it there.
+func (s *Service) inGuildZone(ctx context.Context, t time.Time) time.Time {
+	if loc := s.guildZone(ctx); loc != nil {
+		return t.In(loc)
+	}
+	return t.UTC()
+}

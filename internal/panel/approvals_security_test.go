@@ -104,10 +104,10 @@ func TestAnAnswerTheTypeOfTheRequestDoesNotHaveIsRefusedByTheServer(t *testing.T
 	a := newApprRig(t)
 	cost := a.open(reqOpt{risk: classes.RiskMedium, typ: classes.RequestExtraCost})
 	for _, body := range []panel.ApprovalAnswerRequest{{Answer: "approve_always"}, {Answer: "approve_pattern", Pattern: "npm *"}, {Answer: "approve_for", For: "3h"}} {
-		a.wantErr(a.answer(a.ownerTok, cost.ID, body, "123456"), 422, panel.CodeApprovalRefused)
+		a.wantErr(a.answer(a.ownerTok, cost.ID, body, "123456"), 422, "approval.answer_not_offered")
 	}
 	low := a.open(reqOpt{risk: classes.RiskLow, typ: classes.RequestExtraCost})
-	a.wantErr(a.answer(a.ownerTok, low.ID, panel.ApprovalAnswerRequest{Answer: "delegate"}, "123456"), 422, panel.CodeApprovalRefused)
+	a.wantErr(a.answer(a.ownerTok, low.ID, panel.ApprovalAnswerRequest{Answer: "delegate"}, "123456"), 422, "approval.answer_not_offered")
 	if a.stateOf(cost.ID) != chain.Open || a.stateOf(low.ID) != chain.Open {
 		t.Fatal("a request changed")
 	}

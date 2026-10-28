@@ -9,6 +9,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -167,13 +168,13 @@ const CodeNoDelegation = "no_delegation"
 func noDelegation(err error) error {
 	var ref *chain.Refusal
 	if errors.As(err, &ref) && ref.Code == chain.CodeHumanRequired {
-		return &chain.Refusal{Code: CodeNoDelegation, Message: ref.Message}
+		return &chain.Refusal{Code: CodeNoDelegation, Msg: ref.Msg}
 	}
 	return err
 }
 
-func human(format string, a ...any) error {
-	return &chain.Refusal{Code: chain.CodeHumanRequired, Message: fmt.Sprintf(format, a...)}
+func human(msg string, kv ...any) error {
+	return &chain.Refusal{Code: chain.CodeHumanRequired, Msg: i18n.M(msg, kv...)}
 }
 
 func (a *Approver) log() *slog.Logger {
@@ -209,7 +210,7 @@ func (a *Approver) Approve(ctx context.Context, o ApproveOrder) (Approval, error
 		return Approval{}, err
 	}
 	if len(standing) == 0 {
-		return Approval{}, human("não há aprovação vigente para o PR #%d no commit %.8s", o.Number, o.SHA)
+		return Approval{}, human("approval.gh_no_current_approval", "number", o.Number, "sha", shortSHA(o.SHA))
 	}
 	best := standing[len(standing)-1]
 	byPerson := ""
@@ -228,7 +229,7 @@ func (a *Approver) Approve(ctx context.Context, o ApproveOrder) (Approval, error
 		humanMode = mode == ModeHuman
 	}
 	if humanMode && byPerson == "" {
-		return Approval{}, human("a campanha está no modo de aprovação humana: só a aprovação de uma pessoa vale")
+		return Approval{}, human("approval.gh_human_mode")
 	}
 	if gmLogin == "" {
 		return Approval{}, errors.New("approvals: the login of the App Grão-Mestre is not known")
@@ -236,7 +237,7 @@ func (a *Approver) Approve(ctx context.Context, o ApproveOrder) (Approval, error
 	openedByGM := strings.EqualFold(pr.Author, gmLogin)
 	required, err := a.required(ctx, o)
 	if err != nil {
-		return Approval{}, human("não foi possível saber quem o repositório exige para aprovar o PR #%d: %v", o.Number, err)
+		return Approval{}, human("approval.gh_required_unknown", "number", o.Number, "reason", err.Error())
 	}
 	if !openedByGM && !humanMode && len(required) == 0 && o.OnBehalf == "" {
 		return a.asGrandMaster(ctx, gm, o, best, byPerson)
@@ -282,7 +283,7 @@ func (a *Approver) asGrandMaster(ctx context.Context, gm ReviewClient, o Approve
 func (a *Approver) refusedReview(err error) error {
 	var api *github.APIError
 	if errors.As(err, &api) && api.Status == 422 {
-		return human("o GitHub recusou o review: %s", api.Message)
+		return human("approval.gh_review_refused", "reason", api.Message)
 	}
 	return err
 }
@@ -295,7 +296,7 @@ func (a *Approver) asPerson(ctx context.Context, o ApproveOrder, r chain.Request
 		return Approval{}, err
 	}
 	if len(targets) == 0 {
-		return Approval{}, human("o PR precisa da aprovação de uma pessoa e nenhuma pessoa cadastrada a dá")
+		return Approval{}, human("approval.gh_no_registered_person")
 	}
 	var lastWaiting Approval
 	for _, p := range targets {
@@ -342,7 +343,7 @@ func (a *Approver) asPerson(ctx context.Context, o ApproveOrder, r chain.Request
 		return lastWaiting, nil
 	}
 	if o.OnBehalf != "" {
-		return Approval{}, noDelegation(human("%s não está entre as pessoas que o PR #%d exige", o.OnBehalf, o.Number))
+		return Approval{}, noDelegation(human("approval.gh_not_among_required", "person", o.OnBehalf, "number", o.Number))
 	}
 	// nobody of the required ones approved it yet: ask the first
 	return a.askPerson(ctx, o, r, targets[0])
@@ -379,7 +380,7 @@ func (a *Approver) targets(ctx context.Context, o ApproveOrder, byPerson string,
 		}
 	}
 	if len(required) > 0 && len(out) < len(required) {
-		return nil, human("o repositório exige a revisão de %s, que não tem cadastro ativo no Mestre", strings.Join(required, ", "))
+		return nil, human("approval.gh_reviewer_not_registered", "reviewers", strings.Join(required, ", "))
 	}
 	return out, nil
 }
@@ -414,11 +415,11 @@ func (a *Approver) withCredential(ctx context.Context, o ApproveOrder, p users.U
 // sendLink gives the person the link of the PR to approve on GitHub.
 func (a *Approver) sendLink(ctx context.Context, o ApproveOrder, p users.User) (Approval, error) {
 	if a.Tell == nil {
-		return Approval{}, human("%s precisa aprovar o PR #%d no GitHub e o Mestre não tem como avisá-la", plain(p.Name), o.Number)
+		return Approval{}, human("approval.gh_cannot_notify", "person", plain(p.Name), "number", o.Number)
 	}
 	text := fmt.Sprintf("O PR #%d precisa do seu review no GitHub: https://github.com/%s/pull/%d\nO Mestre percebe o seu review e conclui sozinho.", o.Number, strings.ToLower(o.Repo), o.Number)
 	if err := a.Tell.Tell(ctx, p.ID, text); err != nil {
-		return Approval{}, human("o link do PR #%d não chegou a %s: %v", o.Number, plain(p.Name), err)
+		return Approval{}, human("approval.gh_link_not_delivered", "number", o.Number, "person", plain(p.Name), "reason", err.Error())
 	}
 	return Approval{As: AsLink}, nil
 }
@@ -427,7 +428,7 @@ func (a *Approver) sendLink(ctx context.Context, o ApproveOrder, p users.User) (
 // refuses the Grão-Mestre: nothing is done in her name without her.
 func (a *Approver) askPerson(ctx context.Context, o ApproveOrder, from chain.Request, p users.User) (Approval, error) {
 	if a.Opener == nil {
-		return Approval{}, human("%s precisa aprovar o PR #%d", plain(p.Name), o.Number)
+		return Approval{}, human("approval.gh_must_approve", "person", plain(p.Name), "number", o.Number)
 	}
 	typ := from.Type
 	if typ == "" {
@@ -438,7 +439,7 @@ func (a *Approver) askPerson(ctx context.Context, o ApproveOrder, from chain.Req
 	if err != nil {
 		return Approval{}, err
 	}
-	return Approval{Request: id}, human("o pedido #%d foi para %s: o PR #%d só vale com a aprovação dela", id, plain(p.Name), o.Number)
+	return Approval{Request: id}, human("approval.gh_waiting_person", "id", id, "person", plain(p.Name), "number", o.Number)
 }
 
 // Decided implements chain.Sink for the requests of PR and merge: an approval
@@ -453,7 +454,7 @@ func (a *Approver) Decided(ctx context.Context, r chain.Result) error {
 	_, err := a.Approve(ctx, ApproveOrder{Workspace: q.Workspace, Repo: q.PR.Repo, Number: q.PR.Number, SHA: q.PR.SHA})
 	var ref *chain.Refusal
 	if errors.As(err, &ref) && ref.Code == chain.CodeHumanRequired {
-		a.log().Warn("approvals: an approval of people was not applied on GitHub", "request", q.ID, "reason", ref.Message)
+		a.log().Warn("approvals: an approval of people was not applied on GitHub", "request", q.ID, "reason", ref.Text())
 	}
 	return err
 }

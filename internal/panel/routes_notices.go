@@ -54,7 +54,7 @@ func (p *Panel) listenNotices() {
 
 func (p *Panel) needNotices(w http.ResponseWriter) bool {
 	if p.notes == nil || p.notes.Feed == nil {
-		WriteError(w, Err(CodeUnavailable, "os avisos não estão disponíveis agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.notices_unavailable", nil))
 		return false
 	}
 	return true

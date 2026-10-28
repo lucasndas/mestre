@@ -247,22 +247,4 @@ export default {
     replace: "Substituir",
     save: "Salvar",
   },
-  refusal: {
-    automatic_connection:
-      "Esta conexão é automática e existe enquanto o motivo existir ({{reasons}}). Ela não pode ser removida aqui.",
-    level_denied: "O seu nível não permite esta ação.",
-    same_item: "Um elemento não se conecta a ele mesmo.",
-    grand_master: "O Grão-Mestre só é conectado pelo próprio Mestre.",
-    different_tables: "Os dois elementos precisam estar na mesma mesa.",
-    no_connection: "Não há conexão entre os dois.",
-    not_found: "Não achei esse elemento. Ele pode ter sido apagado.",
-    too_large: "O texto é grande demais para um pergaminho.",
-    name_taken: "Já existe algo com este nome.",
-    invalid_state: "Isto não pode ser feito no estado em que está agora.",
-    table_state: "A mesa não está num estado que aceite isto.",
-    no_access: "Você não tem acesso à campanha.",
-    cancelled: "A restauração foi cancelada.",
-    selection: "A seleção não pode ser salva como está.",
-    invalid: "A missão não é válida: confira as etapas e os personagens.",
-  },
 } as const;

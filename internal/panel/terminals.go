@@ -118,7 +118,7 @@ const maxTerminalName = 200
 func (a *terminalArea) handleFind(w http.ResponseWriter, r *http.Request) {
 	finder, _ := a.p.terminalSource().(TerminalFinder)
 	if finder == nil {
-		WriteError(w, Err(CodeUnavailable, "os terminais não estão disponíveis agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.terminals_unavailable", nil))
 		return
 	}
 	name, ws := r.URL.Query().Get("name"), r.URL.Query().Get("workspace")
@@ -167,14 +167,14 @@ func (a *terminalArea) fill(info TerminalInfo, u users.User) TerminalInfo {
 func (a *terminalArea) handleInfo(w http.ResponseWriter, r *http.Request) {
 	src := a.p.terminalSource()
 	if src == nil {
-		WriteError(w, Err(CodeUnavailable, "os terminais não estão disponíveis agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.terminals_unavailable", nil))
 		return
 	}
 	u := UserOf(r)
 	info, err := src.ByCharacter(r.Context(), r.PathValue("id"))
 	switch {
 	case errors.Is(err, ErrNoTerminal) || (err == nil && !visible(u, info.Workspace)):
-		WriteError(w, Err(CodeNotFound, "terminal não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.terminal_not_found", nil))
 		return
 	case err != nil:
 		a.p.log.Warn("panel: reading a terminal", "err", err)
@@ -241,7 +241,7 @@ func (a *terminalArea) open(ctx context.Context, sub *Subscription, u users.User
 		return nil
 	}
 	if !a.reserve(u.ID) {
-		sub.Reply(TypeUIError, "", Err(CodeTooManyStreams, "terminais demais abertos nesta conta", map[string]any{"max": maxStreamsPerUser}))
+		sub.Reply(TypeUIError, "", Err(CodeTooManyStreams, "api.too_many_terminals", map[string]any{"max": maxStreamsPerUser}))
 		return nil
 	}
 	cctx, cancel := context.WithCancel(context.Background())
@@ -460,20 +460,20 @@ func (a *terminalArea) input(ctx context.Context, s Socket, env UIEnvelope) {
 			ts.endTyping()
 		}
 		a.p.audit(ctx, "panel.terminal_input_refused", map[string]any{"user": u.ID, "terminal": in.TerminalID, "have": string(u.Level)})
-		s.Fail(env.ID, Err(CodeForbiddenLevel, "ação não permitida: "+err.Error(), params))
+		s.Fail(env.ID, errForbidden(err, params))
 		return
 	}
 	src := a.p.terminalSource()
 	switch {
 	case ts == nil:
-		s.Fail(env.ID, Err(CodeBadRequest, "abra o terminal antes de digitar", nil))
+		s.Fail(env.ID, Err(CodeBadRequest, "api.open_terminal_first", nil))
 		return
 	case src == nil:
-		s.Fail(env.ID, Err(CodeUnavailable, "os terminais não estão disponíveis agora", nil))
+		s.Fail(env.ID, Err(CodeUnavailable, "api.terminals_unavailable", nil))
 		return
 	case !u.Acts(ts.info.Workspace) && ts.info.Workspace != "":
 		ts.endTyping()
-		s.Fail(env.ID, Err(CodeForbiddenLevel, "ação não permitida nesta campanha", map[string]any{"workspace": ts.info.Workspace}))
+		s.Fail(env.ID, Err(CodeForbiddenLevel, "api.workspace_not_allowed", map[string]any{"workspace": ts.info.Workspace}))
 		return
 	}
 	if !ts.beginTyping(ctx) {
@@ -484,11 +484,11 @@ func (a *terminalArea) input(ctx context.Context, s Socket, env UIEnvelope) {
 	switch err := src.Type(ctx, in.TerminalID, []byte(in.Data)); {
 	case err == nil:
 	case errors.Is(err, ErrNoSignal):
-		s.Fail(env.ID, Err(CodeUnavailable, "a máquina do terminal está sem sinal", map[string]any{"reason": "no_signal"}))
+		s.Fail(env.ID, Err(CodeUnavailable, "api.terminal_no_signal", map[string]any{"reason": "no_signal"}))
 	case errors.Is(err, ErrNoTerminal):
-		s.Fail(env.ID, Err(CodeNotFound, "terminal não encontrado", nil))
+		s.Fail(env.ID, Err(CodeNotFound, "api.terminal_not_found", nil))
 	case errors.Is(err, ErrPermissionPrompt):
-		s.Fail(env.ID, Err(CodePermissionPrompt, "o agente espera uma decisão de permissão; responda pela aprovação", nil))
+		s.Fail(env.ID, Err(CodePermissionPrompt, "api.permission_prompt", nil))
 	default:
 		a.p.log.Warn("panel: typing into a terminal", "terminal", in.TerminalID, "err", err)
 		s.Fail(env.ID, errInternal())

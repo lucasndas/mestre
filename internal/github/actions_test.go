@@ -13,6 +13,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/testkit/fakegithub"
@@ -83,7 +84,7 @@ func TestATableCannotTouchAnIssueOfAnotherTable(t *testing.T) {
 	a := github.Actor{Kind: github.ActorTable, Table: "41-b"}
 	err := r.guard.Authorize(r.ctx, a, github.Target{Repo: repoFull, Kind: github.KindIssue, Number: n})
 	var ref *github.Refusal
-	if !errors.As(err, &ref) || ref.Code != github.CodeOtherTable || ref.Message == "" || !contains(ref.Message, "#40") {
+	if !errors.As(err, &ref) || ref.Code != github.CodeOtherTable || !contains(i18n.Render(i18n.En, ref.Msg), "#40") {
 		t.Fatalf("authorize = %v, want other_table citing the epic #40", err)
 	}
 	if err := r.guard.Authorize(r.ctx, github.Actor{Kind: github.ActorTable, Table: "40-a"}, github.Target{Repo: repoFull, Kind: github.KindIssue, Number: n}); err != nil {

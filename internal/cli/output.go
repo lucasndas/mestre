@@ -97,6 +97,9 @@ func (o out) printJSON(r localchan.Response) {
 		if e.Details == nil {
 			e.Details = map[string]any{}
 		}
+		if e.Params == nil {
+			e.Params = map[string]any{}
+		}
 		e.Hint = firstNonEmpty(e.Hint, defaultHint(e.Code))
 		v["error"] = e
 		if data != nil {

@@ -20,7 +20,7 @@ func TestTheRefusalsOfTheRegistryReachTheGuildScreenWithTheirReason(t *testing.T
 		guild.ErrNotActive: "not_active", guild.ErrNotRevealed: "not_revealed", guild.ErrNoLock: "no_lock", guild.ErrBadTimezone: "bad_timezone", guild.ErrNotPending: "not_pending",
 	} {
 		var ref *panel.Refusal
-		if got := refusalOf(fmt.Errorf("wrapped: %w", err)); !errors.As(got, &ref) || ref.Reason != reason {
+		if got := refusalOf(fmt.Errorf("wrapped: %w", err)); !errors.As(got, &ref) || ref.Msg.Code != "guild."+reason {
 			t.Errorf("%v -> %v, want reason %s", err, got, reason)
 		}
 	}
@@ -49,16 +49,16 @@ func TestOnlyOnePlannedHandoverRunsAtATime(t *testing.T) {
 		if !errors.As(err, &ref) {
 			return fmt.Sprint(err)
 		}
-		return ref.Reason
+		return ref.Msg.Code
 	}
 	if err := run.claimHandover(true); err != nil {
 		t.Fatalf("the first: %v", err)
 	}
-	if got := reason(run.claimHandover(true)); got != "handover_in_progress" {
+	if got := reason(run.claimHandover(true)); got != "guild.handover_in_progress" {
 		t.Errorf("the second: %q", got)
 	}
 	run.handing.Store(false) // the handover ended
-	if got := reason(run.claimHandover(false)); got != "suspended" {
+	if got := reason(run.claimHandover(false)); got != "guild.suspended" {
 		t.Errorf("a Citadel that does not act: %q", got)
 	}
 	if err := run.claimHandover(true); err != nil {

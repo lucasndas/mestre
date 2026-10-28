@@ -49,43 +49,43 @@ var protections = map[string]bool{
 // as stored now. It returns why the PIN is needed ("" when it is not).
 func check(p Proposal, u users.User, now time.Time) (string, *Refusal) {
 	if u.State != users.Active {
-		return "", refuse(CodeLevel, "o autor não está ativo")
+		return "", refuse(CodeLevel, "decree.author_inactive")
 	}
 	if strings.TrimSpace(p.Text) == "" {
-		return "", refuse(CodeInvalid, "a proposta precisa do texto original da ordem")
+		return "", refuse(CodeInvalid, "decree.text_required")
 	}
 	if p.Workspace == "" {
-		return "", refuse(CodeInvalid, "a proposta precisa da campanha")
+		return "", refuse(CodeInvalid, "decree.workspace_required")
 	}
 	switch p.Kind {
 	case KindRule:
 		if err := users.Require(u.Level, users.PermanentDecree); err != nil {
-			return "", refuse(CodeLevel, "%s", err.Error())
+			return "", refuseMsg(CodeLevel, levelMsg(err))
 		}
 	case KindException:
 		if err := users.Require(u.Level, users.OneOffException); err != nil {
-			return "", refuse(CodeLevel, "%s", err.Error())
+			return "", refuseMsg(CodeLevel, levelMsg(err))
 		}
 	default:
-		return "", refuse(CodeInvalid, "o tipo do decreto é regra permanente ou exceção pontual")
+		return "", refuse(CodeInvalid, "decree.kind_invalid")
 	}
 	if !u.Acts(p.Workspace) {
-		return "", refuse(CodeWorkspace, "a campanha %q não está entre os seus", p.Workspace)
+		return "", refuse(CodeWorkspace, "decree.workspace_not_yours", "workspace", p.Workspace)
 	}
 	if err := checkTarget(p); err != nil {
 		return "", err
 	}
 	if p.Kind == KindRule && !p.Until.IsZero() && !p.Until.After(now) {
-		return "", refuse(CodeInvalid, "a validade já passou")
+		return "", refuse(CodeInvalid, "decree.validity_passed")
 	}
 	if p.Kind == KindException {
 		if p.Action == nil || p.Effect.Kind != EffectPermission {
-			return "", refuse(CodeInvalid, "uma exceção pontual libera uma ação exata")
+			return "", refuse(CodeInvalid, "decree.exception_exact_action")
 		}
 	}
 	if len(p.TargetRef) > 0 {
 		if _, err := chain.Impress(p.TargetRef); err != nil {
-			return "", refuse(CodeInvalid, "o estado a que a exceção se prende não pode ser lido: %v", err)
+			return "", refuse(CodeInvalid, "decree.exception_state_unreadable", "reason", err.Error())
 		}
 	}
 	if ref := checkBuiltIn(p); ref != nil {
@@ -96,17 +96,17 @@ func check(p Proposal, u users.User, now time.Time) (string, *Refusal) {
 		return checkPermission(p)
 	case EffectBehavior:
 		if strings.TrimSpace(p.Effect.Instruction) == "" || len([]rune(p.Effect.Instruction)) > 500 {
-			return "", refuse(CodeInvalid, "o comportamento é uma instrução curta, de até 500 caracteres")
+			return "", refuse(CodeInvalid, "decree.behavior_too_long")
 		}
 		return "", nil
 	case EffectPolicy:
 		return "", checkPolicy(p)
 	case EffectCeiling:
 		if err := users.Require(u.Level, users.RaiseCeiling); err != nil {
-			return "", refuse(CodeLevel, "%s", err.Error())
+			return "", refuseMsg(CodeLevel, levelMsg(err))
 		}
 		if p.Effect.Allow == nil || emptyGrant(p.Effect.Allow) {
-			return "", refuse(CodeInvalid, "ampliar o teto precisa dizer o que o teto passa a permitir")
+			return "", refuse(CodeInvalid, "decree.ceiling_needs_allow")
 		}
 		if ref := invariant(p.Effect.Allow); ref != nil {
 			return "", ref
@@ -115,20 +115,20 @@ func check(p Proposal, u users.User, now time.Time) (string, *Refusal) {
 	case EffectDelegation:
 		return checkDelegation(p, u, now)
 	}
-	return "", refuse(CodeInvalid, "efeito desconhecido: %q (os efeitos são permission, behavior, policy, ceiling e delegation)", p.Effect.Kind)
+	return "", refuse(CodeInvalid, "decree.effect_unknown", "effect", p.Effect.Kind)
 }
 
 func checkTarget(p Proposal) *Refusal {
 	switch p.Target.Kind {
 	case TargetClass, TargetCharacter, TargetWorkspace, TargetTable:
 	default:
-		return refuse(CodeInvalid, "o alvo é uma classe, um personagem, uma campanha ou uma mesa")
+		return refuse(CodeInvalid, "decree.target_kind")
 	}
 	if strings.TrimSpace(p.Target.Name) == "" {
-		return refuse(CodeInvalid, "o alvo precisa de um nome")
+		return refuse(CodeInvalid, "decree.target_name_required")
 	}
 	if p.Target.Kind == TargetWorkspace && p.Target.Name != p.Workspace {
-		return refuse(CodeInvalid, "o alvo campanha %q não é o escopo %q", p.Target.Name, p.Workspace)
+		return refuse(CodeInvalid, "decree.target_workspace_mismatch", "target", p.Target.Name, "workspace", p.Workspace)
 	}
 	return nil
 }
@@ -142,9 +142,9 @@ func checkBuiltIn(p Proposal) *Refusal {
 		return nil
 	}
 	if p.Target.Kind == TargetClass && p.Target.Name == classes.ReservedOrchestrator {
-		return refuse(CodeBuiltIn, "a classe `orquestrador` é embutida no binário: nenhum decreto muda os campos, as regras fixas ou o files.deny dela; um decreto pode liberar ou proibir uma ação aos orquestradores, como a qualquer personagem")
+		return refuse(CodeBuiltIn, "decree.class_built_in")
 	}
-	return refuse(CodeInvalid, "um decreto não edita uma classe: a classe muda por `mestre class`, e o decreto muda a regra efetiva")
+	return refuse(CodeInvalid, "decree.class_not_edited")
 }
 
 func emptyGrant(g *classes.Grant) bool {
@@ -154,7 +154,7 @@ func emptyGrant(g *classes.Grant) bool {
 func checkPermission(p Proposal) (string, *Refusal) {
 	e := p.Effect
 	if emptyGrant(e.Allow) && emptyGrant(e.Deny) && (p.Kind == KindRule || p.Action == nil) {
-		return "", refuse(CodeInvalid, "uma permissão libera ou proíbe arquivos, comandos, ferramentas ou domínios")
+		return "", refuse(CodeInvalid, "decree.permission_kinds")
 	}
 	if ref := invariant(e.Allow); ref != nil {
 		return "", ref
@@ -240,7 +240,7 @@ func invariant(g *classes.Grant) *Refusal {
 	for _, list := range [][]string{g.Files, g.Tools, g.Domains, g.Commands} {
 		for _, pat := range list {
 			if strings.Trim(pat, "*/ ") == "" {
-				return refuse(CodeInvariant, "%q libera tudo, o que inclui o cofre, os arquivos do Mestre e os CLIs de agentes, que o agente nunca recebe; o decreto é recusado", pat)
+				return refuse(CodeInvariant, "decree.allow_all", "pattern", pat)
 			}
 		}
 	}
@@ -249,7 +249,7 @@ func invariant(g *classes.Grant) *Refusal {
 		bare := strings.Trim(strings.ReplaceAll(l, "*", ""), "/ ")
 		for _, bad := range protected {
 			if strings.Contains(l, bad) || (len(bare) >= 3 && strings.HasPrefix(bad, bare)) {
-				return refuse(CodeInvariant, "o agente nunca recebe %q: são arquivos de hooks e de configuração do Mestre ou o cofre, que só o motor toca; o decreto é recusado", f)
+				return refuse(CodeInvariant, "decree.file_never", "file", f)
 			}
 		}
 	}
@@ -262,12 +262,12 @@ func invariant(g *classes.Grant) *Refusal {
 			}
 			for _, cli := range []string{"claude", "codex", "agy", "gemini"} {
 				if w == cli || strings.HasPrefix(w, cli+"*") || (strings.HasSuffix(w, "*") && w != "*" && strings.HasPrefix(cli, strings.TrimRight(w, "*"))) {
-					return refuse(CodeInvariant, "o agente não inicia CLIs de agente pelo shell (%q): personagens nascem só pelo motor, de fichas e bases", c)
+					return refuse(CodeInvariant, "decree.agent_cli_never", "command", c)
 				}
 			}
 		}
 		if strings.Contains(l, "mestre vault") || strings.Contains(l, "mestre secret") {
-			return refuse(CodeInvariant, "o agente nunca tem acesso ao cofre (%q)", c)
+			return refuse(CodeInvariant, "decree.vault_never", "command", c)
 		}
 	}
 	return nil
@@ -276,26 +276,26 @@ func invariant(g *classes.Grant) *Refusal {
 func checkPolicy(p Proposal) *Refusal {
 	e := p.Effect
 	if strings.TrimSpace(e.Setting) == "" {
-		return refuse(CodeInvalid, "um decreto de política diz o tipo de pedido ou a condição que ajusta")
+		return refuse(CodeInvalid, "decree.policy_needs_type")
 	}
 	if p.Target.Kind == TargetCharacter {
-		return refuse(CodeInvalid, "um decreto de política vale para a campanha, a mesa ou a classe, não para um personagem")
+		return refuse(CodeInvalid, "decree.policy_target")
 	}
 	if !e.Loosens {
 		// a decree of policy tightens any type, the high ones too ("*" is all of them)
 		if e.Setting != "*" && e.Setting != "tudo" && !chain.KnownPolicyType(e.Setting) {
-			return refuse(CodeInvalid, "apertar a política precisa de um tipo de pedido (como acao_destrutiva) ou de * para todos; %q não é um", e.Setting)
+			return refuse(CodeInvalid, "decree.policy_tighten_type", "setting", e.Setting)
 		}
 		return nil
 	}
 	if protections[e.Setting] {
-		return refuse(CodeInvariant, "contornar a proteção do GitHub (%s) nem o motor pode: o decreto é recusado", e.Setting)
+		return refuse(CodeInvariant, "decree.policy_github_protection", "setting", e.Setting)
 	}
 	if highTypes[e.Setting] || fixedTypes[e.Setting] {
-		return refuse(CodePolicy, "um decreto de política não afrouxa o tipo %q (risco alto ou fixo); para o Grão-Mestre decidir um tipo alto, só um decreto `delegation` do Senhor da Guilda (docs/aprovacoes/delegacao.md)", e.Setting)
+		return refuse(CodePolicy, "decree.policy_not_loosened", "setting", e.Setting)
 	}
 	if !chain.LoosenablePolicySetting(e.Setting) {
-		return refuse(CodeInvalid, "afrouxar a política precisa de uma área sensível (como migracoes) ou de um tipo de risco medio; %q não é um (as áreas do motor e dos segredos nunca são abertas)", e.Setting)
+		return refuse(CodeInvalid, "decree.policy_loosen_area", "setting", e.Setting)
 	}
 	return nil
 }
@@ -303,35 +303,35 @@ func checkPolicy(p Proposal) *Refusal {
 func checkDelegation(p Proposal, u users.User, now time.Time) (string, *Refusal) {
 	e := p.Effect
 	if err := users.Require(u.Level, users.DelegateHigh); err != nil {
-		return "", refuse(CodeLevel, "%s", err.Error())
+		return "", refuseMsg(CodeLevel, levelMsg(err))
 	}
 	t := e.Setting
 	switch {
 	case t == string(classes.RequestOperator):
 		if err := users.Require(u.Level, users.OperatorActivation); err != nil {
-			return "", refuse(CodeLevel, "a delegação da ativação do Operador é só do Senhor da Guilda: %s", err.Error())
+			return "", refuse(CodeLevel, "decree.operator_delegation_owner_only", "reason", levelMsg(err))
 		}
 		if !strings.HasPrefix(p.Scope, "missao:") && !strings.HasPrefix(p.Scope, "classe:") || strings.HasSuffix(p.Scope, ":") {
-			return "", refuse(CodeDelegation, "a delegação da ativação do Operador precisa de escopo: `missao:<nome>` ou `classe:<nome>`")
+			return "", refuse(CodeDelegation, "decree.operator_scope_required")
 		}
 		if p.Until.IsZero() || !p.Until.After(now) || p.Until.Sub(now) > MaxOperatorDelegation {
-			return "", refuse(CodeDelegation, "a delegação da ativação do Operador tem validade obrigatória, de no máximo 7 dias")
+			return "", refuse(CodeDelegation, "decree.operator_validity_required")
 		}
 		if e.MaxMinutes < 0 || e.MaxMinutes > DefaultOperatorMinutes {
-			return "", refuse(CodeDelegation, "cada ativação delegada vai até %d minutos", DefaultOperatorMinutes)
+			return "", refuse(CodeDelegation, "decree.operator_minutes", "minutes", DefaultOperatorMinutes)
 		}
 	case highTypes[t]:
 		if p.Mesa == "" && p.Scope == "" {
-			return "", refuse(CodeDelegation, "a delegação precisa de escopo: a mesa, `classe:<nome>` ou `repo:<dono/nome>`")
+			return "", refuse(CodeDelegation, "decree.scope_required")
 		}
 		if p.Scope != "" && !validDecisionScope(p.Scope) {
-			return "", refuse(CodeDelegation, "o escopo de uma delegação é a mesa, `classe:<nome>` ou `repo:<dono/nome>`; %q não se entende", p.Scope)
+			return "", refuse(CodeDelegation, "decree.delegation_scope_unknown", "scope", p.Scope)
 		}
 		if !p.Until.IsZero() && p.Until.Sub(now) > MaxDelegation {
-			return "", refuse(CodeDelegation, "a delegação vale por no máximo 30 dias (pedida: até %s)", momentIn(p.Until, nil))
+			return "", refuse(CodeDelegation, "decree.delegation_validity_max", "until", p.Until.UTC())
 		}
 	default:
-		return "", refuse(CodeDelegation, "tipo não delegável: %q; o Grão-Mestre decide só os tipos de risco alto sob um decreto `delegation` (a entrada na Guilda, a promoção da Cidadela e o custo acima do teto nunca)", t)
+		return "", refuse(CodeDelegation, "decree.delegation_type_not_allowed", "type", t)
 	}
 	return "delegação", nil
 }

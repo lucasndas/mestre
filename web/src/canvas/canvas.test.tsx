@@ -30,7 +30,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 const refused = (reason: string, message: string, params: object = {}) => ({
   status: 409,
-  body: { error: { code: "refused", message, params: { reason, ...params } } },
+  body: { error: { code: `canvas.${reason}`, message, params } },
 });
 
 function wrap(
@@ -208,7 +208,7 @@ test("the refusal is said in the language of the user, and a reason without a te
   const { Wrapper } = wrap("en");
   const { result } = renderHook(() => useRefusalText(), { wrapper: Wrapper });
   const refusal = (reason: string, message: string) =>
-    new ApiError(409, "refused", message, { reason, reasons: ["mestre"] });
+    new ApiError(409, `canvas.${reason}`, message, { reasons: ["mestre"] });
   expect(result.current(refusal("automatic_connection", "x"))).toBe(
     "This connection is automatic and lasts as long as its reason does (mestre). It cannot be removed here.",
   );

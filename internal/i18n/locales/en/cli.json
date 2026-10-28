@@ -1,0 +1,7 @@
+{
+  "cli.locked": "The Mestre is locked: this command does not run until the Guildmaster unlocks it.",
+  "cli.locked_github": "The Mestre is locked: nothing is done on GitHub until the Guildmaster unlocks it.",
+  "cli.locked_hint": "The Guildmaster unlocks it with /destravar.",
+  "cli.typed_one": "{{count}} byte typed in {{name}}",
+  "cli.typed_other": "{{count}} bytes typed in {{name}}"
+}

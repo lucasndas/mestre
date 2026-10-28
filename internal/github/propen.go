@@ -183,7 +183,7 @@ func (s *PRService) push(ctx context.Context, who Asker, repo string, b Branch, 
 	}
 	// the branch of a table is never the branch it goes into
 	if strings.EqualFold(b.Name, b.BaseBranch) || strings.EqualFold(b.Name, "main") || strings.EqualFold(b.Name, "master") {
-		return refuse(CodeForce, "o envio na branch principal não é feito: a mesa trabalha na sua branch")
+		return refuse(CodeForce, "github.push_to_main")
 	}
 	auth, err := s.Send.Auth.PushAuth(ctx, who, repo, workflows)
 	if errors.Is(err, ErrWorkflowPermission) {
@@ -220,17 +220,17 @@ type POpened struct {
 func (s *PRService) Open(ctx context.Context, a Actor, repo string, in POpen) (POpened, error) {
 	repo, err := NormalizeRepo(repo)
 	if err != nil {
-		return POpened{}, refuse(CodeNotAllowed, "repositório inválido")
+		return POpened{}, refuse(CodeNotAllowed, "github.invalid_repo")
 	}
 	if a.Kind != ActorTable {
-		return POpened{}, refuse(CodeNotAllowed, "o PR é da mesa")
+		return POpened{}, refuse(CodeNotAllowed, "github.pr_of_table")
 	}
 	ref, ok, err := s.Tables.Epic(ctx, a.Table)
 	if err != nil {
 		return POpened{}, err
 	}
 	if !ok {
-		return POpened{}, refuse(CodeNotAllowed, "a mesa %s não tem épico registrado", a.Table)
+		return POpened{}, refuse(CodeNotAllowed, "github.no_epic", "table", a.Table)
 	}
 	op := in.Op
 	if op == "" {
@@ -424,7 +424,7 @@ func (s *PRService) Update(ctx context.Context, a Actor, repo string, n int, in 
 
 func (s *PRService) updateBlock(ctx context.Context, a Actor, repo string, n int, in PUpdate) error {
 	if !slicesContains(BlockNames, in.Block) {
-		return refuse(CodeNotAllowed, "o bloco %q não existe; os blocos são %s", in.Block, strings.Join(BlockNames, ", "))
+		return refuse(CodeNotAllowed, "github.block_unknown", "block", in.Block, "blocks", strings.Join(BlockNames, ", "))
 	}
 	p, err := s.API.PullData(ctx, repo, n)
 	if err != nil {

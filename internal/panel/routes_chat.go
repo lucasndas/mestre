@@ -167,7 +167,7 @@ func (p *Panel) listenChat() {
 
 func (p *Panel) needChat(w http.ResponseWriter) bool {
 	if p.chat == nil {
-		WriteError(w, Err(CodeUnavailable, "a conversa não está disponível agora", nil))
+		WriteError(w, Err(CodeUnavailable, "api.chat_unavailable", nil))
 		return false
 	}
 	return true
@@ -178,7 +178,7 @@ func (p *Panel) needChat(w http.ResponseWriter) bool {
 func (p *Panel) chatWorkspace(w http.ResponseWriter, r *http.Request) (string, bool) {
 	ws := r.PathValue("workspace")
 	if ws == "" || !UserOf(r).Acts(ws) {
-		WriteError(w, Err(CodeNotFound, "não encontrado", nil))
+		WriteError(w, Err(CodeNotFound, "api.not_found", nil))
 		return "", false
 	}
 	return ws, true
@@ -259,7 +259,7 @@ func (p *Panel) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	}
 	mr, err := r.MultipartReader()
 	if err != nil {
-		WriteError(w, Err(CodeChatMalformed, "mensagem malformada", nil))
+		WriteError(w, Err(CodeChatMalformed, "api.message_malformed", nil))
 		return
 	}
 	u := UserOf(r)
@@ -295,7 +295,7 @@ func (p *Panel) handleChatSend(w http.ResponseWriter, r *http.Request) {
 		name := part.FormName()
 		if part.FileName() == "" {
 			if draft != nil { // a field after the first file: the order is part of the contract
-				WriteError(w, Err(CodeChatMalformed, "mensagem malformada", nil))
+				WriteError(w, Err(CodeChatMalformed, "api.message_malformed", nil))
 				return
 			}
 			val, err := io.ReadAll(io.LimitReader(part, maxChatField+1))
@@ -304,7 +304,7 @@ func (p *Panel) handleChatSend(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if len(val) > maxChatField {
-				WriteError(w, Err(CodeChatTooLong, "mensagem longa demais", nil))
+				WriteError(w, Err(CodeChatTooLong, "api.message_too_long", nil))
 				return
 			}
 			switch name {
@@ -318,7 +318,7 @@ func (p *Panel) handleChatSend(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if name != "files" {
-			WriteError(w, Err(CodeChatMalformed, "mensagem malformada", nil))
+			WriteError(w, Err(CodeChatMalformed, "api.message_malformed", nil))
 			return
 		}
 		if !begin() {
@@ -358,7 +358,7 @@ func (p *Panel) chatBodyError(w http.ResponseWriter, err error) {
 	var big *http.MaxBytesError
 	if errors.As(err, &big) {
 		per, _ := p.chat.Limits()
-		WriteError(w, Err(CodeChatFileTooLarge, "arquivo grande demais", map[string]any{"limit": per}))
+		WriteError(w, Err(CodeChatFileTooLarge, "api.file_too_big", map[string]any{"limit": per}))
 		return
 	}
 	var api *APIError
@@ -367,7 +367,7 @@ func (p *Panel) chatBodyError(w http.ResponseWriter, err error) {
 		return
 	}
 	p.log.Warn("panel: reading a message", "err", err)
-	WriteError(w, Err(CodeChatMalformed, "mensagem malformada", nil))
+	WriteError(w, Err(CodeChatMalformed, "api.message_malformed", nil))
 }
 
 // handleChatChoose is POST /api/chat-choices/{id}: the click on an option of a question of
