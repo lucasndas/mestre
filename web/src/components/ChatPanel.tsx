@@ -231,7 +231,7 @@ function Question({ entry, workspace }: { entry: ChatEntry; workspace: string })
   if (entry.channel !== "panel") return <p className="mt-2 text-muted">{t("question.telegram")}</p>;
   return (
     <div className="mt-2 flex flex-col gap-2">
-      <fieldset className="flex flex-col gap-2">
+      <fieldset className="flex flex-wrap gap-2">
         <legend className="sr-only">{t("question.options")}</legend>
         {q.options.map((o, i) => (
           <Button
@@ -273,7 +273,7 @@ function EntryView({
       : t("entry.grandMaster");
   return (
     <li
-      className={`flex max-w-[92%] flex-col gap-1 rounded-field border p-3 ${mine ? "ml-auto border-line bg-accent-wash" : "mr-auto border-line bg-paper"} ${entry.waiting && locked ? "border-warn bg-warn-wash" : ""}`}
+      className={`flex max-w-[92%] flex-col gap-1 rounded-field border p-3 ${mine ? "ml-auto border-line bg-accent-wash" : entry.from === "question" ? "mr-auto border-accent bg-paper" : "mr-auto border-line bg-paper"} ${entry.waiting && locked ? "border-warn bg-warn-wash" : ""}`}
       data-entry={entry.id}
     >
       <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
@@ -296,7 +296,11 @@ function EntryView({
       ) : held ? (
         <p className="break-words">{t("entry.heldText")}</p>
       ) : entry.text ? (
-        <p className="break-words whitespace-pre-wrap">{entry.text}</p>
+        <p
+          className={`break-words whitespace-pre-wrap ${entry.from === "question" ? "font-semibold" : ""}`}
+        >
+          {entry.text}
+        </p>
       ) : null}
       {held ? (
         <p className="m-0 flex gap-3 rounded-field bg-danger-wash p-2 text-sm text-danger">
@@ -371,6 +375,10 @@ function Composer({
   const nextFile = useRef(0);
   const [problem, setProblem] = useState("");
   const [notice, setNotice] = useState("");
+  // the filter of secrets blocked the sending: the field and the buttons are off until the window passes
+  const [blocked, setBlocked] = useState(false);
+  const unblock = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(unblock.current), []);
   const [dragging, setDragging] = useState(false);
   // the id stays until the message went: a retry after a failure is the same message
   const id = useRef(newMessageId());
@@ -413,6 +421,12 @@ function Composer({
         );
         return;
       }
+      if (err instanceof ApiError && err.code === "chat_blocked") {
+        const minutes = typeof err.params.minutes === "number" ? err.params.minutes : 10;
+        setBlocked(true);
+        clearTimeout(unblock.current);
+        unblock.current = setTimeout(() => setBlocked(false), minutes * 60_000);
+      }
       setProblem(errorText(te, err)); // what was typed stays in the field
     },
   });
@@ -442,7 +456,7 @@ function Composer({
         ? t("composer.offline")
         : "";
   const empty = text.trim() === "" && files.length === 0;
-  const canSend = conv.can_talk && !noGM && online && !empty && !send.isPending;
+  const canSend = conv.can_talk && !blocked && !noGM && online && !empty && !send.isPending;
 
   const submit = () => {
     if (canSend) send.mutate();
@@ -509,6 +523,18 @@ function Composer({
           ))}
         </ul>
       ) : null}
+      {reason ? (
+        <p className="m-0 flex items-start gap-2 rounded-field bg-accent-wash px-3 py-2 text-base">
+          {conv.can_talk ? null : <ComposerIcon d="M7 11V8a5 5 0 0 1 10 0v3M5 11h14v9H5z" />}
+          <span>{reason}</span>
+        </p>
+      ) : null}
+      {problem ? (
+        <Alert>
+          <BoldLead text={problem} />
+        </Alert>
+      ) : null}
+      {notice && !problem ? <Alert tone="ok">{notice}</Alert> : null}
       <label className="sr-only" htmlFor="chat-text">
         {t("composer.label")}
       </label>
@@ -516,22 +542,19 @@ function Composer({
         id="chat-text"
         value={text}
         rows={3}
-        disabled={!conv.can_talk}
+        disabled={!conv.can_talk || blocked}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKey}
         placeholder={t("composer.placeholder")}
         className="min-h-20 rounded-field border border-line bg-paper px-3 py-2 text-ink outline-none placeholder:text-muted focus:border-accent focus:ring-3 focus:ring-accent/25 disabled:opacity-60"
       />
-      {reason ? <p className="text-sm font-semibold">{reason}</p> : null}
-      {problem ? <Alert>{problem}</Alert> : null}
-      {notice && !problem ? <Alert tone="ok">{notice}</Alert> : null}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <label className="focus-within:ring-3 focus-within:ring-accent/25 inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-field border border-line bg-surface px-4 font-semibold hover:bg-accent-wash has-[:disabled]:opacity-60">
           <input
             type="file"
             multiple
             className="sr-only"
-            disabled={!conv.can_talk}
+            disabled={!conv.can_talk || blocked}
             onChange={(e) => {
               addFiles(Array.from(e.target.files ?? []));
               e.target.value = "";
@@ -548,6 +571,18 @@ function Composer({
         </Button>
       </div>
     </form>
+  );
+}
+
+/** The first sentence of a notice in bold, the rest after it (what happened, then what to do). */
+function BoldLead({ text }: { text: string }) {
+  const m = /^(.+?\.)\s+(.+)$/s.exec(text);
+  return m ? (
+    <>
+      <strong>{m[1]}</strong> {m[2]}
+    </>
+  ) : (
+    <>{text}</>
   );
 }
 
