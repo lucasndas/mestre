@@ -174,6 +174,6 @@ func (c *ChooseChannel) click(ctx context.Context, k Click) (string, string, err
 // message of the user who clicked, with the option and the number of the question.
 func AnswerItem(q ChoiceQuestion, by users.User, option string) inbox.NewItem {
 	return inbox.NewItem{Workspace: q.Workspace, Kind: inbox.KindUser, Sender: by.Name,
-		Origin: &inbox.Origin{Channel: inbox.ChannelTelegram, User: by.ID, UserName: by.Name, Level: characters.UserLevel(by.Level), Table: q.Mesa, Choice: q.ID},
+		Origin: &inbox.Origin{Channel: inbox.ChannelTelegram, User: by.ID, UserName: by.Name, Level: characters.UserLevel(by.Level), Table: q.Mesa, Choice: q.ID, Language: by.LanguageFor(by.TelegramLanguage)},
 		Text:   fmt.Sprintf("Escolha %q (pergunta %d: %s)", option, q.ID, strings.Join(strings.Fields(q.Question), " "))}
 }

@@ -216,12 +216,13 @@ function Attachments({ entry }: { entry: ChatEntry }) {
 }
 
 function Question({ entry, workspace }: { entry: ChatEntry; workspace: string }) {
-  const { t } = useTranslation("chat");
+  const { t, i18n } = useTranslation("chat");
   const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
   const q = entry.question;
   const choose = useMutation({
-    mutationFn: (option: number) => api("POST", `/api/chat-choices/${q?.id}`, { option }),
+    mutationFn: (option: number) =>
+      api("POST", `/api/chat-choices/${q?.id}`, { option, language: i18n.language }),
     onSettled: () => qc.invalidateQueries({ queryKey: chatQuery(workspace).queryKey }),
   });
   if (!q) return null;
@@ -389,6 +390,7 @@ function Composer({
       const form = new FormData();
       form.append("text", text);
       form.append("client_id", id.current);
+      form.append("language", i18n.language); // the language the panel is open in
       if (quote) form.append("quote", quote.id);
       for (const { file } of files) form.append("files", file, file.name);
       return api<ChatSent>("POST", `/api/chat/${encodeURIComponent(workspace)}/messages`, form);

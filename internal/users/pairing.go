@@ -176,7 +176,7 @@ func (s *Service) ClearTelegram(ctx context.Context, by User, userID string) err
 		if _, err := s.actor(ctx, tx, by, ManageUsers); err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, `UPDATE users SET telegram_id = 0, updated_at = ? WHERE id = ? AND state <> 'removed'`, ms(s.clk.Now()), userID)
+		res, err := tx.ExecContext(ctx, `UPDATE users SET telegram_id = 0, telegram_language = '', updated_at = ? WHERE id = ? AND state <> 'removed'`, ms(s.clk.Now()), userID)
 		if err != nil {
 			return err
 		}

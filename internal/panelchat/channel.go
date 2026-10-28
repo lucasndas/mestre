@@ -147,7 +147,7 @@ func (s *Service) AskChoice(ctx context.Context, q Question, recommend int) (int
 // Grão-Mestre asked in the panel. The answer goes to the inbox of the Grão-Mestre once, as a
 // message of the user; a second click, from any tab, is refused. Only the user the question was
 // asked of, in the channel it was asked in, can answer it.
-func (s *Service) Choose(ctx context.Context, u users.User, id int64, option int) error {
+func (s *Service) Choose(ctx context.Context, u users.User, id int64, option int, language string) error {
 	unknown := panel.Err(panel.CodeChatChoiceUnknown, "api.choice_unknown", nil)
 	var q question
 	row := s.o.DB.Reader().QueryRowContext(ctx, `SELECT id, workspace, mesa, user_id, channel, question, options, state, answer, created_at FROM choose_questions
@@ -181,7 +181,7 @@ func (s *Service) Choose(ctx context.Context, u users.User, id int64, option int
 		return panel.Err(panel.CodeChatChoiceTaken, "api.choice_taken", nil)
 	}
 	_, err = s.enqueue(ctx, inbox.NewItem{Workspace: q.Workspace, Kind: inbox.KindUser, Sender: u.Name,
-		Origin: &inbox.Origin{Channel: inbox.ChannelPanel, User: u.ID, UserName: u.Name, Level: characters.UserLevel(u.Level), Table: q.Mesa, Choice: q.ID},
+		Origin: &inbox.Origin{Channel: inbox.ChannelPanel, User: u.ID, UserName: u.Name, Level: characters.UserLevel(u.Level), Table: q.Mesa, Choice: q.ID, Language: u.LanguageFor(language)},
 		Text:   fmt.Sprintf("Escolha %q (pergunta %d: %s)", q.Options[option], q.ID, oneLine(q.Text)),
 		Refs:   inbox.Refs{Key: fmt.Sprintf("panel-choice:%d", q.ID)}})
 	if err != nil {
