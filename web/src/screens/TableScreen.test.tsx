@@ -122,3 +122,39 @@ test("the terminal page of a character that sits at a table leads to the tab of 
   const trail = await screen.findByRole("navigation", { name: "Você está em" }, SLOW);
   expect(within(trail).getByText("Login com Google")).toBeTruthy();
 });
+
+test("on a phone the terminal tab brings its window into view, so Digitar is within reach", async () => {
+  const scroll = vi.fn();
+  const original = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = scroll;
+  // the window has its height: the observer says so as soon as it is asked to watch
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(private cb: (e: { contentRect: { height: number } }[]) => void) {}
+      observe() {
+        this.cb([{ contentRect: { height: 500 } }]);
+      }
+      disconnect() {}
+      unobserve() {}
+    },
+  );
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query === "(max-width: 767px)",
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+  try {
+    server({
+      "GET /api/characters/dev/terminal": () => ({
+        body: info({ name: "Dev-1", workspace: "loja", table: "42-login" }),
+      }),
+    });
+    renderApp("/workspaces/loja/mesas/42-login?aba=terminal&personagem=dev");
+    await screen.findByTestId("terminal", undefined, SLOW);
+    await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: "start" }), SLOW);
+  } finally {
+    Element.prototype.scrollIntoView = original;
+  }
+});
