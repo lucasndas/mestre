@@ -475,6 +475,20 @@ test("with nothing selected there is a hint and no loose group or grimoire butto
   );
 });
 
+// CA-CANVAS-13: Shift + click selects several (not the Control/Meta default of the library).
+test("a Shift + click on a second card selects both", async () => {
+  fakeServer({ [`GET ${path}`]: () => ({ body: tableState() }) });
+  const { Wrapper } = wrap();
+  render(<TableCanvas workspace="loja" table="m1" />, { wrapper: Wrapper });
+  await screen.findByRole("article", { name: "Personagem Dev-1" });
+  fireEvent.click(screen.getByRole("article", { name: "Personagem Dev-1" }));
+  fireEvent.keyDown(window, { key: "Shift", code: "ShiftLeft", shiftKey: true });
+  fireEvent.click(screen.getByRole("article", { name: "Personagem Revisor" }), { shiftKey: true });
+  fireEvent.keyUp(window, { key: "Shift", code: "ShiftLeft" });
+  const bar = await screen.findByRole("toolbar", { name: "O que fazer com a seleção" });
+  await waitFor(() => expect(bar.textContent).toContain("2 selecionados"));
+});
+
 // CA-CANVAS-14: group and undo it; only the layout is touched.
 test("Juntar em grupo draws a group with a name and Desfazer grupo frees the cards", async () => {
   const { calls } = fakeServer({
