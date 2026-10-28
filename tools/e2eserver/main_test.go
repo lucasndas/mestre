@@ -11,6 +11,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/github"
 	"github.com/mestre-ia/mestre/internal/store"
 	guilddb "github.com/mestre-ia/mestre/internal/store/guild"
+	"github.com/mestre-ia/mestre/internal/users"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
@@ -47,8 +48,7 @@ func TestAFreePortIsTakenOnTheIPOfTheBind(t *testing.T) {
 }
 
 // The rich seed leaves the administration with the states a fresh Guild never has: the Apps ready,
-// waiting and with the link expired, the proposals of class (one with a problem), the second
-// machine active and a request to join.
+// waiting and with the link expired and the proposals of class (one with a problem).
 func TestTheRichSeedLeavesTheAdministrationWithItsStates(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
@@ -58,10 +58,6 @@ func TestTheRichSeedLeavesTheAdministrationWithItsStates(t *testing.T) {
 	}
 	defer db.Close()
 	now := clock.Real{}.Now()
-	if _, err := db.Writer().ExecContext(ctx, `INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, joined_at)
-		VALUES ('e2e-torre', 'notebook-ana', 'torre', 1, 0, 'offline', '{}', ?)`, now.UnixMilli()); err != nil {
-		t.Fatal(err)
-	}
 	if err := seedAdmin(ctx, db, now); err != nil {
 		t.Fatal(err)
 	}
@@ -80,12 +76,29 @@ func TestTheRichSeedLeavesTheAdministrationWithItsStates(t *testing.T) {
 	if err != nil || len(pending) != 2 {
 		t.Fatalf("pending proposals = %v, %v", pending, err)
 	}
-	var machine string
-	if err := db.Reader().QueryRowContext(ctx, `SELECT state FROM machines WHERE machine_id = 'e2e-torre'`).Scan(&machine); err != nil || machine != "active" {
-		t.Errorf("the second machine is %q, %v", machine, err)
+}
+
+// The Guild of the rich seed has a Tower that is connected and a request that is accepted, refused or
+// made the Citadel, in memory.
+func TestTheFakeGuildAcceptsARequestAndPassesTheCitadel(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	g := newFakeGuild()
+	v, _ := g.View(ctx)
+	if len(v.Machines) != 2 || !v.Machines[1].Online || len(v.Pending) != 1 || v.Single {
+		t.Fatalf("view = %+v", v)
 	}
-	var joins int
-	if err := db.Reader().QueryRowContext(ctx, `SELECT COUNT(*) FROM join_requests WHERE state = 'pending'`).Scan(&joins); err != nil || joins != 1 {
-		t.Errorf("requests to join = %d, %v", joins, err)
+	if err := g.Decide(ctx, users.User{}, v.Pending[0].ID, true, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.PassCitadel(ctx, users.User{}, "e2e-torre", ""); err != nil {
+		t.Fatal(err)
+	}
+	v, _ = g.View(ctx)
+	if len(v.Machines) != 3 || len(v.Pending) != 0 || v.Machines[0].Citadel || !v.Machines[1].Citadel {
+		t.Errorf("after the accept and the pass = %+v", v)
+	}
+	if err := g.Decide(ctx, users.User{}, "nope", true, false); err == nil {
+		t.Error("a request that does not exist was decided")
 	}
 }
