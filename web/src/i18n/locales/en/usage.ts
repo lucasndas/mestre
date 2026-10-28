@@ -17,7 +17,7 @@ const usage: Widen<typeof pt> = {
     noLimitHint:
       "The spending shows below; the limits show what is left when the provider reports the usage.",
   },
-  emptyTitle: "Nothing spent yet",
+  emptyTitle: "How usage starts to show",
   emptyStep1: "Ask the Grand Master for something so a table starts working.",
   emptyStep2: "Come back here: the cost and time of each character come in by day.",
   period: "Period",

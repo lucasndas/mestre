@@ -7,6 +7,9 @@ import { settingsOf } from "../screens/settingsMap";
 import { viewQuery } from "../workspace/queries";
 import { CampaignSwitch } from "../workspace/WorkspaceSelector";
 
+// the levels between the entry point and the page are links too, but only the entry point is loud
+const LINK_QUIET =
+  "inline-flex min-h-11 items-center rounded-field px-1.5 text-muted hover:text-ink hover:underline underline-offset-4";
 const LINK =
   "inline-flex min-h-11 items-center rounded-field px-1.5 text-accent underline underline-offset-4";
 
@@ -19,12 +22,13 @@ function Trail({ items }: { items: ReactNode[] }) {
           // the trail is rebuilt whole from the address, in a fixed order
           // biome-ignore lint/suspicious/noArrayIndexKey: no item has an id of its own
           <li key={i} className="flex items-center gap-1">
-            {it}
-            {i < items.length - 1 ? (
+            {/* the mark leads the item, so a line never ends on a lone mark */}
+            {i > 0 ? (
               <span aria-hidden="true" className="text-muted">
                 ›
               </span>
             ) : null}
+            {it}
           </li>
         ))}
       </ol>
@@ -108,7 +112,7 @@ export function Breadcrumbs({ path }: { path: string }) {
           <Link key="c" to="/configuracoes" className={LINK}>
             {t("nav.settings")}
           </Link>,
-          <Link key="g" to="/configuracoes" hash={`grupo-${cfg.group.key}`} className={LINK}>
+          <Link key="g" to="/configuracoes" hash={`grupo-${cfg.group.key}`} className={LINK_QUIET}>
             {say(`settings.groups.${cfg.group.key}.name`)}
           </Link>,
           <Here key="e">{say(`settings.entries.${cfg.entry.key}.name`)}</Here>,

@@ -394,3 +394,31 @@ func TestTheExtraInstructionsAreWrittenByAnAdministratorWithinTheLimit(t *testin
 	r.wantErr(r.call("PUT", "/api/workspaces/loja/instructions", panel.InstructionsInput{Role: "table_masters", Text: "a\x00b"}, opts{cookie: adm}), 400, panel.CodeBadRequest)
 	r.wantErr(r.call("PUT", "/api/workspaces/loja/instructions", panel.InstructionsInput{Role: "grand_master", Text: "x"}, opts{cookie: apv}), 403, panel.CodeForbiddenLevel)
 }
+
+// CA-ADM-07: Validar says whether a text would be accepted, with the line, and writes nothing.
+func TestValidatingAPolicyChecksItWithoutSaving(t *testing.T) {
+	t.Parallel()
+	r := newRules(t)
+	tok := r.ownerSession()
+	cur := decodeInto[panel.PolicyFile](t, r.call("GET", "/api/workspaces/loja/policy", nil, opts{cookie: tok}))
+	path := filepath.Join(r.eng.dir, ".mestre", "regras", "politica-de-aprovacao.yaml")
+
+	broken := strings.Replace(cur.Text, "quorum:", "quorum: [", 1)
+	w := r.call("POST", "/api/workspaces/loja/policy/validate", panel.PolicyInput{Text: broken, Version: cur.Version}, opts{cookie: tok})
+	r.wantErr(w, 422, panel.CodeInvalidPolicy)
+	var e panel.ErrorBody
+	decodeJSON(t, w, &e)
+	if l, _ := e.Error.Params["line"].(float64); l < 1 {
+		t.Errorf("line = %v, want the line of the quorum", e.Error.Params["line"])
+	}
+	good := strings.Replace(cur.Text, "max_arquivos: 25", "max_arquivos: 30", 1)
+	if w := r.call("POST", "/api/workspaces/loja/policy/validate", panel.PolicyInput{Text: good, Version: cur.Version}, opts{cookie: tok}); w.Code != 204 {
+		t.Fatalf("validate = %d %s, want 204", w.Code, w.Body)
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("validating wrote the file")
+	}
+	// the level of the policy applies to the check as well
+	_, apv := r.member("Carla", "carla", users.Approver)
+	r.wantErr(r.call("POST", "/api/workspaces/loja/policy/validate", panel.PolicyInput{Text: good}, opts{cookie: apv}), 403, panel.CodeForbiddenLevel)
+}

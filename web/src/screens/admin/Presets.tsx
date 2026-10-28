@@ -46,11 +46,11 @@ export function Presets() {
       <VocabLine terms={["Base", "Ficha"]} />
       {error ? <LoadError what={t("what")} error={error} onRetry={() => void refetch()} /> : null}
       {!data && !error ? <p className="text-muted">{t("loading")}</p> : null}
-      <div className="flex max-w-5xl flex-col gap-8">
+      <div className="flex max-w-4xl flex-col gap-8">
         {data && !error ? (
           <StatusStrip
             tone={data.sheets.length === 0 ? "warn" : "ok"}
-            title={t("strip.title", { bases: data.bases.length, sheets: data.sheets.length })}
+            title={`${t("strip.bases", { count: data.bases.length })} ${t("strip.and")} ${t("strip.sheets", { count: data.sheets.length })}`}
             hint={data.sheets.length === 0 ? t("strip.noSheets") : t("strip.hint")}
           >
             <Button
@@ -223,21 +223,21 @@ function BaseList({
         <EmptyState title={t("bases.emptyTitle")} why={t("bases.empty")} />
       ) : null}
       {bases.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] border-collapse text-left">
+        <div className="overflow-x-auto rounded-field border border-line bg-surface">
+          <table className="w-full border-collapse text-left">
             <caption className="sr-only">{t("bases.caption")}</caption>
             <thead>
               <tr className="border-b border-line text-sm text-muted">
                 <th scope="col" className="py-2 pr-4">
                   {t("bases.name")}
                 </th>
-                <th scope="col" className="py-2 pr-4">
+                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
                   {t("bases.command")}
                 </th>
-                <th scope="col" className="py-2 pr-4">
+                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
                   {t("bases.ready")}
                 </th>
-                <th scope="col" className="py-2 pr-4">
+                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
                   {t("bases.platforms")}
                 </th>
                 <th scope="col" className="py-2" />
@@ -246,12 +246,15 @@ function BaseList({
             <tbody>
               {bases.map((b) => (
                 <tr key={b.name} className="border-b border-line align-top">
-                  <th scope="row" className="py-2 pr-4 font-semibold">
+                  <th scope="row" className="px-3 py-2 pr-4 font-semibold">
                     {b.name} {b.builtin ? <Badge>{t("bases.builtin")}</Badge> : null}
+                    <span className="mt-1 block font-mono text-sm font-normal text-muted sm:hidden">
+                      {b.command} · {b.platforms.join(", ")}
+                    </span>
                   </th>
-                  <td className="py-2 pr-4 font-mono text-sm">{b.command}</td>
-                  <td className="py-2 pr-4 text-sm">{b.ready}</td>
-                  <td className="py-2 pr-4">{b.platforms.join(", ")}</td>
+                  <td className="hidden py-2 pr-4 font-mono text-sm sm:table-cell">{b.command}</td>
+                  <td className="hidden py-2 pr-4 text-sm sm:table-cell">{b.ready}</td>
+                  <td className="hidden py-2 pr-4 sm:table-cell">{b.platforms.join(", ")}</td>
                   <td className="py-2">
                     <Actions
                       name={b.name}
@@ -296,24 +299,24 @@ function SheetList({
         <EmptyState title={t("sheets.emptyTitle")} why={t("sheets.empty")} />
       ) : null}
       {sheets.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] border-collapse text-left">
+        <div className="overflow-x-auto rounded-field border border-line bg-surface">
+          <table className="w-full border-collapse text-left">
             <caption className="sr-only">{t("sheets.caption")}</caption>
             <thead>
               <tr className="border-b border-line text-sm text-muted">
                 <th scope="col" className="py-2 pr-4">
                   {t("sheets.name")}
                 </th>
-                <th scope="col" className="py-2 pr-4">
+                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
                   {t("sheets.base")}
                 </th>
-                <th scope="col" className="py-2 pr-4">
+                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
                   {t("sheets.agent")}
                 </th>
-                <th scope="col" className="py-2 pr-4">
+                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
                   {t("sheets.class")}
                 </th>
-                <th scope="col" className="py-2 pr-4">
+                <th scope="col" className="hidden py-2 pr-4 sm:table-cell">
                   {t("sheets.account")}
                 </th>
                 <th scope="col" className="py-2" />
@@ -329,11 +332,16 @@ function SheetList({
                         <Badge tone="warn">{t("sheets.incomplete", { what: s.incomplete })}</Badge>
                       </span>
                     ) : null}
+                    <span className="mt-1 block text-sm font-normal text-muted sm:hidden">
+                      {s.base} · {s.agent}
+                    </span>
                   </th>
-                  <td className="py-2 pr-4">{s.base}</td>
-                  <td className="py-2 pr-4">{s.agent}</td>
-                  <td className="py-2 pr-4">{s.class || t("sheets.none")}</td>
-                  <td className="py-2 pr-4">{s.account || t("sheets.none")}</td>
+                  <td className="hidden py-2 pr-4 sm:table-cell">{s.base}</td>
+                  <td className="hidden py-2 pr-4 sm:table-cell">{s.agent}</td>
+                  <td className="hidden py-2 pr-4 sm:table-cell">{s.class || t("sheets.none")}</td>
+                  <td className="hidden py-2 pr-4 sm:table-cell">
+                    {s.account || t("sheets.none")}
+                  </td>
                   <td className="py-2">
                     <Actions name={s.name} onEdit={() => onEdit(s)} onDelete={onDelete(s.name)} />
                   </td>
@@ -361,14 +369,14 @@ function Actions({
   const { t } = useTranslation("presets");
   return (
     <div className="flex flex-col items-start gap-2">
-      <Button variant="secondary" onPress={onEdit}>
-        {t("edit", { name })}
+      <Button variant="secondary" aria-label={t("edit", { name })} onPress={onEdit}>
+        {t("editShort")}
       </Button>
       {builtin ? (
         <p className="text-sm text-muted">{t("bases.builtinHint")}</p>
       ) : (
-        <SensitiveButton variant="danger" onConfirm={onDelete}>
-          {t("delete", { name })}
+        <SensitiveButton variant="danger" ariaLabel={t("delete", { name })} onConfirm={onDelete}>
+          {t("deleteShort")}
         </SensitiveButton>
       )}
     </div>

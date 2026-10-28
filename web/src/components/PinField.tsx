@@ -14,6 +14,7 @@ export function SensitiveButton({
   variant = "primary",
   isDisabled = false,
   describeError,
+  ariaLabel,
 }: {
   children: string;
   onConfirm: (pin: string) => Promise<unknown>;
@@ -22,6 +23,8 @@ export function SensitiveButton({
   isDisabled?: boolean;
   /** Says why the server refused, when the screen has more to say than the generic text. */
   describeError?: (err: unknown) => string;
+  /** The full name of the action for a screen reader when the visible text is short. */
+  ariaLabel?: string;
 }) {
   const { t } = useTranslation("common");
   const { t: te } = useTranslation("errors");
@@ -37,7 +40,14 @@ export function SensitiveButton({
 
   if (!asking) {
     return (
-      <Button variant={variant} isDisabled={isDisabled} onPress={() => setAsking(true)}>
+      // a destructive action starts outlined; the red block is the confirmation after the PIN
+      <Button
+        variant={variant === "danger" ? "secondary" : variant}
+        className={variant === "danger" ? "border-danger/50 text-danger" : ""}
+        isDisabled={isDisabled}
+        aria-label={ariaLabel}
+        onPress={() => setAsking(true)}
+      >
         {children}
       </Button>
     );

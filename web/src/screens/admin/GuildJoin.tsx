@@ -17,23 +17,30 @@ export function AddMachineCard({ single }: { single: boolean }) {
   const { t } = useTranslation("guild");
   const steps: { key: string; soon: boolean }[] = [
     { key: "install", soon: true },
+    { key: "code", soon: false },
     { key: "accept", soon: false },
-    { key: "conclude", soon: true },
     { key: "check", soon: false },
   ];
   return (
     <section
       aria-label={t(single ? "add.titleFirst" : "add.title")}
-      className="flex max-w-3xl flex-col gap-3 rounded-field border border-dashed border-muted p-5"
+      className="flex max-w-4xl flex-col gap-3 rounded-field border border-dashed border-muted p-5"
     >
       <h2 className="text-xl">{t(single ? "add.titleFirst" : "add.title")}</h2>
       <p>{t("add.why")}</p>
       <ol className="flex flex-col gap-2">
         {steps.map((s, i) => (
-          <li key={s.key} className="flex flex-wrap items-baseline gap-x-2">
-            <span className="font-semibold">{i + 1}.</span>
-            <span>{t(`add.steps.${s.key}` as "add.steps.install")}</span>
-            {s.soon ? <Badge tone="warn">{t("add.soon")}</Badge> : null}
+          <li key={s.key} className="flex flex-wrap items-start gap-x-3">
+            <span
+              aria-hidden="true"
+              className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-accent-wash text-sm font-semibold"
+            >
+              {i + 1}
+            </span>
+            <span className="min-w-0 flex-1">
+              {t(`add.steps.${s.key}` as "add.steps.install")}{" "}
+              {s.soon ? <Badge tone="warn">{t("add.soon")}</Badge> : null}
+            </span>
           </li>
         ))}
       </ol>

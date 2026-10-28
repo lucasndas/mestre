@@ -461,13 +461,10 @@ test("the extra instructions count their bytes and refuse to save over the limit
   });
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
   renderApp("/instrucoes");
-  const gm = (await screen.findByLabelText(
-    "Texto: Instruções para o Grão-Mestre",
-  )) as HTMLTextAreaElement;
-  expect(screen.getByText("13 de 20 bytes")).toBeTruthy();
+  const gm = (await screen.findByLabelText("Instruções para o Grão-Mestre")) as HTMLTextAreaElement;
+  expect(screen.getByText("13 bytes, até 20 bytes")).toBeTruthy();
   await fill(user, gm, " em revisão de código");
-  const form = screen.getByRole("form", { name: "Instruções para o Grão-Mestre" });
-  const save = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+  const save = screen.getByRole("button", { name: "Salvar instruções" }) as HTMLButtonElement;
   expect(save.disabled).toBe(true);
   expect(screen.getAllByRole("alert").length).toBeGreaterThan(0);
 });
@@ -542,8 +539,10 @@ test.each(Object.entries(EMPTY))(
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByText("Vocabulário:")).toBeTruthy();
     expect(strips()).toHaveLength(1);
+    // the way out is the main action of the strip or, with no campaign, the one of the empty state
     const box = empty.closest("section") as HTMLElement;
-    expect(box.querySelector("button, a")).toBeTruthy();
+    const strip = strips()[0] as HTMLElement;
+    expect(box.querySelector("button, a") ?? strip.querySelector("button, a")).toBeTruthy();
   },
 );
 
@@ -587,11 +586,14 @@ test("the chain screen tells Pausar autonomia from Pausar mesa in its first line
 });
 
 // CA-ADM-24
-test("the queue tables roll inside their own box and the buttons are tall enough to touch", async () => {
+test("the queue is a sentence per level and the buttons are tall enough to touch", async () => {
   fakeServer({ ...OWNER, "GET /api/chain": () => ({ body: chainBody() }) });
   renderApp("/cadeia");
-  const table = (await screen.findAllByRole("table"))[0] as HTMLElement;
-  expect(table.parentElement?.className).toContain("overflow-x-auto");
+  const queue = (
+    await screen.findAllByRole("list", { name: "Fila de aprovações" })
+  )[0] as HTMLElement;
+  expect(queue.textContent).toContain("Pessoas: 1 pedido, o mais antigo há");
+  expect(screen.queryByRole("table")).toBeNull();
   const main = within(screen.getByRole("main"));
   for (const b of main.getAllByRole("button")) {
     if (!b.getAttribute("aria-label")?.startsWith("Ajuda sobre"))
@@ -645,4 +647,66 @@ test("buttons a level cannot press show the level they need", async () => {
   expect(
     screen.getAllByText("Exige o nível Senhor da Guilda; o seu é Administrador.").length,
   ).toBeGreaterThan(0);
+});
+
+// CA-ADM-07
+test("Validar checks the text without saving and says the line when it does not read", async () => {
+  const { calls } = fakeServer({
+    ...OWNER,
+    "GET /api/rules/workspaces": () => ({ body: { workspaces: ["loja"] } }),
+    "GET /api/workspaces/loja/policy": () => ({
+      body: { workspace: "loja", text: "versao: 1\n", version: "v1", default: false },
+    }),
+    "POST /api/workspaces/loja/policy/validate": (c) =>
+      (c.body as { text: string }).text.includes("ruim")
+        ? {
+            status: 422,
+            body: {
+              error: { code: "invalid_policy", message: "x", params: { line: 2, reason: "ruim" } },
+            },
+          }
+        : { status: 204 },
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/politica");
+  const box = (await screen.findByLabelText("politica-de-aprovacao.yaml")) as HTMLTextAreaElement;
+  const validate = screen.getByRole("button", { name: "Validar" }) as HTMLButtonElement;
+  expect(validate.disabled).toBe(true);
+  await user.clear(box);
+  await fill(user, box, "versao: 1\nexpiracao: 24h");
+  await user.click(screen.getByRole("button", { name: "Validar" }));
+  expect(await screen.findByText("Política válida: pode salvar.")).toBeTruthy();
+  await user.clear(box);
+  await fill(user, box, "versao: 1\nruim: 1");
+  await user.click(screen.getByRole("button", { name: "Validar" }));
+  expect((await screen.findByRole("alert")).textContent).toContain("Linha 2:");
+  expect(calls.some((c) => c.method === "PUT")).toBe(false); // validating never saves
+});
+
+test("one Salvar instruções saves both texts, each one with its own role", async () => {
+  const { calls } = fakeServer({
+    ...OWNER,
+    "GET /api/rules/workspaces": () => ({ body: { workspaces: ["loja"] } }),
+    "GET /api/workspaces/loja/instructions": () => ({
+      body: { workspace: "loja", grand_master: "a", table_masters: "b", max_bytes: 4096 },
+    }),
+    "PUT /api/workspaces/loja/instructions": (c) => ({
+      body: {
+        workspace: "loja",
+        grand_master: (c.body as { role: string }).role === "grand_master" ? "novo gm" : "a",
+        table_masters: (c.body as { role: string }).role === "table_masters" ? "novo mm" : "b",
+        max_bytes: 4096,
+      },
+    }),
+  });
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/instrucoes");
+  await fill(user, await screen.findByLabelText("Instruções para o Grão-Mestre"), "novo gm");
+  await fill(user, screen.getByLabelText("Instruções para os Mestres de mesa"), "novo mm");
+  await user.click(screen.getByRole("button", { name: "Salvar instruções" }));
+  expect(await screen.findByText("Instruções salvas.")).toBeTruthy();
+  const puts = calls
+    .filter((c) => c.method === "PUT")
+    .map((c) => (c.body as { role: string }).role);
+  expect(puts).toEqual(["grand_master", "table_masters"]);
 });

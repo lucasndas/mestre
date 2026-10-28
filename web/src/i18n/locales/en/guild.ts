@@ -1,5 +1,5 @@
 export default {
-  title: "Guild and machines",
+  title: "Guild",
   intro:
     "One row per machine of the Guild, live. Only the Guildmaster changes anything here, and every change asks for your PIN.",
   loading: "Loading the Guild…",
@@ -45,8 +45,8 @@ export default {
     soon: "coming soon",
     steps: {
       install: "Install the Mestre on the new machine and ask to join the Guild.",
-      accept: "Here, type the code the new machine shows and accept with your PIN.",
-      conclude: "The new machine finishes joining by itself and becomes a Tower.",
+      code: "The new machine shows a 6-digit code.",
+      accept: "You compare the 6 digits here and accept with your PIN.",
       check: "Check the Tower here and set up its AI accounts.",
     },
     where: "Requests to join show at the top of this screen, by themselves.",
@@ -136,7 +136,11 @@ export default {
   },
   load: "Load",
   disk: "Free disk",
-  running: "{{count}} agent(s) running",
+  running_zero: "no agent running",
+  running_one: "1 agent running",
+  running_other: "{{count}} agents running",
+  youAreHere: "you are here",
+  details: "Machine details",
   agents: "Agents",
   noAgents: "no agent running",
   agentLink: "Open table {{table}}",
@@ -181,6 +185,8 @@ export default {
     cancel: "Cancel",
   },
   timezone: {
+    line: "Guild time zone: {{zone}}",
+    change: "Change the time zone",
     title: "Guild time zone",
     intro:
       "It sets the daily backup, the turn of the day of the usage limits, the validity of decrees and the rituals with no zone of their own. It does not change on a Citadel switch.",

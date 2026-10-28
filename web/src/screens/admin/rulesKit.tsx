@@ -118,8 +118,11 @@ export function Area({
   mono = false,
   invalidText,
   placeholder,
+  hideLabel = false,
 }: {
   label: string;
+  /** The heading above already says it: the label stays for screen readers only. */
+  hideLabel?: boolean;
   description?: string;
   placeholder?: string;
   value: string;
@@ -135,7 +138,9 @@ export function Area({
       isInvalid={Boolean(invalidText)}
       className="flex flex-col gap-1"
     >
-      <Label className="text-[0.95em] font-semibold tracking-wide">{label}</Label>
+      <Label className={hideLabel ? "sr-only" : "text-[0.95em] font-semibold tracking-wide"}>
+        {label}
+      </Label>
       <TextArea
         rows={rows}
         placeholder={placeholder}
@@ -170,7 +175,11 @@ export function ConfirmButton({
   const [error, setError] = useState<unknown>(null);
   if (!asking) {
     return (
-      <Button variant={variant} onPress={() => setAsking(true)}>
+      <Button
+        variant={variant === "danger" ? "secondary" : variant}
+        className={variant === "danger" ? "border-danger/50 text-danger" : ""}
+        onPress={() => setAsking(true)}
+      >
         {children}
       </Button>
     );

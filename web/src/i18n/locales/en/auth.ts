@@ -36,7 +36,7 @@ const auth: Widen<typeof pt> = {
     pin2: "Repeat the PIN",
     pinWhy:
       "The PIN confirms sensitive actions. It is not your password: do not use the same value for both.",
-    submit: "Sign in",
+    submit: "Create my access",
     errors: {
       invalid_code:
         "That code is no longer valid: it may have expired (it lasts 24 hours) or already been used. Ask the Guildmaster for another.",

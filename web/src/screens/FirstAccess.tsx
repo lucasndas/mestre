@@ -78,6 +78,9 @@ export function FirstAccess() {
             ),
         )}
       >
+        {error ? (
+          <Alert>{firstAccessText(t as unknown as Say, te, error, f.pin === "")}</Alert>
+        ) : null}
         <Field
           label={t("first.code")}
           autoComplete="off"
@@ -124,9 +127,6 @@ export function FirstAccess() {
           />
         </div>
         <p className="text-sm text-muted">{t("first.pinWhy")}</p>
-        {error ? (
-          <Alert>{firstAccessText(t as unknown as Say, te, error, f.pin === "")}</Alert>
-        ) : null}
         <Button type="submit" isDisabled={busy} className="mt-2">
           {t("first.submit")}
         </Button>

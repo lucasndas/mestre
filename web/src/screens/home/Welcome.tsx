@@ -45,23 +45,36 @@ export function Welcome() {
       <h2 className="text-xl">{t("welcome.title", { level: say(`levels.${user.level}`) })}</h2>
       <div>
         <h3 className="text-lg">{t("welcome.can")}</h3>
-        <p>{say(`welcome.can_${user.level}`)}</p>
+        <ul className="mt-1 flex flex-col gap-1">
+          <li className="flex gap-2">
+            <span aria-hidden="true">✓</span>
+            <span>{say(`welcome.can_${user.level}`)}</span>
+          </li>
+        </ul>
       </div>
       <div>
         <h3 className="text-lg">{t("welcome.cannot")}</h3>
-        <p>{say(`welcome.cannot_${user.level}`)}</p>
+        <ul className="mt-1 flex flex-col gap-1">
+          <li className="flex gap-2">
+            <span aria-hidden="true">–</span>
+            <span>{say(`welcome.cannot_${user.level}`)}</span>
+          </li>
+        </ul>
       </div>
       <p>
         {user.workspaces.length > 0
           ? t("welcome.workspaces", { list: user.workspaces.join(", ") })
           : t("welcome.noWorkspaces")}
       </p>
-      <p>
-        {t("welcome.telegram")}{" "}
-        <Link to="/configuracoes" className="underline">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-field border border-line bg-surface p-3">
+        <p>{t("welcome.telegram")}</p>
+        <Link
+          to="/configuracoes"
+          className="inline-flex min-h-11 items-center rounded-field border border-line px-4 font-semibold hover:bg-accent-wash"
+        >
           {t("welcome.telegramLink")}
         </Link>
-      </p>
+      </div>
       <div>
         <Button onPress={close}>{t("welcome.done")}</Button>
       </div>

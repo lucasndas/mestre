@@ -33,7 +33,7 @@ export default {
     pin2: "Repita o PIN",
     pinWhy:
       "O PIN confirma ações sensíveis. Ele não é a sua senha: não use o mesmo valor nos dois.",
-    submit: "Entrar",
+    submit: "Criar meu acesso",
     errors: {
       invalid_code:
         "Esse código não vale mais: pode ter vencido (vale 24 horas) ou já ter sido usado. Peça outro ao Senhor da Guilda.",

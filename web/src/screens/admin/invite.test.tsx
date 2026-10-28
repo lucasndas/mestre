@@ -90,6 +90,26 @@ test("choosing a level says what the person will and will not be able to do", as
   expect(screen.queryByLabelText("PIN")).toBeNull();
 });
 
+// CA-CRESC-01
+test("the campaigns that were ticked go in the invite", async () => {
+  const { calls } = fakeServer(invited);
+  const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+  renderApp("/usuarios");
+  await user.click(
+    (await screen.findAllByRole("button", { name: "Convidar pessoa" }))[0] as HTMLElement,
+  );
+  await fill(user, screen.getByLabelText("Nome"), "Ana Lima");
+  await user.click(screen.getByRole("checkbox", { name: "loja" }));
+  await user.click(screen.getByRole("button", { name: "Criar convite" }));
+  await fill(user, screen.getByLabelText("PIN"), "123456");
+  await user.click(screen.getByRole("button", { name: "Criar convite" }));
+  await screen.findByRole("region", { name: "1. Instruções" });
+  expect(calls.find((c) => c.method === "POST" && c.path === "/api/users")?.body).toMatchObject({
+    name: "Ana Lima",
+    workspaces: ["loja"],
+  });
+});
+
 // CA-CRESC-02 and CA-CRESC-03
 test("the invite has three parts with their own copy buttons: no code in the instructions, the check code computed from the certificate, the secret only after the confirmation", async () => {
   fakeServer(invited);
@@ -107,8 +127,9 @@ test("the invite has three parts with their own copy buttons: no code in the ins
   expect(p1.textContent).toMatch(/NÃO instale/);
   expect(within(p1).getByRole("button", { name: /Copiar: 1\. Instruções/ })).toBeTruthy();
   expect(within(p2).getByRole("button", { name: /Copiar: 2\./ })).toBeTruthy();
-  // the secret waits for the word of the person
+  // the secret waits for the word of the person: the checkbox is what shows it
   expect(within(p3).queryByTestId("shown-once")).toBeNull();
+  expect(within(p3).getByRole("checkbox", { name: /conferiu o código/ })).toBeTruthy();
   await user.click(within(p3).getByRole("checkbox", { name: /conferiu o código/ }));
   expect(within(p3).getByTestId("shown-once").textContent).toBe("ABCD2345");
   // nowhere is there a link that carries the code

@@ -46,6 +46,7 @@ func mountWorkspaceRules(r *Router) {
 	r.Require("POST /api/workspaces/{workspace}/ceiling/widen", p.handleWiden, users.RaiseCeiling)
 	r.Require("GET /api/workspaces/{workspace}/policy", p.handlePolicy, users.BasesVaultPolicy)
 	r.Require("PUT /api/workspaces/{workspace}/policy", p.handleSavePolicy, users.BasesVaultPolicy)
+	r.Require("POST /api/workspaces/{workspace}/policy/validate", p.handleValidatePolicy, users.BasesVaultPolicy)
 	r.Require("GET /api/workspaces/{workspace}/instructions", p.handleInstructions, users.ConfigureWorkspace)
 	r.Require("PUT /api/workspaces/{workspace}/instructions", p.handleSaveInstructions, users.ConfigureWorkspace)
 }
@@ -282,6 +283,40 @@ func plainText(s string) bool {
 	return utf8.ValidString(s) && !strings.ContainsRune(s, 0)
 }
 
+// checkPolicyText validates a whole policy file before anything is written. A refusal of the
+// content carries the line (and is audited by the caller); one of the encoding or the size has
+// line -1 and is not.
+func checkPolicyText(text string) (data []byte, apiErr *APIError, line int) {
+	if len(text) > chain.MaxPolicyBytes {
+		return nil, Err(CodeTooLarge, "o arquivo é maior do que o limite", map[string]any{"max_bytes": chain.MaxPolicyBytes}), -1
+	}
+	data = []byte(text)
+	if !plainText(text) {
+		return nil, Err(CodeInvalidPolicy, "o arquivo precisa ser texto UTF-8", map[string]any{"line": 0}), -1
+	}
+	if _, _, err := chain.ParsePolicyFile(data); err != nil {
+		line = policyErrorLine(data, err)
+		return nil, Err(CodeInvalidPolicy, "arquivo de política inválido: "+err.Error(), map[string]any{"line": line, "reason": err.Error()}), line
+	}
+	return data, nil, 0
+}
+
+// handleValidatePolicy says whether a text would be accepted as the policy, without saving it.
+func (p *Panel) handleValidatePolicy(w http.ResponseWriter, r *http.Request) {
+	if _, ok := p.ruleDir(w, r); !ok {
+		return
+	}
+	var in PolicyInput
+	if !decode(w, r, &in) {
+		return
+	}
+	if _, apiErr, _ := checkPolicyText(in.Text); apiErr != nil {
+		WriteError(w, apiErr)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (p *Panel) handleSavePolicy(w http.ResponseWriter, r *http.Request) {
 	dir, ok := p.ruleDir(w, r)
 	if !ok {
@@ -292,20 +327,12 @@ func (p *Panel) handleSavePolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx, me, ws := r.Context(), UserOf(r), r.PathValue("workspace")
-	if len(in.Text) > chain.MaxPolicyBytes {
-		WriteError(w, Err(CodeTooLarge, "o arquivo é maior do que o limite", map[string]any{"max_bytes": chain.MaxPolicyBytes}))
-		return
-	}
-	data := []byte(in.Text)
-	if !plainText(in.Text) {
-		WriteError(w, Err(CodeInvalidPolicy, "o arquivo precisa ser texto UTF-8", map[string]any{"line": 0}))
-		return
-	}
-	// validated whole before anything is written: an invalid file saves nothing
-	if _, _, err := chain.ParsePolicyFile(data); err != nil {
-		line := policyErrorLine(data, err)
-		p.audit(ctx, "panel.policy.refused", map[string]any{"user_id": me.ID, "workspace": ws, "line": line, "ip": clientIP(r)})
-		WriteError(w, Err(CodeInvalidPolicy, "arquivo de política inválido: "+err.Error(), map[string]any{"line": line, "reason": err.Error()}))
+	data, apiErr, line := checkPolicyText(in.Text)
+	if apiErr != nil {
+		if line >= 0 {
+			p.audit(ctx, "panel.policy.refused", map[string]any{"user_id": me.ID, "workspace": ws, "line": line, "ip": clientIP(r)})
+		}
+		WriteError(w, apiErr)
 		return
 	}
 	path := filepath.Join(dir, policyFile)

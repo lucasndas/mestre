@@ -34,59 +34,74 @@ export function InviteForm({
   const [ws, setWs] = useState<string[]>([]);
   const [gh, setGh] = useState("");
   return (
-    <div className="flex max-w-3xl flex-col gap-4 rounded-field border border-line bg-surface p-5">
-      <h2 className="text-xl">{t("create.title")}</h2>
-      <Field label={t("create.name")} value={name} onChange={setName} autoComplete="off" />
-      <ChoiceGroup
-        label={t("create.level")}
-        value={level}
-        onChange={setLevel}
-        options={ASSIGNABLE.map((l) => ({
-          value: l,
-          label: say(`levels.${l}`),
-          hint: say(`levelHints.${l}`),
-        }))}
-      />
-      <div aria-live="polite" className="rounded-field bg-accent-wash p-3 text-sm">
-        <p>{say(`levelCan.${level}`)}</p>
-        <p className="mt-1">{say(`levelCannot.${level}`)}</p>
-      </div>
-      <MultiChoice
-        label={t("create.workspaces")}
-        value={ws}
-        onChange={setWs}
-        options={workspaces}
-        empty={t("workspaceNone")}
-      />
-      <details>
-        <summary className="min-h-11 cursor-pointer py-2 font-semibold">{t("create.more")}</summary>
-        <Field
-          label={t("create.githubLogin")}
-          description={t("create.githubLoginHint")}
-          value={gh}
-          onChange={setGh}
-          autoComplete="off"
+    <div className="grid max-w-4xl gap-4 rounded-field border border-line bg-surface p-5 md:grid-cols-[minmax(0,1fr)_16rem]">
+      <div className="flex min-w-0 flex-col gap-4">
+        <h2 className="text-xl">{t("create.title")}</h2>
+        <Field label={t("create.name")} value={name} onChange={setName} autoComplete="off" />
+        <ChoiceGroup
+          label={t("create.level")}
+          value={level}
+          onChange={setLevel}
+          options={ASSIGNABLE.map((l) => ({
+            value: l,
+            label: say(`levels.${l}`),
+            hint: say(`levelHints.${l}`),
+          }))}
         />
-      </details>
-      <div className="flex flex-wrap items-start gap-3">
-        <SensitiveButton
-          isDisabled={name.trim() === ""}
-          onConfirm={async (pin) => {
-            const body: CreateUserRequest = {
-              name: name.trim(),
-              level,
-              workspaces: ws,
-              github_login: gh.trim(),
-            };
-            await onCreated(await api<CreateUserResponse>("POST", "/api/users", body, { pin }));
-          }}
-        >
-          {t("create.submit")}
-        </SensitiveButton>
-        <Button variant="quiet" onPress={onClose}>
-          {t("create.close")}
-        </Button>
+        <MultiChoice
+          label={t("create.workspaces")}
+          value={ws}
+          onChange={setWs}
+          options={workspaces}
+          empty={t("workspaceNone")}
+        />
+        <details>
+          <summary className="min-h-11 cursor-pointer py-2 font-semibold">
+            {t("create.more")}
+          </summary>
+          <Field
+            label={t("create.githubLogin")}
+            description={t("create.githubLoginHint")}
+            value={gh}
+            onChange={setGh}
+            autoComplete="off"
+          />
+        </details>
+        <div className="flex flex-wrap items-start gap-3">
+          <SensitiveButton
+            isDisabled={name.trim() === ""}
+            onConfirm={async (pin) => {
+              const body: CreateUserRequest = {
+                name: name.trim(),
+                level,
+                workspaces: ws,
+                github_login: gh.trim(),
+              };
+              await onCreated(await api<CreateUserResponse>("POST", "/api/users", body, { pin }));
+            }}
+          >
+            {t("create.submit")}
+          </SensitiveButton>
+          <Button variant="quiet" onPress={onClose}>
+            {t("create.close")}
+          </Button>
+        </div>
       </div>
+      <aside
+        aria-live="polite"
+        aria-label={t("create.previewLabel")}
+        className="flex h-fit flex-col gap-2 rounded-field bg-accent-wash p-4 text-sm"
+      >
+        <p className="text-base font-semibold">
+          {t("create.preview", {
+            name: name.trim() || t("create.previewAnyone"),
+            level: say(`levels.${level}`),
+          })}
+        </p>
+        <p>{say(`levelCan.${level}`)}</p>
+        <p>{say(`levelCannot.${level}`)}</p>
+        <p className="border-t border-line pt-2">{t("create.pinNote")}</p>
+      </aside>
     </div>
   );
 }

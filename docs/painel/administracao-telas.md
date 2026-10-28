@@ -51,7 +51,7 @@ Fora desta unidade: o desenho é o da unidade 4I (a Guilda cresce), que segue o 
 
 ## Regras e consumo, auditoria e bases e fichas
 
-Só o padrão: a frase de para que serve, a faixa de situação, o vazio com saída e o erro. As frases e o que cada uma põe no vazio estão em [regras e cadeia](administracao-regras.md#apresentação). Consumo: o resumo do limite sobe para a faixa e "sem dado" é explicado ao lado do número. Auditoria: a coluna "o que mudou" é uma frase traduzida da ação, com antes/depois num detalhe recolhido. Bases e fichas: só o cabeçalho, a faixa e o vazio; o YAML e o importar tudo ou nada ficam como estão.
+Só o padrão: a frase de para que serve, a faixa de situação, o vazio com saída e o erro. As frases e o que cada uma põe no vazio estão em [regras e cadeia](administracao-regras.md#apresentação). Consumo: o resumo do limite sobe para a faixa e "sem dado" é explicado ao lado do número. Auditoria: uma tabela Quando, Quem e O que mudou; a última coluna é uma frase traduzida da ação (uma ação que o painel ainda não conhece aparece como "Outra ação do painel", com o código ao lado), com antes/depois num detalhe recolhido. Bases e fichas: só o cabeçalho, a faixa e o vazio; o YAML e o importar tudo ou nada ficam como estão.
 
 ## O que pede backend novo
 

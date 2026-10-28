@@ -56,8 +56,7 @@ function CeilingOf({ workspace, picker }: { workspace: string; picker: React.Rea
   ) : null;
 
   return (
-    <div className="flex max-w-3xl flex-col gap-5">
-      {picker}
+    <div className="flex flex-col gap-5">
       {data ? (
         <StatusStrip
           tone={!data.present ? "neutral" : data.valid ? "ok" : "danger"}
@@ -71,16 +70,17 @@ function CeilingOf({ workspace, picker }: { workspace: string; picker: React.Rea
           hint={
             data.widenings.length > 0
               ? t("ceiling.stripWidenings", { count: data.widenings.length })
-              : undefined
+              : !data.present
+                ? t("ceiling.stripNoneHint")
+                : undefined
           }
         >
-          {data.present ? (
-            <LevelGate need="administrator" label={t("ceiling.widen")}>
-              {widenButton}
-            </LevelGate>
-          ) : null}
+          <LevelGate need="administrator" label={t("ceiling.widen")}>
+            {widenButton}
+          </LevelGate>
         </StatusStrip>
       ) : null}
+      {picker}
       {notice ? <Alert tone="ok">{notice}</Alert> : null}
       {error ? (
         <LoadError what={t("loadWhat.ceiling")} error={error} onRetry={() => void refetch()} />
@@ -89,11 +89,7 @@ function CeilingOf({ workspace, picker }: { workspace: string; picker: React.Rea
       {data ? (
         <>
           {!data.present ? (
-            <EmptyState title={t("ceiling.emptyTitle")} why={t("ceiling.noFile")}>
-              <LevelGate need="administrator" label={t("ceiling.widen")}>
-                {widenButton}
-              </LevelGate>
-            </EmptyState>
+            <EmptyState title={t("ceiling.emptyTitle")} why={t("ceiling.noFile")} />
           ) : (
             <div>
               {!data.valid ? (

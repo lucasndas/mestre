@@ -33,7 +33,7 @@ test("the status strip says the tone with a word and a symbol, and holds the one
   );
   const strip = screen.getByRole("status");
   expect(strip.textContent).toContain("Falta algo: Nenhuma conta de IA entrou ainda");
-  expect(strip.textContent).toContain("▲");
+  expect(strip.textContent).toContain("!");
   expect(screen.getByRole("button", { name: "Entrar em outra conta" })).toBeTruthy();
 });
 
@@ -107,4 +107,22 @@ test("who reaches the level gets the action itself", () => {
     false,
   );
   expect(screen.queryByText(/Exige o nível/)).toBeNull();
+});
+
+// CA-ADM-25
+test("a screen above the level of the user is a refusal that says the level, not a read that failed", () => {
+  show(
+    <LoadError
+      what="os Apps do GitHub"
+      error={new ApiError(403, "forbidden_level", "x", { need: "owner", have: "approver" })}
+      onRetry={() => undefined}
+    />,
+    "approver",
+  );
+  const alert = screen.getByRole("alert");
+  expect(alert.textContent).toContain(
+    "Esta ação exige o nível Senhor da Guilda; o seu é Aprovador.",
+  );
+  expect(alert.textContent).not.toContain("Não foi possível carregar");
+  expect(screen.queryByRole("button", { name: "Tentar de novo" })).toBeNull();
 });

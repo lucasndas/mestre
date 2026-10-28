@@ -55,22 +55,30 @@ export function Profiles() {
       {data && !error ? (
         <div className="flex max-w-4xl flex-col gap-6">
           <Strip data={data} onAdd={() => setAdding(data.providers[0] ?? "")} />
-          <p className="max-w-2xl text-sm text-muted">
-            {t("machineNote", { machine: data.machine })}
-          </p>
+          <p className="max-w-2xl text-sm text-muted">{t("machineNote")}</p>
           {notice ? <Alert tone="ok">{notice}</Alert> : null}
           {data.profiles.length === 0 ? (
             <EmptyState title={t("empty.title")} why={t("empty.why")}>
-              {data.providers.map((p) => (
-                <Button
-                  key={p}
-                  variant="secondary"
-                  isDisabled={!reaches}
-                  onPress={() => setAdding(p)}
-                >
-                  {t("empty.pick", { provider: labelOr(say, `providers.${p}`, p) })}
-                </Button>
-              ))}
+              <div className="grid w-full gap-3 sm:grid-cols-3">
+                {[...data.providers]
+                  .sort((a, b) => providerRank(a) - providerRank(b))
+                  .map((p) => (
+                    <div
+                      key={p}
+                      className="flex flex-col gap-2 rounded-field border border-line bg-surface p-3"
+                    >
+                      <p className="font-semibold">{labelOr(say, `providers.${p}`, p)}</p>
+                      <p className="text-sm text-muted">{labelOr(say, `providerHelp.${p}`, "")}</p>
+                      <Button
+                        variant="secondary"
+                        isDisabled={!reaches}
+                        onPress={() => setAdding(p)}
+                      >
+                        {t("empty.pick", { provider: labelOr(say, `providers.${p}`, p) })}
+                      </Button>
+                    </div>
+                  ))}
+              </div>
             </EmptyState>
           ) : null}
           <ul className="flex flex-col gap-4">
@@ -106,6 +114,12 @@ export function Profiles() {
     </section>
   );
 }
+
+const PROVIDER_ORDER = ["claude-code", "codex", "antigravity"];
+const providerRank = (p: string) => {
+  const i = PROVIDER_ORDER.indexOf(p);
+  return i < 0 ? PROVIDER_ORDER.length : i;
+};
 
 function Strip({ data, onAdd }: { data: ProfilesPage; onAdd: () => void }) {
   const { t } = useTranslation("profiles");

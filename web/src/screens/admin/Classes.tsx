@@ -8,7 +8,15 @@ import { SensitiveButton } from "../../components/PinField";
 import { Alert, Button } from "../../components/ui";
 import type { ClassRow, ProposalRow } from "../../gen/panel";
 import { api } from "../../lib/api";
-import { Badge, EmptyState, LoadError, PageHeader, StatusStrip, VocabLine } from "./kit";
+import {
+  Badge,
+  EmptyState,
+  LoadError,
+  linkButton,
+  PageHeader,
+  StatusStrip,
+  VocabLine,
+} from "./kit";
 import { classesQuery, labelOr, type Say } from "./manage";
 
 /** The tone of the label of an App state ("em criação", "pronto", "com erro"). */
@@ -57,7 +65,11 @@ export function Classes() {
                   ? t("strip.inForceOne")
                   : t("strip.inForce", { count: data.classes.length })
               }
-              hint={data.classes.some(appWaits) ? t("strip.inForceApp") : t("strip.inForceHint")}
+              hint={
+                data.classes.some(appWaits)
+                  ? t("strip.inForceApp", { count: data.classes.filter(appWaits).length })
+                  : t("strip.inForceHint")
+              }
             />
           ) : (
             <StatusStrip tone="warn" title={t("strip.none")} hint={t("strip.noneHint")}>
@@ -76,9 +88,7 @@ export function Classes() {
               title={t("empty.title")}
               why={t("empty.why")}
               steps={[t("empty.step1"), t("empty.step2"), t("empty.step3")]}
-            >
-              <Button onPress={chat.show}>{t("strip.talk")}</Button>
-            </EmptyState>
+            />
           )}
         </div>
       ) : null}
@@ -92,11 +102,11 @@ function AppsBand({ total, limit }: { total: number; limit: number }) {
   return (
     <div
       role="status"
-      className="flex flex-wrap items-center justify-between gap-2 rounded-field bg-warn px-4 py-2 font-semibold text-warn-ink"
+      className="flex max-w-4xl flex-wrap items-center justify-between gap-2 rounded-field border border-warn bg-warn-wash px-4 py-2 font-semibold"
     >
       <span>{t("band", { total, limit })}</span>
       {canApps ? (
-        <Link to="/apps" className="inline-flex min-h-11 items-center underline underline-offset-2">
+        <Link to="/apps" className={linkButton}>
           {t("bandLink")}
         </Link>
       ) : null}
@@ -225,16 +235,26 @@ function ClassItem({ c }: { c: ClassRow }) {
         <Badge>{labelOr(say, `states.${c.state}`, c.state)}</Badge>
         {c.app ? (
           <Badge tone={appTone(c.app_state)}>
-            {c.app}
-            {c.app_state ? ` · ${c.app_state}` : ""}
+            {c.app_state === "pronto"
+              ? t("list.appReady", { name: c.app })
+              : labelOr(say, `list.appState.${c.app_state}`, t("list.appPending"))}
           </Badge>
         ) : (
           <Badge tone="warn">{t("list.noApp")}</Badge>
         )}
         <span className="text-sm font-normal text-muted">
           {t("list.version", { version: c.version })}
-          {c.table ? ` · ${c.workspace} / ${c.table}` : ""}
         </span>
+      </p>
+      <p className="mt-1 text-sm text-muted">
+        {t("list.appliesTo", {
+          where:
+            c.scope === "global"
+              ? t("proposals.global")
+              : c.table
+                ? `${c.workspace} / ${c.table}`
+                : c.workspace,
+        })}
       </p>
       {c.problems.length > 0 ? (
         <p className="mt-1 text-sm text-danger">{c.problems.join("; ")}</p>
@@ -242,7 +262,7 @@ function ClassItem({ c }: { c: ClassRow }) {
       {notReady ? (
         <p className="mt-2 text-sm">
           {t("list.appNotReady")}{" "}
-          <Link to="/apps" className="font-semibold underline underline-offset-2">
+          <Link to="/apps" className={linkButton}>
             {t("list.appLink")}
           </Link>
         </p>

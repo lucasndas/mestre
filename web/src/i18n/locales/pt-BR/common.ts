@@ -11,6 +11,7 @@ export default {
     technical: "Detalhes técnicos",
     vocabulary: "Vocabulário",
     loadFailed: "Não foi possível carregar {{what}}.",
+    refused: "Esta tela é de outro nível.",
     needLevel: "Exige o nível {{need}}; o seu é {{have}}.",
     tone: { neutral: "Situação", warn: "Falta algo", ok: "Em dia", danger: "Falhou" },
   },

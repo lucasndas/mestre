@@ -35,12 +35,16 @@ export function Chain() {
       <VocabLine terms={["Cadeia de aprovação", "Pausa de autonomia", "Mestre da mesa"]} />
       {data ? (
         <StatusStrip
-          tone={paused > 0 ? "warn" : "ok"}
-          title={t("chain.strip", { count: waiting, paused })}
+          tone={paused > 0 || waiting > 0 ? "warn" : "ok"}
+          title={
+            paused > 0
+              ? t("chain.strip", { count: waiting, paused })
+              : t("chain.stripQueue", { count: waiting })
+          }
           hint={oldest > 0 ? t("chain.stripOldest", { age: dur(oldest) }) : t("chain.stripNone")}
         />
       ) : null}
-      <div className="flex max-w-3xl flex-col gap-5">
+      <div className="flex max-w-4xl flex-col gap-5">
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
         {error ? (
           <LoadError what={t("loadWhat.chain")} error={error} onRetry={() => void refetch()} />
@@ -61,7 +65,11 @@ export function Chain() {
               {g.workspace}
             </h2>
             {g.queues.length > 0 ? <Queues rows={g.queues} /> : null}
-            {g.tables.length === 0 ? <p className="text-muted">{t("chain.noTables")}</p> : null}
+            {g.tables.length === 0 ? (
+              <p className="text-muted">
+                {g.queues.some((q) => q.open > 0) ? t("chain.noTablesQueue") : t("chain.noTables")}
+              </p>
+            ) : null}
             <ul className="flex flex-col gap-3">
               {g.tables.map((tb) => (
                 <li key={tb.table}>
@@ -88,40 +96,21 @@ function Queues({ rows }: { rows: QueueRow[] }) {
   const { t } = useTranslation("rules");
   const say = t as unknown as Say;
   const dur = useDuration();
+  const open = rows.filter((q) => q.open > 0);
+  if (open.length === 0) return <p>{t("chain.queueEmpty")}</p>;
   return (
-    <div className="max-w-xl overflow-x-auto">
-      <table className="w-full border-collapse text-left text-sm">
-        <caption className="sr-only">{t("chain.queues")}</caption>
-        <thead>
-          <tr className="border-b border-line text-muted">
-            <th scope="col" className="py-2 pr-4 font-semibold">
-              {t("chain.level")}
-            </th>
-            <th scope="col" className="py-2 pr-4 font-semibold">
-              {t("chain.open")}
-            </th>
-            <th scope="col" className="py-2 pr-4 font-semibold">
-              {t("chain.oldest")}
-            </th>
-            <th scope="col" className="py-2 font-semibold">
-              {t("chain.avgWait")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((q) => (
-            <tr key={`${q.level}-${q.table ?? ""}`} className="border-b border-line">
-              <th scope="row" className="py-2 pr-4 font-normal">
-                {say(`chain.levels.${q.level}`)}
-              </th>
-              <td className="py-2 pr-4">{q.open}</td>
-              <td className="py-2 pr-4">{q.open > 0 ? dur(q.oldest_seconds) : "—"}</td>
-              <td className="py-2">{q.avg_wait_seconds > 0 ? dur(q.avg_wait_seconds) : "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <ul aria-label={t("chain.queues")} className="flex flex-col gap-1">
+      {open.map((q) => (
+        <li key={`${q.level}-${q.table ?? ""}`}>
+          <span className="font-semibold">{say(`chain.levels.${q.level}`)}</span>:{" "}
+          {t("chain.queueLine", {
+            count: q.open,
+            oldest: dur(q.oldest_seconds),
+            avg: q.avg_wait_seconds > 0 ? dur(q.avg_wait_seconds) : "—",
+          })}
+        </li>
+      ))}
+    </ul>
   );
 }
 

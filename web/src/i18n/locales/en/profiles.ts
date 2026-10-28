@@ -8,7 +8,7 @@ const profiles: Widen<typeof pt> = {
   what: "the account profiles",
   loading: "Loading the profiles…",
   machineNote:
-    "This list is the one of machine {{machine}}, where the panel runs. The accounts of the other machines show on the page of each one, in the Guild; here they are coming soon.",
+    "This list is the one of the machine the panel runs on (the Citadel). The accounts of the other machines show on the sheet of each one, in the Guild; they come here soon.",
   strip: {
     none: "No AI account has signed in yet",
     noneHint: "Pick a provider below to sign in to the first account.",
@@ -24,6 +24,11 @@ const profiles: Widen<typeof pt> = {
     pick: "Sign in with {{provider}}",
   },
   providers: { "claude-code": "Claude", codex: "Codex", antigravity: "Antigravity" },
+  providerHelp: {
+    "claude-code": "Claude Code, by Anthropic",
+    codex: "Codex, by OpenAI",
+    antigravity: "Antigravity, by Google",
+  },
   default: "default",
   badge: { ready: "ready", missing: "a step is missing", unchecked: "login not checked" },
   manual: {

@@ -36,7 +36,9 @@ async function submit(language: "pt-BR" | "en") {
     screen.getByLabelText(pt ? "Repita a senha" : "Repeat the password"),
     "uma senha bem longa",
   );
-  await user.click(screen.getByRole("button", { name: pt ? "Entrar" : "Sign in" }));
+  await user.click(
+    screen.getByRole("button", { name: pt ? "Criar meu acesso" : "Create my access" }),
+  );
 }
 
 const CASES: [string, Record<string, unknown>, number, RegExp, RegExp][] = [

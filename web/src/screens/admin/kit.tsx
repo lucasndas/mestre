@@ -63,21 +63,25 @@ export const auditFetch = (f: AuditFilters, cursor: string) =>
 export function PageHeader({ title, intro }: { title: string; intro: ReactNode }) {
   return (
     <>
-      <h1 className="text-3xl">{title}</h1>
-      <p className="mt-1 mb-6 max-w-2xl text-muted">{intro}</p>
+      <h1 className="text-[2rem]">{title}</h1>
+      <p className="mt-1 mb-6 max-w-[62ch]">{intro}</p>
     </>
   );
 }
+
+/** A link that leads to another screen and looks like the secondary button next to it. */
+export const linkButton =
+  "inline-flex min-h-11 items-center justify-center rounded-field border border-line bg-surface px-4 font-semibold text-ink hover:bg-accent-wash";
 
 export type Tone = "neutral" | "warn" | "ok" | "danger";
 
 // The tone is told by a symbol and a word as well as by the color (the pattern of the
 // administration screens, docs/painel/design.md#tela-de-administração).
-const toneStyle: Record<Tone, { box: string; symbol: string }> = {
-  neutral: { box: "border-line bg-surface", symbol: "○" },
-  warn: { box: "border-warn-ink/40 bg-warn text-warn-ink", symbol: "▲" },
-  ok: { box: "border-signal bg-surface", symbol: "✓" },
-  danger: { box: "border-danger/40 bg-danger-wash text-danger", symbol: "✕" },
+const toneStyle: Record<Tone, { box: string; dot: string; symbol: string }> = {
+  neutral: { box: "border-line bg-surface", dot: "border border-line bg-paper", symbol: "i" },
+  warn: { box: "border-warn bg-warn-wash", dot: "bg-warn text-warn-ink", symbol: "!" },
+  ok: { box: "border-signal/50 bg-signal-wash", dot: "bg-signal text-accent-ink", symbol: "✓" },
+  danger: { box: "border-danger/40 bg-danger-wash", dot: "bg-danger text-accent-ink", symbol: "✕" },
 };
 
 /**
@@ -101,15 +105,22 @@ export function StatusStrip({
   return (
     <div
       role="status"
-      className={`mb-6 flex max-w-4xl flex-col gap-3 rounded-field border p-4 sm:flex-row sm:items-center sm:justify-between ${st.box}`}
+      className={`mb-6 flex max-w-4xl flex-col gap-3 rounded-field border px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between ${st.box}`}
     >
-      <div className="min-w-0">
-        <p className="flex items-baseline gap-2 text-lg font-semibold">
-          <span aria-hidden="true">{st.symbol}</span>
-          <span className="sr-only">{t(`admin.tone.${tone}`)}: </span>
-          <span>{title}</span>
+      <div className="grid min-w-0 grid-cols-[auto_1fr] gap-x-3">
+        <p className="contents font-semibold">
+          <span
+            aria-hidden="true"
+            className={`mt-0.5 grid size-6 place-items-center rounded-full text-sm font-bold ${st.dot}`}
+          >
+            {st.symbol}
+          </span>
+          <span>
+            <span className="sr-only">{t(`admin.tone.${tone}`)}: </span>
+            {title}
+          </span>
         </p>
-        {hint ? <p className="mt-1 text-sm">{hint}</p> : null}
+        {hint ? <p className="col-start-2 mt-0.5 text-sm text-muted">{hint}</p> : null}
       </div>
       {children ? <div className="flex flex-wrap items-center gap-2">{children}</div> : null}
     </div>
@@ -130,13 +141,21 @@ export function EmptyState({
   children?: ReactNode;
 }) {
   return (
-    <section className="flex max-w-3xl flex-col gap-3 rounded-field border border-dashed border-muted p-5">
+    <section className="flex max-w-4xl flex-col gap-3 rounded-field border border-dashed border-muted p-5">
       <h2 className="text-xl">{title}</h2>
       <p>{why}</p>
       {steps && steps.length > 0 ? (
-        <ol className="ml-5 list-decimal text-sm">
-          {steps.map((s) => (
-            <li key={s}>{s}</li>
+        <ol className="flex flex-col gap-2">
+          {steps.map((s, i) => (
+            <li key={s} className="flex items-start gap-3">
+              <span
+                aria-hidden="true"
+                className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-accent-wash text-sm font-semibold"
+              >
+                {i + 1}
+              </span>
+              <span>{s}</span>
+            </li>
           ))}
         </ol>
       ) : null}
@@ -163,10 +182,22 @@ export function LoadError({
   const { t: te } = useTranslation("errors");
   const raw =
     error instanceof ApiError ? [error.code, error.message].filter(Boolean).join(": ") : "";
+  // a screen above the level of the user is a refusal that says the level, not a read that failed
+  if (error instanceof ApiError && error.code === "forbidden_level") {
+    return (
+      <div
+        role="alert"
+        className="flex max-w-4xl flex-col gap-1 rounded-field border border-warn bg-warn-wash p-4"
+      >
+        <p className="font-semibold">{t("admin.refused")}</p>
+        <p>{errorText(te, error)}</p>
+      </div>
+    );
+  }
   return (
     <div
       role="alert"
-      className="flex max-w-3xl flex-col gap-3 rounded-field border border-danger/40 bg-danger-wash p-4 text-danger"
+      className="flex max-w-4xl flex-col gap-3 rounded-field border border-danger/40 bg-danger-wash p-4 text-danger"
     >
       <p className="font-semibold">{t("admin.loadFailed", { what })}</p>
       <p>{errorText(te, error)}</p>
@@ -191,8 +222,11 @@ export function VocabLine({ terms, extra }: { terms: TermKey[]; extra?: ReactNod
   return (
     <p className="-mt-4 mb-6 flex max-w-2xl flex-wrap items-baseline gap-x-3 gap-y-1 text-sm text-muted">
       <span>{t("admin.vocabulary")}:</span>
-      {terms.map((name) => (
-        <Term key={name} name={name} />
+      {terms.map((name, i) => (
+        <span key={name} className="flex items-baseline gap-x-3">
+          {i > 0 ? <span aria-hidden="true">·</span> : null}
+          <Term name={name} />
+        </span>
       ))}
       {extra}
     </p>
@@ -248,7 +282,7 @@ export function Badge({
   const cls = {
     plain: "bg-accent-wash text-ink",
     ok: "border border-signal bg-surface text-signal",
-    warn: "bg-warn text-warn-ink",
+    warn: "border border-warn bg-warn-wash text-warn-ink",
     danger: "bg-danger-wash text-danger",
   }[tone];
   return (
