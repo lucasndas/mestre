@@ -29,7 +29,7 @@ var bundle = map[string]map[string]string{
 func TestMatch(t *testing.T) {
 	t.Parallel()
 	for tag, want := range map[string]string{
-		"en": En, "en-US": En, "EN-gb": En, "en_US": En, "pt-BR": PtBR, "pt": PtBR, "fr": PtBR, "": PtBR, "english": PtBR,
+		"en": En, "en-US": En, "EN-gb": En, "en_US": En, "pt-BR": PtBR, "pt": PtBR, "fr": PtBR, "": PtBR, "english": En,
 	} {
 		if got := Match(tag); got != want {
 			t.Errorf("Match(%q) = %q, want %q", tag, got, want)

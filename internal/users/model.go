@@ -3,8 +3,9 @@ package users
 import (
 	"errors"
 	"slices"
-	"strings"
 	"time"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // State is the state of a user.
@@ -90,16 +91,9 @@ var (
 // Languages are the languages of the panel.
 var Languages = []string{"pt-BR", "en"}
 
-// MatchLanguage is the one rule that turns a hint of language (the language_code of
-// the Telegram, the language of the browser, the locale of the machine) into one
-// of Languages: a tag that starts with "en", whatever the case, is "en"; anything
-// else (empty included) is "pt-BR" (docs/plataforma/idioma-por-canal.md#a-regra-única).
-func MatchLanguage(tag string) string {
-	if len(tag) >= 2 && strings.EqualFold(tag[:2], "en") {
-		return "en"
-	}
-	return "pt-BR"
-}
+// MatchLanguage turns a hint of language into one of Languages: it is i18n.Match,
+// the one rule (docs/plataforma/idioma-por-canal.md#a-regra-única).
+func MatchLanguage(tag string) string { return i18n.Match(tag) }
 
 // LanguageFor is the language to speak to the user: the one he chose, or else the
 // match of the hint.

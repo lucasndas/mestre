@@ -72,11 +72,13 @@ func (m Msg) String() string {
 	return b.String()
 }
 
-// Match is the language of the catalogs for a language tag: a tag that starts
-// with "en" is en, anything else (empty, unknown) is pt-BR.
+// Match is the one rule that turns a hint of language (the language_code of the
+// Telegram, the Accept-Language, the locale of the machine) into a language of
+// the catalogs: a tag that starts with "en", whatever the case, is en; anything
+// else (empty, unknown) is pt-BR, as the panel does with the browser
+// (docs/plataforma/idioma-por-canal.md#a-regra-única).
 func Match(tag string) string {
-	t := strings.ToLower(strings.TrimSpace(tag))
-	if t == "en" || strings.HasPrefix(t, "en-") || strings.HasPrefix(t, "en_") {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(tag)), "en") {
 		return En
 	}
 	return PtBR
