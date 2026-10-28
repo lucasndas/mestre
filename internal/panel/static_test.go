@@ -1,6 +1,9 @@
 package panel_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The tests never depend on the build of the front end: the files are a MapFS.
 func TestStaticFilesAndTheFallbackToIndex(t *testing.T) {
@@ -25,6 +28,17 @@ func TestStaticFilesAndTheFallbackToIndex(t *testing.T) {
 	}
 	if w := r.call("POST", "/mesas", nil, opts{}); w.Code != 405 {
 		t.Errorf("POST on a client route = %d", w.Code)
+	}
+}
+
+// The fonts of the panel are inlined as data: URIs by the build; without font-src the browser refuses them and
+// the terminal falls back to another face.
+func TestThePolicyLetsTheInlinedFontsLoad(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	csp := r.call("GET", "/", nil, opts{}).Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "font-src 'self' data:") {
+		t.Fatalf("CSP = %q", csp)
 	}
 }
 

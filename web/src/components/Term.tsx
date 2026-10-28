@@ -63,13 +63,11 @@ export function Term({
         }}
         placement="bottom start"
         offset={6}
-        className="max-w-[18rem] rounded-field bg-ink px-3.5 py-3 text-[0.85rem] leading-snug whitespace-normal text-paper shadow-pop"
+        className="max-w-[18rem] rounded-field border border-line bg-surface px-3.5 py-3 text-[0.85rem] leading-snug whitespace-normal text-ink shadow-pop"
       >
         <Dialog aria-label={text.name} className="outline-none">
           <p>{text.help}</p>
-          <p className="mt-2 text-[0.7rem] tracking-wider text-paper/70 uppercase">
-            {t("help.real")}
-          </p>
+          <p className="mt-2 text-[0.7rem] tracking-wider text-muted uppercase">{t("help.real")}</p>
           <p>{text.real}</p>
         </Dialog>
       </Popover>

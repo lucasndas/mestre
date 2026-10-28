@@ -401,11 +401,17 @@ export function TerminalView({
           leave();
         }
       }}
-      className={`flex min-w-0 flex-col ${
-        focused ? "fixed inset-0 z-40 bg-paper" : ""
-      } ${compact ? "min-h-0 flex-1" : "overflow-hidden rounded-field border bg-surface"} ${
-        tone && !compact ? "border-accent ring-2 ring-accent" : "border-line"
-      } ${className}`}
+      className={`flex min-w-0 flex-col ${focused ? "fixed inset-0 z-40 bg-term-bg" : ""} ${
+        compact
+          ? "min-h-0 flex-1"
+          : `overflow-hidden rounded-field border bg-term-bg text-term-fg shadow-pop ${
+              focused
+                ? ""
+                : narrow
+                  ? "h-[clamp(420px,calc(100dvh-var(--term-offset,340px)),860px)]"
+                  : "h-[clamp(460px,calc(100dvh-var(--term-offset,300px)),860px)]"
+            }`
+      } ${tone && !compact ? "border-accent ring-2 ring-accent" : "border-term-line"} ${className}`}
     >
       {compact ? null : (
         <TerminalBar
@@ -424,26 +430,29 @@ export function TerminalView({
         />
       )}
       {reconnecting ? (
-        <p className="m-0 border-b border-warn bg-warn-wash px-3 py-2 text-warn-ink">
+        <p className="m-0 border-b border-term-line bg-warn px-3.5 py-2 text-warn-ink">
           {t("banner.reconnecting")}
         </p>
       ) : null}
       {context?.paused ? (
-        <p className="m-0 border-b border-warn bg-warn-wash px-3 py-2 text-warn-ink">
+        <p className="m-0 border-b border-term-line bg-warn px-3.5 py-2 text-warn-ink">
           {context.pausedReason
             ? t("pause.banner", { reason: context.pausedReason })
             : t("pause.bannerNoReason")}
         </p>
       ) : null}
       {noSignal ? (
-        <Alert tone="ok">
+        <p
+          role="status"
+          className="m-0 border-b border-term-line bg-term-chrome-2 px-3.5 py-2 text-term-fg"
+        >
           {since
             ? t("noSignal", { time: formatTime(since, i18n.language, timeZone) })
             : t("noSignalNoTime")}
-        </Alert>
+        </p>
       ) : null}
       {!compact && decision && !ended ? (
-        <div className="flex flex-wrap items-center gap-3 bg-accent px-3 py-2 text-accent-ink">
+        <div className="flex flex-wrap items-center gap-3 bg-accent px-3.5 py-2 text-accent-ink">
           <span>
             {t("banner.decision", {
               name: info.name,
@@ -458,12 +467,12 @@ export function TerminalView({
         </div>
       ) : null}
       {!compact && ended ? (
-        <div className="flex flex-wrap items-center gap-3 border-b border-line bg-accent-wash px-3 py-2">
+        <div className="flex flex-wrap items-center gap-3 border-b border-term-line bg-term-chrome-2 px-3.5 py-2 text-term-fg">
           <span>{t("banner.ended", { name: info.name })}</span>
           {onSeeTable ? (
             <AriaButton
               onPress={onSeeTable}
-              className="min-h-11 rounded-field border border-line px-3 font-semibold text-ink hover:bg-surface"
+              className="min-h-11 rounded-field border border-current px-3 text-term-fg hover:bg-term-chrome"
             >
               {t("banner.seeTable")}
             </AriaButton>
@@ -478,12 +487,12 @@ export function TerminalView({
         </Alert>
       ) : null}
       {narrow ? (
-        <div className="flex flex-wrap items-center gap-2 border-b border-line bg-accent-wash px-3 py-1 text-sm whitespace-nowrap">
+        <div className="flex flex-wrap items-center gap-2 border-b border-term-line bg-term-chrome-2 px-3 py-1 text-sm whitespace-nowrap text-term-fg">
           <span>{t("phone.strip")}</span>
           <AriaButton
             aria-pressed={wrap}
             onPress={() => setWrap(!wrap)}
-            className="min-h-11 rounded-field border border-line bg-surface px-3 font-semibold text-ink"
+            className="min-h-11 rounded-field border border-term-line bg-transparent px-3 text-term-fg"
           >
             {wrap ? t("phone.unwrap") : t("phone.wrap")}
           </AriaButton>
@@ -504,11 +513,10 @@ export function TerminalView({
             setAway(!atEnd && !compact);
           }}
           className={`nodrag nowheel nopan overflow-auto bg-term-bg ${
-            compact ? "h-full min-h-0 rounded-field border border-line" : ""
+            compact ? "h-full min-h-0 rounded-field border border-line" : "h-full"
           } ${dimmed || ended ? "opacity-60" : ""} ${noSignal ? "grayscale" : ""}`}
           data-renderer={live ? "webgl" : "snapshot"}
           data-signal={noSignal ? "lost" : "ok"}
-          style={compact ? undefined : { maxHeight: narrow ? "60dvh" : "min(70dvh, 60rem)" }}
         >
           {live ? (
             <div className="relative w-max p-2">
@@ -535,14 +543,14 @@ export function TerminalView({
           )}
         </div>
         {!live ? (
-          <span className="pointer-events-none absolute top-2 right-4 rounded-field bg-term-bg/90 px-2 text-sm text-term-fg">
+          <span className="pointer-events-none absolute top-2 right-4 rounded-field border border-term-line bg-term-chrome px-2 py-1 font-mono text-sm text-term-dim">
             {t("pictureLabel")}
           </span>
         ) : null}
         {away && !compact ? (
           <AriaButton
             onPress={toEnd}
-            className="absolute right-4 bottom-3 min-h-11 rounded-field bg-accent px-3 font-semibold text-accent-ink shadow-pop hover:bg-accent-strong"
+            className="absolute right-4 bottom-3 min-h-11 rounded-field border border-term-line bg-term-chrome-2 px-3 font-mono text-sm font-medium text-term-fg shadow-pop hover:bg-term-chrome"
           >
             {behind > 0 ? t("toEndBehind", { count: behind }) : t("toEnd")}
           </AriaButton>
@@ -583,7 +591,7 @@ export function TerminalView({
       {confirm ? (
         <section
           aria-label={t("banner.busyTitle")}
-          className="flex flex-wrap items-center gap-3 border-t border-warn bg-warn-wash px-3 py-2 text-warn-ink"
+          className="flex flex-wrap items-center gap-3 border-t border-term-line bg-warn px-3.5 py-2 text-warn-ink"
         >
           <span className="font-semibold">{t("busy.title")}</span>
           <span className="min-w-0 flex-1 basis-60">{t("busy.body", { name: info.name })}</span>
@@ -622,7 +630,7 @@ export function TerminalView({
         />
       )}
       {keys ? (
-        <p className="m-0 border-t border-line bg-surface px-3 py-1 text-sm text-muted">
+        <p className="m-0 border-t border-term-line bg-term-chrome px-3 py-1 font-mono text-sm text-term-dim">
           {t("composer.keysOn")}
         </p>
       ) : null}

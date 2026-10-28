@@ -10,6 +10,16 @@ const TONE: Record<Tone, string> = {
   done: "border-signal bg-signal text-accent-ink",
 };
 
+/** The same tones on the dark chrome of the terminal window: a mono word with a hairline, the tone in the text. */
+const TONE_DARK: Record<Tone, string> = {
+  ok: "border-term-line bg-term-chrome-2 text-term-ok",
+  plain: "border-term-line bg-term-chrome-2 text-term-fg",
+  warn: "border-warn/50 bg-term-chrome-2 text-warn",
+  accent: "border-accent bg-accent text-accent-ink",
+  danger: "border-danger bg-danger text-accent-ink",
+  done: "border-term-ok/50 bg-term-chrome-2 text-term-ok",
+};
+
 const PATHS: Record<Icon, string> = {
   open: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18",
   work: "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16ZM12 8v4l3 2",
@@ -26,22 +36,29 @@ export function ToneChip({
   tone,
   icon,
   large = false,
+  dark = false,
   children,
 }: {
   tone: Tone;
   icon: Icon;
   /** The size of the text of a card of the board (17 px), where the small chip text does not go. */
   large?: boolean;
+  /** On the dark chrome of the terminal window. */
+  dark?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <span
-      className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 ${large ? "text-base" : "text-sm"} font-semibold ${TONE[tone]}`}
+      className={
+        dark
+          ? `inline-flex items-center gap-1.5 rounded-field border px-2 py-1.5 font-mono text-sm leading-none ${TONE_DARK[tone]}`
+          : `inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 ${large ? "text-base" : "text-sm"} font-semibold ${TONE[tone]}`
+      }
     >
       <svg
         viewBox="0 0 24 24"
-        width="18"
-        height="18"
+        width={dark ? 14 : 18}
+        height={dark ? 14 : 18}
         fill="none"
         stroke="currentColor"
         strokeWidth="2"

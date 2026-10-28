@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Checkbox, Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 import { useTranslation } from "react-i18next";
-import { Term } from "../components/Term";
 import { Button, Field } from "../components/ui";
 import type { CanvasState, GrimoirePlan, RitualInfo } from "../gen/panel";
 import { formatDateTime } from "../lib/format";
@@ -31,7 +30,7 @@ export interface SidePanelProps {
 }
 
 const tabClass =
-  "min-h-11 cursor-pointer border-b-2 border-transparent px-3 font-semibold outline-none data-selected:border-accent data-focus-visible:ring-2 data-focus-visible:ring-accent";
+  "flex min-h-11 cursor-pointer items-center border-b-2 border-transparent px-3 font-semibold outline-none data-selected:border-accent data-focus-visible:ring-2 data-focus-visible:ring-accent";
 
 /** The side panel of the table: missions (draw and adjust), rituals, and the grimoires to restore. */
 export function SidePanel({
@@ -49,7 +48,7 @@ export function SidePanel({
   return (
     <aside
       aria-label={t("side.title")}
-      className="flex max-h-[45%] min-h-0 w-full flex-col border-t border-line bg-surface md:max-h-none md:w-96 md:border-t-0 md:border-l"
+      className="flex max-h-[45%] min-h-0 w-full flex-col border-t border-line bg-surface md:absolute md:inset-y-0 md:right-72 md:z-20 md:max-h-none md:w-96 md:border-t-0 md:border-l md:shadow-pop"
     >
       <Tabs
         selectedKey={tab}
@@ -58,13 +57,13 @@ export function SidePanel({
       >
         <TabList aria-label={t("side.title")} className="flex flex-wrap border-b border-line">
           <Tab id="missions" className={tabClass}>
-            <Term name="Missão" />
+            {t("side.tabs.missions")}
           </Tab>
           <Tab id="rituals" className={tabClass}>
-            <Term name="Ritual" />
+            {t("side.tabs.rituals")}
           </Tab>
           <Tab id="grimoires" className={tabClass}>
-            <Term name="Grimório" />
+            {t("side.tabs.grimoires")}
           </Tab>
         </TabList>
         <TabPanel id="missions" className="min-h-0 flex-1 overflow-auto p-3">

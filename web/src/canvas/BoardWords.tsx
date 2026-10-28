@@ -120,11 +120,14 @@ function ListCard({
       </h3>
       <p className="m-0 mt-1 flex flex-wrap items-center gap-2">
         <StatusChip status={status} />
-        <span className="rounded-field border border-line px-2 text-base">
+        {c.class ? (
+          <span className="rounded-full bg-accent-wash px-2.5 text-base">{c.class}</span>
+        ) : null}
+        <span className="rounded-full bg-accent-wash px-2.5 text-base">
           {t("node.machine", { machine: c.machine_name })}
         </span>
         {c.pinned ? (
-          <span className="rounded-field border border-line px-2 text-base">{t("node.fixed")}</span>
+          <span className="rounded-full bg-accent-wash px-2.5 text-base">{t("node.fixed")}</span>
         ) : null}
       </p>
       {mission ? (
@@ -137,7 +140,7 @@ function ListCard({
           <Button
             variant="secondary"
             aria-label={t("list.viewTerminalNamed", { name: c.name })}
-            onPress={() => goto(`/terminal/${encodeURIComponent(c.id)}`)}
+            onPress={() => goto(env.terminalPath(c.id))}
           >
             {t("list.viewTerminal")}
           </Button>

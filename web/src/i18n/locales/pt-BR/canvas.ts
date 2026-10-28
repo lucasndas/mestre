@@ -6,6 +6,21 @@ export default {
   controls: "Zoom do canvas",
   minimap: "Mapa do canvas",
   dismiss: "Dispensar",
+  zoomIn: "Aproximar",
+  zoomOut: "Afastar",
+  zoomReset: "Voltar a 100%",
+  head: {
+    talk: "Conversar sobre esta mesa",
+    tabs: "Partes da mesa",
+    board: "Quadro",
+    terminal: "Terminal",
+    branch: "Branch",
+    lastDelivery: "Última entrega",
+    noDelivery: "ainda sem entrega",
+    pick: "Terminal de qual personagem",
+    noTerminal: "Nenhum personagem desta mesa tem terminal agora.",
+    identifier: "Identificador da mesa",
+  },
   fit: "Ajustar à tela",
   zoomNote: "Zoom 100%: os textos já abrem legíveis.",
   plain: {
@@ -49,6 +64,7 @@ export default {
   deadlock:
     "Impasse: {{cycle}}. Ninguém sai do lugar até um deles ser liberado. Peça ao Grão-Mestre para destravar.",
   side: {
+    tabs: { missions: "Missões", rituals: "Rituais", grimoires: "Grimórios" },
     title: "Missões, rituais e grimórios",
     what: {
       missions:

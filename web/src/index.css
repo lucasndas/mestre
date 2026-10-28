@@ -30,6 +30,13 @@
     monospace;
   --color-term-bg: #1f1a14;
   --color-term-fg: #efe6d2;
+  /* the chrome of the window (bar, status line, composer): a darker brown than the screen, as in the prototype */
+  --color-term-chrome: #2a2118;
+  --color-term-chrome-2: #332a1f;
+  --color-term-line: #46392b;
+  --color-term-dim: #a89b86;
+  --color-term-accent: #e8a982;
+  --color-term-ok: #7fc59a;
   --color-term-cursor: #f1b04c;
   --color-term-selection: #5a4a36;
   /* the 16 ANSI colors, warm and at least 4.5:1 on --color-term-bg (black is the background itself) */

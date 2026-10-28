@@ -107,7 +107,7 @@ function CharacterNodeView({ data, selected, id }: NodeProps<CanvasNode>) {
             c.class || <Term name="Terminal simples" />
           )}
         </span>
-        <span className="rounded-field border border-line px-2 text-base" title={c.machine}>
+        <span className="rounded-full bg-accent-wash px-2.5 text-base" title={c.machine}>
           {t("node.machine", { machine: c.machine_name })}
         </span>
         <span role="status">
@@ -115,7 +115,7 @@ function CharacterNodeView({ data, selected, id }: NodeProps<CanvasNode>) {
         </span>
         <span className="flex-1" />
         {c.pinned ? (
-          <span className="rounded-field border border-line px-2 text-base">{t("node.fixed")}</span>
+          <span className="rounded-full bg-accent-wash px-2.5 text-base">{t("node.fixed")}</span>
         ) : null}
         {c.reduced ? (
           <span className="text-base text-danger" title={c.reduced}>
@@ -161,7 +161,7 @@ function CharacterNodeView({ data, selected, id }: NodeProps<CanvasNode>) {
         {c.has_terminal ? (
           <AriaButton
             aria-label={t("node.openTerminalNamed", { name: c.name })}
-            onPress={() => goto(`/terminal/${encodeURIComponent(c.id)}`)}
+            onPress={() => goto(env.terminalPath(c.id))}
             className="nodrag min-h-11 rounded-field border border-line bg-surface px-3 font-semibold hover:bg-accent-wash data-focus-visible:ring-2 data-focus-visible:ring-accent"
           >
             {t("node.openTerminal")}

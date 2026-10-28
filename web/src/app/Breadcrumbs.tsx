@@ -60,13 +60,33 @@ function TableTrail({ workspace, table }: { workspace: string; table: string }) 
 function TerminalTrail({ character }: { character: string }) {
   const { t } = useTranslation("shell");
   const { data } = useQuery(terminalQuery(character));
+  const workspace = data?.workspace ?? "";
+  const table = data?.table ?? "";
+  // the title of the table is in the view of the campaign; the id stands in until it is read
+  const { data: view } = useQuery({
+    ...viewQuery(workspace),
+    enabled: workspace !== "" && table !== "",
+  });
+  const found = view?.tables.find((b) => b.id === table);
   return (
     <Trail
       items={[
         <Link key="c" to="/workspaces" className={LINK}>
           {t("nav.workspaces")}
         </Link>,
-        ...(data?.workspace ? [<CampaignSwitch key="w" slug={data.workspace} last={false} />] : []),
+        ...(workspace ? [<CampaignSwitch key="w" slug={workspace} last={false} />] : []),
+        ...(workspace && table
+          ? [
+              <Link
+                key="m"
+                to="/workspaces/$workspace/mesas/$table"
+                params={{ workspace, table }}
+                className={LINK}
+              >
+                {found?.epic_title || table}
+              </Link>,
+            ]
+          : []),
         <Here key="t">{t("crumbs.terminal", { name: data?.name ?? character })}</Here>,
       ]}
     />

@@ -89,7 +89,8 @@ test("CA-TUI-01: the screen opens 200 x 50 at 15 px in the packaged font, and th
   expect(lives[0]?.opened).toMatchObject({ cols: 200, rows: 50, fontSize: FONT.screen });
   const bar = screen.getByRole("toolbar");
   expect(within(bar).getByRole("heading", { name: "Revisor" })).toBeTruthy();
-  expect(bar.textContent).toContain("Revisor · Máquina Torre A");
+  expect(within(bar).getByText("Revisor", { selector: "span" })).toBeTruthy(); // the class, a chip of its own
+  expect(within(bar).getByText("Máquina Torre A")).toBeTruthy();
   expect(bar.textContent).toContain("Trabalhando");
   expect(bar.textContent).not.toContain("busy");
   // the font is packaged, with the line height 1.4 and no ligatures
@@ -98,6 +99,32 @@ test("CA-TUI-01: the screen opens 200 x 50 at 15 px in the packaged font, and th
   expect(css).toMatch(/--font-mono:\s*"JetBrains Mono Variable"/);
   expect(readFileSync("src/terminal/factory.ts", "utf8")).toContain("lineHeight: 1.4");
   expect(readFileSync("package.json", "utf8")).not.toContain("addon-ligatures");
+});
+
+// CA-TUI-01
+test("CA-TUI-01: the window is one dark piece, bar and status line in the chrome of the terminal, every action an icon with its name, and it fits the height of the screen", () => {
+  setup({ context: context() });
+  const section = screen.getByRole("region", { name: "Terminal de Revisor" });
+  expect(section.className).toContain("bg-term-bg");
+  expect(section.className).toContain(
+    "h-[clamp(460px,calc(100dvh-var(--term-offset,300px)),860px)]",
+  );
+  const bar = screen.getByRole("toolbar");
+  expect(bar.className).toContain("bg-term-chrome");
+  for (const name of [
+    "Fixar",
+    "Pausar mesa",
+    "Copiar tela",
+    "Letra menor",
+    "Letra maior",
+    "Ajustar à largura",
+    "Focar",
+  ])
+    expect(within(bar).getByRole("button", { name }).textContent).toBe("");
+  expect(section.querySelector("[data-renderer]")?.className).toContain("h-full");
+  const css = readFileSync("src/index.css", "utf8");
+  for (const token of ["chrome", "chrome-2", "line", "dim"])
+    expect(css).toContain(`--color-term-${token}:`);
 });
 
 // CA-TUI-02

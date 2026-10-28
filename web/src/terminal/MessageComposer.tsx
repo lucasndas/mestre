@@ -161,38 +161,43 @@ export function MessageComposer({
     setText("");
   };
   return (
-    <div className="flex flex-col gap-2 border-t border-line bg-surface px-3 py-2">
+    <div className="flex flex-col gap-2 border-t border-term-line bg-term-chrome px-2.5 py-2 text-term-fg">
       {queue.length > 0 ? (
         <section aria-label={t("composer.queued", { count: queue.length, name })}>
-          <p className="m-0 font-semibold">{t("composer.queued", { count: queue.length, name })}</p>
+          <p className="m-0 font-mono text-sm text-term-dim">
+            {t("composer.queued", { count: queue.length, name })}
+          </p>
           <ol className="m-0 flex list-none flex-col gap-1 p-0">
             {queue.map((m) => (
-              <li key={m.id} className="flex flex-wrap items-center gap-2">
+              <li
+                key={m.id}
+                className="flex flex-wrap items-center gap-2.5 rounded-field border border-dashed border-term-line px-2.5 py-1.5 font-mono text-sm"
+              >
                 <span className="min-w-0 flex-1 truncate">{m.text}</span>
                 <button
                   type="button"
                   aria-label={t("composer.sendNowNamed", { text: m.text })}
                   title={t("composer.sendNowHint")}
                   onClick={() => onSendNow(m.id)}
-                  className="min-h-11 rounded-field border border-warn bg-warn-wash px-3 text-base font-semibold text-warn-ink"
+                  className="min-h-11 rounded-field border border-warn bg-transparent px-2.5 font-mono text-sm font-medium text-warn"
                 >
                   {t("composer.sendNow")}
                 </button>
                 <AriaButton
                   aria-label={t("composer.removeNamed", { text: m.text })}
                   onPress={() => onRemove(m.id)}
-                  className="min-h-11 rounded-field border border-line px-3 text-base font-semibold text-ink hover:bg-accent-wash"
+                  className="min-h-11 rounded-field border border-term-line px-2.5 font-mono text-sm font-medium text-term-fg hover:bg-term-chrome-2"
                 >
                   {t("composer.remove")}
                 </AriaButton>
               </li>
             ))}
           </ol>
-          <p className="m-0 text-sm text-muted">{t("composer.queueBrowser")}</p>
+          <p className="m-0 font-mono text-sm text-term-dim">{t("composer.queueBrowser")}</p>
         </section>
       ) : null}
       {sentBack ? (
-        <p role="status" className="m-0 text-sm text-danger">
+        <p role="status" className="m-0 text-sm text-term-accent">
           {t("composer.sentBack")}
         </p>
       ) : null}
@@ -213,7 +218,7 @@ export function MessageComposer({
               submit();
             }
           }}
-          className="min-h-14 min-w-0 flex-1 basis-60 rounded-field border border-line bg-paper p-2 text-base"
+          className="min-h-14 min-w-0 flex-1 basis-60 rounded-field border border-term-line bg-term-bg p-2 font-mono text-[15px] text-term-fg caret-term-cursor placeholder:text-term-dim"
         />
         <AriaButton
           onPress={submit}
@@ -226,7 +231,7 @@ export function MessageComposer({
           {keysDisabled ? (
             <span>{t("composer.keys")}</span>
           ) : (
-            <Term name="Teclado direto" onAct={onKeys} />
+            <Term name="Teclado direto" onAct={onKeys} border="border-term-dim" />
           )}
         </span>
       </div>

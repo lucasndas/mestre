@@ -492,15 +492,11 @@ function Composer({
         placeholder={t("composer.placeholder")}
         className="min-h-20 rounded-field border border-line bg-paper px-3 py-2 text-ink outline-none placeholder:text-muted focus:border-accent focus:ring-3 focus:ring-accent/25 disabled:opacity-60"
       />
-      {reason ? (
-        <p className="text-sm font-semibold">{reason}</p>
-      ) : (
-        <p className="text-sm text-muted">{t("composer.hint")}</p>
-      )}
+      {reason ? <p className="text-sm font-semibold">{reason}</p> : null}
       {problem ? <Alert>{problem}</Alert> : null}
       {notice && !problem ? <Alert tone="ok">{notice}</Alert> : null}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <label className="focus-within:ring-3 focus-within:ring-accent/25 inline-flex min-h-11 cursor-pointer items-center rounded-field border border-line bg-surface px-4 font-semibold hover:bg-accent-wash has-[:disabled]:opacity-60">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <label className="focus-within:ring-3 focus-within:ring-accent/25 inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-field border border-line bg-surface px-4 font-semibold hover:bg-accent-wash has-[:disabled]:opacity-60">
           <input
             type="file"
             multiple
@@ -511,13 +507,37 @@ function Composer({
               e.target.value = "";
             }}
           />
+          <ComposerIcon d="M21 11.5 12.5 20a5.5 5.5 0 0 1-8-8L13 3.5a3.7 3.7 0 0 1 5.3 5.3L9.8 17.3a1.8 1.8 0 0 1-2.6-2.6L15 7" />
           {t("composer.attach")}
         </label>
+        {reason ? null : <p className="min-w-0 flex-1 text-sm text-muted">{t("composer.hint")}</p>}
+        <div className="flex-1" />
         <Button type="submit" isDisabled={!canSend}>
+          <ComposerIcon d="M22 2 11 13M22 2l-7 20-4-9-9-4Z" />
           {send.isPending ? t("composer.sending") : t("composer.send")}
         </Button>
       </div>
     </form>
+  );
+}
+
+/** The icon beside Anexar and Enviar. */
+function ComposerIcon({ d }: { d: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <path d={d} />
+    </svg>
   );
 }
 
@@ -748,19 +768,22 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
       {isPending ? <p className="p-4 text-muted">{t("loading")}</p> : null}
       {overview && list.length === 0 ? <p className="p-4 text-muted">{t("noWorkspace")}</p> : null}
       {list.length > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-x-3 border-b border-line px-4 py-1 text-sm text-muted">
-          <p>
-            {t("workspace")}: <span className="font-semibold text-ink">{named}</span> ·{" "}
-            {mayTalk ? t("privacy") : t("privacyReader")}
+        <div className="flex flex-col border-b border-line px-4 py-1 text-sm text-muted">
+          <p className="flex flex-wrap items-center gap-x-2">
+            <span>
+              {t("workspace")} <span className="font-semibold text-ink">{named}</span>
+            </span>
+            <span aria-hidden="true">·</span>
+            <Link
+              to="/workspaces/$workspace"
+              params={{ workspace: named }}
+              onClick={onClose}
+              className="inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-4"
+            >
+              {t("openWorkspace")}
+            </Link>
           </p>
-          <Link
-            to="/workspaces/$workspace"
-            params={{ workspace: named }}
-            onClick={onClose}
-            className="inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-4"
-          >
-            {t("openWorkspace")}
-          </Link>
+          <p className="pb-1">{mayTalk ? t("privacy") : t("privacyReader")}</p>
         </div>
       ) : null}
       {noTalk ? (

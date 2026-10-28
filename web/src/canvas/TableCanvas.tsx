@@ -5,7 +5,6 @@ import {
   applyNodeChanges,
   Background,
   ConnectionMode,
-  Controls,
   MiniMap,
   type NodeChange,
   type OnBeforeDelete,
@@ -14,8 +13,10 @@ import {
   ReactFlowProvider,
   useNodesInitialized,
   useReactFlow,
+  useStore,
 } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button as AriaButton } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { useCan, useMe } from "../app/session";
 import { useUiSocket } from "../app/socket";
@@ -24,6 +25,7 @@ import type { CanvasState } from "../gen/panel";
 import { ApiError } from "../lib/api";
 import { errorText } from "../lib/errors";
 import { socketFeed } from "../terminal/feed";
+import { tableTerminalPath } from "../terminal/TerminalPane";
 import { actions, canvasQuery, canvasTopic } from "./api";
 import { CharacterList, PlainWords } from "./BoardWords";
 import { CanvasEnvContext } from "./context";
@@ -296,8 +298,9 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
       drawing: draft !== null,
       ungroup: (id: string) => void ungroup(id),
       renameGroup,
+      terminalPath: (character: string) => tableTerminalPath(workspace, table, character),
     }),
-    [act, feed, timezone, canType, fail, changed, draft, ungroup, renameGroup],
+    [act, feed, timezone, canType, fail, changed, draft, ungroup, renameGroup, workspace, table],
   );
 
   if (error) {
@@ -319,7 +322,7 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
 
   return (
     <CanvasEnvContext.Provider value={env}>
-      <div className="flex md:h-[calc(100dvh-12rem)] md:min-h-[28rem] w-full flex-col border border-line bg-paper md:flex-row">
+      <div className="relative flex w-full flex-col border border-line bg-paper md:h-[calc(100dvh-20rem)] md:min-h-[28rem] md:flex-row">
         <section
           aria-label={t("region", { table })}
           className="hidden min-h-[18rem] min-w-0 flex-1 md:flex md:flex-col"
@@ -369,8 +372,13 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
               proOptions={{ hideAttribution: false }}
             >
               <Background gap={32} color="var(--color-line)" />
-              <Controls showInteractive={false} aria-label={t("controls")} />
-              <MiniMap pannable zoomable ariaLabel={t("minimap")} className="!hidden md:!block" />
+              <ZoomControls />
+              <MiniMap
+                pannable
+                zoomable
+                ariaLabel={t("minimap")}
+                className="!m-3 !hidden !h-24 !w-36 md:!block"
+              />
               <Panel
                 position="top-left"
                 className="pointer-events-none flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-2 *:pointer-events-auto"
@@ -379,6 +387,19 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
                   variant="secondary"
                   onPress={() => void flow.fitView({ padding: 0.12, minZoom: 0.05, maxZoom: 1 })}
                 >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="18"
+                    height="18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+                  </svg>
                   {t("fit")}
                 </Button>
                 <Button
@@ -494,6 +515,53 @@ function Canvas({ workspace, table }: { workspace: string; table: string }) {
         ) : null}
       </div>
     </CanvasEnvContext.Provider>
+  );
+}
+
+/** Zoom with the number in view: smaller, the zoom now (a press goes back to 100%) and larger. */
+function ZoomControls() {
+  const { t } = useTranslation("canvas");
+  const flow = useReactFlow();
+  const zoom = useStore((s) => s.transform[2]);
+  const btn =
+    "inline-grid size-11 place-items-center rounded-field text-ink hover:bg-accent-wash data-pressed:bg-accent-wash";
+  const icon = (d: string) => (
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={d} />
+    </svg>
+  );
+  return (
+    <Panel position="bottom-left">
+      <div
+        role="toolbar"
+        aria-label={t("controls")}
+        className="flex items-center rounded-field border border-line bg-surface shadow-pop"
+      >
+        <AriaButton className={btn} aria-label={t("zoomOut")} onPress={() => void flow.zoomOut()}>
+          {icon("M6 12h12")}
+        </AriaButton>
+        <AriaButton
+          className="min-h-11 min-w-[4.5rem] rounded-field px-2 font-mono text-base hover:bg-accent-wash"
+          aria-label={t("zoomReset")}
+          onPress={() => void flow.zoomTo(1)}
+        >
+          {Math.round(zoom * 100)}%
+        </AriaButton>
+        <AriaButton className={btn} aria-label={t("zoomIn")} onPress={() => void flow.zoomIn()}>
+          {icon("M12 6v12M6 12h12")}
+        </AriaButton>
+      </div>
+    </Panel>
   );
 }
 
