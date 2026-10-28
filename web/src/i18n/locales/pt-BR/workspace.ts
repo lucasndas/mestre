@@ -8,9 +8,9 @@ export default {
   region: "Canvas da campanha {{workspace}}",
   loading: "Abrindo a campanha…",
   state: {
-    preparing: "preparando",
-    active: "ativo",
-    paused: "pausado",
+    preparing: "Preparando",
+    active: "Ativa",
+    paused: "Pausada",
   },
   shortcuts: {
     label: "Atalhos da campanha",

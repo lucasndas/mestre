@@ -173,7 +173,7 @@ function Canvas({
   return (
     <section
       aria-label={t("region", { workspace: slug })}
-      className="h-[calc(100dvh-14rem)] min-h-[32rem] w-full rounded-field border border-line"
+      className="h-[calc(100dvh-22rem)] min-h-[30rem] w-full rounded-field border border-line"
     >
       <ReactFlow<ViewNode>
         nodes={nodes}

@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useCan } from "../../app/session";
-import { useDynamicT } from "../../components/ApprovalCard";
+import { useDynamicT, useRequestTitle } from "../../components/ApprovalCard";
 import { approvalsQuery } from "../../lib/approvalQueries";
 import { useLiveEvents } from "../../lib/live";
 import { useFormatTime } from "../../lib/time";
@@ -20,6 +20,7 @@ const ALL = { workspace: "", table: "", type: "" };
 export function Waiting({ tables }: { tables: HomeTable[] }) {
   const { t, i18n } = useTranslation("home");
   const ta = useDynamicT("approvals");
+  const requestTitle = useRequestTitle();
   const fmt = useFormatTime();
   const can = useCan("decide_approvals");
   const qc = useQueryClient();
@@ -79,7 +80,7 @@ export function Waiting({ tables }: { tables: HomeTable[] }) {
                 className="flex min-h-16 flex-wrap items-center justify-between gap-2 rounded-field px-1 py-3 hover:bg-accent-wash"
               >
                 <span className="min-w-0">
-                  <strong>{known ? ta(`readable.${r.type}.title`) : r.about}</strong>
+                  <strong>{known ? requestTitle(r) : r.about}</strong>
                   <span className="block text-sm text-muted">{where}</span>
                 </span>
                 <Badge tone="warn">{t("waiting.decide")}</Badge>

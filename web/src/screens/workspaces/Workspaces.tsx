@@ -15,7 +15,9 @@ import type {
 import { api } from "../../lib/api";
 import { useLive, useLiveEvents } from "../../lib/live";
 import { useRememberCampaign } from "../../workspace/current";
+import { situationOf } from "../../workspace/situation";
 import { Badge, ChoiceGroup, NativeSelect, PageHeader } from "../admin/kit";
+import { type HomeTable, useHomeTables } from "../home/reads";
 import { WORKSPACES_TOPIC, workspacesQuery } from "./queries";
 import { refusalText } from "./refusal";
 import { Verification } from "./Verification";
@@ -31,6 +33,7 @@ export function Workspaces({ create = false }: { create?: boolean }) {
   const qc = useQueryClient();
   const live = useLive();
   const { data, error } = useQuery(workspacesQuery);
+  const home = useHomeTables(data?.workspaces ?? []);
   const [creating, setCreating] = useState(create);
   useEffect(() => live.subscribe([WORKSPACES_TOPIC]), [live]);
   // the topic says something changed: the list is read again
@@ -72,7 +75,7 @@ export function Workspaces({ create = false }: { create?: boolean }) {
         <ul className="flex flex-col gap-4">
           {data?.workspaces.map((w) => (
             <li key={w.slug}>
-              <Workspace w={w} />
+              <Workspace w={w} tables={home.open.filter((x) => x.workspace === w.slug)} />
             </li>
           ))}
         </ul>
@@ -180,7 +183,20 @@ const STAGE_TONE: Record<string, "plain" | "ok" | "warn" | "danger"> = {
   pending: "plain",
 };
 
-function Workspace({ w }: { w: WorkspaceRow }) {
+/** "2 mesas em andamento · 1 espera você", from the tables the Home reads of each campaign (no count comes with the list). */
+function TablesSummary({ tables }: { tables: HomeTable[] }) {
+  const { t } = useTranslation("workspace");
+  const canDecide = useCan("decide_approvals");
+  const need = tables.filter((x) => situationOf(x.block, canDecide).urgent).length;
+  const parts: string[] =
+    tables.length === 0
+      ? [t("life.summary.none")]
+      : [t("life.summary.live", { count: tables.length })];
+  if (need > 0) parts.push(t("life.summary.need", { count: need }));
+  return <p className="mt-1 text-sm text-muted">{parts.join(" · ")}</p>;
+}
+
+function Workspace({ w, tables }: { w: WorkspaceRow; tables: HomeTable[] }) {
   const { t } = useTranslation("workspaces");
   const say = t as unknown as Say;
   const canConfigure = useCan("configure_workspace") && w.can_act;
@@ -201,6 +217,7 @@ function Workspace({ w }: { w: WorkspaceRow }) {
         {w.grand_master_sheet ? " · " : null}
         {t("grandMaster.state", { state: say(`grandMasterState.${w.grand_master}`) })}
       </p>
+      {w.state === "active" ? <TablesSummary tables={tables} /> : null}
       {w.fetch_error ? (
         <p className="mt-2 text-sm text-danger">{t("fetchError", { error: w.fetch_error })}</p>
       ) : null}

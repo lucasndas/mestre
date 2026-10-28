@@ -326,3 +326,42 @@ test("the link of the session zero pull request is a link only for github.com", 
   ).toBe("https://github.com/acme/a/pull/1");
   expect(screen.queryByRole("link", { name: "javascript:alert(1)" })).toBeNull();
 });
+
+// docs/painel/workspaces.md: the card says how many tables go and how many wait for the user, from the view of the campaign
+test("the card of a campaign says how many tables are going and how many wait for the user", async () => {
+  const block = (id: string, extra: object = {}) => ({
+    id,
+    epic: 1,
+    epic_title: id,
+    branch: `epico/${id}`,
+    state: "working",
+    paused: false,
+    party: [],
+    party_size: 0,
+    waits: [],
+    stalled: false,
+    quiet_seconds: 0,
+    pr: 0,
+    ...extra,
+  });
+  fakeServer({
+    ...base,
+    ...as(ADMIN),
+    "GET /api/workspaces": () => ({ body: list([row({})]) }),
+    "GET /api/workspaces/loja/view": () => ({
+      body: {
+        workspace: row({}),
+        tables: [
+          block("a"),
+          block("b", { waits: [{ kind: "same_failure", reason: "mesma falha" }] }),
+        ],
+        layout: [],
+        can_pause: true,
+        can_type: true,
+      },
+    }),
+  });
+  renderApp("/workspaces");
+  const article = await screen.findByRole("article", { name: "loja" });
+  expect(await within(article).findByText("2 mesas em andamento · 1 espera por você")).toBeTruthy();
+});

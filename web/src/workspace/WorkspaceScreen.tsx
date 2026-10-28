@@ -114,7 +114,7 @@ function Shortcuts() {
   const down =
     (guild as GuildView | undefined)?.machines.filter((m) => !m.excluded && !m.online).length ?? 0;
   return (
-    <nav aria-label={t("shortcuts.label")} className="mb-4 flex flex-wrap items-center gap-2">
+    <nav aria-label={t("shortcuts.label")} className="flex flex-wrap items-center gap-2">
       <Button variant="secondary" aria-expanded={chat.open} onPress={chat.toggle}>
         {t("shortcuts.chat")}
       </Button>
@@ -249,23 +249,27 @@ export function WorkspaceScreen({ workspace }: { workspace: string }) {
   const board = wide && mode === "board";
   return (
     <section>
-      <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h1 className="text-2xl">{t("title", { workspace: w.slug })}</h1>
-        <Badge tone={w.state === "active" ? "ok" : w.state === "paused" ? "warn" : "plain"}>
-          {say(`state.${w.state}`)}
-        </Badge>
-        <span className="text-sm text-muted">
-          <Term name="Campanha" />: {w.repo}
-        </span>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <div>
+          <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="text-2xl">{t("title", { workspace: w.slug })}</h1>
+            <Badge tone={w.state === "active" ? "ok" : w.state === "paused" ? "warn" : "plain"}>
+              {say(`state.${w.state}`)}
+            </Badge>
+            <span className="text-sm text-muted">
+              <Term name="Campanha" />: {w.repo}
+            </span>
+          </div>
+          {preparing ? null : (
+            <Summary
+              live={going.length}
+              need={pending.length}
+              review={going.filter((r) => r.situation.key === "review").length}
+            />
+          )}
+        </div>
+        <Shortcuts />
       </div>
-      {preparing ? null : (
-        <Summary
-          live={going.length}
-          need={pending.length}
-          review={going.filter((r) => r.situation.key === "review").length}
-        />
-      )}
-      <div className="mt-3" />
       {error ? (
         <div
           role="alert"
@@ -279,7 +283,6 @@ export function WorkspaceScreen({ workspace }: { workspace: string }) {
           </Button>
         </div>
       ) : null}
-      <Shortcuts />
       {preparing ? (
         <div className="max-w-2xl rounded-field border border-line bg-surface p-5">
           <h2 className="text-xl">{t("preparing.title")}</h2>
