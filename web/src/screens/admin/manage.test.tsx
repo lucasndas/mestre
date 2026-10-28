@@ -131,6 +131,58 @@ test("a proposal that changed meanwhile says so and nothing is approved", async 
   expect(screen.queryByText(/Apps na conta/)).toBeNull(); // no band at 3 Apps
 });
 
+// Part of CA-ADM-02: each App is a card with what it is, what it does and where it is installed
+test("an App is a card with its technical name, what it does, where it is installed and the next step", async () => {
+  const app = (o: Record<string, unknown>) => ({
+    name: "mestre-qa",
+    slug: "",
+    role: "class",
+    class: "qa",
+    state: "pronto",
+    state_label: "pronto",
+    repos: [],
+    request: "",
+    can_link: false,
+    ...o,
+  });
+  fakeServer({
+    ...base,
+    "GET /api/github/apps": () => ({
+      body: {
+        count: count(4, 1),
+        creation: true,
+        requests: [],
+        apps: [
+          app({ name: "mestre-grao-mestre", role: "grand_master", class: "", repos: ["loja"] }),
+          app({
+            name: "mestre-revisor",
+            class: "revisor",
+            state_label: "link vencido",
+            can_link: true,
+          }),
+        ],
+      },
+    }),
+  });
+  renderApp("/apps");
+  const fixed = (await screen.findByText("mestre-grao-mestre")).closest("li") as HTMLElement;
+  expect(within(fixed).getByText("fixo")).toBeTruthy();
+  expect(
+    within(fixed).getByText("App Grão-Mestre: fala com você e aprova no GitHub."),
+  ).toBeTruthy();
+  expect(within(fixed).getByText("Instalado em")).toBeTruthy();
+  expect(within(fixed).getByText("loja")).toBeTruthy();
+  expect(fixed.textContent).not.toContain("grand_master"); // no raw role in the card
+  const waiting = screen.getByText("mestre-revisor").closest("li") as HTMLElement;
+  expect(within(waiting).getByText("Classe revisor")).toBeTruthy();
+  expect(
+    within(waiting).getByText("Dá à classe revisor uma identidade própria nos PRs."),
+  ).toBeTruthy();
+  expect(within(waiting).getByText("nenhuma campanha ainda")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Apps do Mestre" })).toBeTruthy();
+  expect(statusText()).toContain("3 do Mestre, 4 de 100 na conta.");
+});
+
 // Part of CA-ADM-02
 test("the Owner edits the other Apps and sees the creation link once", async () => {
   const { calls } = fakeServer({

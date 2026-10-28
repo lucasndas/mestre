@@ -32,12 +32,13 @@ Os nomes e os grupos são os do índice de Configurações que a 4B pôs na `mai
 
 - A contagem "N de 100" vira um medidor com a frase de apoio; o campo "outros Apps da conta" fica recolhido ("O Mestre não vê os seus outros Apps. Informar quantos são"). Com 90 ou mais o medidor fica vermelho.
 - **Os pedidos de criação deixam de ser seção solta:** cada App tem o seu estado e o próximo passo por [estado](../github/criacao-de-apps.md#estados-de-um-app): em criação com o link emitido ("abra no navegador logado no GitHub e confirme; vale até…"), link vencido ("**Gerar novo link**", com PIN) e pronto (instalado em: campanhas). O link continua aparecendo uma vez, com **Copiar** e **Já copiei**.
+- Cada App é um cartão: o nome técnico em fonte de código com o selo "fixo" ou "Classe X" e o estado, a frase do que o App faz ("App Grão-Mestre: fala com você e aprova no GitHub."), o próximo passo e, à direita, **Instalado em** com as campanhas ("nenhuma campanha ainda"). Link vencido tem o botão cheio; a lista chama-se "Apps do Mestre" e a faixa diz "N do Mestre, M de 100 na conta".
 - Quem não é Senhor da Guilda só lê, e a tela diz isso em vez de esconder o botão em silêncio.
 
 ### Segredos
 
 - **"Onde cada chave vai":** site (aqui, **Cadastrar credencial de site**, preferindo senha de app, token ou chave de API); chave de App do GitHub (entra no cofre sozinha na criação, link para Apps); conta de Claude, Codex ou Antigravity (por login, link para Perfis de conta); token do bot do Telegram (guardado pelo Mestre na instalação); chave de API de provedor ([pendência](#o-que-pede-backend-novo)).
-- Os segredos do próprio Mestre (`guild_ca_key`, `telegram_bot_token`, `github_app_key`…) saem da lista de credenciais e vão para "Guardados pelo Mestre": nome legível, [impressão](../plataforma/cofre.md) e o nome técnico ao lado, sem edição. As credenciais de site são cartões (página, tipo, classes, domínios, quem responde ao segundo fator, último uso, aviso de validade) com **Substituir** e **Apagar**, com PIN.
+- Os segredos do próprio Mestre (`guild_ca_key`, `telegram_bot_token`, `github_app_key`…) saem da lista de credenciais e vão para "Guardados pelo Mestre": nome legível, [impressão](../plataforma/cofre.md) e o nome técnico ao lado, sem edição. As credenciais de site são cartões: cabeçalho com o nome, o selo do tipo ("Senha de app") e o selo "vence em N dias", com **Substituir** e **Apagar** (com PIN) ao lado, e uma linha de colunas (classes, domínios, quem responde ao segundo fator, último uso, impressão) e a frase do aviso de validade; a página de login só aparece ao substituir.
 - O formulário mantém todos os campos de hoje; dono, validade, seletores e texto de sucesso ficam em "Mais opções". A chave de recuperação vira a seção "Cópia de segurança do cofre", com o mesmo aviso, PIN e `ShownOnce`, e a frase de que os backups que já existem continuam exigindo a chave antiga.
 
 ### Classes

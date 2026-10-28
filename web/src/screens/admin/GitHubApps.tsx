@@ -134,7 +134,11 @@ function Strip({
     <StatusStrip
       tone="warn"
       title={pending === 1 ? t("strip.waitingOne") : t("strip.waiting", { count: pending })}
-      hint={t("strip.waitingHint")}
+      hint={t("strip.waitingHint", {
+        mine: page.count.mine,
+        total: page.count.total,
+        limit: page.count.limit,
+      })}
     >
       {action}
     </StatusStrip>
@@ -274,7 +278,7 @@ function AppItem({
   const ready = a.state_label === "pronto";
   const status = a.request || request?.status || "";
   let next = "";
-  if (ready) next = a.repos.length > 0 ? "" : t("list.notInstalled");
+  if (ready) next = "";
   else if (request && !request.expired && (status === "link" || status === "opened"))
     next = t("next.link", { when: fmt(request.expires_at) });
   else if (status === "exchanging") next = t("next.exchanging");
@@ -282,29 +286,39 @@ function AppItem({
   else if (request?.expired || status === "expired") next = t("next.expired");
   else if (a.can_link) next = t("next.noLink");
   else if (!owner) next = t("next.waitingOwner");
+  const expired = a.state_label === "link vencido" || Boolean(request?.expired);
   return (
-    <li className="rounded-field border border-line bg-surface p-4">
-      <p className="flex flex-wrap items-center gap-2 text-lg font-semibold">
-        {a.name}
-        <Badge tone={appTone(a.state_label)}>{a.state_label}</Badge>
-        {status && !ready ? (
-          <Badge>{labelOr(say, `requests.status.${status}`, status)}</Badge>
+    <li className="grid gap-x-6 gap-y-2 rounded-field border border-line bg-surface p-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="min-w-0">
+        <p className="flex flex-wrap items-center gap-2 text-lg font-semibold">
+          <span className="font-mono text-base break-all">{a.name}</span>
+          <Badge>{a.class ? t("list.class", { class: a.class }) : t("list.fixed")}</Badge>
+          <Badge tone={appTone(a.state_label)}>{a.state_label}</Badge>
+          {status && !ready && !expired ? (
+            <Badge>{labelOr(say, `requests.status.${status}`, status)}</Badge>
+          ) : null}
+        </p>
+        <p className="text-sm text-muted">
+          {a.class ? t("list.descClass", { class: a.class }) : say(`list.desc.${a.role}`)}
+        </p>
+        {next ? <p className="mt-2">{next}</p> : null}
+        {owner && a.can_link ? (
+          <div className="mt-3">
+            <SensitiveButton
+              variant={expired ? "primary" : "secondary"}
+              onConfirm={(pin) => onLink(a.name, pin)}
+            >
+              {t(request ? "link.new" : "link.make")}
+            </SensitiveButton>
+          </div>
         ) : null}
-      </p>
-      <p className="text-sm text-muted">
-        {a.class ? t("list.class", { class: a.class }) : t("list.fixed")} · {a.role}
-      </p>
-      {a.repos.length > 0 ? (
-        <p className="mt-2 text-sm">{t("list.installed", { repos: a.repos.join(", ") })}</p>
-      ) : null}
-      {next ? <p className="mt-2">{next}</p> : null}
-      {owner && a.can_link ? (
-        <div className="mt-3">
-          <SensitiveButton variant="secondary" onConfirm={(pin) => onLink(a.name, pin)}>
-            {t(request ? "link.new" : "link.make")}
-          </SensitiveButton>
-        </div>
-      ) : null}
+      </div>
+      <div className="text-sm sm:text-right">
+        <p className="text-muted">{t("list.installedLabel")}</p>
+        <p className="text-base">
+          {a.repos.length > 0 ? a.repos.join(", ") : t("list.notInstalledShort")}
+        </p>
+      </div>
     </li>
   );
 }

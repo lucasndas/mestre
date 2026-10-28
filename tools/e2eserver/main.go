@@ -47,12 +47,13 @@ func main() {
 	exitOnStdin := flag.Bool("exit-on-stdin-close", false, "shut down when stdin is closed")
 	bind := flag.String("bind", "127.0.0.1", "the IP the panel listens on, such as the LAN address of this machine to open it from another one")
 	port := flag.Int("port", 0, "the port of the panel; 0 picks a free one")
+	rich := flag.Bool("rich", false, "also seed Apps, proposals of class, a second machine and a request to join the Guild, for who looks at the administration in a browser")
 	flag.Parse()
 	var stdin io.Reader
 	if *exitOnStdin {
 		stdin = os.Stdin
 	}
-	err := runWith(ctx, os.Stdout, os.Stderr, stdin, runOptions{Seed: true, Bind: *bind, Port: *port})
+	err := runWith(ctx, os.Stdout, os.Stderr, stdin, runOptions{Seed: true, Rich: *rich, Bind: *bind, Port: *port})
 	stop()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "e2eserver:", err)
@@ -84,6 +85,9 @@ type runOptions struct {
 	// Seed puts a request of extra cost waiting for the people, which asks the PIN,
 	// in a Guild that is new: what the smoke test of the central of approvals answers.
 	Seed bool
+	// Rich also seeds the administration states a browser looks at (seed_admin.go); the smoke and
+	// the journey tests run without it.
+	Rich bool
 	// Bind is the IP the panel listens on and its certificate names; empty is the
 	// loopback.
 	Bind string
@@ -131,7 +135,7 @@ func runWith(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, o r
 		}
 		rk.Destroy()
 		if o.Seed {
-			if err := seedRequest(ctx, guildDB, paths.Workspaces); err != nil {
+			if err := seedRequest(ctx, guildDB, paths.Workspaces, o.Rich); err != nil {
 				return fmt.Errorf("seeding the request: %w", err)
 			}
 		}
