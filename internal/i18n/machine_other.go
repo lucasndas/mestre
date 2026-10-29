@@ -2,4 +2,6 @@
 
 package i18n
 
-func machineTag(lookupEnv func(string) (string, bool)) string { return envTag(lookupEnv) }
+func machineTag(lookupEnv func(string) (string, bool), _ func() string) string {
+	return envTag(lookupEnv)
+}

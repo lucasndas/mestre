@@ -35,7 +35,7 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	if len(os.Args) > 1 && os.Args[1] == "run" {
-		code := app.Main(ctx, os.Args[2:], os.Stderr, os.LookupEnv, version)
+		code := app.Main(ctx, os.Args[2:], os.Stderr, os.LookupEnv, nil, version)
 		stop()
 		os.Exit(code)
 	}

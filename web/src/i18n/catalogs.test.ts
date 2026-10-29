@@ -66,14 +66,54 @@ test("the English panel says Guildmaster and Campaign, and keeps Party", () => {
   expect(en.workspace.block.party).toBe("Party");
 });
 
-// CA-MSG-11 (the guard of the vocabulary also holds for the catalogs of the engine, generated here)
+// The guard of the vocabulary also holds for the catalogs of the engine, generated here.
+// The one exception is the exact label of the owner of a request that blocks, not the words inside a sentence.
+const engineBad = {
+  "pt-BR": {
+    re: /\b(Workspaces?|workspaces?|Dono)\b/,
+    label: "Dono: {{owner}}",
+  },
+  en: { re: /\b(Workspaces?|workspaces?|Owner)\b/, label: "Owner: {{owner}}" },
+} as const;
+
+function vocabularyViolations(
+  texts: Record<string, string>,
+  lang: keyof typeof engineBad,
+): string[] {
+  const { re, label } = engineBad[lang];
+  return Object.entries(texts)
+    .filter(([, text]) => text.trim() !== label && re.test(text.replace(/{{\w+}}/g, "")))
+    .map(([key]) => key);
+}
+
+// CA-MSG-11
 test("the texts of the engine keep the vocabulary in both languages", () => {
-  for (const [key, text] of Object.entries(messages["pt-BR"])) {
-    const left = text.replace(/{{\w+}}/g, "").replaceAll("Dono: ", ""); // the label of the owner of a request
-    expect(left, key).not.toMatch(/\b(Workspaces?|workspaces?|Dono)\b/);
-  }
-  for (const [key, text] of Object.entries(messages.en)) {
-    const left = text.replace(/{{\w+}}/g, "").replaceAll("Owner: ", ""); // the label of the owner of a request
-    expect(left, key).not.toMatch(/\b(Workspaces?|workspaces?|Owner)\b/);
-  }
+  expect(vocabularyViolations(messages["pt-BR"], "pt-BR")).toEqual([]);
+  expect(vocabularyViolations(messages.en, "en")).toEqual([]);
+});
+
+// CA-MSG-11
+test("the guard of the vocabulary names the key of a bad text and lets only the exact label through", () => {
+  expect(
+    vocabularyViolations(
+      {
+        "a.bad": "Dono da credencial",
+        "a.label": "Dono: {{owner}}",
+        "a.inside": "Veja Dono: {{owner}}",
+        "a.ok": "Senhor da Guilda",
+      },
+      "pt-BR",
+    ),
+  ).toEqual(["a.bad", "a.inside"]);
+  expect(
+    vocabularyViolations(
+      {
+        "b.bad": "Owner of it",
+        "b.label": "Owner: {{owner}}",
+        "b.inside": "See Owner: {{owner}}",
+        "b.ws": "the workspace",
+      },
+      "en",
+    ),
+  ).toEqual(["b.bad", "b.inside", "b.ws"]);
 });

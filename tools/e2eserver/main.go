@@ -188,7 +188,7 @@ func runWith(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, o r
 	if restart {
 		// the Owner exists already: there is no code of setup to make
 		code.WriteString("restart")
-	} else if rc := app.SetupCodeWith(ctx, []string{"--dir", dir}, &code, stderr, func(string) (string, bool) { return "", false }, func() bool { return true }); rc != 0 {
+	} else if rc := app.SetupCodeWith(ctx, []string{"--dir", dir}, &code, stderr, func(string) (string, bool) { return "", false }, nil, func() bool { return true }); rc != 0 {
 		cancel()
 		<-done
 		return fmt.Errorf("setup-code exited with %d", rc)

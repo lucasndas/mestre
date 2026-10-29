@@ -18,7 +18,7 @@ func TestMachineLanguageFromTheEnvironment(t *testing.T) {
 		"unset":             {nil, PtBR},
 		"LC_ALL beats LANG": {map[string]string{"LC_ALL": "en_US.UTF-8", "LANG": "pt_BR.UTF-8"}, En},
 	} {
-		if got := MachineLanguageFrom(env(c.vars)); got != c.want {
+		if got := MachineLanguageFrom(env(c.vars), nil); got != c.want {
 			t.Errorf("%s: %q, want %q", name, got, c.want)
 		}
 	}

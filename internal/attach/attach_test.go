@@ -38,7 +38,7 @@ func (c *fakeConsole) Output() io.Writer         { return &c.out }
 func envWith(con *fakeConsole, vars map[string]string) (Env, *bytes.Buffer, *bytes.Buffer) {
 	var so, se bytes.Buffer
 	return Env{Stdout: &so, Stderr: &se, Console: con, Clock: clock.NewFake(clock.NewFake(clock.Real{}.Now()).Now()),
-		LookupEnv: func(k string) (string, bool) { v, ok := vars[k]; return v, ok }}, &so, &se
+		LookupEnv: func(k string) (string, bool) { v, ok := vars[k]; return v, ok }, UILanguage: interfaceOf(vars)}, &so, &se
 }
 
 // CA-ATTACH-03

@@ -3,6 +3,7 @@
 package app
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -54,12 +55,25 @@ func TestTheGrandMasterGetsTheLanguageOfTheUserInTheHeaderAndItsReplyArrivesAsWr
 	if r := w.forward("reply", nil, answer); !r.OK {
 		t.Fatalf("mestre reply: %+v", r.Error)
 	}
-	found := false
+	var reply string
 	for _, p := range w.chatTexts(biaChat) {
-		found = found || strings.Contains(p, answer)
+		if strings.Contains(p, answer) {
+			reply = p
+		}
 	}
-	if !found {
+	if reply == "" {
 		t.Fatalf("the Telegram did not get the reply as written: %q", w.chatTexts(biaChat))
+	}
+	// the frame of this very message (the name of the workspace on its own line) has no words of a
+	// language, and the text of the agent follows it whole; no frame in pt-BR is added to it
+	var sent struct {
+		Plain string `json:"_plain"`
+	}
+	if err := json.Unmarshal([]byte(reply), &sent); err != nil {
+		t.Fatal(err)
+	}
+	if head, body, ok := strings.Cut(sent.Plain, "\n"); !ok || head != w.ws.Slug || body != answer {
+		t.Fatalf("the reply is %q, want the workspace %q and then the text as written", sent.Plain, w.ws.Slug)
 	}
 	// the frame of the engine around it is in en: a notice of the engine for the same user
 	w.run.alert.Tell(w.ctx, w.bia.ID, i18n.M("bot.table_paused", "table", "42"))

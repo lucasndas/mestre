@@ -23,13 +23,14 @@ import (
 // an administrator, on the machine of the Citadel, and never from an agent. It
 // returns the exit code.
 func SetupCodeMain(ctx context.Context, args []string, stdout, stderr io.Writer, lookupEnv func(string) (string, bool)) int {
-	return SetupCodeWith(ctx, args, stdout, stderr, lookupEnv, isElevated)
+	return SetupCodeWith(ctx, args, stdout, stderr, lookupEnv, nil, isElevated)
 }
 
-// SetupCodeWith is SetupCodeMain with the test of the privilege given: root on
+// SetupCodeWith is SetupCodeMain with the language of the interface (nil is the system's) and the
+// test of the privilege given: root on
 // Linux, elevated on Windows. The tests give theirs.
-func SetupCodeWith(ctx context.Context, args []string, stdout, stderr io.Writer, lookupEnv func(string) (string, bool), elevated func() bool) int {
-	lang := i18n.MachineLanguageFrom(lookupEnv)
+func SetupCodeWith(ctx context.Context, args []string, stdout, stderr io.Writer, lookupEnv func(string) (string, bool), uiLanguage func() string, elevated func() bool) int {
+	lang := i18n.MachineLanguageFrom(lookupEnv, uiLanguage)
 	if _, agent := lookupEnv("MESTRE_AGENT_ID"); agent {
 		// for an agent, never translated
 		fmt.Fprintln(stderr, "error: an agent never makes the code of setup (MESTRE_AGENT_ID is in the environment)")
