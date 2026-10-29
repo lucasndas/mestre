@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 )
@@ -205,7 +206,8 @@ func (s *Service) escalateStep(ctx context.Context, q Quest, st Step) {
 		return
 	}
 	sd := q.Def.Steps[st.Pos]
-	s.escalate(ctx, q, fmt.Sprintf("A etapa %s da missão %s (mesa %s) segue travada há %s e o Mestre da mesa não a resolveu.", sd.Title(), q.Name, q.Table, s.o.EscalateAfter))
+	s.escalate(ctx, q, fmt.Sprintf("A etapa %s da missão %s (mesa %s) segue travada há %s e o Mestre da mesa não a resolveu.", sd.Title(), q.Name, q.Table, s.o.EscalateAfter),
+		i18n.M("character.step_stuck", "step", sd.Title(), "quest", q.Name, "table", q.Table, "after", s.o.EscalateAfter.String()))
 }
 
 // Loop is the loop of the engine: it makes what was asked for (the advance of a

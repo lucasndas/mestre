@@ -11,6 +11,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
@@ -74,11 +75,13 @@ func checkPolicy(b []byte) error {
 // not valid, or a path it refuses to follow.
 type Problem struct {
 	// Path is relative to the folder it was found in.
-	Path   string
-	Reason string
+	Path string
+	// Reason is why, as a message: the people read it in their language; String says it in pt-BR
+	// (the log, the agents).
+	Reason i18n.Msg
 }
 
-func (p Problem) String() string { return p.Path + ": " + p.Reason }
+func (p Problem) String() string { return p.Path + ": " + i18n.Render(i18n.PtBR, p.Reason) }
 
 // StructureReport is what EnsureStructure did.
 type StructureReport struct {
@@ -102,7 +105,7 @@ func EnsureStructure(root string) StructureReport {
 		_, statErr := os.Lstat(dir) // only to tell the report what was made
 		missing := errors.Is(statErr, fs.ErrNotExist)
 		if err := safefile.MkdirAll(dir); err != nil {
-			rep.Invalid = append(rep.Invalid, Problem{Path: path.Join(MestreDir, d), Reason: "não é uma pasta comum (" + err.Error() + ")"})
+			rep.Invalid = append(rep.Invalid, Problem{Path: path.Join(MestreDir, d), Reason: i18n.M("sessionzero.not_a_folder", "error", err.Error())})
 			continue
 		}
 		if missing {
@@ -117,22 +120,22 @@ func EnsureStructure(root string) StructureReport {
 		case err == nil:
 			if f.check != nil {
 				if cerr := f.check(cur); cerr != nil {
-					rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: "inválido: " + cerr.Error()})
+					rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: i18n.M("sessionzero.invalid", "error", cerr.Error())})
 				}
 			}
 		case errors.Is(err, fs.ErrNotExist):
 			if werr := safefile.Write(full, []byte(f.content), safefile.Options{Mode: modeOf(f.rel)}); werr != nil {
-				rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: "não foi criado: " + werr.Error()})
+				rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: i18n.M("sessionzero.not_created", "error", werr.Error())})
 				continue
 			}
 			rep.Created = append(rep.Created, rel)
 		default:
-			rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: "não foi lido: " + err.Error()})
+			rep.Invalid = append(rep.Invalid, Problem{Path: rel, Reason: i18n.M("sessionzero.not_read", "error", err.Error())})
 		}
 	}
 	// what an earlier version, a checkout or the advance of the clone left writable by the group
 	if err := safefile.TightenRules(base); err != nil {
-		rep.Invalid = append(rep.Invalid, Problem{Path: MestreDir + "/regras", Reason: "o grupo do agente pode alterar arquivos ou pastas e a permissão não foi corrigida: " + err.Error()})
+		rep.Invalid = append(rep.Invalid, Problem{Path: MestreDir + "/regras", Reason: i18n.M("sessionzero.group_permission", "error", err.Error())})
 	}
 	return rep
 }

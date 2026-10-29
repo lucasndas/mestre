@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/usage"
 	"github.com/mestre-ia/mestre/internal/providers"
@@ -79,6 +80,32 @@ func TestWarnsOnceAt80Percent(t *testing.T) {
 	}
 	if got := w.pause.got(); len(got) != 0 {
 		t.Errorf("paused before 100%%: %v", got)
+	}
+}
+
+// The alert of use is a code and parameters: the people read it in their language, and the Grand
+// Master gets the pt-BR text of the same message.
+func TestTheAlertAt80PercentReadsInBothLanguages(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	if err := w.svc.SetLimit(w.ctx, classes.LevelAdmin, "loja", usage.Limit{Scope: usage.ScopeTable, Key: "loja/t1", Unit: classes.UnitUSD, Value: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.svc.Record(w.ctx, stepRecord(w, 8)); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.said.msgs) != 1 {
+		t.Fatalf("the people heard %d times", len(w.said.msgs))
+	}
+	m := w.said.msgs[0]
+	if got, want := i18n.Render(i18n.En, m), "Usage at 80%: the table Login reached US$ 8.00 of US$ 10.00."; got != want {
+		t.Errorf("en = %q; want %q", got, want)
+	}
+	if got, want := i18n.Render(i18n.PtBR, m), "Uso em 80%: a mesa Login chegou a US$ 8.00 de US$ 10.00."; got != want {
+		t.Errorf("pt-BR = %q; want %q", got, want)
+	}
+	if got := w.said.noteTo(characters.ToGrandMaster, "Uso em 80%: a mesa Login chegou a US$ 8.00 de US$ 10.00."); len(got) != 1 {
+		t.Errorf("the Grand Master did not get the same text in pt-BR: %v", w.said.notes)
 	}
 }
 

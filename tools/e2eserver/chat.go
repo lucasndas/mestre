@@ -106,7 +106,7 @@ func startFakeChat(ctx context.Context, guildDB, filesDir string, mask func(stri
 				if strings.Contains(low, askToThink) {
 					thinking.Store(true)
 					// the card of progress the Grão-Mestre keeps while he works
-					_ = svc.SetProgress(ctx, it.Workspace, i18n.Text("2 mesas em andamento, 1 precisa de você."))
+					_ = svc.SetProgress(ctx, it.Workspace, i18n.Concat(i18n.M("progress.header", "workspace", it.Workspace, "count", 2), i18n.M("progress.going", "count", 1, "names", "Mesa 42"), i18n.M("progress.waiting", "table", "Mesa 43", "owner", i18n.M("progress.owner_people"), "what", "decidir o login")))
 					svc.Changed(ctx, fakeGrandMaster)
 					return it, nil
 				}

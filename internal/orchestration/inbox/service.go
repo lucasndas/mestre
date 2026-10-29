@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/protocol"
 	"github.com/mestre-ia/mestre/pkg/clock"
@@ -48,8 +49,8 @@ type Channels interface {
 
 // Users tells the people (milestone 5): the Owner, or one user.
 type Users interface {
-	NotifyOwner(ctx context.Context, workspace, text string) error
-	NotifyUser(ctx context.Context, workspace, user, text string) error
+	NotifyOwner(ctx context.Context, workspace string, msg i18n.Msg) error
+	NotifyUser(ctx context.Context, workspace, user string, msg i18n.Msg) error
 }
 
 // Options are the pieces of the Service.
@@ -246,8 +247,7 @@ func (s *Service) tellUnavailable(ctx context.Context, c characters.Character, n
 	}
 	s.unavail[key] = c.Reason
 	s.mu.Unlock()
-	text := "O Grão-Mestre está indisponível: " + c.Reason + ". A sua mensagem ficou na fila e segue quando ele voltar."
-	if err := s.tellUser(ctx, n.Workspace, n.Origin.User, text); err != nil {
+	if err := s.tellUser(ctx, n.Workspace, n.Origin.User, i18n.M("inbox.gm_unavailable", "reason", c.Reason)); err != nil {
 		s.log.Warn("inbox: the user was not told the Grand Master is unavailable", "workspace", n.Workspace, "err", err)
 	}
 }

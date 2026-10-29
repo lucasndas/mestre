@@ -1,6 +1,6 @@
 # Grão-Mestre
 
-> **Assunto:** papel do Grão-Mestre, triagem e roteamento do pedido, mensagem de progresso, supervisor das aprovações das mesas, proteção, retomada, instruções do sistema e instruções extras do usuário · **Componente:** Motor · **Atualizado:** 2026-10-20
+> **Assunto:** papel do Grão-Mestre, triagem e roteamento do pedido, mensagem de progresso, supervisor das aprovações das mesas, proteção, retomada, instruções do sistema e instruções extras do usuário · **Componente:** Motor · **Atualizado:** 2026-10-29
 
 ## Objetivo
 
@@ -45,7 +45,7 @@ Tudo o que um usuário pede chega ao Grão-Mestre ([roteamento do Telegram](../t
 
 ### Mensagem de progresso
 
-Montada pelo **motor**, nunca pelo agente, por campanha, no fim de cada missão e a cada 2 h enquanto houver mesa em `working` (padrão, configurável). Princípio: **contagem para o que não precisa de ninguém e uma linha com dono para cada coisa que precisa de alguém**. Só entra como "mesclada" o que o motor confirmou na base ([eventos](../github/eventos.md#entrega-na-caixa-de-entrada)). Sai pelo [bot](../telegram/bot.md#mensagens-de-saída) e aparece no painel:
+Montada pelo **motor**, nunca pelo agente, por campanha, no fim de cada missão e a cada 2 h enquanto houver mesa em `working` (padrão, configurável). Princípio: **contagem para o que não precisa de ninguém e uma linha com dono para cada coisa que precisa de alguém**. Só entra como "mesclada" o que o motor confirmou na base ([eventos](../github/eventos.md#entrega-na-caixa-de-entrada)). Sai pelo [bot](../telegram/bot.md#mensagens-de-saída) e aparece no painel, em código e parâmetros, no idioma de cada pessoa ([mensagens por código](../plataforma/mensagens-por-codigo.md#avisos-do-motor-às-pessoas)); o exemplo abaixo está em pt-BR:
 
 ```
 loja · 3 mesas

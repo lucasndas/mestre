@@ -415,7 +415,7 @@ func TestTheApprovalOfAMesaTheBlockNoticeTheQuotaNoticeAndTheProgressStartWithTh
 	startsWith("passou de 80%", "<b>loja</b>")
 
 	// the message of progress is of the workspace it counts
-	if err := dg.Send(w.ctx, digest.Message{UserID: w.owner.ID, Workspace: "blog", Text: "Progresso do blog: 2 de 3 etapas confirmadas."}); err != nil {
+	if err := dg.Send(w.ctx, digest.Message{UserID: w.owner.ID, Workspace: "blog", Msg: i18n.Text("Progresso do blog: 2 de 3 etapas confirmadas.")}); err != nil {
 		t.Fatal(err)
 	}
 	w.drain()

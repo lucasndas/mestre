@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
@@ -175,7 +176,7 @@ type PollerOptions struct {
 	// them wait. Alert tells the Owner, once for each time the quota runs out.
 	Quota *Quota
 	App   string
-	Alert func(ctx context.Context, text string)
+	Alert func(ctx context.Context, msg i18n.Msg)
 	// Rand gives a number in [0, 1) for the jitter; nil: the middle (no jitter).
 	Rand   func() float64
 	Logger *slog.Logger
@@ -713,7 +714,7 @@ func (p *Poller) Tick(ctx context.Context) error {
 
 		p.mu.Lock()
 		st.running = false
-		alert := ""
+		var alert i18n.Msg
 		var lim *RetryAfterError
 		switch {
 		case err == nil:
@@ -730,7 +731,7 @@ func (p *Poller) Tick(ctx context.Context) error {
 				}
 				if !p.alerted {
 					p.alerted = true
-					alert = fmt.Sprintf("O limite de requisições do GitHub acabou: as consultas de todas as campanhas voltam às %s UTC.", lim.At.UTC().Format("15:04"))
+					alert = i18n.M("github.quota_exhausted", "at", lim.At.UTC().Format("15:04"))
 				}
 			}
 		case ctx.Err() != nil: // leaving: not a failure of GitHub
@@ -740,7 +741,7 @@ func (p *Poller) Tick(ctx context.Context) error {
 			p.o.Logger.Warn("github: reading a workspace failed", "workspace", w.Workspace, "err", err)
 		}
 		p.mu.Unlock()
-		if alert != "" && p.o.Alert != nil {
+		if !alert.IsZero() && p.o.Alert != nil {
 			p.o.Alert(ctx, alert)
 		}
 	}

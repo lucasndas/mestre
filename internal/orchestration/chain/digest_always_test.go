@@ -34,7 +34,7 @@ func (s *digestSent) texts(user string) []string {
 	var out []string
 	for _, m := range s.sent {
 		if m.UserID == user {
-			out = append(out, m.Text)
+			out = append(out, i18n.Render(i18n.PtBR, m.Msg))
 		}
 	}
 	return out

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/machinesheet"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
@@ -394,7 +395,7 @@ func TestTheFilesOfTheTableAreCheckedBeforeEachCharacterAndAProviderThatIsHeldBa
 	if len(check.calls) != 2 || !strings.HasSuffix(check.calls[1], " claude-code") || !strings.HasPrefix(check.calls[1], "meu-app/3-login ") {
 		t.Fatalf("checks = %q, want one before each character", check.calls)
 	}
-	check.err = &sessionzero.BlockedError{Provider: providers.ClaudeCode, Problems: []sessionzero.Problem{{Path: ".claude/settings.local.json", Reason: "not generated"}}}
+	check.err = &sessionzero.BlockedError{Provider: providers.ClaudeCode, Problems: []sessionzero.Problem{{Path: ".claude/settings.local.json", Reason: i18n.Text("not generated")}}}
 	_, err := r.create(characters.CreateRequest{Name: "Barrado", Sheet: "Dev Claude", Table: "3-login", Creator: byChar(tm)})
 	var blocked *sessionzero.BlockedError
 	if !errors.As(err, &blocked) {
@@ -416,7 +417,7 @@ func TestOnlyTheProviderThatIsHeldBackIsRefusedAtTheStart(t *testing.T) {
 	check := &checkFake{only: providers.Codex}
 	r := newRig(t, rigOptions{tables: check, machines: []machineSpec{withCodex(linux("linux"))}})
 	tm := r.makeTM("3-login")
-	check.err = &sessionzero.BlockedError{Provider: providers.Codex, Problems: []sessionzero.Problem{{Path: ".codex/hooks.json", Reason: "invalid JSON"}}}
+	check.err = &sessionzero.BlockedError{Provider: providers.Codex, Problems: []sessionzero.Problem{{Path: ".codex/hooks.json", Reason: i18n.Text("invalid JSON")}}}
 	var blocked *sessionzero.BlockedError
 	if _, err := r.create(characters.CreateRequest{Name: "Barrado", Sheet: "Revisor Codex", Table: "3-login", Creator: byChar(tm)}); !errors.As(err, &blocked) {
 		t.Fatalf("the held back provider: %v", err)

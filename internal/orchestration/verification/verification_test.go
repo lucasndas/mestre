@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/quests"
 	"github.com/mestre-ia/mestre/internal/orchestration/verification"
 	"github.com/mestre-ia/mestre/internal/store"
@@ -374,7 +375,10 @@ func TestTheProposalIsWrittenOnceAndHoldsNothingUntilConfirmed(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	var told []string
-	k := verification.Keeper{Notify: func(_ context.Context, _, text string) error { told = append(told, text); return nil }}
+	k := verification.Keeper{Notify: func(_ context.Context, _ string, m i18n.Msg) error {
+		told = append(told, i18n.Render(i18n.PtBR, m))
+		return nil
+	}}
 	if err := k.Propose(context.Background(), "ws", dir, []string{"go build ./...", "go test ./..."}); err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,4 @@
+{
+  "inbox.gm_unavailable": "The Grand Master is unavailable: {{reason}}. Your message stayed in the queue and goes on when it is back.",
+  "inbox.screen": "\n\n{{screen}}"
+}

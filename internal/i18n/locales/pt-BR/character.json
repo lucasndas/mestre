@@ -1,0 +1,13 @@
+{
+  "character.created": "O personagem {{name}} (id {{id}}) que esperava vaga foi criado na máquina {{machine}}.",
+  "character.deadlock": "Impasse entre personagens: {{ring}}. Cada um espera pelo próximo; nada foi cancelado. Troque um deles, responda por ele ou avise os usuários.",
+  "character.dismissed": "{{name}} foi encerrado, como pedido.",
+  "character.keeps_failing": "{{who}} caiu {{count}} vezes em {{minutes}} minutos ({{reason}}). O motor continua tentando iniciá-lo de novo a cada 2 minutos.",
+  "character.not_resumed": "O terminal {{name}} foi interrompido; o motor não reexecuta comandos sozinho.",
+  "character.request_failed": "O pedido de personagem que esperava vaga falhou: {{error}}",
+  "character.slot_timeout": "O pedido de {{what}} esperou {{waited}} por uma vaga e falhou: limite {{limit}} ({{max}}) ocupado por {{holders}}.",
+  "character.start_failed": "{{name}} não iniciou: {{error}}",
+  "character.step_stuck": "A etapa {{step}} da missão {{quest}} (mesa {{table}}) segue travada há {{after}} e o Mestre da mesa não a resolveu.",
+  "character.who_gm": "O Grão-Mestre de {{workspace}}",
+  "character.who_mesa": "O Mestre da mesa {{table}} de {{workspace}}"
+}

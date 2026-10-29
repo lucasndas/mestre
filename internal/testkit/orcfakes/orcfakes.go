@@ -14,6 +14,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/machinesheet"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/presets"
@@ -288,15 +289,15 @@ type Users struct {
 }
 
 // NotifyOwner implements inbox.Users.
-func (u *Users) NotifyOwner(_ context.Context, _, text string) error {
+func (u *Users) NotifyOwner(_ context.Context, _ string, msg i18n.Msg) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	u.owner = append(u.owner, text)
+	u.owner = append(u.owner, i18n.Render(i18n.PtBR, msg)) // the tests read the Owner's messages in pt-BR
 	return nil
 }
 
 // NotifyUser implements inbox.Users.
-func (*Users) NotifyUser(context.Context, string, string, string) error { return nil }
+func (*Users) NotifyUser(context.Context, string, string, i18n.Msg) error { return nil }
 
 // Told lists what the Owner was told.
 func (u *Users) Told() []string {

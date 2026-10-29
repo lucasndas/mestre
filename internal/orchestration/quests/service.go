@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/connections"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
@@ -605,13 +606,13 @@ func (s *Service) tellMaster(ctx context.Context, q Quest, kind inbox.Kind, text
 }
 
 // escalate tells the Grand Master and the users.
-func (s *Service) escalate(ctx context.Context, q Quest, text string) {
+func (s *Service) escalate(ctx context.Context, q Quest, text string, msg i18n.Msg) {
 	if s.o.Notifier == nil {
 		return
 	}
 	for _, to := range []characters.RecipientKind{characters.ToGrandMaster, characters.ToOwner} {
 		if err := s.o.Notifier.Notify(ctx, characters.Notice{Kind: characters.NoticeSystem, To: characters.Recipient{Kind: to},
-			Workspace: q.Workspace, Table: q.Table, Text: text}); err != nil {
+			Workspace: q.Workspace, Table: q.Table, Text: text, Msg: msg}); err != nil {
 			s.log.Warn("quests: an escalation was not delivered", "quest", q.ID, "to", to, "err", err)
 		}
 	}

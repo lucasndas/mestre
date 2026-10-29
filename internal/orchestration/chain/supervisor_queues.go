@@ -248,8 +248,10 @@ func (s *Supervisor) setAlert(ctx context.Context, k queueKey, on bool) error {
 // Owner for the people.
 func (s *Supervisor) warn(ctx context.Context, m QueueMetric) {
 	text := fmt.Sprintf("Fila acumulando: %s tem %d pedidos de aprovação abertos e o mais antigo espera há %s.", levelName(m), m.Open, short(m.Oldest))
+	msg := i18n.M("chain.queue_accumulating", "who", levelMsg(m), "open", m.Open, "oldest", short(m.Oldest))
 	switch m.Level {
 	case LevelAgent, LevelMesa:
+		msg = i18n.Concat(msg, i18n.M("chain.queue_hint", "table", fmt.Sprintf("%q", m.Table)))
 		text += fmt.Sprintf("\nSe os pedidos médios da mesa não deveriam ficar com o Mestre da mesa, pause a autonomia dela: mestre approval autonomy pause --table %q --reason \"<motivo>\".", m.Table)
 		told := false
 		if gm, ok, err := s.o.Characters.GrandMaster(ctx, m.Workspace); err == nil && ok {
@@ -262,19 +264,19 @@ func (s *Supervisor) warn(ctx context.Context, m QueueMetric) {
 		// the people who may pause it get the same warning with the button
 		// **Pausar autonomia** (the Telegram; the panel, M6)
 		if s.o.QueuePeople != nil {
-			if err := s.o.QueuePeople.QueueAccumulating(ctx, QueueNotice{Workspace: m.Workspace, Table: m.Table, Text: text, Msg: i18n.Concat(i18n.M("chain.queue_accumulating", "who", levelMsg(m), "open", m.Open, "oldest", short(m.Oldest)), i18n.M("chain.queue_hint", "table", fmt.Sprintf("%q", m.Table)))}); err != nil {
+			if err := s.o.QueuePeople.QueueAccumulating(ctx, QueueNotice{Workspace: m.Workspace, Table: m.Table, Text: text, Msg: msg}); err != nil {
 				s.log.Warn("supervision: the people were not warned of the queue", "table", m.Table, "err", err)
 			} else {
 				told = true
 			}
 		}
 		if !told {
-			s.tellPeople(ctx, m.Workspace, "Administradores e Senhor da Guilda: "+text)
+			s.tellPeople(ctx, m.Workspace, i18n.M("chain.to_admins", "text", msg))
 		}
 	case LevelGrandMaster:
-		s.tellPeople(ctx, m.Workspace, "Administradores e Senhor da Guilda: "+text)
+		s.tellPeople(ctx, m.Workspace, i18n.M("chain.to_admins", "text", msg))
 	default:
-		s.tellPeople(ctx, m.Workspace, "Senhor da Guilda: "+text)
+		s.tellPeople(ctx, m.Workspace, i18n.M("chain.to_owner", "text", msg))
 	}
 }
 
@@ -293,11 +295,11 @@ type QueuePeople interface {
 	QueueAccumulating(ctx context.Context, n QueueNotice) error
 }
 
-func (s *Supervisor) tellPeople(ctx context.Context, workspace, text string) {
+func (s *Supervisor) tellPeople(ctx context.Context, workspace string, msg i18n.Msg) {
 	if s.o.Alerts == nil {
 		return
 	}
-	if err := s.o.Alerts.Notify(ctx, workspace, text); err != nil {
+	if err := s.o.Alerts.Notify(ctx, workspace, msg); err != nil {
 		s.log.Warn("supervision: the people were not warned", "workspace", workspace, "err", err)
 	}
 }

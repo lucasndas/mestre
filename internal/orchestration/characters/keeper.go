@@ -2,11 +2,12 @@ package characters
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // The Grand Master is kept up (docs/orquestracao/grao-mestre.md#fixo-e-protegido):
@@ -95,7 +96,7 @@ func (k *Keeper) Tick(ctx context.Context) error {
 			continue
 		}
 		due, alert := k.observe(c, now)
-		if alert != "" {
+		if !alert.IsZero() {
 			if err := k.notifyFailing(ctx, c, alert); err != nil {
 				k.s.log.Warn("characters: the alert of the master that keeps failing was not given", "workspace", c.Workspace, "character", c.ID, "err", err)
 				k.unalert(c.ID) // the next failure of the window tells it
@@ -131,8 +132,8 @@ func (k *Keeper) tableOpen(ctx context.Context, c Character) bool {
 // notifyFailing gives the alert of a master that keeps failing: the users for
 // the Grand Master; for a table master the Grand Master, and the users too
 // (docs/orquestracao/mestre-da-mesa.md#fixo-enquanto-a-mesa-estiver-aberta).
-func (k *Keeper) notifyFailing(ctx context.Context, c Character, text string) error {
-	n := Notice{Kind: NoticeGrandMasterFailing, To: Recipient{Kind: ToOwner}, Workspace: c.Workspace, Character: c.ID, Name: c.Name, Text: text}
+func (k *Keeper) notifyFailing(ctx context.Context, c Character, msg i18n.Msg) error {
+	n := Notice{Kind: NoticeGrandMasterFailing, To: Recipient{Kind: ToOwner}, Workspace: c.Workspace, Character: c.ID, Name: c.Name, Text: i18n.Render(i18n.PtBR, msg), Msg: msg}
 	if c.Role != RoleTableMaster {
 		return k.s.o.Notifier.Notify(ctx, n)
 	}
@@ -162,7 +163,7 @@ func (k *Keeper) unalert(id string) {
 
 // observe updates what is known of a Grand Master and says whether it is time
 // to start it, and the alert to give, if this failure is the one to alert.
-func (k *Keeper) observe(c Character, now time.Time) (due bool, alert string) {
+func (k *Keeper) observe(c Character, now time.Time) (due bool, alert i18n.Msg) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	st := k.st[c.ID]
@@ -170,7 +171,7 @@ func (k *Keeper) observe(c Character, now time.Time) (due bool, alert string) {
 		if st != nil && now.Sub(st.last()) >= KeepWindow {
 			delete(k.st, c.ID)
 		}
-		return false, ""
+		return false, i18n.Msg{}
 	}
 	if st == nil {
 		st = &keepState{}
@@ -191,12 +192,11 @@ func (k *Keeper) observe(c Character, now time.Time) (due bool, alert string) {
 			st.alerted = false
 		case len(st.fails) >= KeepAlertAfter && (!st.alerted || now.Sub(st.alertedAt) >= RemindEvery):
 			st.alerted, st.alertedAt = true, now
-			who := "O Grão-Mestre de " + c.Workspace
+			who := i18n.M("character.who_gm", "workspace", c.Workspace)
 			if c.Role == RoleTableMaster {
-				who = "O Mestre da mesa " + untrustedReason(c.Table) + " de " + c.Workspace
+				who = i18n.M("character.who_mesa", "table", untrustedReason(c.Table), "workspace", c.Workspace)
 			}
-			alert = fmt.Sprintf("%s caiu %d vezes em %d minutos (%s). O motor continua tentando iniciá-lo de novo a cada 2 minutos.",
-				who, len(st.fails), int(KeepWindow/time.Minute), untrustedReason(c.Reason))
+			alert = i18n.M("character.keeps_failing", "who", who, "count", len(st.fails), "minutes", int(KeepWindow/time.Minute), "reason", untrustedReason(c.Reason))
 		}
 	}
 	if now.Before(st.next) {

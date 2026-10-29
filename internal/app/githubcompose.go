@@ -258,7 +258,7 @@ func (r *stdRun) poller(orc *Orchestration) (*github.Poller, error) {
 	return github.NewPoller(github.PollerOptions{
 		DB: r.env.DB, Clock: r.env.Clock, API: r.s.GitHubBase, HTTP: r.s.HTTP, Token: gm.Token, Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock},
 		Sink: sinks, Merges: ghMerges{orc}, Situation: ghSituation{orc}, Watches: watches(orc), Quota: r.quota, App: app,
-		Alert: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, i18n.Text(text)) }, Logger: r.env.Log,
+		Alert: func(ctx context.Context, m i18n.Msg) { r.alert.OwnerAlert(ctx, m) }, Logger: r.env.Log,
 	})
 }
 

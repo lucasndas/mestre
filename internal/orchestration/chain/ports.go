@@ -237,7 +237,7 @@ type Supervision interface {
 // Alerts tells the people something the chain did on its own (a character
 // paused by the circuit breaker).
 type Alerts interface {
-	Notify(ctx context.Context, workspace, text string) error
+	Notify(ctx context.Context, workspace string, msg i18n.Msg) error
 }
 
 // Tasks gives the task a character is doing: what the approver reads as

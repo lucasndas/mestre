@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
@@ -58,7 +59,7 @@ type Pump interface {
 
 // Alerts tells the users of a workspace (the bot and the panel).
 type Alerts interface {
-	Notify(ctx context.Context, workspace, text string) error
+	Notify(ctx context.Context, workspace string, msg i18n.Msg) error
 }
 
 // Extras opens the custo_extra request of a limit in the chain of approval

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/progress"
 	"github.com/mestre-ia/mestre/internal/orchestration/tables"
@@ -36,7 +37,11 @@ type fakeSender struct {
 	sent []string
 }
 
-func (f *fakeSender) Send(_ context.Context, user, _, text string) error {
+// text is the message as the people read it in pt-BR.
+func text(m progress.Message) string { return i18n.Render(i18n.PtBR, m.Msg) }
+
+func (f *fakeSender) Send(_ context.Context, user, _ string, msg i18n.Msg) error {
+	text := i18n.Render(i18n.PtBR, msg)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sent = append(f.sent, user+": "+text)
@@ -97,8 +102,31 @@ func TestTheProgressMessageCountsWhatTheEngineConfirmedAndNamesTheOwnerOfWhatWai
 		t.Fatalf("Compose = %v, %v", ok, err)
 	}
 	want := "loja · 4 mesas\n  ✅ 2 mescladas (Login, Recibos)\n  🔧 1 em andamento (Busca)\n  🙋 Checkout: espera você — aprovar PR #41 (mexe em pagamentos)\nPróximo: Checkout volta ao trabalho quando você aprovar"
-	if m.Text != want {
-		t.Errorf("message:\n%s\nwant:\n%s", m.Text, want)
+	if text(m) != want {
+		t.Errorf("message:\n%s\nwant:\n%s", text(m), want)
+	}
+}
+
+// The lines of the message of progress are a code and parameters: each person reads them in their
+// language, and what an agent wrote in them is the same in both.
+func TestTheProgressMessageReadsInTheLanguageOfThePerson(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	checkout := table("41-checkout", "Checkout", tables.StateInReview, false)
+	checkout.PRNumber = 41
+	r.tables.ts = []tables.Table{table("38-login", "Login", tables.StateInReview, true), checkout, table("42-busca", "Busca", tables.StateWorking, false)}
+	r.reqs["41-checkout"] = []chain.Request{{ID: 7, Level: chain.Level{Kind: chain.LevelPeople}, PR: &chain.PRRef{Number: 41}, Why: []string{"mexe em pagamentos"}}}
+	m, _, err := r.svc.Compose(t.Context(), "loja")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantEn := "loja · 3 tables\n  ✅ 1 merged (Login)\n  🔧 1 in progress (Busca)\n  🙋 Checkout: waiting for you — approve PR #41 (mexe em pagamentos)\nNext: Checkout goes back to work when you approve"
+	if got := i18n.Render(i18n.En, m.Msg); got != wantEn {
+		t.Errorf("en:\n%s\nwant:\n%s", got, wantEn)
+	}
+	wantPt := "loja · 3 mesas\n  ✅ 1 mesclada (Login)\n  🔧 1 em andamento (Busca)\n  🙋 Checkout: espera você — aprovar PR #41 (mexe em pagamentos)\nPróximo: Checkout volta ao trabalho quando você aprovar"
+	if got := i18n.Render(i18n.PtBR, m.Msg); got != wantPt {
+		t.Errorf("pt-BR:\n%s\nwant:\n%s", got, wantPt)
 	}
 }
 
@@ -168,9 +196,9 @@ func TestTheProgressMessageMasksAndLabelsWhatAgentsWrote(t *testing.T) {
 	r.tables.ts = []tables.Table{pr}
 	r.reqs["41-checkout"] = []chain.Request{{ID: 7, Level: chain.Level{Kind: chain.LevelGrandMaster}, About: "rodar\nnpm install s3cr3t"}}
 	m, _, _ := svc.Compose(t.Context(), "loja")
-	if strings.Contains(m.Text, "s3cr3t") || strings.Contains(m.Text, "\nde uso") || !strings.Contains(m.Text, "espera o Grão-Mestre — rodar npm install [segredo removido]") ||
-		!strings.Contains(m.Text, "pausada — limite de uso [segredo removido]") {
-		t.Errorf("message:\n%s", m.Text)
+	if strings.Contains(text(m), "s3cr3t") || strings.Contains(text(m), "\nde uso") || !strings.Contains(text(m), "espera o Grão-Mestre — rodar npm install [segredo removido]") ||
+		!strings.Contains(text(m), "pausada — limite de uso [segredo removido]") {
+		t.Errorf("message:\n%s", text(m))
 	}
 }
 
@@ -189,16 +217,16 @@ func TestTheProgressMessageMasksBeforeCuttingAndKeepsTheTitleToOneLine(t *testin
 	r.tables.ts = []tables.Table{bad}
 	r.reqs["41-checkout"] = []chain.Request{{ID: 7, Level: chain.Level{Kind: chain.LevelPeople}, About: strings.Repeat("x", 150) + secret}}
 	m, _, _ := svc.Compose(t.Context(), "loja")
-	if strings.Contains(m.Text, "ghp_") || strings.Contains(m.Text, "\x1b") || strings.Contains(m.Text, "Check\nout") {
-		t.Errorf("message:\n%s", m.Text)
+	if strings.Contains(text(m), "ghp_") || strings.Contains(text(m), "\x1b") || strings.Contains(text(m), "Check\nout") {
+		t.Errorf("message:\n%s", text(m))
 	}
 	var many []tables.Table
 	for i := range 200 {
 		many = append(many, table("t"+strings.Repeat("x", i), strings.Repeat("título ", 10), tables.StateWorking, true))
 	}
 	r.tables.ts = many
-	if m, _, _ := svc.Compose(t.Context(), "loja"); len([]rune(m.Text)) > 3600 {
-		t.Errorf("the message has %d characters", len([]rune(m.Text)))
+	if m, _, _ := svc.Compose(t.Context(), "loja"); len([]rune(text(m))) > 3600 {
+		t.Errorf("the message has %d characters", len([]rune(text(m))))
 	}
 }
 
@@ -207,7 +235,7 @@ type flakySender struct {
 	sent []string
 }
 
-func (f *flakySender) Send(_ context.Context, user, _, text string) error {
+func (f *flakySender) Send(_ context.Context, user, _ string, _ i18n.Msg) error {
 	if f.fail[user] {
 		return context.DeadlineExceeded
 	}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/providers"
@@ -25,12 +26,12 @@ type usersLog struct {
 	told []string
 }
 
-func (u *usersLog) NotifyOwner(context.Context, string, string) error { return nil }
+func (u *usersLog) NotifyOwner(context.Context, string, i18n.Msg) error { return nil }
 
-func (u *usersLog) NotifyUser(_ context.Context, _, user, text string) error {
+func (u *usersLog) NotifyUser(_ context.Context, _, user string, msg i18n.Msg) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	u.told = append(u.told, user+": "+text)
+	u.told = append(u.told, user+": "+i18n.Render(i18n.PtBR, msg))
 	return nil
 }
 

@@ -77,8 +77,8 @@ func (r *stdRun) analystOr(def sessionzero.Analyst) sessionzero.Analyst {
 // verificationKeeper keeps the commands the analysis proposes in verificacao.yaml and tells the
 // Administrators they wait for the confirmation.
 func (r *stdRun) verificationKeeper() verification.Keeper {
-	return verification.Keeper{Log: r.env.Log, Notify: func(ctx context.Context, workspace, text string) error {
-		_, err := r.alert.AdminAlert(ctx, workspace, i18n.Text(text))
+	return verification.Keeper{Log: r.env.Log, Notify: func(ctx context.Context, workspace string, msg i18n.Msg) error {
+		_, err := r.alert.AdminAlert(ctx, workspace, msg)
 		if errors.Is(err, telegram.ErrQueued) {
 			return nil
 		}
@@ -109,7 +109,7 @@ func (u szUsers) AskOwnerToInstall(ctx context.Context, workspace string, links 
 
 // Notify tells the Owner and the Administrators who act in the workspace.
 func (u szUsers) Notify(ctx context.Context, workspace string, n sessionzero.Notice) error {
-	return u.tell(ctx, workspace, i18n.Text(n.Text))
+	return u.tell(ctx, workspace, n.Msg)
 }
 
 // AskVersioning tells the Administrators the question is pending. The answer

@@ -17,6 +17,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/providers"
 	"github.com/mestre-ia/mestre/internal/safefile"
 )
@@ -293,7 +294,7 @@ func (t *Table) trust(req TableRequest, rep *TableReport) {
 			rep.Trusted = append(rep.Trusted, tr.Trusted...)
 		}
 		if err != nil {
-			pr := Problem{Path: trustPath(p.Provider), Reason: "a confiança da pasta não foi gravada no perfil: " + err.Error()}
+			pr := Problem{Path: trustPath(p.Provider), Reason: i18n.M("sessionzero.trust_not_saved", "error", err.Error())}
 			rep.Problems = append(rep.Problems, pr)
 			rep.Blocked[p.Provider] = append(rep.Blocked[p.Provider], pr)
 		}
@@ -308,11 +309,12 @@ func (t *Table) tell(ctx context.Context, req TableRequest, rep TableReport) {
 		delete(t.told, req.Dir)
 		return
 	}
-	text := problemsText("Arquivos da mesa "+req.Table+" que o Mestre não gerou (os personagens dos provedores afetados não iniciam nessa pasta até resolver)", rep.Problems)
+	msg := problemsMsg(i18n.M("sessionzero.table_files_head", "table", req.Table), rep.Problems)
+	text := i18n.Render(i18n.PtBR, msg) // the same set of problems says the same, whatever the language
 	if t.o.Notices == nil || t.told[req.Dir] == text {
 		return
 	}
-	if err := t.o.Notices.Notify(ctx, req.Workspace, Notice{Kind: "provider_files", Text: text}); err == nil {
+	if err := t.o.Notices.Notify(ctx, req.Workspace, Notice{Kind: "provider_files", Msg: msg}); err == nil {
 		t.told[req.Dir] = text
 	}
 }
@@ -325,12 +327,12 @@ func (t *Table) copyClasses(ctx context.Context, req TableRequest, rep *TableRep
 	}
 	for _, name := range req.Classes {
 		if name == "" || name != path.Base(name) || name == "." || name == ".." || strings.ContainsAny(name, `\:`) {
-			rep.Problems = append(rep.Problems, Problem{Path: path.Join(MestreDir, "run", "classes", name), Reason: "nome de classe inválido"})
+			rep.Problems = append(rep.Problems, Problem{Path: path.Join(MestreDir, "run", "classes", name), Reason: i18n.M("sessionzero.bad_class_name")})
 			continue
 		}
 		c, err := t.o.Classes.Approved(ctx, name, req.Table)
 		if err != nil {
-			rep.Problems = append(rep.Problems, Problem{Path: path.Join(MestreDir, "run", "classes", name), Reason: "a classe não foi copiada: " + err.Error()})
+			rep.Problems = append(rep.Problems, Problem{Path: path.Join(MestreDir, "run", "classes", name), Reason: i18n.M("sessionzero.class_not_copied", "error", err.Error())})
 			continue
 		}
 		var files []File
@@ -347,7 +349,7 @@ func (t *Table) copyAttachments(ctx context.Context, req TableRequest, rep *Tabl
 	}
 	files, err := t.o.Attachments.For(ctx, req.Workspace, req.Table)
 	if err != nil {
-		rep.Problems = append(rep.Problems, Problem{Path: path.Join(MestreDir, "anexos"), Reason: "os anexos não foram copiados: " + err.Error()})
+		rep.Problems = append(rep.Problems, Problem{Path: path.Join(MestreDir, "anexos"), Reason: i18n.M("sessionzero.attachments_not_copied", "error", err.Error())})
 		return
 	}
 	t.sync(req.Dir, path.Join(MestreDir, "anexos"), files, false, rep)
@@ -385,7 +387,7 @@ func syncFolder(dir, rel string, files []File, prune, skills bool) (written, rem
 	want := map[string]bool{}
 	for _, f := range files {
 		if err := checkRel(f.Path); err != nil {
-			rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, f.Path), Reason: err.Error()})
+			rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, f.Path), Reason: i18n.OfError(err)})
 			continue
 		}
 		want[f.Path] = true
@@ -393,7 +395,7 @@ func syncFolder(dir, rel string, files []File, prune, skills bool) (written, rem
 			if top, _, nested := strings.Cut(f.Path, "/"); nested && generated[top] && handmade(top) {
 				if !skipped[top] {
 					skipped[top] = true
-					rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, top, "SKILL.md"), Reason: "já existe e não tem o marcador de arquivo gerado: conflito, nada foi alterado"})
+					rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, top, "SKILL.md"), Reason: i18n.M("sessionzero.skill_conflict")})
 				}
 				continue
 			}
@@ -404,7 +406,7 @@ func syncFolder(dir, rel string, files []File, prune, skills bool) (written, rem
 		case err == nil && bytes.Equal(cur, f.Data):
 			continue
 		case err != nil && !errors.Is(err, fs.ErrNotExist):
-			rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, f.Path), Reason: "não foi lido: " + err.Error()})
+			rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, f.Path), Reason: i18n.M("sessionzero.not_read", "error", err.Error())})
 			continue
 		}
 		o := safefile.Options{Guard: func(now safefile.Info) error {
@@ -417,7 +419,7 @@ func syncFolder(dir, rel string, files []File, prune, skills bool) (written, rem
 			o.Mode = 0o755 // a script of a hook runs
 		}
 		if err := safefile.Write(file, f.Data, o); err != nil {
-			rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, f.Path), Reason: "não foi gravado: " + err.Error()})
+			rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, f.Path), Reason: i18n.M("sessionzero.not_written", "error", err.Error())})
 			continue
 		}
 		rep.Written = append(rep.Written, path.Join(rel, f.Path))
@@ -431,11 +433,11 @@ func syncFolder(dir, rel string, files []File, prune, skills bool) (written, rem
 			continue
 		}
 		if top, _, nested := strings.Cut(old, "/"); skills && nested && strings.HasPrefix(top, "mestre-") && handmade(top) {
-			rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, top, "SKILL.md"), Reason: "não tem o marcador de arquivo gerado: a pasta é de quem a fez e nada nela foi removido"})
+			rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, top, "SKILL.md"), Reason: i18n.M("sessionzero.skill_no_marker")})
 			continue
 		}
 		if err := safefile.Remove(filepath.Join(base, filepath.FromSlash(old)), nil); err != nil {
-			rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, old), Reason: "não foi removido: " + err.Error()})
+			rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, old), Reason: i18n.M("sessionzero.not_removed", "error", err.Error())})
 			continue
 		}
 		rep.Removed = append(rep.Removed, path.Join(rel, old))

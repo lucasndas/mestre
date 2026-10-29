@@ -1,0 +1,21 @@
+{
+  "progress.going_one": "\n  🔧 {{count}} in progress ({{names}})",
+  "progress.going_other": "\n  🔧 {{count}} in progress ({{names}})",
+  "progress.header_one": "{{workspace}} · {{count}} table",
+  "progress.header_other": "{{workspace}} · {{count}} tables",
+  "progress.merged_one": "\n  ✅ {{count}} merged ({{names}})",
+  "progress.merged_other": "\n  ✅ {{count}} merged ({{names}})",
+  "progress.next": "\nNext: {{table}} goes back to work when you {{verb}}",
+  "progress.no_reason": "no reason recorded",
+  "progress.owner_gm": "the Grand Master",
+  "progress.owner_level": "the level {{name}}",
+  "progress.owner_mesa": "the Table Master",
+  "progress.owner_people": "you",
+  "progress.paused": "\n  ⏸ {{table}}: paused — {{why}}",
+  "progress.truncated": "\n…",
+  "progress.verb_approve": "approve",
+  "progress.verb_decide": "decide",
+  "progress.waiting": "\n  🙋 {{table}}: waiting for {{owner}} — {{what}}",
+  "progress.what_pr": "approve PR #{{number}}",
+  "progress.what_pr_why": "approve PR #{{number}} ({{why}})"
+}

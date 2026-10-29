@@ -1,6 +1,13 @@
 {
   "table.level_denied": "Seu nível não permite pausar mesas.",
   "table.over": "Esta mesa já terminou.",
+  "table.ref_alert": "Alerta: a ref {{ref}} da mesa {{table}}: {{reason}} (registrado {{registered}}, agora {{current}}). Nada desta mesa é enviado nem sincronizado até um Administrador confiar de novo na ref.",
+  "table.ref_branch_gone": "a branch desapareceu do espelho",
+  "table.ref_foreign_commits": "recebeu commits que são da mesa {{table}}",
+  "table.ref_moved_silently": "andou sem passar pelo motor",
+  "table.ref_no_living": "avançou, mas nenhum personagem da mesa está vivo para ter feito isso",
+  "table.ref_no_living_on": "avançou, mas nenhum personagem da mesa está vivo na Torre {{machine}} para ter feito isso",
+  "table.ref_not_continuation": "não é continuação do que o motor registrou",
   "table.secret": "Não escreva senhas no motivo; diga só por que pausar.",
   "table.unavailable": "A pausa de mesa não está disponível agora."
 }

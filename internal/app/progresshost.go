@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/digest"
 	"github.com/mestre-ia/mestre/internal/orchestration/progress"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
@@ -53,6 +54,6 @@ type progressSender struct{ s digest.Sender }
 var _ progress.Sender = progressSender{}
 
 // Send implements progress.Sender.
-func (p progressSender) Send(ctx context.Context, userID, workspace, text string) error {
-	return p.s.Send(ctx, digest.Message{UserID: userID, Workspace: workspace, Text: text})
+func (p progressSender) Send(ctx context.Context, userID, workspace string, msg i18n.Msg) error {
+	return p.s.Send(ctx, digest.Message{UserID: userID, Workspace: workspace, Msg: msg})
 }

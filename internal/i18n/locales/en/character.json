@@ -1,0 +1,13 @@
+{
+  "character.created": "The character {{name}} (id {{id}}) that was waiting for a vacancy was created on the machine {{machine}}.",
+  "character.deadlock": "Deadlock between characters: {{ring}}. Each one waits for the next; nothing was cancelled. Replace one of them, answer for it or warn the users.",
+  "character.dismissed": "{{name}} was ended, as asked.",
+  "character.keeps_failing": "{{who}} went down {{count}} times in {{minutes}} minutes ({{reason}}). The engine keeps trying to start it again every 2 minutes.",
+  "character.not_resumed": "The terminal {{name}} was interrupted; the engine does not run commands again by itself.",
+  "character.request_failed": "The character request that was waiting for a vacancy failed: {{error}}",
+  "character.slot_timeout": "The request for {{what}} waited {{waited}} for a vacancy and failed: limit {{limit}} ({{max}}) held by {{holders}}.",
+  "character.start_failed": "{{name}} did not start: {{error}}",
+  "character.step_stuck": "The step {{step}} of the mission {{quest}} (table {{table}}) has been stuck for {{after}} and the Table Master did not solve it.",
+  "character.who_gm": "The Grand Master of {{workspace}}",
+  "character.who_mesa": "The Table Master {{table}} of {{workspace}}"
+}

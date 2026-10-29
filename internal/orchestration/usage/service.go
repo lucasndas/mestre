@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
@@ -181,25 +182,43 @@ func (s *Service) checkOne(ctx context.Context, r Record, lim Limit, period stri
 		if err != nil || !fresh {
 			return err
 		}
-		s.tell(ctx, r.Workspace, r.Table, fmt.Sprintf("Uso em %.0f%%: %s chegou a %s de %s.", ratio*100, s.what(lim, r), amount(lim.Unit, used), amount(lim.Unit, eff)))
+		s.tell(ctx, r.Workspace, r.Table, i18n.M("usage.at_percent", "percent", fmt.Sprintf("%.0f", ratio*100), "what", whatMsg(lim, r, false), "used", amountMsg(lim.Unit, used), "limit", amountMsg(lim.Unit, eff)))
 	}
 	return nil
 }
 
-// what is the words for what the limit covers.
-func (s *Service) what(lim Limit, r Record) string {
+// whatMsg is the words for what the limit covers; capital makes the first letter a capital one.
+func whatMsg(lim Limit, r Record, capital bool) i18n.Msg {
 	switch lim.Scope {
 	case ScopeQuest:
-		return "a missão " + orElse(r.QuestName, lim.Key)
+		if capital {
+			return i18n.M("usage.what_quest_cap", "name", orElse(r.QuestName, lim.Key))
+		}
+		return i18n.M("usage.what_quest", "name", orElse(r.QuestName, lim.Key))
 	case ScopeTable:
-		return "a mesa " + orElse(r.TableName, r.Table)
+		if capital {
+			return i18n.M("usage.what_table_cap", "name", orElse(r.TableName, r.Table))
+		}
+		return i18n.M("usage.what_table", "name", orElse(r.TableName, r.Table))
 	case ScopeWorkspace:
-		return "a campanha " + lim.Key
+		if capital {
+			return i18n.M("usage.what_workspace_cap", "name", lim.Key)
+		}
+		return i18n.M("usage.what_workspace", "name", lim.Key)
 	case ScopeDay:
-		return "o dia da campanha " + lim.Key
+		if capital {
+			return i18n.M("usage.what_day_cap", "name", lim.Key)
+		}
+		return i18n.M("usage.what_day", "name", lim.Key)
 	}
-	return "o dia da instalação"
+	if capital {
+		return i18n.M("usage.what_installation_cap")
+	}
+	return i18n.M("usage.what_installation")
 }
+
+// whatText is what the limit covers in pt-BR, for the text that is kept with a request.
+func whatText(lim Limit, r Record) string { return i18n.Render(i18n.PtBR, whatMsg(lim, r, false)) }
 
 func orElse(a, b string) string {
 	if a != "" {
@@ -208,16 +227,19 @@ func orElse(a, b string) string {
 	return b
 }
 
-// amount writes a number in the unit of a limit.
-func amount(u classes.Unit, v float64) string {
+// amountMsg is a number in the unit of a limit.
+func amountMsg(u classes.Unit, v float64) i18n.Msg {
 	switch u {
 	case classes.UnitUSD:
-		return fmt.Sprintf("US$ %.2f", v)
+		return i18n.M("usage.amount_usd", "value", fmt.Sprintf("%.2f", v))
 	case classes.UnitTokens:
-		return fmt.Sprintf("%.0f tokens", v)
+		return i18n.M("usage.amount_tokens", "value", fmt.Sprintf("%.0f", v))
 	}
-	return fmt.Sprintf("%.1f h", v)
+	return i18n.M("usage.amount_hours", "value", fmt.Sprintf("%.1f", v))
 }
+
+// amount is amountMsg in pt-BR, for the text that is kept with a request.
+func amount(u classes.Unit, v float64) string { return i18n.Render(i18n.PtBR, amountMsg(u, v)) }
 
 // reached is a limit at 100%: it pauses what the limit covers and asks for
 // the extra. Nothing interrupts a turn.
@@ -227,13 +249,12 @@ func (s *Service) reached(ctx context.Context, r Record, lim Limit, period strin
 		extra = math.Ceil(extra)
 	}
 	paused, perr := s.pause(ctx, lim, r)
-	what := s.what(lim, r)
-	msg := fmt.Sprintf("%s chegou ao limite: %s de %s. ", capitalize(what), amount(lim.Unit, used), amount(lim.Unit, eff))
+	parts := []i18n.Msg{i18n.M("usage.limit_reached", "what", whatMsg(lim, r, true), "used", amountMsg(lim.Unit, used), "limit", amountMsg(lim.Unit, eff))}
 	if perr != nil {
 		s.log.Warn("usage: what the limit covers was not paused", "scope", lim.Scope, "key", lim.Key, "err", perr)
-		msg += "Não consegui pausar; veja o log. "
+		parts = append(parts, i18n.M("usage.pause_failed"))
 	} else {
-		msg += "Pausei; quem está no turno termina. "
+		parts = append(parts, i18n.M("usage.paused"))
 	}
 	req := request{Scope: lim.Scope, Key: lim.Key, Period: period, Unit: lim.Unit, Workspace: r.Workspace, Table: r.Table, Used: used, Cap: eff, Extra: extra, Paused: paused, State: reqOpen, At: s.clk.Now()}
 	if s.o.Extras != nil {
@@ -241,24 +262,17 @@ func (s *Service) reached(ctx context.Context, r Record, lim Limit, period strin
 		switch {
 		case err != nil:
 			s.log.Warn("usage: the custo_extra request was not opened", "scope", lim.Scope, "key", lim.Key, "err", err)
-			msg += "O pedido de custo extra não abriu."
+			parts = append(parts, i18n.M("usage.extra_failed"))
 		default:
 			req.ID = id
 			if err := s.st.putRequest(ctx, req); err != nil {
 				return fmt.Errorf("usage: %w", err)
 			}
-			msg += fmt.Sprintf("Pedi %s a mais (pedido #%d).", amount(lim.Unit, extra), id)
+			parts = append(parts, i18n.M("usage.extra_asked", "amount", amountMsg(lim.Unit, extra), "id", id))
 		}
 	}
-	s.tell(ctx, r.Workspace, r.Table, strings.TrimSpace(msg))
+	s.tell(ctx, r.Workspace, r.Table, i18n.Concat(parts...))
 	return perr
-}
-
-func capitalize(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // askExtra opens the custo_extra request. An extra that takes the limit above
@@ -279,7 +293,7 @@ func (s *Service) askExtra(ctx context.Context, r Record, lim Limit, req request
 		return 0, err
 	}
 	return s.o.Extras.OpenExtra(ctx, ExtraRequest{Workspace: r.Workspace, Table: r.Table, Scope: lim.Scope, Unit: lim.Unit, Used: req.Used, Limit: req.Cap, Extra: req.Extra,
-		About: fmt.Sprintf("custo extra: %s chegou a %s de %s; pede mais %s", s.what(lim, r), amount(lim.Unit, req.Used), amount(lim.Unit, req.Cap), amount(lim.Unit, req.Extra)),
+		About: fmt.Sprintf("custo extra: %s chegou a %s de %s; pede mais %s", whatText(lim, r), amount(lim.Unit, req.Used), amount(lim.Unit, req.Cap), amount(lim.Unit, req.Extra)),
 		Risk:  risk, Target: target})
 }
 
@@ -318,14 +332,14 @@ func (s *Service) pause(ctx context.Context, lim Limit, r Record) ([]string, err
 }
 
 // tell warns the users of the workspace and the Grand Master.
-func (s *Service) tell(ctx context.Context, workspace, table, text string) {
+func (s *Service) tell(ctx context.Context, workspace, table string, msg i18n.Msg) {
 	if s.o.Alerts != nil && workspace != "" {
-		if err := s.o.Alerts.Notify(ctx, workspace, text); err != nil {
+		if err := s.o.Alerts.Notify(ctx, workspace, msg); err != nil {
 			s.log.Warn("usage: the users were not told", "workspace", workspace, "err", err)
 		}
 	}
 	if s.o.Notifier != nil && workspace != "" {
-		n := characters.Notice{Kind: characters.NoticeSystem, To: characters.Recipient{Kind: characters.ToGrandMaster}, Workspace: workspace, Table: table, Text: text}
+		n := characters.Notice{Kind: characters.NoticeSystem, To: characters.Recipient{Kind: characters.ToGrandMaster}, Workspace: workspace, Table: table, Text: i18n.Render(i18n.PtBR, msg), Msg: msg}
 		if err := s.o.Notifier.Notify(ctx, n); err != nil {
 			s.log.Warn("usage: the Grand Master was not told", "workspace", workspace, "err", err)
 		}
@@ -346,17 +360,17 @@ func (s *Service) Decided(ctx context.Context, d Decision) error {
 		return err
 	}
 	lim := Limit{Scope: req.Scope, Key: req.Key, Unit: req.Unit}
-	what := s.what(lim, Record{Workspace: req.Workspace, Table: req.Table})
+	what := whatMsg(lim, Record{Workspace: req.Workspace, Table: req.Table}, false)
 	if !d.Approved {
-		why := d.Reason
-		if why == "" {
-			why = "negado ou expirado"
+		var why any = d.Reason // what the approver wrote: not translated
+		if d.Reason == "" {
+			why = i18n.M("usage.denied_or_expired")
 		}
-		s.tell(ctx, req.Workspace, req.Table, fmt.Sprintf("O pedido de custo extra de %s não foi aprovado (%s): continua pausado.", what, why))
+		s.tell(ctx, req.Workspace, req.Table, i18n.M("usage.extra_denied", "what", what, "why", why))
 		return nil
 	}
 	err = s.resume(ctx, req)
-	s.tell(ctx, req.Workspace, req.Table, fmt.Sprintf("Custo extra aprovado para %s: o limite sobe %s e a pausa foi retirada.", what, amount(req.Unit, req.Extra)))
+	s.tell(ctx, req.Workspace, req.Table, i18n.M("usage.extra_approved", "what", what, "amount", amountMsg(req.Unit, req.Extra)))
 	return err
 }
 

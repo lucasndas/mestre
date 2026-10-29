@@ -27,5 +27,6 @@
   "github.pr_not_of_table": "The PR #{{number}} is not of the table {{table}}; ask the Grand Master.",
   "github.pr_of_table": "The PR is the table's.",
   "github.push_to_main": "Pushing to the main branch is not done: the table works on its own branch.",
+  "github.quota_exhausted": "The GitHub request limit is over: the queries of all campaigns resume at {{at}} UTC.",
   "github.target_kind": "The target is an issue or a PR; a comment counts for what contains it."
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/protocol"
@@ -129,19 +130,21 @@ type fakeUsers struct {
 	mu    sync.Mutex
 	owner []string
 	user  []string
+	msgs  []i18n.Msg // what the Owner was told, as messages
 }
 
-func (f *fakeUsers) NotifyOwner(_ context.Context, _, text string) error {
+func (f *fakeUsers) NotifyOwner(_ context.Context, _ string, msg i18n.Msg) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.owner = append(f.owner, text)
+	f.owner = append(f.owner, i18n.Render(i18n.PtBR, msg))
+	f.msgs = append(f.msgs, msg)
 	return nil
 }
 
-func (f *fakeUsers) NotifyUser(_ context.Context, _, user, text string) error {
+func (f *fakeUsers) NotifyUser(_ context.Context, _, user string, msg i18n.Msg) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.user = append(f.user, user+": "+text)
+	f.user = append(f.user, user+": "+i18n.Render(i18n.PtBR, msg))
 	return nil
 }
 

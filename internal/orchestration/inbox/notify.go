@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
@@ -22,19 +23,28 @@ func (s *Service) Notify(ctx context.Context, n characters.Notice) error {
 	if n.Screen != "" {
 		text += "\n\n" + n.Screen
 	}
+	// what the people read: the message the engine gave, in the language of each; a notice made for
+	// the agents alone has only its text, shown as it is
+	msg := n.Msg
+	if msg.IsZero() {
+		msg = i18n.Text(n.Text)
+	}
+	if n.Screen != "" {
+		msg = i18n.Concat(msg, i18n.M("inbox.screen", "screen", n.Screen)) // the screen of the agent: a parameter
+	}
 	switch n.To.Kind {
 	case characters.ToOwner:
-		return s.tellOwner(ctx, n.Workspace, text)
+		return s.tellOwner(ctx, n.Workspace, msg)
 	case characters.ToGrandMaster:
-		return s.system(ctx, n.Workspace, "", text, n.Table)
+		return s.system(ctx, n.Workspace, "", text, msg, n.Table)
 	case characters.ToCreator:
 		switch n.Creator.Kind {
 		case characters.CreatedByCharacter:
 			if c, err := s.o.Registry.Get(ctx, n.Creator.ID); err == nil && c.State.Alive() {
-				return s.system(ctx, n.Workspace, c.ID, text, n.Table)
+				return s.system(ctx, n.Workspace, c.ID, text, msg, n.Table)
 			}
 		case characters.CreatedByUser:
-			return s.tellUser(ctx, n.Workspace, n.Creator.ID, text)
+			return s.tellUser(ctx, n.Workspace, n.Creator.ID, msg)
 		}
 		fallthrough // the creator ended, or it is the engine: the table master
 	case characters.ToTableMaster:
@@ -44,17 +54,17 @@ func (s *Service) Notify(ctx context.Context, n characters.Notice) error {
 				return err
 			}
 			if ok && m.State.Alive() {
-				return s.system(ctx, n.Workspace, m.ID, text, n.Table)
+				return s.system(ctx, n.Workspace, m.ID, text, msg, n.Table)
 			}
 		}
-		return s.system(ctx, n.Workspace, "", text, n.Table)
+		return s.system(ctx, n.Workspace, "", text, msg, n.Table)
 	}
 	return fmt.Errorf("inbox: a notice for %q", n.To.Kind)
 }
 
 // system puts an item `system` in the inbox of the character, or of the Grand
 // Master of the workspace when to is empty.
-func (s *Service) system(ctx context.Context, workspace, to, text, table string) error {
+func (s *Service) system(ctx context.Context, workspace, to, text string, msg i18n.Msg, table string) error {
 	if to == "" {
 		gm, ok, err := s.o.Registry.GrandMaster(ctx, workspace)
 		if err != nil {
@@ -62,7 +72,7 @@ func (s *Service) system(ctx context.Context, workspace, to, text, table string)
 		}
 		if !ok || !gm.State.Alive() {
 			s.log.Warn("inbox: a notice found no Grand Master to receive it", "workspace", workspace, "text", text)
-			return s.tellOwner(ctx, workspace, text)
+			return s.tellOwner(ctx, workspace, msg)
 		}
 		to = gm.ID
 	}
@@ -70,20 +80,20 @@ func (s *Service) system(ctx context.Context, workspace, to, text, table string)
 	return err
 }
 
-func (s *Service) tellOwner(ctx context.Context, workspace, text string) error {
+func (s *Service) tellOwner(ctx context.Context, workspace string, msg i18n.Msg) error {
 	if s.o.Users == nil {
-		s.log.Info("inbox: a notice for the Owner has no channel yet", "workspace", workspace, "text", text)
+		s.log.Info("inbox: a notice for the Owner has no channel yet", "workspace", workspace, "text", msg.String())
 		return nil
 	}
-	return s.o.Users.NotifyOwner(ctx, workspace, text)
+	return s.o.Users.NotifyOwner(ctx, workspace, msg)
 }
 
-func (s *Service) tellUser(ctx context.Context, workspace, user, text string) error {
+func (s *Service) tellUser(ctx context.Context, workspace, user string, msg i18n.Msg) error {
 	if s.o.Users == nil {
-		s.log.Info("inbox: a notice for a user has no channel yet", "workspace", workspace, "user", user, "text", text)
+		s.log.Info("inbox: a notice for a user has no channel yet", "workspace", workspace, "user", user, "text", msg.String())
 		return nil
 	}
-	return s.o.Users.NotifyUser(ctx, workspace, user, text)
+	return s.o.Users.NotifyUser(ctx, workspace, user, msg)
 }
 
 // QueuedResult delivers the result of a call of the CLI that was accepted as

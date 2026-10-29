@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
@@ -22,11 +23,15 @@ type RefAlert struct {
 	// Registered is what the engine registered, Current what the ref has now
 	// ("" for a ref that disappeared).
 	Registered, Current string
-	Reason              string
+	Reason              i18n.Msg
 }
 
-func (a RefAlert) String() string {
-	return fmt.Sprintf("%s da mesa %s: %s (registrado %s, agora %s)", a.Ref, a.Table, a.Reason, gitx.Hash(a.Registered).Short(), gitx.Hash(a.Current).Short())
+func (a RefAlert) String() string { return i18n.Render(i18n.PtBR, a.Msg()) }
+
+// Msg is the alert as a message: the Administrators read it in their language, the table
+// master in pt-BR (String).
+func (a RefAlert) Msg() i18n.Msg {
+	return i18n.M("table.ref_alert", "ref", a.Ref, "table", a.Table, "reason", a.Reason, "registered", gitx.Hash(a.Registered).Short(), "current", gitx.Hash(a.Current).Short())
 }
 
 func untrustedKey(workspace, table string) string { return workspace + "/" + table }
@@ -114,7 +119,7 @@ func (s *Service) checkTable(ctx context.Context, t Table) ([]RefAlert, error) {
 		case err != nil:
 			return alerts, err
 		case wt.RefCommit != "" && string(cur) != wt.RefCommit:
-			alerts = append(alerts, s.alert(ctx, t, RefAlert{Ref: ref, Registered: wt.RefCommit, Current: string(cur), Reason: "andou sem passar pelo motor"}))
+			alerts = append(alerts, s.alert(ctx, t, RefAlert{Ref: ref, Registered: wt.RefCommit, Current: string(cur), Reason: i18n.M("table.ref_moved_silently")}))
 		}
 	}
 	return alerts, nil
@@ -124,7 +129,7 @@ func (s *Service) checkBranch(ctx context.Context, mirror gitx.Repo, t Table, wt
 	ref := "refs/heads/" + t.Branch
 	cur, err := mirror.ResolveRef(ctx, ref)
 	if errors.Is(err, gitx.ErrRefNotFound) {
-		return []RefAlert{s.alert(ctx, t, RefAlert{Ref: ref, Registered: wt.LastCommit, Reason: "a branch desapareceu do espelho"})}, nil
+		return []RefAlert{s.alert(ctx, t, RefAlert{Ref: ref, Registered: wt.LastCommit, Reason: i18n.M("table.ref_branch_gone")})}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -137,19 +142,19 @@ func (s *Service) checkBranch(ctx context.Context, mirror gitx.Repo, t Table, wt
 		return nil, err
 	}
 	if !ahead {
-		return []RefAlert{s.alert(ctx, t, RefAlert{Ref: ref, Registered: wt.LastCommit, Current: string(cur), Reason: "não é continuação do que o motor registrou"})}, nil
+		return []RefAlert{s.alert(ctx, t, RefAlert{Ref: ref, Registered: wt.LastCommit, Current: string(cur), Reason: i18n.M("table.ref_not_continuation")})}, nil
 	}
 	alive, err := s.hasLiving(ctx, t)
 	if err != nil {
 		return nil, err
 	}
 	if !alive {
-		return []RefAlert{s.alert(ctx, t, RefAlert{Ref: ref, Registered: wt.LastCommit, Current: string(cur), Reason: "avançou, mas nenhum personagem da mesa está vivo para ter feito isso"})}, nil
+		return []RefAlert{s.alert(ctx, t, RefAlert{Ref: ref, Registered: wt.LastCommit, Current: string(cur), Reason: i18n.M("table.ref_no_living")})}, nil
 	}
 	if foreign, err := s.foreignCommits(ctx, mirror, t, wt.LastCommit, string(cur)); err != nil {
 		return nil, err
 	} else if foreign != "" {
-		return []RefAlert{s.alert(ctx, t, RefAlert{Ref: ref, Registered: wt.LastCommit, Current: string(cur), Reason: "recebeu commits que são da mesa " + foreign})}, nil
+		return []RefAlert{s.alert(ctx, t, RefAlert{Ref: ref, Registered: wt.LastCommit, Current: string(cur), Reason: i18n.M("table.ref_foreign_commits", "table", foreign)})}, nil
 	}
 	if s.Untrusted(t.Workspace, t.ID) {
 		return nil, nil // moved ahead after an alert: still not trusted
@@ -258,9 +263,8 @@ func (s *Service) alert(ctx context.Context, t Table, a RefAlert) RefAlert {
 	if !fresh {
 		return a
 	}
-	text := "Alerta: a ref " + a.String() + ". Nada desta mesa é enviado nem sincronizado até um Administrador confiar de novo na ref."
-	s.tellMaster(ctx, t, text)
-	if err := s.o.Alerts.Operational(ctx, workspaces.Alert{Workspace: t.Workspace, Kind: workspaces.AlertRefMoved, Detail: text, Since: s.clk.Now()}); err != nil {
+	s.tellMaster(ctx, t, i18n.Render(i18n.PtBR, a.Msg())) // the table master is an agent: pt-BR as always
+	if err := s.o.Alerts.Operational(ctx, workspaces.Alert{Workspace: t.Workspace, Kind: workspaces.AlertRefMoved, Msg: a.Msg(), Since: s.clk.Now()}); err != nil {
 		s.log.Warn("tables: the Administrators were not told of a ref that moved", "table", t.ID, "err", err)
 	}
 	return a

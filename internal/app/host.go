@@ -75,7 +75,7 @@ func (unavailableBuilder) Build(context.Context, characters.BuildInput) (session
 type logAlerts struct{ log *slog.Logger }
 
 func (a logAlerts) Operational(_ context.Context, al workspaces.Alert) error {
-	a.log.Warn("app: operational alert", "workspace", al.Workspace, "kind", string(al.Kind), "detail", al.Detail, "since", al.Since)
+	a.log.Warn("app: operational alert", "workspace", al.Workspace, "kind", string(al.Kind), "detail", al.Msg.String(), "since", al.Since)
 	return nil
 }
 
@@ -268,7 +268,7 @@ func (e *Engine) hostChain(o *OrchestrationOptions, people chainPeople, layout w
 	o.ClassLibraries = books.For
 	// the proposals of the Grand Master become requests of the type classe_workspace,
 	// and the "Aprovar" of an Administrator puts the class in use (classapproval.go)
-	ca := &classApprovals{chain: periodChain, books: books.For, users: people.Users, tell: func(ctx context.Context, text string) { people.OwnerAlert(ctx, i18n.Text(text)) }}
+	ca := &classApprovals{chain: periodChain, books: books.For, users: people.Users, tell: func(ctx context.Context, msg i18n.Msg) { people.OwnerAlert(ctx, msg) }}
 	books.alerts = ca.alertsFor
 	if o.ChainSinks == nil {
 		o.ChainSinks = map[classes.RequestType]chain.Sink{}

@@ -15,13 +15,13 @@ type inboxUsers struct{ r *stdRun }
 var _ inbox.Users = inboxUsers{}
 
 // NotifyOwner implements inbox.Users.
-func (u inboxUsers) NotifyOwner(ctx context.Context, _, text string) error {
-	u.r.alert.OwnerAlert(ctx, i18n.Text(text))
+func (u inboxUsers) NotifyOwner(ctx context.Context, _ string, msg i18n.Msg) error {
+	u.r.alert.OwnerAlert(ctx, msg)
 	return nil
 }
 
 // NotifyUser implements inbox.Users: user is the id of the user.
-func (u inboxUsers) NotifyUser(ctx context.Context, _, user, text string) error {
-	u.r.alert.Tell(ctx, user, i18n.Text(text))
+func (u inboxUsers) NotifyUser(ctx context.Context, _, user string, msg i18n.Msg) error {
+	u.r.alert.Tell(ctx, user, msg)
 	return nil
 }

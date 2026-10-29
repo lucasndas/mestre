@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/providers"
 )
@@ -259,21 +260,26 @@ func (s *Service) quota(ctx context.Context, sub Subject, until time.Time) error
 			_, _ = s.st.takeWait(ctx, sub.ID) // so the next reading tries to block again
 		}
 	}
-	text := fmt.Sprintf("%s (%s, conta %s) ficou aguardando cota", orElse(sub.Name, sub.ID), sub.Provider, account(sub.Profile))
+	acct := i18n.M("usage.account_default")
+	if sub.Profile != "" {
+		acct = i18n.M("usage.account_named", "name", sub.Profile)
+	}
+	parts := []i18n.Msg{i18n.M("usage.quota_waiting", "name", orElse(sub.Name, sub.ID), "provider", string(sub.Provider), "account", acct)}
 	if until.IsZero() {
-		text += "; o provedor não disse quando ela volta."
+		parts = append(parts, i18n.M("usage.quota_unknown"))
 	} else {
-		text += "; a cota volta às " + s.clock(ctx, until) + "."
+		parts = append(parts, i18n.M("usage.quota_until", "at", s.clock(ctx, until)))
 	}
 	alts, err := s.o.Directory.Alternatives(ctx, sub)
 	if err != nil {
 		errs = append(errs, err)
 	}
 	if len(alts) > 0 {
-		text += " Fichas da mesma classe em outro provedor ou conta: " + strings.Join(alts, ", ") + ". Troque com `recruit --replace` ou espere."
+		parts = append(parts, i18n.M("usage.quota_alternatives", "names", strings.Join(alts, ", ")))
 	} else {
-		text += " Não há ficha da mesma classe em outro provedor ou conta; espere a cota voltar."
+		parts = append(parts, i18n.M("usage.quota_no_alternative"))
 	}
+	text := i18n.Concat(parts...)
 	if err := s.tellQuota(ctx, sub, text); err != nil {
 		errs = append(errs, err)
 	}
@@ -287,31 +293,19 @@ func joinedOrNil(errs []error) error {
 	return joinErrors(errs)
 }
 
-func account(profile string) string {
-	if profile == "" {
-		return "padrão"
-	}
-	return profile
-}
-
-// clock writes a moment as the hour of the time zone of the Guild.
-func (s *Service) clock(ctx context.Context, t time.Time) string {
-	return t.In(s.location(ctx)).Format("15:04")
-}
-
 // tellQuota sends the event to whom decides: the table master; if it is the
 // one that ran out, the Grand Master; if it is the Grand Master, the users.
-func (s *Service) tellQuota(ctx context.Context, sub Subject, text string) error {
+func (s *Service) tellQuota(ctx context.Context, sub Subject, msg i18n.Msg) error {
 	switch sub.Role {
 	case characters.RoleGrandMaster:
 		if s.o.Alerts != nil && sub.Workspace != "" {
-			return s.o.Alerts.Notify(ctx, sub.Workspace, text)
+			return s.o.Alerts.Notify(ctx, sub.Workspace, msg)
 		}
 		return nil
 	case characters.RoleTableMaster:
-		return s.notify(ctx, characters.ToGrandMaster, sub, text)
+		return s.notify(ctx, characters.ToGrandMaster, sub, i18n.Render(i18n.PtBR, msg))
 	}
-	return s.notify(ctx, characters.ToTableMaster, sub, text)
+	return s.notify(ctx, characters.ToTableMaster, sub, i18n.Render(i18n.PtBR, msg))
 }
 
 func (s *Service) notify(ctx context.Context, to characters.RecipientKind, sub Subject, text string) error {
@@ -348,4 +342,9 @@ func (s *Service) SourceUnavailable(ctx context.Context, character, source, deta
 		return nil
 	}
 	return s.o.Checklist.Raise(ctx, "ALL-23", character, source+": "+detail)
+}
+
+// clock writes a moment as the hour of the time zone of the Guild.
+func (s *Service) clock(ctx context.Context, t time.Time) string {
+	return t.In(s.location(ctx)).Format("15:04")
 }

@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -36,7 +37,7 @@ type classApprovals struct {
 	chain *atomic.Pointer[chain.Service]
 	books func(workspace string) *classes.Library
 	users func() *users.Service
-	tell  func(ctx context.Context, text string)
+	tell  func(ctx context.Context, msg i18n.Msg)
 }
 
 var _ chain.Sink = (*classApprovals)(nil)
@@ -95,7 +96,7 @@ func (c *classApprovals) Decided(ctx context.Context, res chain.Result) error {
 	}
 	// only an "Aprovar" puts the class in use; delegating the request is not approving the package
 	if r.Decision == nil || !r.Decision.Answer.Approves() {
-		c.tell(ctx, fmt.Sprintf("O pedido %d, da classe da campanha, foi encerrado sem um \"Aprovar\": a classe não entrou em uso.", r.ID))
+		c.tell(ctx, i18n.M("approval.class_closed_without_approve", "id", r.ID))
 		return nil
 	}
 	by, user := "", false
@@ -109,7 +110,7 @@ func (c *classApprovals) Decided(ctx context.Context, res chain.Result) error {
 	lib := c.books(r.Workspace)
 	if !user || by == "" || lib == nil || c.users == nil || c.users() == nil {
 		// no person approved it (an agent never does): nothing is put in use
-		c.tell(ctx, fmt.Sprintf("O pedido %d, da classe %s, foi aprovado sem uma pessoa: a classe não entrou em uso.", r.ID, t.Class))
+		c.tell(ctx, i18n.M("approval.class_approved_by_nobody", "id", r.ID, "class", t.Class))
 		return fmt.Errorf("app: the class of the request %d was approved by no user", r.ID)
 	}
 	u, err := c.users().Get(ctx, by)
@@ -117,7 +118,7 @@ func (c *classApprovals) Decided(ctx context.Context, res chain.Result) error {
 		return err
 	}
 	if err := lib.Approve(ctx, t.Proposal, t.Hash, classes.Author{Level: classLevelOf(u.Level), ID: u.ID}); err != nil {
-		c.tell(ctx, fmt.Sprintf("A aprovação da classe %s (pedido %d) não pôde ser aplicada: %v. Veja a proposta no painel.", t.Class, r.ID, err))
+		c.tell(ctx, i18n.M("approval.class_not_applied", "class", t.Class, "id", r.ID, "error", err.Error()))
 		return err
 	}
 	return nil

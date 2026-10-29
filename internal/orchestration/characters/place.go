@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/presets"
 	"github.com/mestre-ia/mestre/internal/providers"
 	"github.com/mestre-ia/mestre/internal/sessionzero"
@@ -318,7 +319,8 @@ func (s *Service) expire(ctx context.Context, w SlotWait, req CreateRequest) err
 	}
 	return s.o.Notifier.Notify(ctx, Notice{Kind: NoticeSlotTimeout, To: Recipient{Kind: ToCreator}, Workspace: req.Workspace, Table: req.Table,
 		Creator: req.Creator, Name: req.Name,
-		Text: fmt.Sprintf("O pedido de %q esperou %s por uma vaga e falhou: limite %s (%d) ocupado por %s.", what, s.o.SlotTimeout, w.Limit, max, w.Holders)})
+		Text: fmt.Sprintf("O pedido de %q esperou %s por uma vaga e falhou: limite %s (%d) ocupado por %s.", what, s.o.SlotTimeout, w.Limit, max, w.Holders),
+		Msg:  i18n.M("character.slot_timeout", "what", fmt.Sprintf("%q", what), "waited", s.o.SlotTimeout.String(), "limit", w.Limit, "max", max, "holders", w.Holders)})
 }
 
 var _ = providers.Null
@@ -345,7 +347,7 @@ func (s *Service) grandMasterNotStarted(ctx context.Context, c Character, cause 
 		return errors.Join(fmt.Errorf("character %s did not start: %w", c.Name, cause), err)
 	}
 	_ = s.o.Notifier.Notify(ctx, Notice{Kind: NoticeStartFailed, To: Recipient{Kind: ToOwner}, Workspace: c.Workspace,
-		Character: c.ID, Name: c.Name, Creator: c.CreatedBy, Text: fmt.Sprintf("%s não iniciou: %v", c.Name, cause)})
+		Character: c.ID, Name: c.Name, Creator: c.CreatedBy, Text: fmt.Sprintf("%s não iniciou: %v", c.Name, cause), Msg: i18n.M("character.start_failed", "name", c.Name, "error", cause.Error())})
 	return fmt.Errorf("character %s did not start: %w", c.Name, cause)
 }
 

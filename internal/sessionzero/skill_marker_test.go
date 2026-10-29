@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/presets"
 	"github.com/mestre-ia/mestre/internal/sessionzero"
 )
@@ -22,7 +23,7 @@ func TestTheClaudeCopyOfTheSharedSkillWithoutTheMarkerIsNotTouched(t *testing.T)
 	if read(t, mine) != "feita à mão\n" {
 		t.Fatal("the skill of the person in .claude was overwritten")
 	}
-	if len(rep.Problems) != 1 || rep.Problems[0].Path != ".claude/skills/mestre-comunicacao/SKILL.md" || !strings.Contains(rep.Problems[0].Reason, "conflito") {
+	if len(rep.Problems) != 1 || rep.Problems[0].Path != ".claude/skills/mestre-comunicacao/SKILL.md" || !strings.Contains(i18n.Render(i18n.PtBR, rep.Problems[0].Reason), "conflito") {
 		t.Fatalf("problems = %v", rep.Problems)
 	}
 	if _, err := os.Stat(filepath.Join(w.dir, ".agents", "skills", "mestre-comunicacao", "SKILL.md")); err != nil {
