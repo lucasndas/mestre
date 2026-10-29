@@ -20,6 +20,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 	"github.com/mestre-ia/mestre/internal/testkit/fakegit"
 	"github.com/mestre-ia/mestre/internal/testkit/fakegithub"
+	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
 	"github.com/mestre-ia/mestre/internal/testkit/orcfakes"
 	"github.com/mestre-ia/mestre/internal/vault"
 )
@@ -88,7 +89,8 @@ func newGHComposeCfg(t *testing.T, withChain, integrationPeople bool) *ghCompose
 		}
 	}
 	double.AddRepo("lucas", "meu_app")
-	i.std.GitHubBase, i.std.GitHubWeb, i.std.HTTP = srv.URL, srv.URL, &http.Client{Timeout: 10 * time.Second}
+	// the Telegram is always the double, whatever the bot is made to call
+	i.std.GitHubBase, i.std.GitHubWeb, i.std.HTTP = srv.URL, srv.URL, &http.Client{Timeout: 10 * time.Second, Transport: telegramToDouble{i.tg, http.DefaultTransport}}
 
 	c := &ghCompose{integ: i, gh: double, run: i.open()}
 	t.Cleanup(c.run.Close)
@@ -418,4 +420,17 @@ func TestATableThatCannotTakeItsPRDoesNotFailThePRCommands(t *testing.T) {
 	if err := c.run.ghHandlers(c.orc).Opened(c.ctx, c.ws.Slug+"/"+c.table.ID, c.pr, "h"); err != nil {
 		t.Fatalf("a closing table failed the command: %v", err)
 	}
+}
+
+// telegramToDouble sends what is meant for the Telegram to the double and the rest on.
+type telegramToDouble struct {
+	tg   http.Handler
+	next http.RoundTripper
+}
+
+func (t telegramToDouble) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.URL.Host == "api.telegram.org" {
+		return fakenet.HandlerTransport(t.tg).RoundTrip(req)
+	}
+	return t.next.RoundTrip(req)
 }

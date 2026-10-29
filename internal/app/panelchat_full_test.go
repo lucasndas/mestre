@@ -36,7 +36,7 @@ func TestTheAnswerOfReplyToAMessageOfThePanelComesBackToThePanelAndNotToTheTeleg
 		t.Fatalf("what the Grand Master got: %q", typed)
 	}
 	if it, err := (&inbox.Store{DB: w.db}).UserItem(w.ctx, w.ws.Slug, w.bia.ID, "m"+strings.TrimPrefix(sent.ID, "in-")); err != nil ||
-		!strings.HasPrefix(it.Header(), "[Mestre · user · de Bia (Administrador) · via painel · m") {
+		!strings.HasPrefix(it.Header(), "[Mestre · user · de Bia (Administrador) · via painel · idioma pt-BR · m") {
 		t.Fatalf("the header of the message: %v %v", it.Header(), err)
 	}
 	toTelegram := len(w.chatTexts(biaChat))

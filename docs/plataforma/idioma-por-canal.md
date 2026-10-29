@@ -41,7 +41,7 @@ Há dois públicos, e só um muda.
 ### Grão-Mestre
 
 - A mensagem que chega ao Grão-Mestre pela caixa de entrada leva o idioma de quem a mandou: `inbox.Origin` ganha `Language`, e o cabeçalho do motor ([envelope](../orquestracao/esperas-e-caixa-de-entrada.md)) ganha `· idioma en` (ou `pt-BR`).
-- Quem preenche: o Telegram, pelo `Language` do usuário ou, sem ele, pelo `language_code`; o painel, pelo `Language` ou, sem ele, pelo idioma em que o painel está aberto, que vai junto da mensagem. A resposta a uma pergunta (`mestre choose`) também leva.
+- Quem preenche: o Telegram, pelo `Language` do usuário ou, sem ele, pelo `language_code` guardado (`users.telegram_language`, atualizado a cada mensagem ou clique), ou pt-BR; o painel, pelo `Language` ou, sem ele, pelo idioma em que o painel está aberto, que vai junto da mensagem (campo `language` do envio e do corpo de `POST /api/chat-choices/{id}`), ou pt-BR. A resposta a uma pergunta (`mestre choose`) também leva.
 - As instruções do Grão-Mestre ([sessão zero do personagem](../sessao-zero/personagem.md)) ganham, em inglês como o resto, a regra: *answer each person in the language named by `idioma` in the header of their message; when you write first (`notify`, `choose`), use the language of that person's last message, or Portuguese (pt-BR) when there is none.*
 - O texto que o Grão-Mestre escreve é dele e não passa pelo catálogo: o Telegram e o painel o mostram como veio. Só a moldura do motor em volta ("Aviso do Grão-Mestre") é traduzida.
 - Os avisos que o motor manda aos agentes pela caixa de entrada (missões, rituais, cadeia, esperas) **não mudam nesta etapa**: são para agente, e o idioma deles não chega à pessoa.

@@ -457,6 +457,22 @@ func (s *Service) SetLanguage(ctx context.Context, id, language string) error {
 	})
 }
 
+// NoteTelegramLanguage keeps the last language_code the Telegram sent for a user.
+// It is a hint: it never writes Language. Nothing is written when the tag is empty
+// or already kept.
+func (s *Service) NoteTelegramLanguage(ctx context.Context, id, tag string) error {
+	if tag == "" {
+		return nil
+	}
+	if len(tag) > 35 { // an IETF tag never needs more; the field is the Telegram's, not trusted
+		tag = tag[:35]
+	}
+	return s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `UPDATE users SET telegram_language = ? WHERE id = ? AND state = ? AND telegram_language <> ?`, tag, id, string(Active), tag)
+		return err
+	})
+}
+
 // SetLastWorkspace records the workspace the user opened last in the panel; the
 // caller checks that the user may see it.
 func (s *Service) SetLastWorkspace(ctx context.Context, id, workspace string) error {

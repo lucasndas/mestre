@@ -79,6 +79,9 @@ type ChatDraftInput struct {
 	Quote string
 	// Session is the session of the panel the message was written in.
 	Session string
+	// Language is the language the panel is open in (the tag of the browser or the
+	// one chosen), a hint for the language of the Grão-Mestre when the user chose none.
+	Language string
 }
 
 // ChatDraft is a message being received: its files, then the send.
@@ -111,7 +114,8 @@ type ChatSource interface {
 	// Read marks the answers of the workspace as read by the user.
 	Read(ctx context.Context, u users.User, workspace string) error
 	// Choose gives the answer of the user to a question of `mestre choose`, once.
-	Choose(ctx context.Context, u users.User, question int64, option int) error
+	// language is the language the panel is open in ("" when it did not say).
+	Choose(ctx context.Context, u users.User, question int64, option int, language string) error
 	// File opens a file the Grão-Mestre sent to the user.
 	File(ctx context.Context, u users.User, workspace string, answer int64, index int) (ChatDownload, error)
 	// Listen registers what the source tells the panel to publish; the returned function
@@ -314,6 +318,8 @@ func (p *Panel) handleChatSend(w http.ResponseWriter, r *http.Request) {
 				in.ClientID = string(val)
 			case "quote":
 				in.Quote = string(val)
+			case "language":
+				in.Language = string(val)
 			}
 			continue
 		}
@@ -382,7 +388,7 @@ func (p *Panel) handleChatChoose(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, errBadRequest())
 		return
 	}
-	if err := p.chat.Choose(r.Context(), UserOf(r), id, body.Option); err != nil {
+	if err := p.chat.Choose(r.Context(), UserOf(r), id, body.Option, body.Language); err != nil {
 		p.writeChatError(w, "answering a question", err)
 		return
 	}

@@ -134,10 +134,10 @@ func TestAChooseQuestionFollowsTheChannelOfTheMessageAndIsAnsweredOnce(t *testin
 	if o := w.conversation(w.owner); len(o.Entries) != 0 {
 		t.Fatalf("another user sees %+v", o.Entries)
 	}
-	if err := w.run.chat.Choose(w.ctx, w.bia, q.Question.ID, 2); err != nil {
+	if err := w.run.chat.Choose(w.ctx, w.bia, q.Question.ID, 2, ""); err != nil {
 		t.Fatal(err)
 	}
-	err := w.run.chat.Choose(w.ctx, w.bia, q.Question.ID, 0)
+	err := w.run.chat.Choose(w.ctx, w.bia, q.Question.ID, 0, "")
 	if api, ok := err.(*panel.APIError); !ok || api.Code != panel.CodeChatChoiceTaken {
 		t.Fatalf("a second click: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestAChooseQuestionFollowsTheChannelOfTheMessageAndIsAnsweredOnce(t *testin
 	if tg.Question == nil || tg.Channel != "telegram" {
 		t.Fatalf("the question of the Telegram in the history: %+v", w.conversation(w.bia).Entries)
 	}
-	if err := w.run.chat.Choose(w.ctx, w.bia, tg.Question.ID, 0); err == nil {
+	if err := w.run.chat.Choose(w.ctx, w.bia, tg.Question.ID, 0, ""); err == nil {
 		t.Fatal("a question of the Telegram was answered through the panel")
 	}
 }
