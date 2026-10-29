@@ -23,6 +23,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/mestre-ia/mestre/internal/attachments"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/panel"
@@ -78,7 +79,7 @@ type Options struct {
 	// AuditSecret writes the attempt to send a secret to the audit (never the text); how is the kind.
 	AuditSecret func(ctx context.Context, user, how string)
 	// AlertOwner tells the Owner a user is sending secrets again and again (nil: nobody).
-	AlertOwner func(ctx context.Context, text string)
+	AlertOwner func(ctx context.Context, msg i18n.Msg)
 	// Discard takes back an attachment kept for a message that was not delivered (nil: it stays).
 	Discard func(ctx context.Context, workspace string, st attachments.Stored) error
 	// Open opens a file the Grão-Mestre sent (nil: the files are not there to download yet).

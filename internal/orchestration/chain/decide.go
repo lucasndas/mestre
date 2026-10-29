@@ -758,7 +758,7 @@ func (s *Service) breaker(ctx context.Context, r Request, st Settings) {
 		if justPaused {
 			s.audit(ctx, r, AuditEntry{Approver: r.Requester, Answer: answerPause, Outcome: "accepted", Reason: fmt.Sprintf("%d denials in a row", b.Denials)})
 			if s.o.Alerts != nil {
-				msg := fmt.Sprintf("%s foi pausado: %d pedidos de aprovação negados em seguida. Um Administrador ou acima o retoma.", orDefault(r.RequesterName, r.Requester), b.Denials)
+				msg := i18n.M("chain.breaker_paused", "name", orDefault(r.RequesterName, r.Requester), "count", b.Denials)
 				if err := s.o.Alerts.Notify(ctx, r.Workspace, msg); err != nil {
 					s.log.Warn("chain: the people were not told of the pause", "character", r.Requester, "err", err)
 				}

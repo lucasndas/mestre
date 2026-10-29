@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/usage"
 	"github.com/mestre-ia/mestre/internal/providers"
@@ -143,13 +144,15 @@ func (p *fakePump) count() int {
 type tellings struct {
 	mu     sync.Mutex
 	alerts []string
+	msgs   []i18n.Msg // the same alerts, as messages
 	notes  []characters.Notice
 }
 
-func (t *tellings) Notify(_ context.Context, workspace, text string) error {
+func (t *tellings) Notify(_ context.Context, workspace string, msg i18n.Msg) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.alerts = append(t.alerts, workspace+": "+text)
+	t.alerts = append(t.alerts, workspace+": "+i18n.Render(i18n.PtBR, msg))
+	t.msgs = append(t.msgs, msg)
 	return nil
 }
 

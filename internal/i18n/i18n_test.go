@@ -1,6 +1,8 @@
 package i18n
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -82,6 +84,22 @@ func TestRenderPluralNestedMessageAndLiteralText(t *testing.T) {
 	got := render(bundle, En, M("note.free", "text", "{{level}} and {{text}}", "level", "X"))
 	if got != "Note: {{level}} and {{text}}" {
 		t.Errorf("literal text = %q", got)
+	}
+	// a text in the form of a date stays a text, even after JSON; an instant has its own mark
+	const date = "2026-01-01T00:00:00Z"
+	if got := render(bundle, En, M("note.free", "text", date)); got != "Note: "+date {
+		t.Errorf("a text in the form of a date = %q", got)
+	}
+	raw, err := json.Marshal(M("note.free", "text", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)))
+	if err != nil || !strings.Contains(string(raw), `{"instant":"2026-01-01T00:00:00Z"}`) {
+		t.Errorf("an instant in JSON = %s, %v", raw, err)
+	}
+	var back Msg
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatal(err)
+	}
+	if got := render(bundle, En, back); got != "Note: 2026-01-01 00:00 UTC" {
+		t.Errorf("an instant through JSON = %q", got)
 	}
 	// a code with no text is the code, never a sentence of another language
 	if got := render(bundle, En, M("nothing.here")); got != "nothing.here" {

@@ -23,8 +23,6 @@ export function isMessageCode(code: string): code is MessageCode {
   );
 }
 
-const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
-
 /** An instant as the engine says it: `25/10/2026 23:59 (America/Sao_Paulo, UTC-03:00)`, or `2026-10-25 23:59 (…)`. */
 export function formatMoment(iso: string, lang: Lang, zone: string | undefined): string {
   const date = new Date(iso);
@@ -66,8 +64,16 @@ function isMsg(v: unknown): v is { code: string; params?: Params } {
   return typeof v === "object" && v !== null && typeof (v as { code?: unknown }).code === "string";
 }
 
+/** An instant as the engine writes it in JSON: `{"instant": "<RFC 3339>"}`. A text is never an instant. */
+function isInstant(v: unknown): v is { instant: string } {
+  return (
+    typeof v === "object" && v !== null && typeof (v as { instant?: unknown }).instant === "string"
+  );
+}
+
 function show(v: unknown, lang: Lang, zone: string | undefined): string {
-  if (typeof v === "string") return INSTANT.test(v) ? formatMoment(v, lang, zone) : v;
+  if (typeof v === "string") return v;
+  if (isInstant(v)) return formatMoment(v.instant, lang, zone);
   if (isMsg(v)) return messageText(lang, v.code, v.params, zone) ?? v.code;
   if (Array.isArray(v)) return v.map((x) => show(x, lang, zone)).join(", ");
   if (v === null || v === undefined) return "";

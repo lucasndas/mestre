@@ -59,7 +59,7 @@ var errNoApproval = errors.New("app: the approval on GitHub is not composed in t
 // confirmed. The sink re-reads the head it approves, so a late run is safe.
 type lateSink struct {
 	get   func() chain.Sink
-	alert func(ctx context.Context, text string)
+	alert func(ctx context.Context, msg i18n.Msg)
 	// lease runs fn under the lease or keeps it for when the lease is back
 	// (queued); nil runs it now.
 	lease func(ctx context.Context, name string, fn func(context.Context) error) (queued bool, err error)
@@ -74,11 +74,11 @@ func (l lateSink) Decided(ctx context.Context, res chain.Result) error {
 		err := s.Decided(ctx, res)
 		if err != nil && res.Approved && l.alert != nil {
 			var ref *chain.Refusal
-			why := "veja o log do motor"
+			why := i18n.M("approval.see_log")
 			if errors.As(err, &ref) && ref.Code == chain.CodeHumanRequired {
-				why = i18n.Render(i18n.PtBR, ref.Msg)
+				why = ref.Msg
 			}
-			l.alert(ctx, fmt.Sprintf("A aprovação do pedido #%d foi dada, mas não foi aplicada no GitHub: %s.", res.Request.ID, why))
+			l.alert(ctx, i18n.M("approval.not_applied_on_github", "id", res.Request.ID, "why", why))
 		}
 		return err
 	}

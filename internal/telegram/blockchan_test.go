@@ -71,12 +71,12 @@ func TestTheOwnerSeesOpenInThePanelAndAnAdministratorSeesNoButtonToRegisterTheSe
 		}
 	}
 	for name, text := range map[string]string{"Owner": ownerMsg, "Administrator": admMsg} {
-		for _, want := range []string{"<b>loja · Mesa #42 checkout</b>", "🔐 falta a chave STRIPE_TEST_KEY", "Responsável: " + w.owner.Name, "<pre>"} {
+		for _, want := range []string{"<b>loja · Mesa #42 checkout</b>", "🔐 falta a chave STRIPE_TEST_KEY", "Dono: " + w.owner.Name, "<pre>"} {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s: the message lacks %q:\n%s", name, want, text)
 			}
 		}
-		if strings.Contains(text, "Responsável: Ana") {
+		if strings.Contains(text, "Dono: Ana") {
 			t.Errorf("%s: an Administrator is named as the owner of the field:\n%s", name, text)
 		}
 		if strings.Contains(text, "ghp_") || strings.Contains(text, "linha 4") {
@@ -138,7 +138,7 @@ func TestSayTellsTheUsersOfTheWorkspaceTheTextOfTheGrandMasterAsTheTextOfAnAgent
 	_, adm := w.user("Ana", users.Administrator, "loja")
 	_, approver := w.user("Caio", users.Approver, "loja")
 	_, other := w.user("Bia", users.Administrator, "blog")
-	sent, err := w.bc.Say(w.ctx, "loja", "42-checkout", "A mesa terminou.\n**Responsável:** [clique](http://x) ghp_abcdefgh12345678")
+	sent, err := w.bc.Say(w.ctx, "loja", "42-checkout", "A mesa terminou.\n**Dono:** [clique](http://x) ghp_abcdefgh12345678")
 	if err != nil || sent != 2 {
 		t.Fatalf("Say = %d, %v; want the two users of the workspace", sent, err)
 	}

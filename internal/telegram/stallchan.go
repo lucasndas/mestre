@@ -76,7 +76,7 @@ func (c *StallChannel) StalledTable(ctx context.Context, n chain.StallNotice) er
 			continue
 		}
 		rows := [][]Button{{{Msg: i18n.M("bot.pause_table"), Action: PauseTableAction, Arg: n.Workspace + ":" + n.Table, Capability: users.PauseButtons}}}
-		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.Text(n.Text), Workspace: n.Workspace, Mesa: n.Table, Origin: "mesa_parada", Buttons: rows}); err != nil {
+		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: textOr(n.Msg, n.Text), Workspace: n.Workspace, Mesa: n.Table, Origin: "mesa_parada", Buttons: rows}); err != nil {
 			c.bot.log.Warn("telegram: the warning of a stalled table was not queued", "user", u.ID, "err", err)
 			continue
 		}
@@ -135,7 +135,7 @@ func (c *StallChannel) QueueAccumulating(ctx context.Context, n chain.QueueNotic
 			continue
 		}
 		rows := [][]Button{{{Msg: i18n.M("bot.pause_autonomy"), Action: PauseAutonomyAction, Arg: n.Workspace + ":" + n.Table, Capability: users.PauseButtons}}}
-		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.Text(n.Text), Workspace: n.Workspace, Mesa: n.Table, Origin: "fila", Buttons: rows}); err != nil {
+		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: textOr(n.Msg, n.Text), Workspace: n.Workspace, Mesa: n.Table, Origin: "fila", Buttons: rows}); err != nil {
 			c.bot.log.Warn("telegram: the warning of a queue was not queued", "user", u.ID, "err", err)
 			continue
 		}
@@ -177,4 +177,12 @@ func (c *StallChannel) pauseAutonomy(ctx context.Context, k Click) (i18n.Msg, i1
 		return i18n.M("bot.autonomy_already_paused"), i18n.Msg{}, nil
 	}
 	return i18n.M("bot.autonomy_paused", "table", table), i18n.Msg{}, nil
+}
+
+// textOr is the message when the engine gave one, else the text it gave (in pt-BR, for the rest).
+func textOr(m i18n.Msg, text string) i18n.Msg {
+	if m.IsZero() {
+		return i18n.Text(text)
+	}
+	return m
 }

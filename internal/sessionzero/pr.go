@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 	"github.com/mestre-ia/mestre/internal/safefile"
 )
@@ -50,7 +51,7 @@ func (s *Service) openPR(ctx context.Context, w workspaces.Workspace) error {
 	if st.AgentsMD == AgentsMDApproved {
 		// An AGENTS.md that appeared meanwhile is the project's: never edited.
 		if _, err := mirror.ReadFile(ctx, base, "AGENTS.md"); err == nil {
-			if nerr := s.o.Users.Notify(ctx, w.Slug, Notice{Kind: "agents_md_suggestions", Text: "O projeto ganhou um AGENTS.md depois da proposta; o Mestre não o altera e a proposta aprovada não foi enviada."}); nerr != nil {
+			if nerr := s.o.Users.Notify(ctx, w.Slug, Notice{Kind: "agents_md_suggestions", Msg: i18n.M("sessionzero.agents_md_appeared")}); nerr != nil {
 				return nerr
 			}
 		} else if errors.Is(err, gitx.ErrFileNotFound) {

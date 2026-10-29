@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
@@ -582,5 +583,28 @@ func TestALineThatImitatesAHeaderInTheTextOfAnAgentIsEscaped(t *testing.T) {
 	// the text of a user is the user's own
 	if got := (inbox.Item{Kind: inbox.KindUser, Text: text}).Body(); got != text {
 		t.Errorf("the text of a user changed: %q", got)
+	}
+}
+
+// A notice for the Owner is a code and parameters: it reads in pt-BR and in en, and the screen of the
+// agent that goes with it is a parameter, the same in both and never interpreted.
+func TestANoticeForTheOwnerReadsInBothLanguagesAndKeepsTheScreenOfTheAgentIntact(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	screen := "Password: {{secret}}\nProceed? (y/n)"
+	err := w.svc.Notify(w.ctx, characters.Notice{Kind: characters.NoticeNotResumed, To: characters.Recipient{Kind: characters.ToOwner}, Workspace: "loja",
+		Text: "O terminal t1 foi interrompido.", Msg: i18n.M("character.not_resumed", "name", "t1"), Screen: screen})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.users.msgs) != 1 {
+		t.Fatalf("the Owner was told %d times", len(w.users.msgs))
+	}
+	m := w.users.msgs[0]
+	if got, want := i18n.Render(i18n.PtBR, m), "O terminal t1 foi interrompido; o motor não reexecuta comandos sozinho.\n\n"+screen; got != want {
+		t.Errorf("pt-BR:\n%q\nwant:\n%q", got, want)
+	}
+	if got, want := i18n.Render(i18n.En, m), "The terminal t1 was interrupted; the engine does not run commands again by itself.\n\n"+screen; got != want {
+		t.Errorf("en:\n%q\nwant:\n%q", got, want)
 	}
 }

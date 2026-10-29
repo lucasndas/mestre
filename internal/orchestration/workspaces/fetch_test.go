@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
@@ -48,7 +49,7 @@ func TestMirrorIsFetchedEvery15MinutesAndAnOutageOf1HourAlertsOnce(t *testing.T)
 	r.runUntil(r.svc, outage.Add(time.Hour))
 	got := r.alerts()
 	if len(got) != 1 || got[0].Kind != workspaces.AlertFetchFailing || got[0].Workspace != w.Slug ||
-		!strings.Contains(got[0].Detail, "Could not resolve host") || !got[0].Since.Equal(outage) {
+		!strings.Contains(i18n.Render(i18n.PtBR, got[0].Msg), "Could not resolve host") || !got[0].Since.Equal(outage) {
 		t.Fatalf("alerts at the hour = %+v; want one about the failing fetch since %v", got, outage)
 	}
 	// And only once, however long it goes on.

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/machinesheet"
 	"github.com/mestre-ia/mestre/internal/orchestration/presets"
 	"github.com/mestre-ia/mestre/internal/protocol"
@@ -360,7 +361,8 @@ func (s *Service) announce(ctx context.Context, c Character, to Creator) {
 	}
 	_ = s.o.Notifier.Notify(ctx, Notice{Kind: NoticeCreated, To: Recipient{Kind: ToCreator}, Workspace: c.Workspace, Table: c.Table,
 		Character: c.ID, Name: c.Name, Creator: to,
-		Text: fmt.Sprintf("O personagem %q (id %s) que esperava vaga foi criado na máquina %s.", c.Name, c.ID, c.Machine)})
+		Text: fmt.Sprintf("O personagem %q (id %s) que esperava vaga foi criado na máquina %s.", c.Name, c.ID, c.Machine),
+		Msg:  i18n.M("character.created", "name", fmt.Sprintf("%q", c.Name), "id", c.ID, "machine", c.Machine)})
 }
 
 // connect makes the connections of a character just registered: the ones of
@@ -442,7 +444,7 @@ func (s *Service) replacementWaits(ctx context.Context, id string) bool {
 func (s *Service) failed(ctx context.Context, req CreateRequest, waitID string, err error) error {
 	if errors.Is(err, machinesheet.ErrNoMachine) {
 		_ = s.o.Notifier.Notify(ctx, Notice{Kind: NoticeNoCapableMachine, To: Recipient{Kind: ToOwner}, Workspace: req.Workspace,
-			Table: req.Table, Creator: req.Creator, Text: err.Error()})
+			Table: req.Table, Creator: req.Creator, Text: err.Error(), Msg: i18n.OfError(err)})
 	}
 	if waitID != "" {
 		_, _ = s.o.Registry.EndSlotWait(ctx, waitID, SlotCancelled, s.clk.Now())
@@ -455,7 +457,7 @@ func (s *Service) failed(ctx context.Context, req CreateRequest, waitID string, 
 			}
 		}
 		_ = s.o.Notifier.Notify(ctx, Notice{Kind: NoticeStartFailed, To: Recipient{Kind: ToCreator}, Workspace: req.Workspace,
-			Table: req.Table, Creator: req.Creator, Text: "o pedido de personagem que esperava vaga falhou: " + err.Error()})
+			Table: req.Table, Creator: req.Creator, Text: "o pedido de personagem que esperava vaga falhou: " + err.Error(), Msg: i18n.M("character.request_failed", "error", err.Error())})
 	}
 	return err
 }

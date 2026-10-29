@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 )
 
@@ -39,7 +40,10 @@ type TableStalls interface {
 type StallNotice struct {
 	Workspace, Table string
 	Since            time.Time
-	Text             string
+	// Text is the warning in pt-BR (what the Grand Master reads); Msg is the same as a message, said in
+	// the language of each person.
+	Text string
+	Msg  i18n.Msg
 }
 
 // StallPeople delivers the warning of a stalled table to the people, with the
@@ -68,7 +72,7 @@ func (s *Supervisor) stalls(ctx context.Context) error {
 		// The people first: they hold the button. If they could not be told, nothing
 		// is marked and the next round tries again, so the Grão-Mestre is not told twice.
 		if s.o.StallPeople != nil {
-			if err := s.o.StallPeople.StalledTable(ctx, StallNotice{Workspace: st.Workspace, Table: st.Table, Since: st.Since, Text: text}); err != nil {
+			if err := s.o.StallPeople.StalledTable(ctx, StallNotice{Workspace: st.Workspace, Table: st.Table, Since: st.Since, Text: text, Msg: i18n.M("chain.stalled", "table", st.Table, "quiet", short(quiet))}); err != nil {
 				s.log.Warn("supervision: the people were not told of a stalled table", "table", st.Table, "err", err)
 				continue
 			}

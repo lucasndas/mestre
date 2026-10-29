@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/machinesheet"
 	"github.com/mestre-ia/mestre/internal/orchestration/presets"
 	"github.com/mestre-ia/mestre/internal/protocol"
@@ -303,8 +304,11 @@ type Notice struct {
 	Name      string
 	// Creator is who asked for it (the recipient of ToCreator).
 	Creator Creator
-	// Text is the text, in Portuguese, for the people.
+	// Text is the text, in Portuguese, for the characters (and for the people when Msg is empty).
 	Text string
+	// Msg is the same notice as a code and parameters, for the people (the Owner, a user who asked
+	// for a character): each reads it in their language. Empty: Text is shown as it is.
+	Msg i18n.Msg
 	// Screen is the screen that waits for input (NoticeBlockedInput).
 	Screen string
 }

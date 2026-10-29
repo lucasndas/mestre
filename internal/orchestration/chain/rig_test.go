@@ -14,6 +14,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/gitx"
 	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
@@ -207,10 +208,10 @@ type fakeAlerts struct {
 	told []string
 }
 
-func (a *fakeAlerts) Notify(_ context.Context, _, text string) error {
+func (a *fakeAlerts) Notify(_ context.Context, _ string, msg i18n.Msg) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.told = append(a.told, text)
+	a.told = append(a.told, i18n.Render(i18n.PtBR, msg))
 	return nil
 }
 

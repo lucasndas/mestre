@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/privdir"
 	"github.com/mestre-ia/mestre/internal/protocol"
 )
@@ -425,7 +426,7 @@ func (r *Receiver) apply(ctx context.Context, mirror gitx.Repo, b protocol.XferB
 	// write to the replica (docs/orquestracao/mesas.md).
 	if why, err := s.continuationProblem(ctx, mirror, t, r.machine, string(local), string(tower)); err != nil {
 		return err
-	} else if why != "" {
+	} else if !why.IsZero() {
 		s.alert(ctx, t, RefAlert{Ref: ref, Registered: registeredRef, Current: string(tower), Reason: why})
 		return nil // blocked: nothing is applied and nothing is recorded
 	}
@@ -496,24 +497,24 @@ func checkHead(ctx context.Context, repo gitx.Repo, branch string) error {
 
 // continuationProblem says why the commits from..to cannot be taken as a
 // continuation of the branch of the table that a character of the machine
-// made ("" when they can): nobody of the table is alive there to have made
+// made (an empty message when they can): nobody of the table is alive there to have made
 // them, or they are commits of another table (also the ones its Towers sent).
-func (s *Service) continuationProblem(ctx context.Context, mirror gitx.Repo, t Table, machine, from, to string) (string, error) {
+func (s *Service) continuationProblem(ctx context.Context, mirror gitx.Repo, t Table, machine, from, to string) (i18n.Msg, error) {
 	alive, err := s.hasLivingOn(ctx, t, machine)
 	if err != nil {
-		return "", err
+		return i18n.Msg{}, err
 	}
 	if !alive {
-		return "avançou, mas nenhum personagem da mesa está vivo na Torre " + machine + " para ter feito isso", nil
+		return i18n.M("table.ref_no_living_on", "machine", machine), nil
 	}
 	foreign, err := s.foreignCommits(ctx, mirror, t, from, to)
 	if err != nil {
-		return "", err
+		return i18n.Msg{}, err
 	}
 	if foreign != "" {
-		return "recebeu commits que são da mesa " + foreign, nil
+		return i18n.M("table.ref_foreign_commits", "table", foreign), nil
 	}
-	return "", nil
+	return i18n.Msg{}, nil
 }
 
 // divergence is the notice to the table master: the commits of each side that

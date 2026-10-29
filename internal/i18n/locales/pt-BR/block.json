@@ -11,7 +11,7 @@
   "block.head": "{{icon}} {{what}}",
   "block.no_evidence": "\nsem evidência verificada",
   "block.open_panel": "Abrir no painel",
-  "block.owner": "\nResponsável: {{owner}}",
+  "block.owner": "\nDono: {{owner}}",
   "block.owner_an_administrator": "um Administrador",
   "block.owner_an_approver": "um Aprovador",
   "block.owner_the_owner": "o Senhor da Guilda",

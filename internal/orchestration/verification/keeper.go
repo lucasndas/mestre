@@ -12,6 +12,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
@@ -24,7 +25,7 @@ const File = ".mestre/regras/verificacao.yaml"
 type Keeper struct {
 	// Notify tells the Administrators of the workspace; its failure does not fail
 	// the stage (the file is written and a new run would not tell again).
-	Notify func(ctx context.Context, workspace, text string) error
+	Notify func(ctx context.Context, workspace string, msg i18n.Msg) error
 	Log    *slog.Logger
 }
 
@@ -57,9 +58,8 @@ func (k Keeper) Propose(ctx context.Context, workspace, dir string, commands []s
 		return fmt.Errorf("write %s: %w", File, err)
 	}
 	if k.Notify != nil {
-		text := "O Grão-Mestre propôs os comandos de verificação (" + strings.Join(commands, ", ") + ") em " + File +
-			". Nada vale antes da confirmação de um Administrador ou acima."
-		if err := k.Notify(ctx, workspace, text); err != nil && k.Log != nil {
+		msg := i18n.M("verification.proposed", "commands", strings.Join(commands, ", "), "file", File)
+		if err := k.Notify(ctx, workspace, msg); err != nil && k.Log != nil {
 			k.Log.Warn("verification: the Administrators were not told of the proposal", "workspace", workspace, "err", err)
 		}
 	}

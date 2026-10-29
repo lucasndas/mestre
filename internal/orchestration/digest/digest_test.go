@@ -51,6 +51,9 @@ func (s *sender) Send(_ context.Context, m digest.Message) error {
 	return nil
 }
 
+// say is what the person reads in pt-BR.
+func say(m digest.Message) string { return i18n.Render(i18n.PtBR, m.Msg) }
+
 func (s *sender) to(user string) []digest.Message {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -212,7 +215,7 @@ func (w *world) toSlot() {
 func (w *world) ownerTexts() []string {
 	var out []string
 	for _, m := range w.send.to(w.owner.ID) {
-		out = append(out, m.Text)
+		out = append(out, say(m))
 	}
 	return out
 }
@@ -267,7 +270,7 @@ func TestRepeatedApprovalsBecomeASuggestionAcceptedWithThePIN(t *testing.T) {
 	w.tick()
 	var sug *digest.Message
 	for _, m := range w.send.to(w.owner.ID) {
-		if strings.Contains(m.Text, "Sugestão de regra") {
+		if strings.Contains(say(m), "Sugestão de regra") {
 			sug = &m
 		}
 	}
@@ -275,20 +278,20 @@ func TestRepeatedApprovalsBecomeASuggestionAcceptedWithThePIN(t *testing.T) {
 		t.Fatalf("no suggestion for the Owner: %v", w.ownerTexts())
 	}
 	for _, want := range []string{"`npm install *`", "classe dev", "npm install lodash", "npm install react", "npm install left-pad"} {
-		if !strings.Contains(sug.Text, want) {
-			t.Fatalf("the suggestion lacks %q: %q", want, sug.Text)
+		if !strings.Contains(say(*sug), want) {
+			t.Fatalf("the suggestion lacks %q: %q", want, say(*sug))
 		}
 	}
 	keys := map[string]bool{}
 	for _, b := range sug.Buttons[0] {
-		keys[b.Text] = true
+		keys[i18n.Render(i18n.PtBR, b.Msg)] = true
 	}
 	if !keys["Aceitar"] || !keys["Recusar"] || !keys["Ver exemplos"] {
 		t.Fatalf("buttons = %+v", sug.Buttons)
 	}
 	if len(w.send.to(w.admin.ID)) != 0 {
 		for _, m := range w.send.to(w.admin.ID) {
-			if strings.Contains(m.Text, "Sugestão") {
+			if strings.Contains(say(m), "Sugestão") {
 				t.Fatal("a suggestion went to somebody who is not the Owner")
 			}
 		}
@@ -300,8 +303,8 @@ func TestRepeatedApprovalsBecomeASuggestionAcceptedWithThePIN(t *testing.T) {
 	if _, err := w.svc.Accept(w.ctx, list[0].ID, w.admin.ID); err != digest.ErrNotOwner {
 		t.Fatalf("an Administrator accepted: %v", err)
 	}
-	if more, err := w.svc.ExamplesText(w.ctx, list[0].ID); err != nil || !strings.Contains(more, "Libera a mais") {
-		t.Fatalf("examples = %q, %v", more, err)
+	if more, err := w.svc.ExamplesMsg(w.ctx, list[0].ID); err != nil || !strings.Contains(i18n.Render(i18n.PtBR, more), "Libera a mais") {
+		t.Fatalf("examples = %q, %v", i18n.Render(i18n.PtBR, more), err)
 	}
 	pend, err := w.svc.Accept(w.ctx, list[0].ID, w.owner.ID)
 	if err != nil || !pend.PIN {
@@ -541,7 +544,7 @@ func TestTheSampleIsDrawnWithTheSeedSentByTheEngineAndAMistakeRevokes(t *testing
 	// and each message of the sample has the button Pausar autonomia of the table it names
 	pauses := 0
 	for _, m := range w.send.to(w.owner.ID) {
-		if !strings.HasPrefix(m.Text, "Amostra para revisão") {
+		if !strings.HasPrefix(say(m), "Amostra para revisão") {
 			continue
 		}
 		for _, row := range m.Buttons {
@@ -608,6 +611,50 @@ func TestAnAlwaysOfAnAgentIsASuggestionWithItsReason(t *testing.T) {
 	_ = w.db.Reader().QueryRowContext(w.ctx, `SELECT COUNT(*) FROM decrees`).Scan(&n)
 	if n != 0 {
 		t.Fatal("a decree exists before the Aceitar")
+	}
+}
+
+// The sample and the suggestion are a code and parameters: the same message reads in pt-BR and in
+// en, and the reason an agent wrote is the same in both.
+func TestTheSampleAndTheSuggestionReadInBothLanguagesWithTheWordsOfTheAgentIntact(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, 1)
+	w.tick()
+	r := w.decided(chain.LevelMesa, true, "42-login", "dev", "npm install lodash", classes.RiskLow)
+	if err := w.st.AddSuggestion(w.ctx, chain.Suggestion{Request: r.ID, At: w.clk.Now(), Kind: chain.AnswerApproveAlways, By: "agent-mesa", Class: "dev", Action: "npm install lodash", Reason: "são só dependências {{de}} dev"}); err != nil {
+		t.Fatal(err)
+	}
+	w.toSlot()
+	w.tick()
+	var sample, suggestion *digest.Message
+	for _, m := range w.send.to(w.owner.ID) {
+		switch {
+		case strings.HasPrefix(say(m), "Amostra para revisão"):
+			sample = &m
+		case strings.HasPrefix(say(m), "Sugestão de regra"):
+			suggestion = &m
+		}
+	}
+	if sample == nil || suggestion == nil {
+		t.Fatalf("the Owner got %v", w.ownerTexts())
+	}
+	for _, want := range []string{"Sample for review: actions approved by the Table Master (1 of 1 in the period)", "level Table Master", "risk baixo", "table 42-login", "request: npm install lodash"} {
+		if got := i18n.Render(i18n.En, sample.Msg); !strings.Contains(got, want) {
+			t.Errorf("the sample in en lacks %q:\n%s", want, got)
+		}
+	}
+	if got := i18n.Render(i18n.En, suggestion.Msg); !strings.Contains(got, "Rule suggestion: allow `npm install *` for the class dev, on the table 42-login.") || !strings.Contains(got, "(agent text, not verified): são só dependências {{de}} dev") {
+		t.Errorf("the suggestion in en:\n%s", got)
+	}
+	if got := i18n.Render(i18n.PtBR, suggestion.Msg); !strings.Contains(got, "Sugestão de regra: permitir `npm install *` para a classe dev, na mesa 42-login.") || !strings.Contains(got, "(texto do agente, não verificado): são só dependências {{de}} dev") {
+		t.Errorf("the suggestion in pt-BR:\n%s", got)
+	}
+	labels := ""
+	for _, b := range suggestion.Buttons[0] {
+		labels += i18n.Render(i18n.En, b.Msg) + "|"
+	}
+	if labels != "Accept|Decline|See examples|" {
+		t.Errorf("the buttons in en = %q", labels)
 	}
 }
 

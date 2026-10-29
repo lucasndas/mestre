@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
 	"github.com/mestre-ia/mestre/pkg/clock"
@@ -48,7 +49,11 @@ func newPollWorld(t *testing.T, r *rig, workspaces ...string) *pollWorld {
 		Sink:  nullSink{}, Situation: quietSituation{mode: github.ModeAttentive},
 		Watches: func(context.Context) ([]github.Watch, error) { return w.ws, nil },
 		Quota:   r.quota, App: "mestre",
-		Alert: func(_ context.Context, text string) { w.mu.Lock(); w.alerts = append(w.alerts, text); w.mu.Unlock() },
+		Alert: func(_ context.Context, m i18n.Msg) {
+			w.mu.Lock()
+			w.alerts = append(w.alerts, i18n.Render(i18n.PtBR, m))
+			w.mu.Unlock()
+		},
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
@@ -146,13 +147,14 @@ func (s *Service) detect(ctx context.Context, from string) {
 		return
 	}
 	body := "Impasse entre personagens: " + text + ". Cada um espera pelo próximo; nada foi cancelado. Troque um deles, responda por ele ou avise os usuários."
+	msg := i18n.M("character.deadlock", "ring", text)
 	to := characters.Recipient{Kind: characters.ToTableMaster}
 	table := tables[0]
 	if len(tables) > 1 {
 		to, table = characters.Recipient{Kind: characters.ToGrandMaster}, ""
 	}
 	for _, rcpt := range []characters.Recipient{to, {Kind: characters.ToOwner}} {
-		if err := s.o.Notifier.Notify(ctx, characters.Notice{Kind: characters.NoticeDeadlock, To: rcpt, Workspace: workspace, Table: table, Text: body}); err != nil {
+		if err := s.o.Notifier.Notify(ctx, characters.Notice{Kind: characters.NoticeDeadlock, To: rcpt, Workspace: workspace, Table: table, Text: body, Msg: msg}); err != nil {
 			s.log.Warn("waits: the warning of a deadlock was not given", "err", err)
 		}
 	}

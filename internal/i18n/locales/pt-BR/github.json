@@ -5,6 +5,7 @@
   "github.app_link_expired": "O link para criar o App \"{{app}}\" venceu. Peça outro no painel (Apps do GitHub) ou ao Grão-Mestre; enquanto isso a classe segue com o App \"Mestre\".",
   "github.app_not_used": "O App \"{{app}}\" não será usado: {{why}}. Se ele existe no GitHub, exclua-o em https://github.com/settings/apps.",
   "github.app_ready": "O App \"{{app}}\" está pronto.",
+  "github.app_requested": "O Grão-Mestre pediu o App {{app}}. Abra o link no seu navegador, entre no painel como Senhor da Guilda e clique em \"Criar no GitHub\" (vale até {{until}}): {{url}}",
   "github.belongs_to_other_table": "#{{number}} pertence a outra mesa; peça ao Grão-Mestre.",
   "github.block_unknown": "O bloco \"{{block}}\" não existe; os blocos são {{blocks}}.",
   "github.force_master_only": "O push forçado é só do Mestre da mesa.",
@@ -26,5 +27,6 @@
   "github.pr_not_of_table": "O PR #{{number}} não é da mesa {{table}}; peça ao Grão-Mestre.",
   "github.pr_of_table": "O PR é da mesa.",
   "github.push_to_main": "O envio na branch principal não é feito: a mesa trabalha na sua branch.",
+  "github.quota_exhausted": "O limite de requisições do GitHub acabou: as consultas de todas as campanhas voltam às {{at}} UTC.",
   "github.target_kind": "O alvo é uma issue ou um PR; um comentário vale pelo que o contém."
 }

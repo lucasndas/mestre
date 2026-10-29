@@ -127,12 +127,12 @@ func policyFileFor(layout workspaces.Layout, tell ownerTeller, log *slog.Logger,
 // chainOwnerAlerts is chain.Alerts to the Owner: the people the chain tells.
 type chainOwnerAlerts struct{ tell ownerTeller }
 
-func (a chainOwnerAlerts) Notify(ctx context.Context, workspace, text string) error {
+func (a chainOwnerAlerts) Notify(ctx context.Context, workspace string, msg i18n.Msg) error {
 	if t, ok := a.tell.(workspaceTeller); ok && workspace != "" {
-		t.OwnerWorkspaceAlert(ctx, workspace, i18n.Text(text)) // the header of the message is the workspace's
+		t.OwnerWorkspaceAlert(ctx, workspace, msg) // the header of the message is the workspace's
 		return nil
 	}
-	a.tell.OwnerAlert(ctx, i18n.M("bot.workspace_prefixed", "workspace", workspace, "text", i18n.Text(text)))
+	a.tell.OwnerAlert(ctx, i18n.M("bot.workspace_prefixed", "workspace", workspace, "text", msg))
 	return nil
 }
 

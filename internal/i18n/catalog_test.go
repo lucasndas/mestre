@@ -269,8 +269,17 @@ func TestCatalogsOfTheEngineKeepTheVocabulary(t *testing.T) {
 	ptBad := regexp.MustCompile(`\b(Workspaces?|workspaces?|Dono)\b`)
 	enBad := regexp.MustCompile(`\b(Workspaces?|workspaces?|Owner)\b`)
 	pt, en := readAll(t)
+	// the one exception: the label of the field of the owner of a request that blocks, as the
+	// panel allows it too ("Dono: {{name}}"; in English "Owner: {{name}}")
+	label := func(text string) bool {
+		t := strings.TrimSpace(text)
+		return t == "Dono: {{owner}}" || t == "Owner: {{owner}}"
+	}
 	for f, m := range pt {
 		for k, text := range m {
+			if label(text) {
+				continue
+			}
 			if loc := ptBad.FindString(placeholder.ReplaceAllString(text, "")); loc != "" {
 				t.Errorf("%s: %q says %q in Portuguese (the campaign, the Senhor da Guilda): %q", f, k, loc, text)
 			}
@@ -278,6 +287,9 @@ func TestCatalogsOfTheEngineKeepTheVocabulary(t *testing.T) {
 	}
 	for f, m := range en {
 		for k, text := range m {
+			if label(text) {
+				continue
+			}
 			if loc := enBad.FindString(placeholder.ReplaceAllString(text, "")); loc != "" {
 				t.Errorf("%s: %q says %q in English (the campaign, the Guildmaster): %q", f, k, loc, text)
 			}

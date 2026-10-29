@@ -11,6 +11,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/store"
@@ -200,7 +201,7 @@ func TestTheAppCreatorMakesTheLinkAndTellsOnlyTheOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	var told []string
-	cr := appCreator{c: c, tell: func(_ context.Context, text string) { told = append(told, text) }}
+	cr := appCreator{c: c, tell: func(_ context.Context, m i18n.Msg) { told = append(told, i18n.Render(i18n.PtBR, m)) }}
 	if why := cr.Available(ctx); why != "" {
 		t.Fatalf("available = %q", why)
 	}

@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // The numbers of the login of the panel (docs/painel/login.md).
@@ -39,17 +41,17 @@ const (
 // The errors of the login.
 var (
 	// ErrSetupDone: the Guild already has a user, so there is no setup.
-	ErrSetupDone = errors.New("users: the Guild already has users: there is no setup")
+	ErrSetupDone = i18n.Err("user.err_setup_done")
 	// ErrBadPassword: the password has fewer than PasswordMin characters.
-	ErrBadPassword = errors.New("users: the password is too short")
+	ErrBadPassword = i18n.Err("user.err_bad_password")
 	// ErrBadLogin: the login name is not a login name.
-	ErrBadLogin = errors.New("users: not a login name")
+	ErrBadLogin = i18n.Err("user.err_bad_login")
 	// ErrLoginTaken: the login name belongs to another user.
-	ErrLoginTaken = errors.New("users: the login name belongs to another user")
+	ErrLoginTaken = i18n.Err("user.err_login_taken")
 	// ErrBadPINFormat: the PIN is not 6 to 12 digits.
-	ErrBadPINFormat = errors.New("users: the PIN has 6 to 12 digits")
+	ErrBadPINFormat = i18n.Err("user.err_bad_pin_format")
 	// ErrWrongPassword: the current password is not the one given.
-	ErrWrongPassword = errors.New("users: wrong password")
+	ErrWrongPassword = i18n.Err("user.err_wrong_password")
 )
 
 var loginName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{2,31}$`)

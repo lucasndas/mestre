@@ -5,6 +5,7 @@
   "github.app_link_expired": "The link to create the App \"{{app}}\" expired. Ask for another in the panel (GitHub Apps) or from the Grand Master; meanwhile the class keeps the App \"Mestre\".",
   "github.app_not_used": "The App \"{{app}}\" will not be used: {{why}}. If it exists on GitHub, delete it at https://github.com/settings/apps.",
   "github.app_ready": "The App \"{{app}}\" is ready.",
+  "github.app_requested": "The Grand Master asked for the App {{app}}. Open the link in your browser, sign in to the panel as Guildmaster and click \"Create on GitHub\" (valid until {{until}}): {{url}}",
   "github.belongs_to_other_table": "#{{number}} belongs to another table; ask the Grand Master.",
   "github.block_unknown": "The block \"{{block}}\" does not exist; the blocks are {{blocks}}.",
   "github.force_master_only": "The force push is only for the Mestre of the table.",
@@ -26,5 +27,6 @@
   "github.pr_not_of_table": "The PR #{{number}} is not of the table {{table}}; ask the Grand Master.",
   "github.pr_of_table": "The PR is the table's.",
   "github.push_to_main": "Pushing to the main branch is not done: the table works on its own branch.",
+  "github.quota_exhausted": "The GitHub request limit is over: the queries of all campaigns resume at {{at}} UTC.",
   "github.target_kind": "The target is an issue or a PR; a comment counts for what contains it."
 }

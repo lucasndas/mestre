@@ -1,0 +1,4 @@
+{
+  "inbox.gm_unavailable": "O Grão-Mestre está indisponível: {{reason}}. A sua mensagem ficou na fila e segue quando ele voltar.",
+  "inbox.screen": "\n\n{{screen}}"
+}

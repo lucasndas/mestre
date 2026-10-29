@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 )
 
@@ -151,6 +152,19 @@ func levelName(m QueueMetric) string {
 	return "pessoas"
 }
 
+// levelMsg is levelName as a message, said in the language of who reads.
+func levelMsg(m QueueMetric) i18n.Msg {
+	switch m.Level {
+	case LevelMesa:
+		return i18n.M("chain.who_mesa", "table", orDash(m.Table))
+	case LevelAgent:
+		return i18n.M("chain.who_agent", "table", orDash(m.Table))
+	case LevelGrandMaster:
+		return i18n.M("chain.who_gm")
+	}
+	return i18n.M("chain.who_people")
+}
+
 // breach says a queue has accumulated: more open requests than the limit, or
 // the oldest past the factor times the deadline of the level.
 func breach(m QueueMetric, st Settings) bool {
@@ -234,8 +248,10 @@ func (s *Supervisor) setAlert(ctx context.Context, k queueKey, on bool) error {
 // Owner for the people.
 func (s *Supervisor) warn(ctx context.Context, m QueueMetric) {
 	text := fmt.Sprintf("Fila acumulando: %s tem %d pedidos de aprovação abertos e o mais antigo espera há %s.", levelName(m), m.Open, short(m.Oldest))
+	msg := i18n.M("chain.queue_accumulating", "who", levelMsg(m), "open", m.Open, "oldest", short(m.Oldest))
 	switch m.Level {
 	case LevelAgent, LevelMesa:
+		msg = i18n.Concat(msg, i18n.M("chain.queue_hint", "table", fmt.Sprintf("%q", m.Table)))
 		text += fmt.Sprintf("\nSe os pedidos médios da mesa não deveriam ficar com o Mestre da mesa, pause a autonomia dela: mestre approval autonomy pause --table %q --reason \"<motivo>\".", m.Table)
 		told := false
 		if gm, ok, err := s.o.Characters.GrandMaster(ctx, m.Workspace); err == nil && ok {
@@ -248,19 +264,19 @@ func (s *Supervisor) warn(ctx context.Context, m QueueMetric) {
 		// the people who may pause it get the same warning with the button
 		// **Pausar autonomia** (the Telegram; the panel, M6)
 		if s.o.QueuePeople != nil {
-			if err := s.o.QueuePeople.QueueAccumulating(ctx, QueueNotice{Workspace: m.Workspace, Table: m.Table, Text: text}); err != nil {
+			if err := s.o.QueuePeople.QueueAccumulating(ctx, QueueNotice{Workspace: m.Workspace, Table: m.Table, Text: text, Msg: msg}); err != nil {
 				s.log.Warn("supervision: the people were not warned of the queue", "table", m.Table, "err", err)
 			} else {
 				told = true
 			}
 		}
 		if !told {
-			s.tellPeople(ctx, m.Workspace, "Administradores e Senhor da Guilda: "+text)
+			s.tellPeople(ctx, m.Workspace, i18n.M("chain.to_admins", "text", msg))
 		}
 	case LevelGrandMaster:
-		s.tellPeople(ctx, m.Workspace, "Administradores e Senhor da Guilda: "+text)
+		s.tellPeople(ctx, m.Workspace, i18n.M("chain.to_admins", "text", msg))
 	default:
-		s.tellPeople(ctx, m.Workspace, "Senhor da Guilda: "+text)
+		s.tellPeople(ctx, m.Workspace, i18n.M("chain.to_owner", "text", msg))
 	}
 }
 
@@ -268,7 +284,10 @@ func (s *Supervisor) warn(ctx context.Context, m QueueMetric) {
 // people who may pause the autonomy of the table (an Approver or above).
 type QueueNotice struct {
 	Workspace, Table string
-	Text             string
+	// Text is the warning in pt-BR (what the Grand Master reads); Msg is the same as a message, said in
+	// the language of each person.
+	Text string
+	Msg  i18n.Msg
 }
 
 // QueuePeople delivers that warning with the button **Pausar autonomia**.
@@ -276,11 +295,11 @@ type QueuePeople interface {
 	QueueAccumulating(ctx context.Context, n QueueNotice) error
 }
 
-func (s *Supervisor) tellPeople(ctx context.Context, workspace, text string) {
+func (s *Supervisor) tellPeople(ctx context.Context, workspace string, msg i18n.Msg) {
 	if s.o.Alerts == nil {
 		return
 	}
-	if err := s.o.Alerts.Notify(ctx, workspace, text); err != nil {
+	if err := s.o.Alerts.Notify(ctx, workspace, msg); err != nil {
 		s.log.Warn("supervision: the people were not warned", "workspace", workspace, "err", err)
 	}
 }

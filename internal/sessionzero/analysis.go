@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 	"github.com/mestre-ia/mestre/internal/safefile"
 )
@@ -87,12 +88,12 @@ func (s *Service) runAnalysis(ctx context.Context, w workspaces.Workspace) error
 }
 
 func (s *Service) warnClaudeMD(ctx context.Context, slug string) error {
-	text := "O projeto tem um CLAUDE.md (ou CLAUDE.local.md): os agentes Claude vão ler esse arquivo no lugar do AGENTS.md, " +
-		"que os agentes Codex e Antigravity leem. Sugestão: unificar tudo no AGENTS.md."
-	if err := s.o.Users.Notify(ctx, slug, Notice{Kind: "claude_md", Text: text}); err != nil {
+	msg := i18n.M("sessionzero.claude_md")
+	if err := s.o.Users.Notify(ctx, slug, Notice{Kind: "claude_md", Msg: msg}); err != nil {
 		return err
 	}
-	if err := s.o.Checklist.Raise(ctx, ChecklistItem{ID: checklistClaudeMD, Workspace: slug, Text: text}); err != nil {
+	// the item of the checklist is kept as a text, in pt-BR
+	if err := s.o.Checklist.Raise(ctx, ChecklistItem{ID: checklistClaudeMD, Workspace: slug, Text: i18n.Render(i18n.PtBR, msg)}); err != nil {
 		return err
 	}
 	return s.store.ClaudeMDWarned(ctx, slug, s.o.Clock.Now())
@@ -105,8 +106,11 @@ func (s *Service) keepAgentsMD(ctx context.Context, slug string, st State, a Ana
 		return nil
 	}
 	if len(a.Suggestions) > 0 {
-		text := "Sugestões para o AGENTS.md do projeto (o Mestre não o altera; vocês aplicam ou não):\n- " + strings.Join(a.Suggestions, "\n- ")
-		if err := s.o.Users.Notify(ctx, slug, Notice{Kind: "agents_md_suggestions", Text: text}); err != nil {
+		parts := []i18n.Msg{i18n.M("sessionzero.agents_md_suggestions")}
+		for _, sg := range a.Suggestions {
+			parts = append(parts, i18n.M("sessionzero.suggestion_line", "text", sg)) // what the analyst agent wrote
+		}
+		if err := s.o.Users.Notify(ctx, slug, Notice{Kind: "agents_md_suggestions", Msg: i18n.Concat(parts...)}); err != nil {
 			return code("notify_failed", err)
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // Git is the git the workspaces need: gitx.Real, or the fake of
@@ -61,8 +62,9 @@ const (
 type Alert struct {
 	Workspace string
 	Kind      AlertKind
-	// Detail is the text for the users, with the reason.
-	Detail string
+	// Msg is the alert for the users, with the reason, as a code and parameters: each
+	// person reads it in their language. The reason of a program (git) is a parameter.
+	Msg i18n.Msg
 	// Since is when the problem began.
 	Since time.Time
 }

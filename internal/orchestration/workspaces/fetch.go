@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/safefile"
 )
 
@@ -315,7 +316,7 @@ func (s *Service) moved(ctx context.Context, w Workspace, now time.Time, cause e
 		return
 	}
 	err := s.o.Alerts.Operational(ctx, Alert{Workspace: w.Slug, Kind: AlertWorktreeMoved, Since: now,
-		Detail: fmt.Sprintf("O clone principal da campanha %s não aponta mais para o espelho do Mestre; o motor não o usa até alguém conferir. %v", w.Slug, cause)})
+		Msg: i18n.M("workspace.worktree_moved", "workspace", w.Slug, "cause", cause.Error())})
 	if err != nil {
 		s.log.Error("workspace alert", "workspace", w.Slug, "kind", AlertWorktreeMoved, "err", err)
 		return
@@ -338,8 +339,7 @@ func (s *Service) alerts(ctx context.Context, slug string) {
 	now := s.o.Clock.Now()
 	if due, _ := s.fetchAlertDue(w, now); due {
 		err := s.o.Alerts.Operational(ctx, Alert{Workspace: w.Slug, Kind: AlertFetchFailing, Since: w.Fetch.FailingSince,
-			Detail: fmt.Sprintf("O espelho da campanha %s não consegue buscar o GitHub desde %s: %s. As mesas seguem trabalhando localmente.",
-				w.Slug, w.Fetch.FailingSince.Format(time.RFC3339), w.Fetch.Error)})
+			Msg: i18n.M("workspace.fetch_failing", "workspace", w.Slug, "since", w.Fetch.FailingSince, "error", w.Fetch.Error)})
 		if err == nil {
 			err = s.store.FetchAlerted(ctx, w.Slug, now)
 		}

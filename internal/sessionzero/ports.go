@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
@@ -45,8 +46,9 @@ type Notice struct {
 	// Kind says what it is about, for the panel to group: "apps_missing",
 	// "claude_md", "agents_md_suggestions", "mestre_dir", "provider_files".
 	Kind string
-	// Text is the text for the users, in Portuguese.
-	Text string
+	// Msg is the message for the users, as a code and parameters: each person reads it in their
+	// language. What an agent wrote (a suggestion) and the error of a program are parameters.
+	Msg i18n.Msg
 }
 
 // Users reaches the people of the workspace (docs/telegram/bot.md,

@@ -77,7 +77,7 @@ func (r *stdRun) newChat() (*panelchat.Service, error) {
 		},
 		Locked:     func(ctx context.Context) bool { return r.lock != nil && r.lock.Locked(ctx) },
 		Mask:       r.env.Masker.Mask,
-		AlertOwner: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, i18n.Text(text)) },
+		AlertOwner: func(ctx context.Context, msg i18n.Msg) { r.alert.OwnerAlert(ctx, msg) },
 		Discard: func(ctx context.Context, workspace string, st attachments.Stored) error {
 			f := r.files.Load()
 			if f == nil {
@@ -158,9 +158,9 @@ type progressFanout struct {
 var _ progress.Sender = progressFanout{}
 
 // Send implements progress.Sender.
-func (p progressFanout) Send(ctx context.Context, userID, workspace, text string) error {
-	if err := p.chat.SetProgress(ctx, workspace, i18n.Text(text)); err != nil && p.log != nil {
+func (p progressFanout) Send(ctx context.Context, userID, workspace string, msg i18n.Msg) error {
+	if err := p.chat.SetProgress(ctx, workspace, msg); err != nil && p.log != nil {
 		p.log("app: the card of progress of the panel was not kept", err)
 	}
-	return p.bot.Send(ctx, userID, workspace, text)
+	return p.bot.Send(ctx, userID, workspace, msg)
 }

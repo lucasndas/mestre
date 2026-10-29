@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 	"github.com/mestre-ia/mestre/internal/sessionzero"
 )
@@ -272,7 +273,7 @@ func TestRealClaudeMDWarnsTheUsersAndTheChecklistShowsIt(t *testing.T) {
 	var text string
 	for _, n := range e.f.notices {
 		if n.Kind == "claude_md" {
-			text = n.Text
+			text = i18n.Render(i18n.PtBR, n.Msg)
 		}
 	}
 	if !strings.Contains(text, "CLAUDE.md") || !strings.Contains(text, "AGENTS.md") || !strings.Contains(text, "Claude") {

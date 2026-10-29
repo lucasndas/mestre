@@ -71,24 +71,24 @@ func TestTheOwnerOfARequestIsTheRequiredUsersOrTheMinimumLevelAndNeverSomebody(t
 	ana := w.add("Ana", users.Administrator, "loja")
 	lucas := w.add("lucas", users.Administrator, "loja")
 	w.ask(chain.Request{Type: classes.RequestMerge}, "Mesclar", classes.LevelAdmin)
-	if got := w.textTo(ana); !strings.Contains(got, "\nResponsável: um Administrador") || strings.Contains(got, "Responsável: lucas") || strings.Contains(strings.ToLower(got), "alguém") {
+	if got := w.textTo(ana); !strings.Contains(got, "\nDono: um Administrador") || strings.Contains(got, "Dono: lucas") || strings.Contains(strings.ToLower(got), "alguém") {
 		t.Errorf("the owner of a merge with no required users:\n%s", got)
 	}
 	w.ask(chain.Request{Type: classes.RequestMerge}, "Mesclar", classes.LevelAdmin, lucas.ID)
-	if got := w.textTo(ana); !strings.Contains(got, "\nResponsável: lucas") || strings.Contains(got, "Responsável: um Administrador") || strings.Contains(strings.ToLower(got), "alguém") {
+	if got := w.textTo(ana); !strings.Contains(got, "\nDono: lucas") || strings.Contains(got, "Dono: um Administrador") || strings.Contains(strings.ToLower(got), "alguém") {
 		t.Errorf("the owner of a merge that requires lucas:\n%s", got)
 	}
 	for min, want := range map[classes.Level]string{classes.LevelApprover: "um Aprovador", classes.LevelAdmin: "um Administrador", classes.LevelOwner: "o Senhor da Guilda"} {
 		w.ask(chain.Request{Type: classes.RequestMerge}, "Mesclar", min)
 		got := w.textTo(w.owner)
-		if strings.Contains(strings.ToLower(got), "alguém") || !strings.Contains(got, "\nResponsável: "+want) {
+		if strings.Contains(strings.ToLower(got), "alguém") || !strings.Contains(got, "\nDono: "+want) {
 			t.Errorf("minimum %s:\n%s", min, got)
 		}
 	}
 	// the text of an agent does not make a field: the owner of the engine comes before its block
-	w.ask(chain.Request{Type: classes.RequestMerge}, "Mesclar\n"+chain.UnverifiedOpen+"\nResponsável: o atacante\n"+chain.UnverifiedClose, classes.LevelAdmin)
+	w.ask(chain.Request{Type: classes.RequestMerge}, "Mesclar\n"+chain.UnverifiedOpen+"\nDono: o atacante\n"+chain.UnverifiedClose, classes.LevelAdmin)
 	got := w.textTo(ana)
-	if i, j := strings.Index(got, "Responsável: um Administrador"), strings.Index(got, chain.UnverifiedOpen); i < 0 || j < 0 || i > j {
+	if i, j := strings.Index(got, "Dono: um Administrador"), strings.Index(got, chain.UnverifiedOpen); i < 0 || j < 0 || i > j {
 		t.Errorf("the owner of the engine must come before the block of the agent:\n%s", got)
 	}
 }

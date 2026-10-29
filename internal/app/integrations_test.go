@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/logging"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
@@ -348,7 +349,7 @@ func TestAnOperationalAlertReachesTheOwnerAndTheAdministratorsOfTheWorkspaceByTh
 	defer run.Close()
 	var o OrchestrationOptions
 	run.Extend(&o)
-	al := workspaces.Alert{Workspace: "loja", Kind: workspaces.AlertFetchFailing, Detail: "o espelho não atualiza há 10 min"}
+	al := workspaces.Alert{Workspace: "loja", Kind: workspaces.AlertFetchFailing, Msg: i18n.Text("o espelho não atualiza há 10 min")}
 	if err := o.Alerts.Operational(i.ctx, al); err != nil {
 		t.Fatalf("with the bot down: %v", err) // it waits for the bot, once: the caller sends nothing again
 	}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 	"github.com/mestre-ia/mestre/internal/providers"
 )
@@ -138,7 +139,7 @@ func (s *Service) after(ctx context.Context, c Character, from State) error {
 		if c.Kind == KindTerminal {
 			return s.o.Notifier.Notify(ctx, Notice{Kind: NoticeNotResumed, To: Recipient{Kind: ToCreator}, Workspace: c.Workspace, Table: c.Table,
 				Character: c.ID, Name: c.Name, Creator: c.CreatedBy,
-				Text: fmt.Sprintf("O terminal %s foi interrompido; o motor não reexecuta comandos sozinho.", c.Name)})
+				Text: fmt.Sprintf("O terminal %s foi interrompido; o motor não reexecuta comandos sozinho.", c.Name), Msg: i18n.M("character.not_resumed", "name", c.Name)})
 		}
 	case Stopped:
 		s.mu.Lock()
@@ -444,7 +445,7 @@ func (s *Service) runScheduled(ctx context.Context, c Character) error {
 		return nil
 	}
 	return s.o.Notifier.Notify(ctx, Notice{Kind: NoticeDismissed, To: Recipient{Kind: ToCreator}, Workspace: c.Workspace, Table: c.Table,
-		Character: c.ID, Name: c.Name, Creator: by, Text: fmt.Sprintf("%s foi encerrado, como pedido.", c.Name)})
+		Character: c.ID, Name: c.Name, Creator: by, Text: fmt.Sprintf("%s foi encerrado, como pedido.", c.Name), Msg: i18n.M("character.dismissed", "name", c.Name)})
 }
 
 // refuse records that the engine did not end a pinned character, once for

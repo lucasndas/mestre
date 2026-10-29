@@ -14,6 +14,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/cli"
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/providers"
 	"github.com/mestre-ia/mestre/internal/safefile"
 )
@@ -124,7 +125,7 @@ func (w Worktree) Ensure(ctx context.Context, req WorktreeRequest) (WorktreeRepo
 		}
 		files, err := ad.HookFiles(providers.HookFilesRequest{OS: w.OS, Root: req.Dir, Binary: w.Binary})
 		if err != nil {
-			rep.Problems = append(rep.Problems, Problem{Path: string(id), Reason: "não foi possível montar os hooks: " + err.Error()})
+			rep.Problems = append(rep.Problems, Problem{Path: string(id), Reason: i18n.M("sessionzero.hooks_failed", "error", err.Error())})
 			continue
 		}
 		for _, f := range files {
@@ -136,7 +137,7 @@ func (w Worktree) Ensure(ctx context.Context, req WorktreeRequest) (WorktreeRepo
 			existed, changed, err := mergeFile(f)
 			switch {
 			case err != nil:
-				rep.Problems = append(rep.Problems, Problem{Path: rel, Reason: err.Error()})
+				rep.Problems = append(rep.Problems, Problem{Path: rel, Reason: i18n.OfError(err)})
 			default:
 				created[rel] = !existed
 				if changed {
@@ -154,7 +155,7 @@ func (w Worktree) Ensure(ctx context.Context, req WorktreeRequest) (WorktreeRepo
 			removed, err := removeSkill(filepath.Join(req.Dir, filepath.FromSlash(rel)))
 			switch {
 			case err != nil:
-				rep.Problems = append(rep.Problems, Problem{Path: rel, Reason: err.Error()})
+				rep.Problems = append(rep.Problems, Problem{Path: rel, Reason: i18n.OfError(err)})
 			case removed:
 				rep.Removed = append(rep.Removed, rel)
 			}
@@ -163,7 +164,7 @@ func (w Worktree) Ensure(ctx context.Context, req WorktreeRequest) (WorktreeRepo
 		changed, err := writeSkill(filepath.Join(req.Dir, filepath.FromSlash(rel)), skill)
 		switch {
 		case err != nil:
-			rep.Problems = append(rep.Problems, Problem{Path: rel, Reason: err.Error()})
+			rep.Problems = append(rep.Problems, Problem{Path: rel, Reason: i18n.OfError(err)})
 		case changed:
 			rep.Written = append(rep.Written, rel)
 		}

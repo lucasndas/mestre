@@ -7,11 +7,11 @@ package i18n
 
 import (
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"path"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -265,17 +265,53 @@ func interpolate(cats map[string]map[string]string, lang, text string, params ma
 	return b.String()
 }
 
-// instant is the shape of an instant in RFC 3339 with a zone: a time.Time that went through JSON.
-var instant = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`)
+// InstantKey is the mark of an instant in JSON: {"instant": "<RFC 3339>"}. A text is never
+// taken for an instant, whatever its shape.
+const InstantKey = "instant"
+
+// WireParams are the parameters as they go in JSON: every time.Time is the object
+// {"instant": "<RFC 3339>"} (also inside a list); the rest stays as it is. The result is a copy.
+func WireParams(p map[string]any) map[string]any {
+	if p == nil {
+		return nil
+	}
+	out := make(map[string]any, len(p))
+	for k, v := range p {
+		out[k] = wireValue(v)
+	}
+	return out
+}
+
+func wireValue(v any) any {
+	switch x := v.(type) {
+	case time.Time:
+		return map[string]any{InstantKey: x.Format(time.RFC3339Nano)}
+	case *time.Time:
+		if x != nil {
+			return map[string]any{InstantKey: x.Format(time.RFC3339Nano)}
+		}
+	case []any:
+		out := make([]any, len(x))
+		for i, e := range x {
+			out[i] = wireValue(e)
+		}
+		return out
+	}
+	return v
+}
+
+// MarshalJSON writes the message with its instants marked (see InstantKey).
+func (m Msg) MarshalJSON() ([]byte, error) {
+	type plain struct {
+		Code   string         `json:"code"`
+		Params map[string]any `json:"params,omitempty"`
+	}
+	return json.Marshal(plain{Code: m.Code, Params: WireParams(m.Params)})
+}
 
 func format(cats map[string]map[string]string, lang string, v any) string {
 	switch x := v.(type) {
 	case string:
-		if instant.MatchString(x) { // an instant that went through JSON
-			if t, err := time.Parse(time.RFC3339Nano, x); err == nil {
-				return Moment(lang, t)
-			}
-		}
 		return x
 	case Msg:
 		return render(cats, lang, x)
@@ -291,7 +327,12 @@ func format(cats map[string]map[string]string, lang string, v any) string {
 			return Moment(lang, *x)
 		}
 		return ""
-	case map[string]any: // a Msg that went through JSON
+	case map[string]any: // an instant or a Msg that went through JSON
+		if raw, ok := x[InstantKey].(string); ok {
+			if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+				return Moment(lang, t)
+			}
+		}
 		if code, ok := x["code"].(string); ok {
 			p, _ := x["params"].(map[string]any)
 			return render(cats, lang, Msg{Code: code, Params: p})

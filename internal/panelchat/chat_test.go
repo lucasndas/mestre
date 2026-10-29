@@ -141,10 +141,10 @@ func newRig(t *testing.T, mod ...func(*panelchat.Options)) *rig {
 			defer r.mu.Unlock()
 			r.audited = append(r.audited, user+":"+how)
 		},
-		AlertOwner: func(_ context.Context, text string) {
+		AlertOwner: func(_ context.Context, msg i18n.Msg) {
 			r.mu.Lock()
 			defer r.mu.Unlock()
-			r.alerts = append(r.alerts, text)
+			r.alerts = append(r.alerts, i18n.Render(i18n.PtBR, msg))
 		},
 		Discard: files.Discard,
 	}

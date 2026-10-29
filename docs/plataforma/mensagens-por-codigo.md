@@ -1,6 +1,6 @@
 # Mensagens por código
 
-> **Assunto:** o motor diz o motivo de uma recusa e o conteúdo de um aviso como código e parâmetros, os catálogos de mensagens do Go em pt-BR e en, a paridade de chaves na suíte rápida, os textos guardados no banco e o formato de datas e números · **Componente:** Motor · **Atualizado:** 2026-10-28
+> **Assunto:** o motor diz o motivo de uma recusa e o conteúdo de um aviso como código e parâmetros, os catálogos de mensagens do Go em pt-BR e en, a paridade de chaves na suíte rápida, os textos guardados no banco e o formato de datas e números · **Componente:** Motor · **Atualizado:** 2026-10-29
 
 ## Objetivo
 
@@ -11,7 +11,7 @@ Tirar do motor as frases prontas para pessoa. O motor diz *o quê* (um código e
 ### A mensagem
 
 - Uma mensagem é `i18n.Msg{Code, Params}`: um **código** estável e um mapa de **parâmetros**. O código é `<área>.<motivo>` em inglês e `snake_case` (`decree.scope_required`, `table.already_closed`, `approval.answered_by`); os códigos da API do painel que já existem (`invalid_code`, `pin_required`…, [`internal/panel/errors.go`](../../internal/panel/errors.go)) ficam como estão, sem área.
-- Um parâmetro é texto, número inteiro, instante (`time.Time`, que sai em RFC 3339 no JSON e o cliente formata) ou **outra mensagem** (`Msg`), traduzida antes no mesmo idioma: o nome do nível, o rótulo de uma resposta, "o Senhor da Guilda" ou "um Administrador".
+- Um parâmetro é texto, número inteiro, instante (`time.Time`, que sai no JSON como o objeto `{"instant": "<RFC 3339>"}`, que o cliente formata; um texto nunca vira data, qualquer que seja a forma dele) ou **outra mensagem** (`Msg`), traduzida antes no mesmo idioma: o nome do nível, o rótulo de uma resposta, "o Senhor da Guilda" ou "um Administrador".
 - Texto que **não se traduz** (o que um agente ou uma pessoa escreveu, o nome de uma campanha, mesa, máquina ou usuário, um erro de programa externo) entra como parâmetro de texto, já mascarado ([mascaramento](../arquitetura/seguranca.md#mascaramento-em-logs)), e a moldura em volta é que vem do catálogo ("— texto do agente, não verificado —").
 - As quatro recusas de hoje, `panel.Refusal`, `decrees.Refusal`, `chain.Refusal` e `github.Refusal`, passam a levar `Msg` no lugar de `Message`; `fmt.Sprintf` de frase para pessoa sai do motor. Cada recusa guarda também o código do *tipo* (`level`, `human_required`…) que o motor e a CLI usam para decidir o que fazer; o código da *mensagem* é o que a pessoa lê. O `Error()` de uma recusa é só o código e os parâmetros, nunca traduzido; para o que fica em auditoria e log, `chain.Refusal.Text()` dá a frase em inglês. O que vai ao log continua em inglês e é escrito à parte.
 - Um nível (`users.Level`), um estado e um nível da cadeia (`chain.Level`) são mensagens também (`level.owner`, `approval.state_open`, `approval.level_mesa`): entram como parâmetro e saem no idioma de quem lê.
@@ -21,7 +21,7 @@ Tirar do motor as frases prontas para pessoa. O motor diz *o quê* (um código e
 ### Os catálogos
 
 - Ficam em `internal/i18n/locales/<idioma>/<área>.json` (`pt-BR` e `en`), embutidos no binário com `go:embed`. O formato é o JSON do i18next, o mesmo do painel: `{{nome}}` para parâmetro e os sufixos `_one` e `_other` para plural pelo parâmetro `count`.
-- Os arquivos são por área, e a chave de um arquivo começa pelo nome dele (`decree.json` guarda `decree.*`). As áreas de hoje: `api` (o `message` dos erros da API), `approval`, `canvas`, `cli`, `decree`, `github`, `guild`, `level`, `person` (os textos da CLI de pessoa, [idioma por canal](idioma-por-canal.md#cli)), `table` e `workspace`.
+- Os arquivos são por área, e a chave de um arquivo começa pelo nome dele (`decree.json` guarda `decree.*`). As áreas de hoje: `api` (o `message` dos erros da API), `approval`, `bot`, `canvas`, `chain`, `character`, `chat`, `cli`, `decree`, `digest`, `github`, `guild`, `inbox`, `level`, `person` (os textos da CLI de pessoa, [idioma por canal](idioma-por-canal.md#cli)), `progress`, `sessionzero`, `table`, `usage`, `vault`, `verification` e `workspace`, entre outras.
 - O pacote `internal/i18n` traduz (`Render(lang, msg)`), sem biblioteca de fora: o formato é pequeno e já fixado pelo painel, e uma biblioteca Go de i18n usaria outro formato e dobraria a manutenção. A regra de plural segue a do `Intl.PluralRules` do navegador: em pt-BR, 0 e 1 são `_one`; em en, só 1 é `_one`.
 - `Match(tag)` dá en para uma tag que começa com "en" e pt-BR para o resto; `FromAcceptLanguage` olha só o primeiro idioma do cabeçalho. Um parâmetro faltando fica como `{{nome}}`, e uma lista sai separada por vírgula. Idioma desconhecido ou vazio usa pt-BR. Um código sem texto (que a paridade impede) sai como o próprio código, nunca como frase de outro idioma.
 - **Painel:** os textos que o painel mostra e que nascem no motor (recusas, avisos do sino, cartões de bloqueio e de aprovação) são gerados do catálogo do Go para `web/src/gen/messages.ts` por `go generate ./internal/i18n`, como o glossário e os tipos da API. As áreas `api` e `person` ficam de fora do gerado: o painel traduz os erros da API pelo código, no catálogo `errors` dele, e o `message` de `api` serve a quem não tem o código. O painel os usa pelo código e não os repete nos catálogos dele, que ficam com os textos próprios das telas ([design](../painel/design.md#idioma-datas-e-números)).
@@ -29,7 +29,7 @@ Tirar do motor as frases prontas para pessoa. O motor diz *o quê* (um código e
 ### Paridade e guardas
 
 - Um teste da rápida confere que pt-BR e en têm as mesmas chaves, nenhum texto vazio, os mesmos `{{parâmetros}}` em cada texto e as duas formas de plural onde há `count`. Confere também que todo código declarado no Go tem texto e que todo texto tem código; "declarado" é o literal de código (`<área>.<motivo>`, com a área de um arquivo dos catálogos) passado a `i18n.M`, `Err`, `ErrMsg`, `refuse`, `Refuse`, `human`, `FailMsg` ou no campo `Code` de um `Msg`, então um código nunca se monta por concatenação. Outro confere que o `web/src/gen/messages.ts` gravado é o que o gerador faz hoje.
-- O guarda de vocabulário dos catálogos do painel (Campanha, Senhor da Guilda, Companhia; em en, Campaign, Guildmaster, Party) vale também para os do Go.
+- O guarda de vocabulário dos catálogos do painel (Campanha, Senhor da Guilda, Companhia; em en, Campaign, Guildmaster, Party) vale também para os do Go. A única exceção, como no painel, é o rótulo do campo do dono de um pedido que bloqueia (`Dono: {{owner}}`; em en, `Owner: {{owner}}`).
 - Uma regra das [regras de código](../qualidade/regras-de-codigo.md) recusa literal com letra acentuada de português em `internal/telegram`, `internal/panel`, `internal/notices`, `internal/blocking` e `internal/approvals` fora dos testes, com uma lista curta de exceções justificadas (nomes do glossário em texto para agente).
 
 ### Respostas
@@ -37,6 +37,10 @@ Tirar do motor as frases prontas para pessoa. O motor diz *o quê* (um código e
 - **HTTP do painel:** `{"error": {"code", "params", "message"}}`, como hoje, com o código da recusa no `code` (o `refused` com `params.reason` dá lugar ao código da área; `refused`, `decree_refused` e `approval_refused` deixam de existir). O status de uma recusa é 409, ou 422 nas de decreto e de aprovação. `message` é o texto já traduzido no idioma de quem pediu, só para quem não tem o código (um cliente velho): o `Language` do usuário da sessão, senão o primeiro idioma do `Accept-Language`, senão pt-BR. O canal do navegador (`UIRejected` e o `error` do socket) leva código e parâmetros, e o `message` do `error` sai no idioma do usuário do socket.
 - **CLI `--json`:** `error` ganha `params` ao lado de `code`, `message` e `hint`. Os códigos de hoje (`level_denied`, `busy`…) não mudam. A mensagem para agente sai do catálogo em en ([idioma por canal](idioma-por-canal.md#cli)), e os `params` são só nomes, números e instantes em RFC 3339 (uma mensagem dentro de um parâmetro vira o texto em en).
 - **Protocolo entre máquinas:** `protocol.Error` não muda; o texto dele é técnico, em inglês, e não chega a pessoa.
+
+### Avisos do motor às pessoas
+
+Tudo que o motor monta e uma pessoa lê (o resumo, a amostra e as sugestões, a mensagem de progresso, os alertas de campanha, de uso e de cota, os avisos da sessão zero, os da caixa de entrada para o Senhor da Guilda ou para quem pediu um personagem) sai como `Msg`, e cada pessoa o lê no seu idioma. O texto que um agente ou uma pessoa escreveu (o motivo de uma decisão, uma sugestão para o AGENTS.md, a tela de um terminal, o erro de um programa) entra como parâmetro, mascarado e sem tradução. Quando o mesmo aviso vai também a um agente, o agente recebe o texto em pt-BR, como antes (`Notice.Text`, `StallNotice.Text`, a lista do resumo ao Grão-Mestre); só o que vai à pessoa tem `Msg`. Um aviso de `characters.Notice` sem `Msg` é feito só para agentes e, se cair na pessoa (o Senhor da Guilda quando não há Grão-Mestre vivo), sai como está, em pt-BR.
 
 ### Textos guardados
 
@@ -50,7 +54,7 @@ O que fica no banco e alguém lê depois guarda o código e os parâmetros (colu
 | `panel_chat_progress` (progresso na conversa) | `msg` de cada linha |
 
 - Uma linha gravada antes da migração, só com `text`, é mostrada como está, em pt-BR.
-- Código: `notices.Feed.Add` e `Update` guardam o `Msg` em `panel_notices.msg` (e `text` vazio); `blocking.Store` guarda em `blocking_notices.msg` a moldura do aviso (resumo, texto inteiro, responsável, passos e bloco do agente, com o texto do agente como parâmetro já mascarado); `approvals.Flow` guarda o cartão em `approval_flow.msg`; `panelchat.SetProgress` guarda o progresso em `panel_chat_progress.msg`. A migração é `0059_stored_messages.sql`. O sino leva `text` (já no idioma do usuário) e `msg` (código e parâmetros, que a tela traduz pelo gerado); o cartão de aprovação e o aviso de bloqueio saem no idioma do `Language` do usuário.
+- Código: `notices.Feed.Add` e `Update` guardam o `Msg` em `panel_notices.msg` (e `text` vazio); `blocking.Store` guarda em `blocking_notices.msg` a moldura do aviso (resumo, texto inteiro, responsável, passos e bloco do agente, com o texto do agente como parâmetro já mascarado); `approvals.Flow` guarda o cartão em `approval_flow.msg`; `panelchat.SetProgress` guarda o progresso em `panel_chat_progress.msg`. A migração é `0059_stored_messages.sql`. O sino leva `text` (já no idioma do usuário) e `msg` (código e parâmetros), e só ele é traduzido pela tela, pelo gerado. O cartão de aprovação e o aviso de bloqueio do painel chegam com o texto já traduzido no servidor, no idioma do usuário da sessão (o `Language` dele, ou o idioma guardado do Telegram, ou pt-BR), e a tela os mostra como vêm.
 - Um aviso para várias pessoas (Senhor da Guilda e Administradores) é **um** registro e uma tradução por destinatário.
 - O que só agente lê (`inbox_messages.body`, os avisos do motor na caixa de entrada, as respostas do Grão-Mestre) não muda nesta etapa.
 

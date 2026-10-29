@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/progress"
 	"github.com/mestre-ia/mestre/internal/orchestration/tables"
@@ -28,7 +29,7 @@ func (noPeople) Recipients(context.Context, string) ([]string, error) { return n
 
 type noSender struct{}
 
-func (noSender) Send(context.Context, string, string, string) error { return nil }
+func (noSender) Send(context.Context, string, string, i18n.Msg) error { return nil }
 
 // Part of CA-GM-15 (the second half, with the real engine; the first is in internal/orchestration/progress): a `pr_mergeado` whose
 // commit is not in the base of the mirror (read by the real poller over the
@@ -53,7 +54,7 @@ func TestAMergedPRWithoutTheCommitInTheBaseIsNotCountedAsMergedInTheProgressMess
 		if err != nil || !ok {
 			t.Fatalf("Compose = %v, %v", ok, err)
 		}
-		return m.Text
+		return i18n.Render(i18n.PtBR, m.Msg)
 	}
 
 	// merged on GitHub (the merge commit is on the remote), but not in the mirror yet

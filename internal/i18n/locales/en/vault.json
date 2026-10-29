@@ -1,0 +1,7 @@
+{
+  "vault.domains": " ({{domains}})",
+  "vault.expired": "Attention: {{what}} expired on {{on}}. Replace it in the panel.",
+  "vault.expiring": "Attention: {{what}} expires in {{days}} days ({{on}}). Replace it in the panel before then.",
+  "vault.no_expiry": "Reminder: {{what}} has no expiry and has not been replaced for {{days}} days. Consider replacing it in the panel.",
+  "vault.what": "the site credential {{name}}"
+}

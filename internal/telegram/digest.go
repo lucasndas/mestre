@@ -48,7 +48,7 @@ func (c *DigestChannel) Send(ctx context.Context, m digest.Message) error {
 	for _, row := range m.Buttons {
 		var r []Button
 		for _, b := range row {
-			btn := Button{Text: b.Text, Action: b.Action, Arg: b.Arg} // the label comes from the digest, in pt-BR
+			btn := Button{Msg: b.Msg, Action: b.Action, Arg: b.Arg}
 			switch b.Action {
 			case digest.MistakeAction:
 				btn.Capability = users.RevokeTemporaryRules
@@ -61,7 +61,7 @@ func (c *DigestChannel) Send(ctx context.Context, m digest.Message) error {
 		}
 		rows = append(rows, r)
 	}
-	_, err = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.Text(m.Text), Workspace: m.Workspace, Origin: "motor", Buttons: rows})
+	_, err = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: m.Msg, Workspace: m.Workspace, Origin: "motor", Buttons: rows})
 	return err
 }
 
@@ -141,9 +141,9 @@ func (c *DigestChannel) examples(ctx context.Context, k Click) (i18n.Msg, i18n.M
 	if err != nil {
 		return i18n.Msg{}, i18n.Msg{}, err
 	}
-	text, err := c.Svc.ExamplesText(ctx, n)
+	msg, err := c.Svc.ExamplesMsg(ctx, n)
 	if err != nil {
 		return i18n.Msg{}, i18n.Msg{}, err
 	}
-	return i18n.M("bot.examples"), i18n.Msg{}, c.reply(ctx, k, i18n.Text(text))
+	return i18n.M("bot.examples"), i18n.Msg{}, c.reply(ctx, k, msg)
 }

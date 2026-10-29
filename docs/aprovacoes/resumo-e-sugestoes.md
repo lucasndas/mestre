@@ -1,6 +1,6 @@
 # Resumo e sugestões
 
-> **Assunto:** resumo periódico do que os agentes da cadeia decidiram, sugestões de regra a partir de aprovações repetidas e amostra das ações aprovadas por agentes para revisão depois · **Componente:** Motor · **Atualizado:** 2026-10-20
+> **Assunto:** resumo periódico do que os agentes da cadeia decidiram, sugestões de regra a partir de aprovações repetidas e amostra das ações aprovadas por agentes para revisão depois · **Componente:** Motor · **Atualizado:** 2026-10-29
 
 ## Objetivo
 
@@ -32,6 +32,7 @@ Deixar as pessoas verem depois o que os agentes da [cadeia de aprovação](../or
 ## Regras e erros
 
 - Resumo, sugestões e amostra nunca mostram segredos: o texto passa pelo mascaramento ([segurança](../arquitetura/seguranca.md#mascaramento-em-logs)).
+- A amostra e as sugestões são mensagens por código ([mensagens por código](../plataforma/mensagens-por-codigo.md#avisos-do-motor-às-pessoas)): cada pessoa as lê no seu idioma, com os botões; o motivo e as ações do agente seguem iguais nos dois. A lista ao Grão-Mestre fica em pt-BR.
 - Telegram fora do ar: as partes ficam no painel e são entregues quando ele volta, como as outras mensagens ([bot](../telegram/bot.md)).
 - Aceitar uma sugestão cujo padrão a tabela de risco passou a dar como `fixo` ou que um ajuste tornou inválido: recusado, com o motivo.
 

@@ -1,0 +1,3 @@
+{
+  "chat.secrets_repeated": "{{name}} sent secrets through the panel {{count}} times in {{minutes}} minutes; their sending through the conversation is blocked until the window passes. It is worth talking to them."
+}

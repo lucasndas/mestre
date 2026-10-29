@@ -1,0 +1,21 @@
+{
+  "progress.going_one": "\n  🔧 {{count}} em andamento ({{names}})",
+  "progress.going_other": "\n  🔧 {{count}} em andamento ({{names}})",
+  "progress.header_one": "{{workspace}} · {{count}} mesa",
+  "progress.header_other": "{{workspace}} · {{count}} mesas",
+  "progress.merged_one": "\n  ✅ {{count}} mesclada ({{names}})",
+  "progress.merged_other": "\n  ✅ {{count}} mescladas ({{names}})",
+  "progress.next": "\nPróximo: {{table}} volta ao trabalho quando você {{verb}}",
+  "progress.no_reason": "sem motivo registrado",
+  "progress.owner_gm": "o Grão-Mestre",
+  "progress.owner_level": "o nível {{name}}",
+  "progress.owner_mesa": "o Mestre da mesa",
+  "progress.owner_people": "você",
+  "progress.paused": "\n  ⏸ {{table}}: pausada — {{why}}",
+  "progress.truncated": "\n…",
+  "progress.verb_approve": "aprovar",
+  "progress.verb_decide": "decidir",
+  "progress.waiting": "\n  🙋 {{table}}: espera {{owner}} — {{what}}",
+  "progress.what_pr": "aprovar PR #{{number}}",
+  "progress.what_pr_why": "aprovar PR #{{number}} ({{why}})"
+}

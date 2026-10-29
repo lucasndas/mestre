@@ -46,25 +46,25 @@ func (v vaultNotices) Notify(ctx context.Context, n vault.Notice, person string)
 	if err != nil {
 		return err
 	}
-	if _, err := bot.Send(ctx, telegram.Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.Text(noticeText(n)), Origin: "motor"}); err != nil {
+	if _, err := bot.Send(ctx, telegram.Out{ChatID: u.TelegramID, UserID: u.ID, Msg: noticeMsg(n), Origin: "motor"}); err != nil {
 		return fmt.Errorf("app: a notice about a credential was not queued for %s: %w", u.ID, err)
 	}
 	return nil
 }
 
-// noticeText is what the people read: in Portuguese, with the days and what to do.
-func noticeText(n vault.Notice) string {
-	what := fmt.Sprintf("a credencial de site %q", n.Name)
+// noticeMsg is what the people read: in Portuguese, with the days and what to do.
+func noticeMsg(n vault.Notice) i18n.Msg {
+	what := i18n.M("vault.what", "name", fmt.Sprintf("%q", n.Name))
 	if len(n.Domains) > 0 {
-		what += " (" + strings.Join(n.Domains, ", ") + ")"
+		what = i18n.Concat(what, i18n.M("vault.domains", "domains", strings.Join(n.Domains, ", ")))
 	}
 	switch {
 	case n.Kind == vault.NoticeExpiring && n.Days < 0:
-		return fmt.Sprintf("Atenção: %s venceu em %s. Troque-a pelo painel.", what, n.Expires.Format("02/01/2006"))
+		return i18n.M("vault.expired", "what", what, "on", n.Expires)
 	case n.Kind == vault.NoticeExpiring:
-		return fmt.Sprintf("Atenção: %s vence em %d dias (%s). Troque-a pelo painel antes disso.", what, n.Days, n.Expires.Format("02/01/2006"))
+		return i18n.M("vault.expiring", "what", what, "days", n.Days, "on", n.Expires)
 	}
-	return fmt.Sprintf("Lembrete: %s não tem validade e não é trocada há %d dias. Considere trocá-la pelo painel.", what, n.Days)
+	return i18n.M("vault.no_expiry", "what", what, "days", n.Days)
 }
 
 // expiryWatcher is the watcher of the validity of the site credentials of this

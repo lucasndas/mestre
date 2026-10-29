@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/tables"
@@ -52,9 +53,10 @@ type Recipients interface {
 	Recipients(ctx context.Context, workspace string) ([]string, error)
 }
 
-// Sender delivers the text to a person (the bot; the panel shows it too).
+// Sender delivers the message to a person (the bot; the panel shows it too), said in
+// the language of the person.
 type Sender interface {
-	Send(ctx context.Context, userID, workspace, text string) error
+	Send(ctx context.Context, userID, workspace string, msg i18n.Msg) error
 }
 
 // Options are the pieces of the Service; all are required but Every, Mask and
@@ -101,7 +103,8 @@ func New(o Options) (*Service, error) {
 
 // Message is a message of progress.
 type Message struct {
-	Text string
+	// Msg is the message as a code and parameters: each person reads it in their language.
+	Msg i18n.Msg
 	// Tables is how many tables the workspace has that are not over, and
 	// Working how many of them are working.
 	Tables, Working int
@@ -132,16 +135,16 @@ func (s *Service) title(t tables.Table) string {
 }
 
 // owner is who a level is, as the person reads it.
-func owner(l chain.Level) string {
+func owner(l chain.Level) i18n.Msg {
 	switch l.Kind {
 	case chain.LevelPeople:
-		return "você"
+		return i18n.M("progress.owner_people")
 	case chain.LevelGrandMaster:
-		return "o Grão-Mestre"
+		return i18n.M("progress.owner_gm")
 	case chain.LevelMesa:
-		return "o Mestre da mesa"
+		return i18n.M("progress.owner_mesa")
 	}
-	return "o nível " + l.Name
+	return i18n.M("progress.owner_level", "name", l.Name)
 }
 
 // Compose makes the message of a workspace from what the engine confirmed: a
@@ -162,8 +165,9 @@ func (s *Service) Compose(ctx context.Context, workspace string) (Message, bool,
 	if len(open) == 0 {
 		return Message{}, false, nil
 	}
-	var merged, going, lines []string
-	var next string
+	var merged, going []string
+	var lines []i18n.Msg
+	var next i18n.Msg
 	working := 0
 	for _, t := range open {
 		if t.State == characters.TableWorking {
@@ -179,55 +183,50 @@ func (s *Service) Compose(ctx context.Context, workspace string) (Message, bool,
 			return Message{}, false, err
 		}
 		for _, r := range reqs {
-			what, verb := s.safe(r.About, 160), "decidir"
+			var what any = s.safe(r.About, 160) // what an agent wrote: a parameter, not translated
+			verb := i18n.M("progress.verb_decide")
 			if r.PR != nil {
-				what, verb = fmt.Sprintf("aprovar PR #%d", r.PR.Number), "aprovar"
+				verb = i18n.M("progress.verb_approve")
+				what = i18n.M("progress.what_pr", "number", r.PR.Number)
 				if len(r.Why) > 0 {
-					what += " (" + s.safe(r.Why[0], 120) + ")"
+					what = i18n.M("progress.what_pr_why", "number", r.PR.Number, "why", s.safe(r.Why[0], 120))
 				}
 			}
-			lines = append(lines, fmt.Sprintf("  🙋 %s: espera %s — %s", name, owner(r.Level), what))
-			if next == "" && r.Level.Kind == chain.LevelPeople {
-				next = fmt.Sprintf("Próximo: %s volta ao trabalho quando você %s", name, verb)
+			lines = append(lines, i18n.M("progress.waiting", "table", name, "owner", owner(r.Level), "what", what))
+			if next.IsZero() && r.Level.Kind == chain.LevelPeople {
+				next = i18n.M("progress.next", "table", name, "verb", verb)
 			}
 		}
 		switch {
 		case t.Paused:
-			why := s.safe(t.PausedReason, 160)
+			var why any = s.safe(t.PausedReason, 160)
 			if why == "" {
-				why = "sem motivo registrado"
+				why = i18n.M("progress.no_reason")
 			}
-			lines = append(lines, fmt.Sprintf("  ⏸ %s: pausada — %s", name, why))
+			lines = append(lines, i18n.M("progress.paused", "table", name, "why", why))
 		case len(reqs) == 0:
 			going = append(going, name)
 		}
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s · %d %s", s.safe(workspace, 60), len(open), plural(len(open), "mesa", "mesas"))
+	parts := []i18n.Msg{i18n.M("progress.header", "workspace", s.safe(workspace, 60), "count", len(open))}
 	if len(merged) > 0 {
-		fmt.Fprintf(&b, "\n  ✅ %d %s (%s)", len(merged), plural(len(merged), "mesclada", "mescladas"), strings.Join(merged, ", "))
+		parts = append(parts, i18n.M("progress.merged", "count", len(merged), "names", strings.Join(merged, ", ")))
 	}
 	if len(going) > 0 {
-		fmt.Fprintf(&b, "\n  🔧 %d em andamento (%s)", len(going), strings.Join(going, ", "))
+		parts = append(parts, i18n.M("progress.going", "count", len(going), "names", strings.Join(going, ", ")))
 	}
-	for _, l := range lines {
-		b.WriteString("\n" + l)
+	parts = append(parts, lines...)
+	if !next.IsZero() {
+		parts = append(parts, next)
 	}
-	if next != "" {
-		b.WriteString("\n" + next)
+	// the size is measured in pt-BR, the language of the default; a message too long loses its last lines
+	if len([]rune(i18n.Render(i18n.PtBR, i18n.Concat(parts...)))) > maxMessage {
+		for len(parts) > 1 && len([]rune(i18n.Render(i18n.PtBR, i18n.Concat(append(parts[:len(parts):len(parts)], i18n.M("progress.truncated"))...)))) > maxMessage {
+			parts = parts[:len(parts)-1]
+		}
+		parts = append(parts, i18n.M("progress.truncated"))
 	}
-	text := b.String()
-	if r := []rune(text); len(r) > maxMessage {
-		text = string(r[:maxMessage]) + "\n…"
-	}
-	return Message{Text: text, Tables: len(open), Working: working}, true, nil
-}
-
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
+	return Message{Msg: i18n.Concat(parts...), Tables: len(open), Working: working}, true, nil
 }
 
 // claim reserves the turn to send a message of a workspace: it fails when one
@@ -255,16 +254,16 @@ func (s *Service) release(workspace string, prev time.Time, had bool) {
 	}
 }
 
-// deliver sends a text to the people of the workspace; the error says each
+// deliver sends a message to the people of the workspace; the error says each
 // one that was not reached, and reached is how many were.
-func (s *Service) deliver(ctx context.Context, workspace, text string) (reached int, err error) {
+func (s *Service) deliver(ctx context.Context, workspace string, msg i18n.Msg) (reached int, err error) {
 	to, err := s.o.Recipients.Recipients(ctx, workspace)
 	if err != nil {
 		return 0, err
 	}
 	var errs []error
 	for _, u := range to {
-		if err := s.o.Sender.Send(ctx, u, workspace, text); err != nil {
+		if err := s.o.Sender.Send(ctx, u, workspace, msg); err != nil {
 			errs = append(errs, fmt.Errorf("user %s: %w", u, err))
 			continue
 		}
@@ -283,7 +282,7 @@ func (s *Service) send(ctx context.Context, workspace string, gap time.Duration,
 	if !ok {
 		return nil
 	}
-	reached, err := s.deliver(ctx, workspace, m.Text)
+	reached, err := s.deliver(ctx, workspace, m.Msg)
 	if reached == 0 {
 		s.release(workspace, prev, had) // nobody got it: the next look tries again
 	}

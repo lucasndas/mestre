@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -15,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/mestre-ia/mestre/internal/attachments"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/panel"
@@ -114,8 +114,7 @@ func (s *Service) secretCaught(ctx context.Context, u users.User, kind secretscr
 		s.o.AuditSecret(ctx, u.ID, string(kind))
 	}
 	if alert && s.o.AlertOwner != nil {
-		s.o.AlertOwner(ctx, fmt.Sprintf("%s mandou segredos pelo painel %d vezes em %d minutos; o envio dele pela conversa está bloqueado até a janela passar. Vale conversar com ele.",
-			u.Name, n, int(secretWindow/time.Minute)))
+		s.o.AlertOwner(ctx, i18n.M("chat.secrets_repeated", "name", u.Name, "count", n, "minutes", int(secretWindow/time.Minute)))
 	}
 }
 

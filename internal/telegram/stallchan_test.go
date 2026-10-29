@@ -100,8 +100,8 @@ func TestAnApproverPausesTheTableByTheButtonButIsRefusedTheCommandAndTheMistakeB
 		t.Errorf("/pausar by an Approver answered %q; want the refusal with the level Administrador", got)
 	}
 	// Foi um erro, the button of the summary: refused at the tap, with the level
-	if err := w.dg.Send(w.ctx, digest.Message{UserID: apr.ID, Workspace: "loja", Text: "Resumo: o Mestre da mesa criou a regra 1.",
-		Buttons: [][]digest.Button{{{Text: "Foi um erro", Action: digest.MistakeAction, Arg: "1"}}}}); err != nil {
+	if err := w.dg.Send(w.ctx, digest.Message{UserID: apr.ID, Workspace: "loja", Msg: i18n.Text("Resumo: o Mestre da mesa criou a regra 1."),
+		Buttons: [][]digest.Button{{{Msg: i18n.Text("Foi um erro"), Action: digest.MistakeAction, Arg: "1"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	w.drain()

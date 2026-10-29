@@ -1,0 +1,3 @@
+{
+  "chat.secrets_repeated": "{{name}} mandou segredos pelo painel {{count}} vezes em {{minutes}} minutos; o envio dele pela conversa está bloqueado até a janela passar. Vale conversar com ele."
+}

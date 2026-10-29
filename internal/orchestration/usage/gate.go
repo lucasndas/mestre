@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/providers"
 )
@@ -113,14 +114,14 @@ func (s *Service) announceHold(ctx context.Context, sub Subject, v Verdict, hold
 		return joinedOrNil(errs)
 	}
 	steps, _ := s.o.Directory.PendingSteps(ctx, sub.Workspace, sub.Table)
-	line := fmt.Sprintf("⏸ Mesa %s pausada · %s %.0f%%", orElse(sub.TableName, sub.Table), v.Window, v.Percent)
+	parts := []i18n.Msg{i18n.M("usage.hold", "table", orElse(sub.TableName, sub.Table), "window", v.Window, "percent", fmt.Sprintf("%.0f", v.Percent))}
 	if !v.Until.IsZero() {
-		line += " · volta às " + s.clock(ctx, v.Until)
+		parts = append(parts, i18n.M("usage.hold_until", "at", s.clock(ctx, v.Until)))
 	}
 	if steps > 0 {
-		line += fmt.Sprintf(" · faltam %d etapas", steps)
+		parts = append(parts, i18n.M("usage.hold_steps", "count", steps))
 	}
-	s.tell(ctx, sub.Workspace, sub.Table, line)
+	s.tell(ctx, sub.Workspace, sub.Table, i18n.Concat(parts...))
 	return joinedOrNil(errs)
 }
 
@@ -196,4 +197,12 @@ func (s *Service) Loop(ctx context.Context, every time.Duration) error {
 			}
 		}
 	}
+}
+
+// account is the name of the account in the text for the agents (pt-BR).
+func account(profile string) string {
+	if profile == "" {
+		return "padrão"
+	}
+	return profile
 }

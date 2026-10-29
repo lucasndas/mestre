@@ -77,18 +77,18 @@ func (p *plainTeller) OwnerAlert(_ context.Context, m i18n.Msg) {
 func TestTheAlertOfTheChainAboutAWorkspaceKeepsTheWorkspaceForTheHeader(t *testing.T) {
 	t.Parallel()
 	f := &fakeTeller{}
-	if err := (chainOwnerAlerts{f}).Notify(t.Context(), "loja", "O limite passou de 80%."); err != nil {
+	if err := (chainOwnerAlerts{f}).Notify(t.Context(), "loja", i18n.Text("O limite passou de 80%.")); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.plain) != 0 || len(f.scoped) != 1 || f.scoped[0] != "loja|O limite passou de 80%." {
 		t.Errorf("plain %q scoped %q", f.plain, f.scoped)
 	}
 	// an alert of no workspace, or a teller that does not know workspaces, names it in the text
-	if err := (chainOwnerAlerts{f}).Notify(t.Context(), "", "do motor"); err != nil || len(f.plain) != 1 {
+	if err := (chainOwnerAlerts{f}).Notify(t.Context(), "", i18n.Text("do motor")); err != nil || len(f.plain) != 1 {
 		t.Errorf("no workspace: %v, %q", err, f.plain)
 	}
 	p := &plainTeller{}
-	if err := (chainOwnerAlerts{p}).Notify(t.Context(), "loja", "x"); err != nil || len(p.got) != 1 || p.got[0] != "[loja] x" {
+	if err := (chainOwnerAlerts{p}).Notify(t.Context(), "loja", i18n.Text("x")); err != nil || len(p.got) != 1 || p.got[0] != "[loja] x" {
 		t.Errorf("a teller with no workspaces: %v, %q", err, p.got)
 	}
 }

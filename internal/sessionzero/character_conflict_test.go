@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/sessionzero"
 )
 
@@ -21,7 +22,7 @@ func TestASharedSkillWithoutTheMarkerIsNotTouchedAndTheConflictIsReported(t *tes
 		t.Errorf("the skill without the marker was rewritten:\n%s", got)
 	}
 	if !slices.ContainsFunc(rep.Problems, func(p sessionzero.Problem) bool {
-		return p.Path == ".agents/skills/mestre-comunicacao/SKILL.md" && strings.Contains(p.Reason, "conflito")
+		return p.Path == ".agents/skills/mestre-comunicacao/SKILL.md" && strings.Contains(i18n.Render(i18n.PtBR, p.Reason), "conflito")
 	}) {
 		t.Errorf("the conflict is not in the report: %v", rep.Problems)
 	}

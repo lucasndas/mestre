@@ -11,7 +11,7 @@
   "block.head": "{{icon}} {{what}}",
   "block.no_evidence": "\nno verified evidence",
   "block.open_panel": "Open in the panel",
-  "block.owner": "\nIn charge: {{owner}}",
+  "block.owner": "\nOwner: {{owner}}",
   "block.owner_an_administrator": "an Administrator",
   "block.owner_an_approver": "an Approver",
   "block.owner_the_owner": "the Guildmaster",

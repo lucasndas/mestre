@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/logging"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 	"github.com/mestre-ia/mestre/internal/store"
@@ -176,12 +177,12 @@ func (s *Service) runFiles(ctx context.Context, w workspaces.Workspace) error {
 		return code("files_failed", err)
 	}
 	if len(structure.Invalid) > 0 {
-		if err := s.o.Users.Notify(ctx, w.Slug, Notice{Kind: "mestre_dir", Text: problemsText("O .mestre/ do repositório tem itens que o Mestre não tocou", structure.Invalid)}); err != nil {
+		if err := s.o.Users.Notify(ctx, w.Slug, Notice{Kind: "mestre_dir", Msg: problemsMsg(i18n.M("sessionzero.mestre_dir_head"), structure.Invalid)}); err != nil {
 			return code("notify_failed", err)
 		}
 	}
 	if len(files.Problems) > 0 {
-		if err := s.o.Users.Notify(ctx, w.Slug, Notice{Kind: "provider_files", Text: problemsText("Arquivos dos provedores que o Mestre não gerou (os personagens desses provedores não iniciam no clone principal até resolver)", files.Problems)}); err != nil {
+		if err := s.o.Users.Notify(ctx, w.Slug, Notice{Kind: "provider_files", Msg: problemsMsg(i18n.M("sessionzero.provider_files_head"), files.Problems)}); err != nil {
 			return code("notify_failed", err)
 		}
 	}
@@ -199,13 +200,12 @@ func (s *Service) runFiles(ctx context.Context, w workspaces.Workspace) error {
 	return nil
 }
 
-func problemsText(head string, ps []Problem) string {
-	var b strings.Builder
-	b.WriteString(head + ":")
+func problemsMsg(head i18n.Msg, ps []Problem) i18n.Msg {
+	parts := []i18n.Msg{head}
 	for _, p := range ps {
-		b.WriteString("\n- " + p.String())
+		parts = append(parts, i18n.M("sessionzero.problem_line", "path", p.Path, "reason", p.Reason))
 	}
-	return b.String()
+	return i18n.Concat(parts...)
 }
 
 // AnswerVersioning records the answer of the users to whether .mestre/ is

@@ -37,12 +37,12 @@ func TestTheBlockingNoticeAndTheCardAreSaidInTheLanguageOfEachUserWithTheSameAge
 		return out
 	}
 	enMsg, ptMsg := said(enTG.ID), said(ptTG.ID)
-	for _, want := range []string{"Evidence:", "To unblock:", "In charge: an Administrator", "agent text, not verified", "Why I do not decide: envolve cobrança"} {
+	for _, want := range []string{"Evidence:", "To unblock:", "Owner: an Administrator", "agent text, not verified", "Why I do not decide: envolve cobrança"} {
 		if !strings.Contains(enMsg, want) {
 			t.Errorf("en: the notice lacks %q:\n%s", want, enMsg)
 		}
 	}
-	for _, want := range []string{"Evidência:", "Para destravar:", "Responsável: um Administrador", "texto do agente, não verificado", "Por que não decido: envolve cobrança"} {
+	for _, want := range []string{"Evidência:", "Para destravar:", "Dono: um Administrador", "texto do agente, não verificado", "Por que não decido: envolve cobrança"} {
 		if !strings.Contains(ptMsg, want) {
 			t.Errorf("pt-BR: the notice lacks %q:\n%s", want, ptMsg)
 		}

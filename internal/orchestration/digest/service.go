@@ -14,6 +14,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/logging"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/providers"
@@ -56,14 +57,17 @@ type Directory interface {
 	MayMark(ctx context.Context, userID, workspace string) bool
 }
 
-// Button is a button of a message.
-type Button struct{ Text, Action, Arg string }
+// Button is a button of a message; its label is said in the language of who reads.
+type Button struct {
+	Msg         i18n.Msg
+	Action, Arg string
+}
 
-// Message is what goes to a person.
+// Message is what goes to a person, said in the language of the person.
 type Message struct {
 	UserID    string
 	Workspace string
-	Text      string
+	Msg       i18n.Msg
 	Buttons   [][]Button
 }
 
@@ -329,6 +333,17 @@ func levelWord(l chain.LevelKind) string {
 	return "Mestre da mesa"
 }
 
+// levelMsg is the level of the agent that decided, said in the language of who reads.
+func levelMsg(l chain.LevelKind) i18n.Msg {
+	if l == chain.LevelGrandMaster {
+		return i18n.M("digest.level_gm")
+	}
+	return i18n.M("digest.level_mesa")
+}
+
+// text is what an agent wrote, as a parameter: masked and on one line. It is never translated.
+func (s *Service) text(v string) string { return s.o.Mask(oneLine(v)) }
+
 func (s *Service) send(ctx context.Context, workspace string, sum chain.SummarySettings, from, to time.Time) ([]chain.Request, map[int64][]chain.AuditEntry, error) {
 	since := to.Add(-Window)
 	if from.Before(since) {
@@ -416,16 +431,16 @@ func (s *Service) sample(ctx context.Context, workspace string, people []Person,
 			pool = pool[:n]
 		}
 		sort.Slice(pool, func(i, j int) bool { return pool[i].Request < pool[j].Request })
-		var b strings.Builder
-		fmt.Fprintf(&b, "Amostra para revisão: ações aprovadas por %s (%d de %d do período). Foi um erro? O botão registra a marcação e revoga a regra temporária que nasceu da decisão.\n", levelWord(level), len(pool), total)
+		parts := []i18n.Msg{i18n.M("digest.sample_head", "level", levelMsg(level), "shown", len(pool), "total", total)}
 		var rows [][]Button
 		for _, d := range pool {
-			fmt.Fprintf(&b, "\n#%d · %s · nível %s · risco %s · mesa %s\n  pedido: %s\n", d.Request, s.name(ctx, d.Approver), levelWord(d.Level), orDash(d.Risk), orDash(d.Table), oneLine(d.About))
+			parts = append(parts, i18n.M("digest.sample_item", "id", d.Request, "name", s.text(s.name(ctx, d.Approver)), "level", levelMsg(d.Level), "risk", orDash(d.Risk), "table", orDash(d.Table), "about", s.text(d.About)))
 			if d.Reason != "" {
-				fmt.Fprintf(&b, "  motivo (texto do agente, não verificado): %s\n", strings.Join(strings.Fields(d.Reason), " "))
+				parts = append(parts, i18n.M("digest.sample_reason", "reason", s.text(d.Reason)))
 			}
-			rows = append(rows, []Button{{Text: fmt.Sprintf("Foi um erro #%d", d.Request), Action: MistakeAction, Arg: fmt.Sprint(d.Request)}})
+			rows = append(rows, []Button{{Msg: i18n.M("digest.mistake_button", "id", d.Request), Action: MistakeAction, Arg: fmt.Sprint(d.Request)}})
 		}
+		body := i18n.Concat(parts...)
 		// Pausar autonomia, one per table of the sample: whoever reads what the agents
 		// decided can stop the decisions of that table there (docs/orquestracao/supervisao-da-cadeia.md)
 		var pauses [][]Button
@@ -433,11 +448,11 @@ func (s *Service) sample(ctx context.Context, workspace string, people []Person,
 		for _, d := range pool {
 			if d.Table != "" && !seen[d.Table] {
 				seen[d.Table] = true
-				pauses = append(pauses, []Button{{Text: "Pausar autonomia " + d.Table, Action: PauseAutonomyAction, Arg: workspace + ":" + d.Table}})
+				pauses = append(pauses, []Button{{Msg: i18n.M("digest.pause_button", "table", d.Table), Action: PauseAutonomyAction, Arg: workspace + ":" + d.Table}})
 			}
 		}
 		for _, p := range people {
-			m := Message{UserID: p.ID, Workspace: workspace, Text: s.o.Mask(b.String()), Buttons: pauses}
+			m := Message{UserID: p.ID, Workspace: workspace, Msg: body, Buttons: pauses}
 			if s.o.Directory.MayMark(ctx, p.ID, workspace) {
 				m.Buttons = append(append([][]Button(nil), rows...), pauses...)
 			}
@@ -708,10 +723,10 @@ func (s *Service) sendSuggestions(ctx context.Context, workspace string, owners 
 		return err
 	}
 	for _, x := range open {
-		text := s.o.Mask(s.suggestionText(x, false))
+		msg := s.suggestionMsg(x, false)
 		for _, o := range owners {
-			err := s.o.Sender.Send(ctx, Message{UserID: o.ID, Workspace: workspace, Text: text, Buttons: [][]Button{{
-				{Text: "Aceitar", Action: AcceptAction, Arg: fmt.Sprint(x.ID)}, {Text: "Recusar", Action: DeclineAction, Arg: fmt.Sprint(x.ID)}, {Text: "Ver exemplos", Action: ExamplesAction, Arg: fmt.Sprint(x.ID)}}}})
+			err := s.o.Sender.Send(ctx, Message{UserID: o.ID, Workspace: workspace, Msg: msg, Buttons: [][]Button{{
+				{Msg: i18n.M("digest.accept_button"), Action: AcceptAction, Arg: fmt.Sprint(x.ID)}, {Msg: i18n.M("digest.decline_button"), Action: DeclineAction, Arg: fmt.Sprint(x.ID)}, {Msg: i18n.M("digest.examples_button"), Action: ExamplesAction, Arg: fmt.Sprint(x.ID)}}}})
 			if err != nil {
 				s.log.Warn("digest: a suggestion was not sent", "user", o.ID, "err", err)
 			}
@@ -720,44 +735,45 @@ func (s *Service) sendSuggestions(ctx context.Context, workspace string, owners 
 	return nil
 }
 
-func (s *Service) suggestionText(x Suggestion, more bool) string {
-	verb := "permitir"
+// suggestionMsg is the suggestion of a rule as a message; the pattern, the actions and the reason of the
+// agent are parameters, masked and not translated.
+func (s *Service) suggestionMsg(x Suggestion, more bool) i18n.Msg {
+	verb := i18n.M("digest.verb_allow")
 	if x.Effect == "deny" {
-		verb = "negar"
+		verb = i18n.M("digest.verb_deny")
 	}
-	scope := "na campanha " + x.Workspace
+	scope := i18n.M("digest.scope_workspace", "workspace", x.Workspace)
 	if x.Mesa != "" {
-		scope = "na mesa " + x.Mesa
+		scope = i18n.M("digest.scope_table", "table", x.Mesa)
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "Sugestão de regra: %s `%s` para a classe %s, %s. Risco do padrão: %s.\n", verb, x.Pattern, x.Class, scope, orDash(x.Examples.Risk))
+	parts := []i18n.Msg{i18n.M("digest.suggestion", "verb", verb, "pattern", s.text(x.Pattern), "class", x.Class, "scope", scope, "risk", orDash(x.Examples.Risk))}
 	if x.Source == "always" {
-		fmt.Fprintf(&b, "Veio de um \"sempre\" de um agente. Motivo dele (texto do agente, não verificado): %s\n", orDash(strings.Join(strings.Fields(x.Reason), " ")))
+		parts = append(parts, i18n.M("digest.from_always", "reason", orDash(s.text(x.Reason))))
 	} else {
-		b.WriteString("Ações já aprovadas que ele casa:\n")
+		parts = append(parts, i18n.M("digest.matches"))
 		for i, a := range x.Examples.Actions {
 			if i == 5 {
 				break
 			}
-			fmt.Fprintf(&b, "- %s\n", a)
+			parts = append(parts, i18n.M("digest.match_item", "action", s.text(a)))
 		}
 	}
 	if more {
-		fmt.Fprintf(&b, "Libera a mais: a forma geral `%s`, com qualquer argumento no lugar do *. O que a tabela de risco diz do padrão: %s.\n", x.Pattern, orDash(x.Examples.Rule))
+		parts = append(parts, i18n.M("digest.more", "pattern", s.text(x.Pattern), "rule", orDash(s.text(x.Examples.Rule))))
 	} else {
-		b.WriteString("Aceitar cria um decreto seu, que pede o PIN.\n")
+		parts = append(parts, i18n.M("digest.accept_hint"))
 	}
-	return b.String()
+	return i18n.Concat(parts...)
 }
 
-// ExamplesText is the click on "Ver exemplos": what the pattern would free
+// ExamplesMsg is the click on "Ver exemplos": what the pattern would free
 // beyond the actions already approved.
-func (s *Service) ExamplesText(ctx context.Context, id int64) (string, error) {
+func (s *Service) ExamplesMsg(ctx context.Context, id int64) (i18n.Msg, error) {
 	x, err := s.Suggestion(ctx, id)
 	if err != nil {
-		return "", err
+		return i18n.Msg{}, err
 	}
-	return s.o.Mask(s.suggestionText(x, true)), nil
+	return s.suggestionMsg(x, true), nil
 }
 
 // Errors of the answers to a suggestion.
@@ -814,7 +830,11 @@ func (s *Service) Accept(ctx context.Context, id int64, userID string) (decrees.
 	}
 	check, err := classes.CheckApprovablePattern(x.Pattern, x.Examples.Example, x.Class, x.Mesa)
 	if err != nil || check.Risk.Risk == classes.RiskFixed {
-		return decrees.Pending{}, fmt.Errorf("digest: o padrão %q não vale mais como regra (%v)", x.Pattern, orErr(err, "a tabela de risco o dá como fixo"))
+		why := i18n.M("digest.pattern_fixed")
+		if err != nil {
+			why = i18n.Text(err.Error()) // the error of the table of risk: not translated
+		}
+		return decrees.Pending{}, i18n.Err("digest.pattern_invalid", "pattern", x.Pattern, "why", why)
 	}
 	grant := &classes.Grant{Commands: []string{x.Pattern}}
 	eff := decrees.Effect{Kind: decrees.EffectPermission, Allow: grant}
@@ -848,13 +868,6 @@ func (s *Service) Accept(ctx context.Context, id int64, userID string) (decrees.
 		return decrees.Pending{}, err
 	}
 	return pend, nil
-}
-
-func orErr(err error, fallback string) string {
-	if err != nil {
-		return err.Error()
-	}
-	return fallback
 }
 
 // UsersDirectory is the Directory over the users of the Guild.

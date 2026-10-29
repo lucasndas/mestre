@@ -66,3 +66,13 @@ test("an instant comes out in the zone of the Guild, in the form of each languag
   );
   expect(formatMoment(at, "en", "UTC")).toBe("2026-10-26 02:59 UTC");
 });
+
+test("only the object with the mark is an instant: a text in the form of a date stays a text", () => {
+  const text = "2026-10-26T02:59:00Z";
+  expect(messageText("en", "decree.delegation_validity_max", { until: text }, "UTC")).toContain(
+    `until ${text})`,
+  );
+  expect(
+    messageText("en", "decree.delegation_validity_max", { until: { instant: text } }, "UTC"),
+  ).toContain("until 2026-10-26 02:59 UTC)");
+});
