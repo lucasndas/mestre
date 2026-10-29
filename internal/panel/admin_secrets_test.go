@@ -45,14 +45,15 @@ func TestTheSecretsAPIAnswersWithNoValueNorPartOfItEvenToTheOwner(t *testing.T) 
 		&vault.SiteMeta{OwnerUser: a.owner.ID, Classes: []string{"pesquisador"}, Domains: []string{"mail.exemplo.com"}, Kind: vault.KindMainPassword}); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.vault.Put(a.ctx, "provedor", vault.TypeProviderAPIKey, []byte("sk-chave-de-provedor-0987"), nil); err != nil {
+	if err := a.vault.Put(a.ctx, "provedor", vault.TypeProviderAPIKey, []byte("sk-chave-de-provedor-qwxz"), nil); err != nil {
 		t.Fatal(err)
 	}
 	w := a.call("GET", "/api/secrets", nil, opts{cookie: tok})
 	if w.Code != 200 {
 		t.Fatalf("list = %d %s", w.Code, w.Body)
 	}
-	for _, leak := range []string{sitePassword, siteUser, "SECRETA", "sk-chave", "0987", "mail.exemplo.com\",\"user"} {
+	// the fragment has letters outside hex, so the fingerprint cannot hold it by chance
+	for _, leak := range []string{sitePassword, siteUser, "SECRETA", "sk-chave", "qwxz", "mail.exemplo.com\",\"user"} {
 		if strings.Contains(w.Body.String(), leak) {
 			t.Errorf("the list has %q: %s", leak, w.Body)
 		}
