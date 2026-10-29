@@ -243,7 +243,7 @@ func description(ev providers.Event) string {
 // designer of the quest never decides it.
 func (s *Service) OpenMissionPoint(ctx context.Context, p quests.MissionPoint) (int64, error) {
 	return s.Request(ctx, OpenRequest{Type: classes.RequestMissionPoint, Workspace: p.Workspace, Table: p.Table, Requester: p.Character, Designer: p.Designer,
-		About: fmt.Sprintf("ponto de aprovação (%s) da etapa %s da missão %s", p.When, p.StepName, p.QuestName), Task: p.Summary,
+		AboutMsg: i18n.M("approval.about_mission_point", "when", p.When, "step", p.StepName, "quest", p.QuestName), Task: p.Summary,
 		Mission: &Mission{Quest: p.Quest, QuestName: p.QuestName, Step: p.Step, StepName: p.StepName, When: p.When, Summary: p.Summary}})
 }
 

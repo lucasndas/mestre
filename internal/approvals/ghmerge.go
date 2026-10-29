@@ -5,6 +5,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 )
 
@@ -54,10 +55,9 @@ func MergeRequest(o MergeOrder) (chain.OpenRequest, error) {
 	}
 	return chain.OpenRequest{
 		Type: classes.RequestMerge, Workspace: o.Workspace, Table: o.Table, Requester: o.Requester, Proposer: o.Proposer,
-		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
-		About:  fmt.Sprintf("merge do PR #%d de %s (%s) em %s, método %s", o.Number, o.Repo, shortSHA(o.Head), o.Base, o.Method),
-		PR:     &chain.PRRef{Repo: o.Repo, Number: o.Number, SHA: o.Head},
-		Target: PRTarget(o.Repo, o.Number, o.Head, o.Base),
+		AboutMsg: i18n.M("approval.about_gh_merge", "number", o.Number, "repo", o.Repo, "sha", shortSHA(o.Head), "base", o.Base, "method", o.Method),
+		PR:       &chain.PRRef{Repo: o.Repo, Number: o.Number, SHA: o.Head},
+		Target:   PRTarget(o.Repo, o.Number, o.Head, o.Base),
 	}, nil
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 )
 
@@ -117,7 +118,7 @@ func (g workflowsGate) Approved(ctx context.Context, who github.Asker, branch, h
 		return false, 0, err
 	}
 	return g.orc.Chain.Workflows(ctx, chain.WorkflowsAsk{Requester: who.Character, Repo: repo, Branch: branch, Head: head,
-		About: "pedido pela classe " + who.Class})
+		AboutMsg: i18n.M("approval.about_by_class", "class", who.Class)})
 }
 
 // NewWorkflowsGate is the gate of the workflows that mestre run puts in the

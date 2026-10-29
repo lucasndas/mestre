@@ -150,7 +150,7 @@ func describe(r Request) i18n.Msg {
 			parts = append(parts, i18n.M("approval.card_paths", "text", strings.Join(paths, ", ")))
 		}
 	} else if !r.AboutMsg.IsZero() && r.Action == nil {
-		parts = append(parts, i18n.M("approval.card_about", "text", r.AboutMsg))
+		parts = append(parts, i18n.M("approval.card_about", "text", oneLineMsg(r.AboutMsg)))
 	} else if r.Action != nil {
 		parts = append(parts, i18n.M("approval.card_action", "text", oneLine(r.About)))
 	} else if r.About != "" {
@@ -293,3 +293,22 @@ func nameOf(r Request) string {
 // describeText is the action of the request as a text for an agent the engine tells in
 // Portuguese (the notices of the supervisor, which do not change).
 func describeText(r Request) string { return i18n.Render(i18n.PtBR, describe(r)) }
+
+// oneLineMsg keeps every text parameter of a message of the engine on one line
+// (the names and words in it may come from an agent), also inside the messages it holds.
+func oneLineMsg(m i18n.Msg) i18n.Msg {
+	if len(m.Params) == 0 {
+		return m
+	}
+	out := i18n.Msg{Code: m.Code, Params: make(map[string]any, len(m.Params))}
+	for k, v := range m.Params {
+		switch x := v.(type) {
+		case string:
+			v = oneLine(x)
+		case i18n.Msg:
+			v = oneLineMsg(x)
+		}
+		out.Params[k] = v
+	}
+	return out
+}

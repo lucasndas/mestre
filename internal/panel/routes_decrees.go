@@ -306,7 +306,7 @@ func (p *Panel) handleProposeDecree(w http.ResponseWriter, r *http.Request) {
 	}
 	p.audit(ctx, "panel.decree.proposed", map[string]any{"user_id": me.ID, "workspace": in.Workspace, "proposal": pending.ID, "kind": in.Kind,
 		"after": map[string]any{"summary": pending.Text, "pin": pending.PIN}, "ip": clientIP(r)})
-	WriteJSON(w, http.StatusCreated, DecreeProposal{ID: pending.ID, Text: pending.Text, Order: orderIn(me.LanguageFor(me.TelegramLanguage), pending), PIN: pending.PIN, Why: pending.Why})
+	WriteJSON(w, http.StatusCreated, proposalOut(me.LanguageFor(me.TelegramLanguage), pending))
 }
 
 // handleConfirmDecree is the click of the author. The engine says whether the PIN is
@@ -393,7 +393,7 @@ func (p *Panel) handleRenewDelegation(w http.ResponseWriter, r *http.Request) {
 	}
 	p.audit(ctx, "panel.decree.renewal_proposed", map[string]any{"user_id": me.ID, "workspace": before.Workspace, "decree": n, "proposal": pending.ID,
 		"after": map[string]any{"summary": pending.Text}, "ip": clientIP(r)})
-	WriteJSON(w, http.StatusCreated, DecreeProposal{ID: pending.ID, Text: pending.Text, Order: orderIn(me.LanguageFor(me.TelegramLanguage), pending), PIN: pending.PIN, Why: pending.Why})
+	WriteJSON(w, http.StatusCreated, proposalOut(me.LanguageFor(me.TelegramLanguage), pending))
 }
 
 // orderIn is the order of a proposal in the language of who reads: the engine's
@@ -403,4 +403,17 @@ func orderIn(lang string, p decrees.Pending) string {
 		return p.Order
 	}
 	return i18n.Render(lang, p.OrderMsg)
+}
+
+// proposalOut is the proposal as the user reads it: the confirmation and the reason
+// of the PIN in his language.
+func proposalOut(lang string, p decrees.Pending) DecreeProposal {
+	text, why := p.Text, p.Why
+	if !p.Msg.IsZero() {
+		text = i18n.Render(lang, p.Msg)
+	}
+	if !p.WhyMsg.IsZero() {
+		why = i18n.Render(lang, p.WhyMsg)
+	}
+	return DecreeProposal{ID: p.ID, Text: text, Order: orderIn(lang, p), PIN: p.PIN, Why: why}
 }

@@ -38,7 +38,7 @@ func (e usageExtras) OpenExtra(ctx context.Context, r usage.ExtraRequest) (int64
 	if *e.p == nil {
 		return 0, errors.New("app: the chain of approval is not built")
 	}
-	return (*e.p).Request(ctx, chain.OpenRequest{Type: classes.RequestExtraCost, Workspace: r.Workspace, Table: r.Table, About: r.About, Risk: r.Risk, Target: r.Target})
+	return (*e.p).Request(ctx, chain.OpenRequest{Type: classes.RequestExtraCost, Workspace: r.Workspace, Table: r.Table, AboutMsg: r.About, Risk: r.Risk, Target: r.Target})
 }
 
 // usageHolds holds, for the inbox, the characters whose provider window is at

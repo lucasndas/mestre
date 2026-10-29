@@ -7,6 +7,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // The request of a merge is of type merge, names the PR and the
@@ -32,8 +33,10 @@ func TestTheMergeRequestIsBoundToTheExactTargetOfThePR(t *testing.T) {
 	if string(req.Target) != string(approvals.PRTarget("Lucas/Meu-App", 7, req.PR.SHA, "main")) {
 		t.Errorf("the target is not the one PRTarget makes: %s", req.Target)
 	}
-	if !strings.Contains(req.About, "#7") || !strings.Contains(req.About, "0123456") || !strings.Contains(req.About, "squash") {
-		t.Errorf("about = %q", req.About)
+	for lang, want := range map[string]string{"en": "merge of PR #7", i18n.PtBR: "merge do PR #7"} {
+		if got := i18n.Render(lang, req.AboutMsg); !strings.Contains(got, want) || !strings.Contains(got, "0123456") || !strings.Contains(got, "squash") {
+			t.Errorf("%s: about = %q", lang, got)
+		}
 	}
 	for _, bad := range []approvals.MergeOrder{
 		{Repo: "lucas/meu-app", Number: 7, Head: "abc", Base: "main"},

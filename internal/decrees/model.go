@@ -140,7 +140,7 @@ type Pending struct {
 	// PIN to confirm, and Why says why.
 	Text string
 	// Msg is the confirmation as a message, said in the language of the author, and
-	// WhyMsg the reason of the PIN (Text and Why are their pt-BR form).
+	// WhyMsg the reason of the PIN (Text and Why are their pt-BR form, kept for the callers that have no language).
 	Msg, WhyMsg i18n.Msg
 	// Order is the text of the order of the user, as he wrote it (without the
 	// blanks at the ends): shown with the proposal so he sees what was understood

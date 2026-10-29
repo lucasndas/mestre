@@ -28,6 +28,8 @@ type WorkflowsAsk struct {
 	Repo, Branch, Head string
 	// About is the line the people read.
 	About string
+	// AboutMsg is the line as a message of the engine, when it has words.
+	AboutMsg i18n.Msg
 }
 
 // WorkflowsTarget is the target a request of envio_workflows is bound to.
@@ -121,7 +123,7 @@ func (s *Service) workflowsAsk(ctx context.Context, a WorkflowsAsk, workspace, t
 		}
 	}
 	id, err := s.Request(ctx, OpenRequest{Type: classes.RequestWorkflows, Workspace: workspace, Table: table, Requester: a.Requester,
-		AboutMsg: i18n.M("approval.about_workflows", "branch", a.Branch, "head", fmt.Sprintf("%.8s", a.Head), "about", oneLine(a.About)), Target: target, Fingerprint: fp})
+		AboutMsg: i18n.M("approval.about_workflows", "branch", a.Branch, "head", fmt.Sprintf("%.8s", a.Head), "about", workflowsAbout(a)), Target: target, Fingerprint: fp})
 	return false, id, err
 }
 
@@ -142,4 +144,11 @@ func (s *Service) WorkflowsPolicy(ctx context.Context, characterID string) (clas
 		return p, nil
 	}
 	return classes.WorkflowsNever, nil
+}
+
+func workflowsAbout(a WorkflowsAsk) any {
+	if !a.AboutMsg.IsZero() {
+		return a.AboutMsg
+	}
+	return oneLine(a.About)
 }

@@ -438,8 +438,7 @@ func (a *Approver) askPerson(ctx context.Context, o ApproveOrder, from chain.Req
 	if typ == "" {
 		typ = classes.RequestMerge
 	}
-	// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
-	id, err := a.Opener.Request(ctx, chain.OpenRequest{Type: typ, Workspace: o.Workspace, Table: from.Table, About: fmt.Sprintf("aprovação de %s para o PR #%d", plain(p.Name), o.Number),
+	id, err := a.Opener.Request(ctx, chain.OpenRequest{Type: typ, Workspace: o.Workspace, Table: from.Table, AboutMsg: i18n.M("approval.about_gh_approve", "name", plain(p.Name), "number", o.Number),
 		PR: &chain.PRRef{Repo: o.Repo, Number: o.Number, SHA: o.SHA}, Require: []string{p.ID}, Target: from.Target, Risk: from.Risk})
 	if err != nil {
 		return Approval{}, err

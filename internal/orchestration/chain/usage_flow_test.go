@@ -36,7 +36,7 @@ func (f fixedCeilings) Ceiling(context.Context, string) (*classes.Ceiling, error
 type chainExtras struct{ ch *chain.Service }
 
 func (e chainExtras) OpenExtra(ctx context.Context, r usage.ExtraRequest) (int64, error) {
-	return e.ch.Request(ctx, chain.OpenRequest{Type: classes.RequestExtraCost, Workspace: r.Workspace, Table: r.Table, About: r.About, Risk: r.Risk, Target: r.Target})
+	return e.ch.Request(ctx, chain.OpenRequest{Type: classes.RequestExtraCost, Workspace: r.Workspace, Table: r.Table, AboutMsg: r.About, Risk: r.Risk, Target: r.Target})
 }
 
 type noDirectory struct{}
