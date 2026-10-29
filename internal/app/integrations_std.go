@@ -808,7 +808,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	}
 	h := r.ghHandlers(orc)
 	h.Register(fwd)
-	(&ghcli.Apps{Characters: orc.Registry, Store: &github.Registry{DB: r.env.DB}, Creator: appCreator{c: r.creation, tell: func(ctx context.Context, text string) { r.alert.OwnerPrivate(ctx, i18n.Text(text)) }}}).Register(fwd)
+	(&ghcli.Apps{Characters: orc.Registry, Store: &github.Registry{DB: r.env.DB}, Creator: appCreator{c: r.creation, tell: r.alert.OwnerPrivate}}).Register(fwd)
 	(&decrees.ProposeHandler{Service: r.decrees, Characters: orc.Registry, Message: inboxMessages{&inbox.Store{DB: r.env.DB}}.Source, Offer: r.dc}).Register(fwd)
 	(&decrees.SubHandler{Service: r.decrees, Characters: orc.Registry}).Register(fwd)
 	poll, perr := r.poller(orc)

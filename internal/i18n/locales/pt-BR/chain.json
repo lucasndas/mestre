@@ -1,0 +1,9 @@
+{
+  "chain.queue_accumulating": "Fila acumulando: {{who}} tem {{open}} pedidos de aprovação abertos e o mais antigo espera há {{oldest}}.",
+  "chain.queue_hint": "\nSe os pedidos médios da mesa não deveriam ficar com o Mestre da mesa, pause a autonomia dela: mestre approval autonomy pause --table {{table}} --reason \"<motivo>\".",
+  "chain.stalled": "A mesa {{table}} está em trabalho há {{quiet}} sem entregar nada: nenhum commit novo na branch, nenhum PR aberto ou atualizado e nenhuma etapa de missão concluída.",
+  "chain.who_agent": "superior agente da mesa {{table}}",
+  "chain.who_gm": "Grão-Mestre",
+  "chain.who_mesa": "Mestre da mesa {{table}}",
+  "chain.who_people": "pessoas"
+}

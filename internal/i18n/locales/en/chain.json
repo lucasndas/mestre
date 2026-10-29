@@ -1,0 +1,9 @@
+{
+  "chain.queue_accumulating": "Queue piling up: {{who}} has {{open}} open approval requests and the oldest has waited for {{oldest}}.",
+  "chain.queue_hint": "\nIf the medium requests of the table should not stay with the Table Master, pause its autonomy: mestre approval autonomy pause --table {{table}} --reason \"<motivo>\".",
+  "chain.stalled": "The table {{table}} has been working for {{quiet}} without delivering anything: no new commit on the branch, no PR opened or updated and no mission step completed.",
+  "chain.who_agent": "agent superior of the table {{table}}",
+  "chain.who_gm": "Grand Master",
+  "chain.who_mesa": "Table Master {{table}}",
+  "chain.who_people": "people"
+}

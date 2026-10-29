@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 )
 
@@ -151,6 +152,19 @@ func levelName(m QueueMetric) string {
 	return "pessoas"
 }
 
+// levelMsg is levelName as a message, said in the language of who reads.
+func levelMsg(m QueueMetric) i18n.Msg {
+	switch m.Level {
+	case LevelMesa:
+		return i18n.M("chain.who_mesa", "table", orDash(m.Table))
+	case LevelAgent:
+		return i18n.M("chain.who_agent", "table", orDash(m.Table))
+	case LevelGrandMaster:
+		return i18n.M("chain.who_gm")
+	}
+	return i18n.M("chain.who_people")
+}
+
 // breach says a queue has accumulated: more open requests than the limit, or
 // the oldest past the factor times the deadline of the level.
 func breach(m QueueMetric, st Settings) bool {
@@ -248,7 +262,7 @@ func (s *Supervisor) warn(ctx context.Context, m QueueMetric) {
 		// the people who may pause it get the same warning with the button
 		// **Pausar autonomia** (the Telegram; the panel, M6)
 		if s.o.QueuePeople != nil {
-			if err := s.o.QueuePeople.QueueAccumulating(ctx, QueueNotice{Workspace: m.Workspace, Table: m.Table, Text: text}); err != nil {
+			if err := s.o.QueuePeople.QueueAccumulating(ctx, QueueNotice{Workspace: m.Workspace, Table: m.Table, Text: text, Msg: i18n.Concat(i18n.M("chain.queue_accumulating", "who", levelMsg(m), "open", m.Open, "oldest", short(m.Oldest)), i18n.M("chain.queue_hint", "table", fmt.Sprintf("%q", m.Table)))}); err != nil {
 				s.log.Warn("supervision: the people were not warned of the queue", "table", m.Table, "err", err)
 			} else {
 				told = true
@@ -268,7 +282,10 @@ func (s *Supervisor) warn(ctx context.Context, m QueueMetric) {
 // people who may pause the autonomy of the table (an Approver or above).
 type QueueNotice struct {
 	Workspace, Table string
-	Text             string
+	// Text is the warning in pt-BR (what the Grand Master reads); Msg is the same as a message, said in
+	// the language of each person.
+	Text string
+	Msg  i18n.Msg
 }
 
 // QueuePeople delivers that warning with the button **Pausar autonomia**.

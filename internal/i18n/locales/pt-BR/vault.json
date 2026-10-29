@@ -1,0 +1,7 @@
+{
+  "vault.domains": " ({{domains}})",
+  "vault.expired": "Atenção: {{what}} venceu em {{on}}. Troque-a pelo painel.",
+  "vault.expiring": "Atenção: {{what}} vence em {{days}} dias ({{on}}). Troque-a pelo painel antes disso.",
+  "vault.no_expiry": "Lembrete: {{what}} não tem validade e não é trocada há {{days}} dias. Considere trocá-la pelo painel.",
+  "vault.what": "a credencial de site {{name}}"
+}
