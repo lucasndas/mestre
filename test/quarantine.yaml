@@ -21,3 +21,7 @@ tests:
     issue: https://github.com/mestre-ia/mestre/issues/418
     added: 2026-10-28
     reason: on the Windows full suite under load the firing did not leave the queue in 50 s
+  - test: TestMestreRunStartsACharacterInATerminalAndReportsToTheCitadel
+    issue: https://github.com/mestre-ia/mestre/issues/453
+    added: 2026-10-29
+    reason: under -race on Linux the registry of the Citadel did not hear the character idle in 20 s, 2 of 10 runs, also before M6+
