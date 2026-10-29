@@ -15,6 +15,7 @@ import type {
 import { api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
 import { useLive, useLiveEvents } from "../../lib/live";
+import { engineText } from "../../lib/messages";
 import { useRememberCampaign } from "../../workspace/current";
 import { situationOf } from "../../workspace/situation";
 import { Badge, ChoiceGroup, NativeSelect, PageHeader } from "../admin/kit";
@@ -28,7 +29,7 @@ const enc = encodeURIComponent;
 
 /** The workspaces (docs/painel/administracao.md): the list, the session zero and what it asks. */
 export function Workspaces({ create = false }: { create?: boolean }) {
-  const { t } = useTranslation("workspaces");
+  const { t, i18n } = useTranslation("workspaces");
   const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
   const live = useLive();
@@ -375,18 +376,25 @@ function StageDetail({
   s: WorkspaceStage;
   canRetry: boolean;
 }) {
-  const { t } = useTranslation("workspaces");
+  const { t, i18n } = useTranslation("workspaces");
   const { t: te } = useTranslation("errors");
   const qc = useQueryClient();
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   if (s.state === "waiting")
-    return <p className="text-sm text-muted">{t("stages.waitingFor", { why: s.waiting ?? "" })}</p>;
+    return (
+      <p className="text-sm text-muted">
+        {t("stages.waitingFor", { why: engineText(i18n.language, s.waiting_msg, s.waiting ?? "") })}
+      </p>
+    );
   if (s.state !== "failed" || !s.failure) return null;
   return (
     <div className="mt-1 flex flex-col gap-2 text-sm">
       <p className="text-danger">
-        {t("stages.failure", { reason: s.failure.reason, count: s.failure.failures })}
+        {t("stages.failure", {
+          reason: engineText(i18n.language, s.failure.reason_msg, s.failure.reason),
+          count: s.failure.failures,
+        })}
       </p>
       {error ? <Alert>{errorText(te, error)}</Alert> : null}
       {canRetry ? (

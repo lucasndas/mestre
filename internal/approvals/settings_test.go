@@ -9,6 +9,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/testkit/fakegithub"
 )
@@ -87,11 +88,15 @@ func TestThePlanBSaysWhereTheReviewIsAskedTodayAndNeedsARequirement(t *testing.T
 	if _, err := l.settings().ProposePlanB(l.ctx, "loja"); err != nil {
 		t.Fatal(err)
 	}
-	if about := l.open.all()[0].About; !strings.Contains(about, "proteção clássica") {
-		t.Fatalf("about = %q; want the change of the classic protection", about)
+	about := l.open.all()[0].AboutMsg
+	if pt := i18n.Render(i18n.PtBR, about); !strings.HasPrefix(pt, "plano B da aprovação: ") || !strings.Contains(pt, "proteção clássica") {
+		t.Fatalf("about in pt-BR = %q; want the change of the classic protection", pt)
+	}
+	if en := i18n.Render(i18n.En, about); !strings.HasPrefix(en, "approval plan B: ") || !strings.Contains(en, "classic protection") {
+		t.Fatalf("about in en = %q; want the change of the classic protection", en)
 	}
 	rules, _ := l.grand.ReadRules(l.ctx, "lucas/meu-app", "main")
-	if !rules.Classic || !strings.Contains(github.PlanBChange(rules), "Tirar a exigência de revisão da proteção clássica") {
+	if !rules.Classic || !strings.Contains(i18n.Render(i18n.PtBR, github.PlanBChange(rules)), "Tirar a exigência de revisão da proteção clássica") {
 		t.Fatalf("rules = %+v", rules)
 	}
 }

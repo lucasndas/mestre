@@ -71,6 +71,11 @@ func TestTheStagesOfTheSessionZeroRunInTheCitadelAndStopWhereTheyNeedWhatIsNotHe
 	if err := w.orc.Workspaces.Prepare(w.ctx, ws.Slug); !errors.As(err, &we) {
 		t.Fatalf("Prepare with an App missing = %v, want the wait of the stage apps", err)
 	}
+	if msg, ok := w.orc.Workspaces.WaitingMsg(ws.Slug); !ok ||
+		!strings.HasPrefix(i18n.Render(i18n.PtBR, msg), "Apps ainda não instalados em lucas/Outro: ") ||
+		!strings.HasPrefix(i18n.Render(i18n.En, msg), "Apps not installed yet in lucas/Outro: ") {
+		t.Fatalf("the wait as a message = %+v (%v), want the Apps phrase in both languages", msg, ok)
+	}
 	if got, _ := w.orc.Workspaces.Get(w.ctx, ws.Slug); got.Stage != workspaces.StageApps || got.StageFailure != nil {
 		t.Fatalf("workspace at %q with failure %v, want waiting at apps with no error", got.Stage, got.StageFailure)
 	}

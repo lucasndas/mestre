@@ -150,11 +150,13 @@ func (s *Service) runApps(ctx context.Context, w workspaces.Workspace) error {
 			return err
 		}
 	}
-	reason := "Apps ainda não instalados em " + w.Repo.String() + ": " + strings.Join(missing, ", ")
+	apps := strings.Join(missing, ", ")
+	msg := i18n.M("workspace.stage_waiting_apps", "repo", w.Repo.String(), "apps", apps)
+	reason := i18n.Render(i18n.En, msg)
 	if addErr != nil && !errors.Is(addErr, ErrNoPersonalCredential) {
 		s.log.Warn("session zero: adding the repository to the installation", "workspace", w.Slug, "err", addErr)
 	}
-	return &workspaces.WaitError{Reason: reason, Poll: AppsPoll}
+	return &workspaces.WaitError{Reason: reason, Msg: msg, Poll: AppsPoll}
 }
 
 // runFiles is the stage files: .mestre/, the files of the providers and the

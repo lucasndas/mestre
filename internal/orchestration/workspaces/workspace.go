@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // State is the state of a workspace (docs/orquestracao/workspaces.md#estados).
@@ -42,6 +44,56 @@ func (s Stage) index() int {
 		}
 	}
 	return -1
+}
+
+// stageErrorMsg is the message of a failure code of the stages; any other code has the generic one.
+func stageErrorMsg(code, detail string) i18n.Msg {
+	switch code {
+	case "analysis_failed":
+		return i18n.M("workspace.stage_error_analysis_failed", "detail", detail)
+	case "approval_request_failed":
+		return i18n.M("workspace.stage_error_approval_request_failed", "detail", detail)
+	case "approval_rules_failed":
+		return i18n.M("workspace.stage_error_approval_rules_failed", "detail", detail)
+	case "apps_check_failed":
+		return i18n.M("workspace.stage_error_apps_check_failed", "detail", detail)
+	case "apps_link_failed":
+		return i18n.M("workspace.stage_error_apps_link_failed", "detail", detail)
+	case "apps_notify_failed":
+		return i18n.M("workspace.stage_error_apps_notify_failed", "detail", detail)
+	case "clone_failed":
+		return i18n.M("workspace.stage_error_clone_failed", "detail", detail)
+	case "config_failed":
+		return i18n.M("workspace.stage_error_config_failed", "detail", detail)
+	case "credentials_failed":
+		return i18n.M("workspace.stage_error_credentials_failed", "detail", detail)
+	case "fetch_failed":
+		return i18n.M("workspace.stage_error_fetch_failed", "detail", detail)
+	case "files_failed":
+		return i18n.M("workspace.stage_error_files_failed", "detail", detail)
+	case "grand_master_failed":
+		return i18n.M("workspace.stage_error_grand_master_failed", "detail", detail)
+	case "layout_mismatch":
+		return i18n.M("workspace.stage_error_layout_mismatch", "detail", detail)
+	case "mkdir_failed":
+		return i18n.M("workspace.stage_error_mkdir_failed", "detail", detail)
+	case "notify_failed":
+		return i18n.M("workspace.stage_error_notify_failed", "detail", detail)
+	case "open_failed":
+		return i18n.M("workspace.stage_error_open_failed", "detail", detail)
+	case "verification_proposal_failed":
+		return i18n.M("workspace.stage_error_verification_proposal_failed", "detail", detail)
+	case "worktree_failed":
+		return i18n.M("workspace.stage_error_worktree_failed", "detail", detail)
+	}
+	return i18n.M("workspace.stage_error_failed", "detail", detail)
+}
+
+// ReasonMsg is the failure as a message of the engine, for each reader to
+// translate: the phrase of the engine comes from the code, and what the program
+// that failed said (already masked in Reason) goes in as a text, never translated.
+func (f StageFailure) ReasonMsg() i18n.Msg {
+	return stageErrorMsg(f.Code, f.Reason)
 }
 
 // StageFailure is a stage that failed: the code and the reason the panel
@@ -147,7 +199,10 @@ const DefaultWaitPoll = time.Minute
 // panel and Poll how long before the stage runs again (zero: DefaultWaitPoll).
 type WaitError struct {
 	Reason string
-	Poll   time.Duration
+	// Msg is Reason as a message of the engine, for the panel to translate (Reason
+	// is then its English text, for logs); empty when Reason is all there is.
+	Msg  i18n.Msg
+	Poll time.Duration
 }
 
 func (e *WaitError) Error() string { return "waiting: " + e.Reason }

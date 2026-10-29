@@ -97,8 +97,7 @@ func (s *Settings) ProposePlanB(ctx context.Context, workspace string) (int64, e
 		return 0, err
 	}
 	return s.Requests.Request(ctx, chain.OpenRequest{Type: classes.RequestRepoSettings, Workspace: workspace, Target: target,
-		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
-		About: "plano B da aprovação: " + github.PlanBChange(rules)})
+		AboutMsg: i18n.M("approval.about_plan_b", "change", github.PlanBChange(rules))})
 }
 
 // ErrBadRuleset: the body is not the body of a ruleset of the API of GitHub.

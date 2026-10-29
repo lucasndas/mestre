@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/gitx"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
@@ -396,6 +397,7 @@ func (s *Service) Prepare(ctx context.Context, slug string) error {
 type waiting struct {
 	stage  Stage
 	reason string
+	msg    i18n.Msg
 	until  time.Time
 }
 
@@ -407,7 +409,7 @@ func (s *Service) stageWaits(ctx context.Context, w Workspace, we *WaitError) er
 		poll = DefaultWaitPoll
 	}
 	s.mu.Lock()
-	s.waits[w.Slug] = waiting{stage: w.Stage, reason: we.Reason, until: s.o.Clock.Now().Add(poll)}
+	s.waits[w.Slug] = waiting{stage: w.Stage, reason: we.Reason, msg: we.Msg, until: s.o.Clock.Now().Add(poll)}
 	s.mu.Unlock()
 	if w.StageFailure != nil {
 		if err := s.store.ClearStageFailure(ctx, w.Slug, s.o.Clock.Now()); err != nil {
@@ -432,6 +434,14 @@ func (s *Service) Waiting(slug string) (reason string, ok bool) {
 	defer s.mu.Unlock()
 	w, ok := s.waits[slug]
 	return w.reason, ok
+}
+
+// WaitingMsg is Waiting as a message of the engine (zero when the stage only gave a text).
+func (s *Service) WaitingMsg(slug string) (i18n.Msg, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w, ok := s.waits[slug]
+	return w.msg, ok && !w.msg.IsZero()
 }
 
 // OpenPrincipal opens the main clone of the workspace by its record.

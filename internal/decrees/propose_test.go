@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -98,8 +99,12 @@ func TestDecreeProposeBuildsTheProposalFromTheMessageAndNothingHoldsBeforeTheCli
 	if off.list[0].Order != order || got.Data["order"] != order {
 		t.Errorf("the order shown to the author = %q (reply %v), want the text of the message %q unchanged", off.list[0].Order, got.Data["order"], order)
 	}
-	if got.Data["text"] != shown {
-		t.Errorf("the reply text %v is not the proposal shown to the author %q", got.Data["text"], shown)
+	// the agent reads English whatever the language of the author; the author reads his own
+	if want := i18n.Render(i18n.En, off.list[0].Msg); got.Data["text"] != want || want == shown {
+		t.Errorf("the reply text %v is not the proposal in English %q (the author's is %q)", got.Data["text"], want, shown)
+	}
+	if want := "Understood: allow commands make deploy-teste for the class dev, permanent (campaign loja). Confirm?"; got.Data["text"] != want {
+		t.Errorf("the reply text = %v, want %q", got.Data["text"], want)
 	}
 	if w.count("decrees") != before {
 		t.Fatal("a decree held before the click of the author")

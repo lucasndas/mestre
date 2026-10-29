@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
@@ -239,7 +240,7 @@ func (h *ProposeHandler) propose(ctx context.Context, c *localchan.Call) localch
 		return localchan.Fail("not_delivered", "the proposal could not be put in front of its author: "+err.Error(), "tell the user another way").WithExit(localchan.ExitConflict)
 	}
 	r := localchan.Fail("pending", "the proposal waits for the confirmation of its author; no decree holds before the click", "").WithExit(localchan.ExitPending)
-	r.Data = localchan.OK(map[string]any{"proposal": pending.ID, "text": pending.Text, "order": pending.Order, "pin": pending.PIN}).Data
+	r.Data = localchan.OK(map[string]any{"proposal": pending.ID, "text": i18n.Render(i18n.En, pending.Msg), "order": pending.Order, "pin": pending.PIN}).Data
 	return r
 }
 

@@ -156,6 +156,62 @@ test("a stage that waits says what for, and an Observer sees no button", async (
   expect(screen.queryByRole("button", { name: /Tentar de novo/ })).toBeNull();
 });
 
+test("the phrases of the engine on a stage come from the code, with what the program said as text", async () => {
+  const stages = [
+    stage("apps", "waiting", {
+      waiting: "Apps not installed yet in lucas/loja: mestre",
+      waiting_msg: {
+        code: "workspace.stage_waiting_apps",
+        params: { repo: "lucas/loja", apps: "mestre" },
+      },
+    }),
+    stage("mirror", "pending"),
+  ];
+  const waiting = row({ state: "preparing", stages });
+  fakeServer({
+    ...base,
+    ...as(["status"]),
+    "GET /api/workspaces": () => ({ body: list([waiting], { can_create: false, sheets: [] }) }),
+  });
+  renderApp("/workspaces");
+  expect(
+    await screen.findByText("Esperando: Apps ainda não instalados em lucas/loja: mestre"),
+  ).toBeTruthy();
+});
+
+test("a failed stage says the engine's phrase in the language and keeps the program's error as it came", async () => {
+  const failing = row({
+    state: "preparing",
+    stages: [
+      stage("apps", "done"),
+      stage("mirror", "failed", {
+        failure: {
+          code: "clone_failed",
+          reason: "fatal: repository not found",
+          reason_msg: {
+            code: "workspace.stage_error_clone_failed",
+            params: { detail: "fatal: repository not found" },
+          },
+          failures: 1,
+          at: "2026-10-20T12:00:00Z",
+          retry_at: "2026-10-20T12:05:00Z",
+        },
+      }),
+    ],
+  });
+  fakeServer({
+    ...base,
+    ...as(["status"]),
+    "GET /api/workspaces": () => ({ body: list([failing], { can_create: false, sheets: [] }) }),
+  });
+  renderApp("/workspaces");
+  expect(
+    await screen.findByText(
+      "Falhou: O clone do repositório falhou: fatal: repository not found (1 vez; o Mestre tenta de novo sozinho).",
+    ),
+  ).toBeTruthy();
+});
+
 test("pausing and resuming ask the server and show the refusal", async () => {
   const { calls } = fakeServer({
     ...base,
