@@ -1184,9 +1184,9 @@ export interface CanvasStep {
    */
   current: boolean;
   /**
-   * Waiting is what holds the step before it starts, in words.
+   * WaitingMsg is what holds the step before it starts, as a code and params.
    */
-  waiting?: string;
+  waiting_msg?: any /* i18n.Msg */;
 }
 /**
  * CanvasWait is a dashed line from who waits to what it waits for. Target is the
@@ -2548,7 +2548,12 @@ export interface ViewMachine {
  */
 export interface ViewWait {
   kind: string;
+  /**
+   * Reason is the text of a person or an agent (the reason to pause); ReasonMsg is
+   * what the engine says as a code and params, which the screen says in its own language.
+   */
   reason: string;
+  reason_msg?: any /* i18n.Msg */;
   fingerprint?: string;
   where?: string;
 }
@@ -2590,7 +2595,7 @@ export interface TableBlock {
   /**
    * IssueWarning is why the table has no issue on GitHub ("" when it has).
    */
-  issue_warning?: string;
+  issue_warning?: any /* i18n.Msg */;
   quest?: ViewQuest;
   party: ViewMachine[];
   party_size: number /* int */;
@@ -2836,7 +2841,7 @@ export interface VerificationView {
    * not parse; FileError says why).
    */
   commands: string[];
-  file_error?: string;
+  file_error?: any /* i18n.Msg */;
   /**
    * Outside is true when a version is confirmed and the file differs from it:
    * an edit made outside the panel, which is not in force.

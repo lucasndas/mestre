@@ -38,7 +38,7 @@ func TestTheViewHasTheBlockOfTheTableAndItsQuiet(t *testing.T) {
 		t.Errorf("the Grand Master is %+v", v.GrandMaster)
 	}
 	b := blockOf(t, v, w.table.ID)
-	if b.Branch != w.table.Branch || b.Epic != w.table.Epic || b.State == "" || b.IssueWarning != "" {
+	if b.Branch != w.table.Branch || b.Epic != w.table.Epic || b.State == "" || b.IssueWarning != nil {
 		t.Errorf("block = %+v", b)
 	}
 	if b.PartySize != 1 || len(b.Party) != 1 || b.Party[0].MachineName == "" {

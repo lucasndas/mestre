@@ -123,7 +123,8 @@ func (h viewHost) block(ctx context.Context, o *Orchestration, t tables.Table, n
 	b := panel.TableBlock{ID: t.ID, Epic: t.Epic, EpicTitle: t.EpicTitle, Branch: t.Branch, State: string(t.State), Paused: t.Paused, PR: t.PRNumber,
 		Party: []panel.ViewMachine{}, Waits: []panel.ViewWait{}}
 	if t.Epic <= 0 {
-		b.IssueWarning = "a issue do épico não foi criada no GitHub"
+		m := i18n.M("table.issue_missing")
+		b.IssueWarning = &m
 	}
 	over := tables.Over(t.State)
 
@@ -147,10 +148,10 @@ func (h viewHost) block(ctx context.Context, o *Orchestration, t tables.Table, n
 				}
 				if s.Waiting != "" && !over {
 					kind := panel.WaitOther
-					if strings.HasPrefix(s.Waiting, "aprovação") {
+					if s.WaitingMsg.Code == "table.wait_approval" {
 						kind = panel.WaitApproval
 					}
-					b.Waits = append(b.Waits, panel.ViewWait{Kind: kind, Reason: s.Waiting})
+					b.Waits = append(b.Waits, panel.ViewWait{Kind: kind, ReasonMsg: msgOrNil(s.WaitingMsg)})
 				}
 			}
 		}
@@ -163,7 +164,7 @@ func (h viewHost) block(ctx context.Context, o *Orchestration, t tables.Table, n
 			b.Criteria = &panel.ViewCriteria{Total: p.Criteria, Proven: p.Proven, Verified: p.Verified}
 		}
 		if cur.State == quests.Paused {
-			w := panel.ViewWait{Kind: panel.WaitOther, Reason: cur.PausedReason}
+			w := reasonWait(panel.WaitOther, cur.PausedReason)
 			if cur.PausedReason == quests.ReasonSameFailure {
 				w.Kind, w.Fingerprint = panel.WaitSameFailure, p.Failure.Fingerprint
 				if len(p.Failure.Places) > 0 {
@@ -181,14 +182,14 @@ func (h viewHost) block(ctx context.Context, o *Orchestration, t tables.Table, n
 			if t.PausedBy == "usage_limit" {
 				kind = panel.WaitQuota
 			}
-			b.Waits = append([]panel.ViewWait{{Kind: kind, Reason: t.PausedReason}}, b.Waits...)
+			b.Waits = append([]panel.ViewWait{reasonWait(kind, t.PausedReason)}, b.Waits...)
 		}
 		held, err := o.Tables.Held(ctx, t.Workspace, t.ID)
 		if err != nil {
 			return b, err
 		}
 		if held {
-			b.Waits = append(b.Waits, panel.ViewWait{Kind: panel.WaitTable, Reason: "aguarda o merge de outra mesa"})
+			b.Waits = append(b.Waits, panel.ViewWait{Kind: panel.WaitTable, ReasonMsg: msgOrNil(i18n.M("table.wait_merge"))})
 		}
 		if t.State == tables.StateWorking && !t.Paused && !held {
 			d, err := o.Tables.LastDelivery(ctx, t.Workspace, t.ID)
@@ -302,4 +303,26 @@ func (h screenedViewHost) PauseTable(ctx context.Context, by users.User, workspa
 		return false, &panel.Refusal{Msg: i18n.M("table.secret")}
 	}
 	return h.viewHost.PauseTable(ctx, by, workspace, table, clean)
+}
+
+// msgOrNil is the message, or nothing when it has no code.
+func msgOrNil(m i18n.Msg) *i18n.Msg {
+	if m.Code == "" {
+		return nil
+	}
+	return &m
+}
+
+// reasonWait is a wait whose reason is the engine's own words when it is one of the
+// reasons it writes, and the text of a person otherwise.
+func reasonWait(kind, reason string) panel.ViewWait {
+	switch reason {
+	case quests.ReasonReturnLimit:
+		return panel.ViewWait{Kind: kind, ReasonMsg: msgOrNil(i18n.M("table.pause_return_limit"))}
+	case quests.ReasonSameFailure:
+		return panel.ViewWait{Kind: kind, ReasonMsg: msgOrNil(i18n.M("table.pause_same_failure"))}
+	case usageReason:
+		return panel.ViewWait{Kind: kind, ReasonMsg: msgOrNil(i18n.M("table.pause_usage_limit"))}
+	}
+	return panel.ViewWait{Kind: kind, Reason: reason}
 }

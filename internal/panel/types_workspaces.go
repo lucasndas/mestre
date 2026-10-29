@@ -1,6 +1,10 @@
 package panel
 
-import "time"
+import (
+	"time"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
+)
 
 // The stage states of the session zero a workspace shows.
 const (
@@ -104,8 +108,8 @@ type VerificationView struct {
 	Confirmed *VerificationConfirmed `json:"confirmed,omitempty"`
 	// Commands are the commands the file proposes, in order (empty when it does
 	// not parse; FileError says why).
-	Commands  []string `json:"commands"`
-	FileError string   `json:"file_error,omitempty"`
+	Commands  []string  `json:"commands"`
+	FileError *i18n.Msg `json:"file_error,omitempty"`
 	// Outside is true when a version is confirmed and the file differs from it:
 	// an edit made outside the panel, which is not in force.
 	Outside bool `json:"outside"`

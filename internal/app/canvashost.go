@@ -288,7 +288,7 @@ func questView(v quests.View) panel.CanvasQuest {
 	for _, s := range v.Steps {
 		cur := s.State == quests.StepPreparing || s.State == quests.StepRunning || s.State == quests.StepStuck || s.State == quests.StepApproving
 		q.Steps = append(q.Steps, panel.CanvasStep{ID: s.ID, Title: s.Def.Title(), State: string(s.State), Character: s.Character, Assignee: s.Def.Character, After: s.Def.After,
-			ReturnTo: s.Def.CanReturnTo, Returns: s.Returns, Current: cur, Waiting: s.Waiting})
+			ReturnTo: s.Def.CanReturnTo, Returns: s.Returns, Current: cur, WaitingMsg: msgOrNil(s.WaitingMsg)})
 	}
 	return q
 }

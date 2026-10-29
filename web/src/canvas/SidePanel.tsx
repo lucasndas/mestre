@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Button, Field } from "../components/ui";
 import type { CanvasState, GrimoirePlan, RitualInfo } from "../gen/panel";
 import { formatDateTime } from "../lib/format";
+import { engineText } from "../lib/messages";
 import { grimoiresQuery, ritualsQuery } from "./api";
 import { useCanvasEnv } from "./context";
 import { type Draft, emptyDraft, fromQuest, move, remove, toRequest } from "./mission";
@@ -98,7 +99,7 @@ function Missions({
   draft: Draft | null;
   setDraft: (d: Draft | null) => void;
 }) {
-  const { t } = useTranslation("canvas");
+  const { t, i18n } = useTranslation("canvas");
   const env = useCanvasEnv();
   const [busy, setBusy] = useState(false);
   const save = async (run: boolean) => {
@@ -229,7 +230,12 @@ function Missions({
                     className={s.current ? "font-semibold text-accent" : ""}
                   >
                     {i + 1}. {s.title}
-                    {s.waiting ? <span className="text-muted"> — {s.waiting}</span> : null}
+                    {s.waiting_msg ? (
+                      <span className="text-muted">
+                        {" "}
+                        — {engineText(i18n.language, s.waiting_msg)}
+                      </span>
+                    ) : null}
                   </li>
                 ))}
               </ol>

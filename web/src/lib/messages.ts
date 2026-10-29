@@ -80,6 +80,18 @@ function show(v: unknown, lang: Lang, zone: string | undefined): string {
   return String(v);
 }
 
+/** A message of the engine as the API carries it: the code and the params. */
+export interface EngineMsg {
+  code: string;
+  params?: Params;
+}
+
+/** The text of a message the API carries (typed `any` by the generator) in a language; `fallback` when it has none or the code is unknown. */
+export function engineText(language: string | undefined, msg: unknown, fallback = ""): string {
+  if (!isMsg(msg)) return fallback;
+  return messageText(language, msg.code, msg.params) ?? fallback;
+}
+
 /**
  * The text of a message of the engine in a language, from its code and params; undefined
  * when the engine has no such code (a client older than the engine). A `count` picks the

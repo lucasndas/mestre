@@ -285,12 +285,32 @@ test("when the read fails the cards stay, with the time of the last good one and
 });
 
 // CA-VIDA-09
-test("a table without issue shows the warning in the card, with the reason", async () => {
-  fakeServer(base(view([table({ epic: 0, issue_warning: "o GitHub recusou a criação" })])));
-  renderApp("/workspaces/loja");
-  const a = await block("42-login");
-  expect(within(a).getByRole("note").textContent).toContain("o GitHub recusou a criação");
-});
+test.each([
+  ["pt-BR", "Sem issue no GitHub: a issue do épico não foi criada no GitHub"],
+  ["en", "No issue on GitHub: the issue of the epic was not created on GitHub"],
+] as const)(
+  "a table without issue shows the warning of the engine in %s",
+  async (language, text) => {
+    fakeServer(base(view([table({ epic: 0, issue_warning: { code: "table.issue_missing" } })])));
+    renderApp("/workspaces/loja", language);
+    const a = await screen.findByRole("article", { name: /42-login/ });
+    expect(within(a).getByRole("note").textContent).toContain(text);
+  },
+);
+
+test.each([
+  ["pt-BR", "Espera: aguarda o merge de outra mesa."],
+  ["en", "Waits: waits for the merge of another table."],
+] as const)(
+  "the reason of a wait the engine gives as a code is said in %s",
+  async (language, text) => {
+    const waits = [{ kind: "table", reason: "", reason_msg: { code: "table.wait_merge" } }];
+    fakeServer(base(view([table({ waits })])));
+    renderApp("/workspaces/loja", language);
+    const a = await screen.findByRole("article", { name: /42-login/ });
+    expect(a.textContent).toContain(text);
+  },
+);
 
 // CA-VIDA-10
 test("on a narrow screen there is only the list: Precisa de você on top, then the Grand Master, then the tables", async () => {
