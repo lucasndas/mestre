@@ -480,12 +480,15 @@ func TestAMessageToTheGrandMasterCarriesTheLanguageOfWhoWroteIt(t *testing.T) {
 		VALUES ('loja', 'lucas/loja', 'lucas/loja', 'https://example.test/x.git', 'main', 'active', '', 1, 1)`); err != nil {
 		t.Fatal(err)
 	}
-	item, err := (&inbox.Store{DB: w.db}).Insert(w.ctx, telegram.NewItem(got[1], "gm"), w.clk.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(item.Header(), " · idioma en · ") {
-		t.Fatalf("header %q", item.Header())
+	store := &inbox.Store{DB: w.db}
+	for _, d := range got {
+		item, err := store.Insert(w.ctx, telegram.NewItem(d, "gm"), w.clk.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if h := item.Header(); !strings.Contains(h, " · idioma "+want[d.User.Name]+" · ") {
+			t.Errorf("%s: header %q, want idioma %s", d.User.Name, h, want[d.User.Name])
+		}
 	}
 	// the answer of a question carries it too
 	if o := telegram.AnswerItem(telegram.ChoiceQuestion{ID: 3, Question: "q"}, bia, "sim").Origin; o.Language != "en" {

@@ -72,6 +72,7 @@ func TestTheSuperiorOfEachCharacterComesFromWhoCreatedItAndFollowsTheCreatorThat
 }
 
 // CA-CADEIA-02
+// CA-IDIOMA-11 (the copy of the agent approver, in en)
 func TestABaixoRequestReachesTheTableMasterAsAnApprovalItemAndApprovingNowIsAOneTimeException(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -103,6 +104,14 @@ func TestABaixoRequestReachesTheTableMasterAsAnApprovalItemAndApprovingNowIsAOne
 		if !strings.Contains(text, part) {
 			t.Errorf("the item lacks %q:\n%s", part, text)
 		}
+	}
+	// the copy that reaches the agent approver through the inbox is in en, the frame
+	// included, whatever the language of the people of the Guild
+	if !strings.Contains(text, "Approval request #"+itoa(id)) || strings.Contains(text, "Pedido de aprovação") {
+		t.Errorf("the item of the agent approver is not in en:\n%s", text)
+	}
+	if want := chain.Text(r, r.Level, chain.AnswersFor(r.Level.Kind, r)); text != want {
+		t.Errorf("the item of the agent approver is not the text of the card in en:\n%s\n---\n%s", text, want)
 	}
 	if !strings.HasPrefix(items[0].Header(), "[Mestre · approval · de Motor") {
 		t.Errorf("header = %q", items[0].Header())

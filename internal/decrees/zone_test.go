@@ -4,10 +4,12 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/users"
 )
 
@@ -46,6 +48,23 @@ func TestTheConfirmationShowsTheLimitInTheGuildZone(t *testing.T) {
 	// a half-hour offset
 	w.setZone("Asia/Kolkata")
 	contains(t, w.confirmationUntil(time.Date(2026, 10, 25, 20, 0, 0, 0, time.UTC)), "até 26/10/2026 01:30 (Asia/Kolkata, UTC+05:30)")
+}
+
+// CA-MSG-10
+// The Guild is in America/Sao_Paulo (guild.timezone): the instant that goes through InGuildZone and
+// into a message comes out in the zone of the Guild, in pt-BR and in en, each with the zone.
+func TestAnInstantOfAMessageIsInTheZoneOfTheGuildInBothLanguages(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.setZone("America/Sao_Paulo")
+	at := w.svc.InGuildZone(w.ctx, time.Date(2026, 10, 26, 2, 59, 0, 0, time.UTC))
+	m := i18n.M("decree.delegation_validity_max", "until", at)
+	if got := i18n.Render(i18n.PtBR, m); !strings.Contains(got, "até 25/10/2026 23:59 (America/Sao_Paulo, UTC-03:00)") {
+		t.Errorf("pt-BR: %q", got)
+	}
+	if got := i18n.Render(i18n.En, m); !strings.Contains(got, "until 2026-10-25 23:59 (America/Sao_Paulo, UTC-03:00)") {
+		t.Errorf("en: %q", got)
+	}
 }
 
 // CA-DEC-13

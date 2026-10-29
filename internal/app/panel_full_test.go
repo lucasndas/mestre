@@ -173,7 +173,7 @@ func TestSetupCodeMakesANewCodeOnlyForRootOnTheCitadelOfAGuildWithNoUser(t *test
 	run := func(env map[string]string, elevated bool) (int, string, string) {
 		var out, errb bytes.Buffer
 		lookup := func(k string) (string, bool) { v, ok := env[k]; return v, ok }
-		code := app.SetupCodeWith(t.Context(), []string{"--dir", a.dir}, &out, &errb, lookup, func() bool { return elevated })
+		code := app.SetupCodeWith(t.Context(), []string{"--dir", a.dir}, &out, &errb, lookup, nil, func() bool { return elevated })
 		return code, strings.TrimSpace(out.String()), errb.String()
 	}
 	if code, out, _ := run(map[string]string{"MESTRE_AGENT_ID": "x"}, true); code != 3 || out != "" {

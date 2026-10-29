@@ -38,8 +38,11 @@ const defaultPort = 7443
 type Env struct {
 	Stdout, Stderr io.Writer
 	LookupEnv      func(string) (string, bool)
-	Console        Console
-	Clock          clock.Clock
+	// UILanguage is the tag of the language of the interface of the user on Windows; nil is the
+	// system's (tests give theirs).
+	UILanguage func() string
+	Console    Console
+	Clock      clock.Clock
 	// Hostname is the name of this machine, for "CLI em <machine>" (empty: os.Hostname).
 	Hostname string
 	// Retry is how long a lost connection is retried (0: DefaultRetry).
@@ -70,7 +73,7 @@ func Run(ctx context.Context, env Env, args []string) int {
 	if env.Clock == nil {
 		env.Clock = clock.Real{}
 	}
-	env.ui = &ui{lang: i18n.MachineLanguageFrom(env.LookupEnv)}
+	env.ui = &ui{lang: i18n.MachineLanguageFrom(env.LookupEnv, env.UILanguage)}
 	err := run(ctx, env, args)
 	var f failure
 	switch {

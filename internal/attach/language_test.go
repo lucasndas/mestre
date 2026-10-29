@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,15 +13,26 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/panel"
+	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
 // scriptedConsole answers the login and the confirmation, and records what it was asked.
 type scriptedConsole struct {
 	fakeConsole
 	onConfirm func()
+	// keys, when set, is the input of the terminal: it blocks until the test closes it, like a
+	// keyboard nobody touches (the empty input of fakeConsole is read as "detach").
+	keys io.Reader
+}
+
+func (c *scriptedConsole) Input() io.Reader {
+	if c.keys != nil {
+		return c.keys
+	}
+	return c.fakeConsole.Input()
 }
 
 func (c *scriptedConsole) ReadLine(p string) (string, error) {
@@ -49,7 +61,7 @@ func panelFor(t *testing.T, userLanguage string) (server *httptest.Server, folde
 		_ = json.NewEncoder(w).Encode(panel.Me{User: panel.UserInfo{Login: "ana", Language: userLanguage}})
 	})
 	mux.HandleFunc("/api/terminals", func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(panel.TerminalList{Terminals: []panel.TerminalInfo{{TerminalID: "t1", Name: "Dev-1", CanType: true, Busy: true, Cols: 80, Rows: 24}}})
+		_ = json.NewEncoder(w).Encode(panel.TerminalList{Terminals: []panel.TerminalInfo{{TerminalID: "t1", Character: "c1", Name: "Dev-1", CanType: true, Busy: true, Cols: 80, Rows: 24}}})
 	})
 	server = httptest.NewTLSServer(mux)
 	t.Cleanup(server.Close)
@@ -84,7 +96,6 @@ func TestTheLoginSpeaksTheMachineLanguageAndThenTheUsers(t *testing.T) {
 	t.Parallel()
 	t.Run("en machine, pt-BR user", func(t *testing.T) {
 		t.Parallel()
-		onWindowsTheInterfaceDecides(t, "en_US.UTF-8")
 		server, folder := panelFor(t, "pt-BR")
 		con := &scriptedConsole{fakeConsole: fakeConsole{interactive: true, cols: 80, rows: 24}}
 		out := runAgainst(t, server, folder, map[string]string{"LANG": "en_US.UTF-8"}, con)
@@ -100,7 +111,6 @@ func TestTheLoginSpeaksTheMachineLanguageAndThenTheUsers(t *testing.T) {
 	})
 	t.Run("pt-BR machine, en user", func(t *testing.T) {
 		t.Parallel()
-		onWindowsTheInterfaceDecides(t, "pt_BR.UTF-8")
 		server, folder := panelFor(t, "en")
 		con := &scriptedConsole{fakeConsole: fakeConsole{interactive: true, cols: 80, rows: 24}}
 		out := runAgainst(t, server, folder, map[string]string{"LANG": "pt_BR.UTF-8"}, con)
@@ -113,7 +123,6 @@ func TestTheLoginSpeaksTheMachineLanguageAndThenTheUsers(t *testing.T) {
 	})
 	t.Run("a user with no language keeps the machine's", func(t *testing.T) {
 		t.Parallel()
-		onWindowsTheInterfaceDecides(t, "en_GB.UTF-8")
 		server, folder := panelFor(t, "")
 		con := &scriptedConsole{fakeConsole: fakeConsole{interactive: true, cols: 80, rows: 24}}
 		runAgainst(t, server, folder, map[string]string{"LC_ALL": "en_GB.UTF-8", "LANG": "pt_BR.UTF-8"}, con)
@@ -123,13 +132,54 @@ func TestTheLoginSpeaksTheMachineLanguageAndThenTheUsers(t *testing.T) {
 	})
 }
 
+// CA-IDIOMA-05
+// The end of the terminal is said in the language of the user who is in, not the one of the
+// machine: the panel stops knowing the terminal, the command ends and writes "terminal encerrado"
+// for a pt-BR user on an en machine, and "terminal ended" for an en user on a pt-BR machine.
+func TestTheEndOfTheTerminalIsSaidInTheLanguageOfTheUser(t *testing.T) {
+	t.Parallel()
+	for name, c := range map[string]struct{ machine, user, want, not string }{
+		"en machine, pt-BR user": {"en_US.UTF-8", "pt-BR", "terminal encerrado", "terminal ended"},
+		"pt-BR machine, en user": {"pt_BR.UTF-8", "en", "terminal ended", "terminal encerrado"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			server, folder := panelFor(t, c.user) // /api/characters/... is unknown to it: 404, the terminal is gone
+			keys, untouched := io.Pipe()
+			t.Cleanup(func() { _ = untouched.Close() })
+			con := &scriptedConsole{fakeConsole: fakeConsole{interactive: true, cols: 80, rows: 24}, keys: keys}
+			env, so, se := envWith(&con.fakeConsole, map[string]string{"LANG": c.machine})
+			clk := clock.NewFake(clock.Real{}.Now())
+			env.Clock = clk
+			env.Retry = 100 * 365 * 24 * time.Hour // the loop below moves the clock fast: the wait to reconnect never runs out
+			env.Console = con
+			env.Folders = func(string, string) (string, int, error) { return folder, 0, nil }
+			done := make(chan int, 1)
+			go func() {
+				done <- Run(t.Context(), env, []string{"Dev-1", "--write", "--server", strings.TrimPrefix(server.URL, "https://")})
+			}()
+			// the clock moves only when the command waits on it (the check of the end every 2 s)
+			go func() {
+				for t.Context().Err() == nil {
+					clk.BlockUntil(1)
+					clk.Advance(endedEvery)
+					runtime.Gosched()
+				}
+			}()
+			if code := <-done; code != 0 {
+				t.Fatalf("exit %d, stdout %q, stderr %q", code, so.String(), se.String())
+			}
+			if out := so.String(); !strings.Contains(out, c.want) || strings.Contains(out, c.not) {
+				t.Errorf("stdout %q: want %q and not %q", out, c.want, c.not)
+			}
+		})
+	}
+}
+
 // The errors keep the fixed prefixes in either language, and the words come from the catalog.
 func TestAnErrorKeepsItsPrefixesInTheLanguageOfTheMachine(t *testing.T) {
 	t.Parallel()
 	for lang, want := range map[string]string{"en_US.UTF-8": "needs a terminal", "pt_BR.UTF-8": "precisa de um terminal"} {
-		if runtime.GOOS == "windows" && i18n.MachineLanguage() != i18n.Match(lang) {
-			continue // the interface of this Windows decides (onWindowsTheInterfaceDecides)
-		}
 		con := &fakeConsole{interactive: false}
 		env, _, stderr := envWith(con, map[string]string{"LANG": lang})
 		if code := Run(context.Background(), env, []string{"Dev-1", "--dir", t.TempDir()}); code != 2 {
@@ -157,14 +207,16 @@ func TestTheRefusalOfAnAgentIgnoresTheLocale(t *testing.T) {
 	}
 }
 
-// onWindowsTheInterfaceDecides skips a case that needs the machine to say lang
-// through its locale variables when the machine is a Windows whose interface says
-// another language: there the interface decides and the variables do not count
-// (docs/plataforma/idioma-por-canal.md#cli; TestMachineLanguageIsTheInterfaceLanguageOnWindows
-// proves it). The other cases run on both systems.
-func onWindowsTheInterfaceDecides(t *testing.T, lang string) {
-	t.Helper()
-	if runtime.GOOS == "windows" && i18n.MachineLanguage() != i18n.Match(lang) {
-		t.Skipf("the interface of this Windows says %s, the case needs %s", i18n.MachineLanguage(), i18n.Match(lang))
+// interfaceOf is what the interface of a Windows says when the case sets the locale variables
+// of a Linux: the first of LC_ALL, LC_MESSAGES and LANG that is not empty. Both systems then read
+// their own source and each case proves its language on either, whatever the runner speaks.
+func interfaceOf(vars map[string]string) func() string {
+	return func() string {
+		for _, k := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
+			if v := strings.TrimSpace(vars[k]); v != "" {
+				return v
+			}
+		}
+		return ""
 	}
 }

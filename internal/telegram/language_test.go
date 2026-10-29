@@ -95,7 +95,21 @@ func TestIdiomaWritesTheLanguageOfWhoTouchedAndAnswersInIt(t *testing.T) {
 	if edits := w.sent("editMessageText"); len(edits) == 0 || !strings.Contains(edits[len(edits)-1].Text, "Language: English.") {
 		t.Errorf("the confirmation is not in the new language: %+v", edits)
 	}
-	// a value out of the list writes nothing
+	// a value out of the list writes nothing, by the button as well: the handler of the bot refuses it
+	bad := telegram.Button{Msg: i18n.Text("Deutsch"), Action: telegram.LanguageAction, Arg: "de"}
+	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.Text("?"), Origin: "motor", Buttons: [][]telegram.Button{{bad}}}); err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	badMsg, badKeys := w.buttons(tg)
+	if badKeys["Deutsch"] == "" {
+		t.Fatalf("the button with a value out of the list was not sent: %v", badKeys)
+	}
+	w.click(tg, badMsg, badKeys["Deutsch"])
+	if got, _ := w.users.Get(w.ctx, u.ID); got.Language != "en" {
+		t.Errorf("Language = %q after a button with a value out of the list", got.Language)
+	}
+	// the panel opens in it in the next session: internal/panel, TestThePanelOpensInTheLanguageWrittenByTheTelegram...
 	if err := w.users.SetLanguage(w.ctx, u.ID, "de"); err == nil {
 		t.Error("a language out of the list was accepted")
 	}
@@ -132,5 +146,30 @@ func TestTheMenuOfCommandsIsRegisteredInBothLanguages(t *testing.T) {
 	}
 	if a, b := names(menus[0]), names(menus[1]); len(a) == 0 || strings.Join(a, ",") != strings.Join(b, ",") {
 		t.Errorf("the names differ: %v and %v", a, b)
+	}
+	// the default menu is in pt-BR and the one of en is in en: the descriptions differ and each
+	// is the text of its language
+	descriptions := func(s faketelegram.Sent) map[string]string {
+		out := map[string]string{}
+		for _, c := range s.Params["commands"].([]any) {
+			m := c.(map[string]any)
+			out[m["command"].(string)], _ = m["description"].(string)
+		}
+		return out
+	}
+	pt, en := descriptions(menus[0]), descriptions(menus[1])
+	for name, d := range pt {
+		if strings.TrimSpace(d) == "" || strings.TrimSpace(en[name]) == "" {
+			t.Errorf("/%s has an empty description: pt-BR %q, en %q", name, d, en[name])
+		}
+	}
+	if want := i18n.Render(i18n.PtBR, i18n.M("bot.cmd_start")); pt["start"] != want {
+		t.Errorf("the default /start = %q, want the pt-BR %q", pt["start"], want)
+	}
+	if want := i18n.Render(i18n.En, i18n.M("bot.cmd_start")); en["start"] != want {
+		t.Errorf("the en /start = %q, want %q", en["start"], want)
+	}
+	if pt["start"] == en["start"] {
+		t.Errorf("both menus say %q", pt["start"])
 	}
 }

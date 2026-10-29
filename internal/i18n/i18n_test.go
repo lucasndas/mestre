@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	_ "time/tzdata" // the zone of the Guild is proved on any runner, with no zoneinfo of the system
 )
 
 // bundle is a small set of catalogs: the rendering is tested apart from the
@@ -112,7 +113,7 @@ func TestRenderInstantInTheZoneOfTheGuild(t *testing.T) {
 	t.Parallel()
 	loc, err := time.LoadLocation("America/Sao_Paulo")
 	if err != nil {
-		t.Skipf("no tzdata: %v", err)
+		t.Fatalf("America/Sao_Paulo is not known (time/tzdata is imported): %v", err)
 	}
 	at := time.Date(2026, 10, 26, 2, 59, 0, 0, time.UTC).In(loc)
 	m := M("decree.until", "until", at)

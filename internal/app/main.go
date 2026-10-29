@@ -15,8 +15,9 @@ import (
 // instance in the foreground, until ctx ends (docs/arquitetura/componentes.md).
 // The service that runs it is milestone 7. --dir puts every folder of the
 // instance under one folder, as the full suite and development use it.
-// lookupEnv is os.LookupEnv. It returns the exit code.
-func Main(ctx context.Context, args []string, stderr io.Writer, lookupEnv func(string) (string, bool), version string) int {
+// lookupEnv is os.LookupEnv; uiLanguage gives the language of the interface on Windows (nil is the
+// system's). It returns the exit code.
+func Main(ctx context.Context, args []string, stderr io.Writer, lookupEnv func(string) (string, bool), uiLanguage func() string, version string) int {
 	// present is enough, even empty: an agent never starts the engine
 	// (docs/arquitetura/componentes.md#mestre)
 	if _, agent := lookupEnv("MESTRE_AGENT_ID"); agent {
@@ -26,7 +27,7 @@ func Main(ctx context.Context, args []string, stderr io.Writer, lookupEnv func(s
 	getenv := func(k string) string { v, _ := lookupEnv(k); return v }
 	// the errors of the start are for the person at the terminal: in the language of the machine
 	// (the prefix "error:" stays; the log of the service stays in English)
-	lang := i18n.MachineLanguageFrom(lookupEnv)
+	lang := i18n.MachineLanguageFrom(lookupEnv, uiLanguage)
 	failWith := func(m i18n.Msg, err error) {
 		fmt.Fprintln(stderr, "error:", i18n.Render(lang, i18n.M(m.Code, "detail", personText(lang, err))))
 	}
