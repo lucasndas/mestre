@@ -7,12 +7,16 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/x/vt"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // screen is the picture of the terminal of the character: the emulator the
 // machines use (docs/arquitetura/terminal.md), at the fixed size of the PTY.
 type screen struct {
 	cols, rows int
+	// say writes the line of state in the language of the person (nil: pt-BR).
+	say func(i18n.Msg) string
 
 	mu sync.Mutex
 	em *vt.Emulator
@@ -121,8 +125,12 @@ func (s *screen) Frame(winCols, winRows int, status string, showCursor bool) str
 	for y := v.rows; y < winRows-1; y++ {
 		fmt.Fprintf(&b, "\x1b[%d;1H\x1b[K", y+1)
 	}
-	line := fmt.Sprintf(" terminal %dx%d · window %dx%d · rows %d-%d · cols %d-%d", s.cols, s.rows, winCols, winRows,
-		v.top+1, v.top+v.rows, v.left+1, v.left+v.cols)
+	say := s.say
+	if say == nil {
+		say = func(m i18n.Msg) string { return i18n.Render(i18n.PtBR, m) }
+	}
+	line := " " + say(i18n.M("person.frame_line", "cols", s.cols, "rows", s.rows, "wcols", winCols, "wrows", winRows,
+		"r1", v.top+1, "r2", v.top+v.rows, "c1", v.left+1, "c2", v.left+v.cols))
 	if status != "" {
 		line += " · " + status
 	}

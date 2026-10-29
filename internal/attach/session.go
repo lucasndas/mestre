@@ -16,6 +16,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/panel"
 	"github.com/mestre-ia/mestre/internal/protocol"
 	"github.com/mestre-ia/mestre/pkg/clock"
@@ -69,6 +70,7 @@ func newSession(env Env, c *panelClient, opts options, info panel.TerminalInfo, 
 		info.Cols, info.Rows = 200, 50
 	}
 	s := &session{env: env, c: c, opts: opts, info: info, write: write, scr: newScreen(info.Cols, info.Rows), dirty: make(chan struct{}, 1)}
+	s.scr.say = env.say
 	s.frame, _ = protocol.ParseULID(info.FrameID)
 	s.signal.Store(true)
 	return s
@@ -89,13 +91,13 @@ func (s *session) run(parent context.Context) error {
 	defer cancel(nil)
 	restore, err := s.env.Console.EnterRaw()
 	if err != nil {
-		return fail(codeUsage, "run it in a terminal", "cannot put the terminal in raw mode: %v", err)
+		return fail(codeUsage, i18n.M("person.hint_terminal"), i18n.M("person.raw_mode", "detail", err.Error()))
 	}
 	var ended bool
 	defer func() {
 		restore()
 		if ended {
-			fmt.Fprintln(s.env.Stdout, "terminal encerrado")
+			fmt.Fprintln(s.env.Stdout, s.env.say(i18n.M("person.terminal_ended")))
 		}
 	}()
 	defer s.scr.Close()
@@ -141,9 +143,9 @@ func (s *session) run(parent context.Context) error {
 		if lostSince.IsZero() {
 			lostSince = now
 		}
-		s.setStatus("connection lost, trying again")
+		s.setStatus(s.env.say(i18n.M("person.connection_lost")))
 		if now.Sub(lostSince) >= s.retry() {
-			return fail(codeUnavailable, "run mestre debug on the machine of the Citadel; the agent was not touched", "the connection to the panel was lost for %s", s.retry())
+			return fail(codeUnavailable, i18n.M("person.connection_lost_timeout_hint"), i18n.M("person.connection_lost_timeout", "duration", s.retry().String()))
 		}
 		if err := clock.Sleep(ctx, s.env.Clock, time.Second); err != nil {
 			continue // the context ended: the check at the top of the loop decides
@@ -288,11 +290,11 @@ func (s *session) onMessage(ctx context.Context, data []byte, lostSince *time.Ti
 func (s *session) rejected(r panel.UIRejected) error {
 	switch r.Code {
 	case panel.CodeTooManyStreams:
-		return fail(codeTooMany, "close a terminal you have open, in the panel or in another attach", "too many terminals open for this user")
+		return fail(codeTooMany, i18n.M("person.too_many_terminals_hint"), i18n.M("person.too_many_terminals"))
 	case panel.CodeForbiddenLevel:
-		return fail(codeNotVisible, "check the name on the canvas, and the workspace", "there is no character %q that you see", s.opts.character)
+		return fail(codeNotVisible, i18n.M("person.character_not_visible_hint"), i18n.M("person.character_not_visible", "name", s.opts.character))
 	}
-	return fail(codeUnavailable, "try again in a moment", "the panel did not open the terminal (%s)", r.Code)
+	return fail(codeUnavailable, i18n.M("person.hint_retry"), i18n.M("person.panel_no_terminal", "code", string(r.Code)))
 }
 
 func (s *session) onEvent(ctx context.Context, ev panel.UIEvent, lostSince *time.Time) {
@@ -306,7 +308,7 @@ func (s *session) onEvent(ctx context.Context, ev panel.UIEvent, lostSince *time
 	case panel.EventReplayed:
 		var r panel.TerminalReplayed
 		if json.Unmarshal(ev.Data, &r) == nil && r.Lost {
-			s.setNotice("part of the output was lost (it left the buffer of the machine)")
+			s.setNotice(s.env.say(i18n.M("person.notice_output_lost")))
 		}
 	case panel.EventScreen:
 		// a slow connection got the picture of the screen instead of the output it lost
@@ -328,7 +330,7 @@ func (s *session) onEvent(ctx context.Context, ev panel.UIEvent, lostSince *time
 		if sg.Signal {
 			s.setStatus("")
 		} else {
-			s.setStatus("no signal from the machine")
+			s.setStatus(s.env.say(i18n.M("person.no_signal")))
 		}
 	}
 }
@@ -337,16 +339,16 @@ func (s *session) onEvent(ctx context.Context, ev panel.UIEvent, lostSince *time
 func (s *session) onRefusal(e panel.APIError) {
 	switch e.Code {
 	case panel.CodePermissionPrompt:
-		s.setNotice("the agent waits on a permission prompt: keys are refused, decide it by the approval")
+		s.setNotice(s.env.say(i18n.M("person.notice_permission_prompt")))
 	case panel.CodeForbiddenLevel:
 		s.mu.Lock()
 		s.write = false
 		s.mu.Unlock()
-		s.setNotice("typing refused: your level does not allow it (read-only now)")
+		s.setNotice(s.env.say(i18n.M("person.notice_typing_level")))
 	case panel.CodeUnavailable:
-		s.setNotice("typing refused: the machine of the terminal has no signal")
+		s.setNotice(s.env.say(i18n.M("person.notice_typing_signal")))
 	default:
-		s.setNotice("typing refused (" + string(e.Code) + ")")
+		s.setNotice(s.env.say(i18n.M("person.notice_typing_code", "code", string(e.Code))))
 	}
 }
 
@@ -469,11 +471,11 @@ func (s *session) draw(ctx context.Context) {
 }
 
 func (s *session) modeText(write bool) string {
-	m := "read-only"
+	m := i18n.M("person.mode_read_only")
 	if write {
-		m = "typing"
+		m = i18n.M("person.mode_typing")
 	}
-	return fmt.Sprintf("%s · %s · %s detaches", s.info.Name, m, s.opts.detachName)
+	return s.env.say(i18n.M("person.mode_line", "name", s.info.Name, "mode", m, "key", s.opts.detachName))
 }
 
 // readKeys reads the keys of the person. The detach key ends the attach; every

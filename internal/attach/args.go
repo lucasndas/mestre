@@ -3,6 +3,8 @@ package attach
 import (
 	"net/url"
 	"strings"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // usageLine is the syntax of the command.
@@ -38,7 +40,7 @@ func wantsJSON(args []string) bool {
 func parseArgs(args []string, defaultInstance string) (options, error) {
 	o := options{instance: defaultInstance, detach: 0x1d, detachName: "Ctrl-]"}
 	var rest []string
-	bad := func(format string, a ...any) error { return fail(codeUsage, "usage: "+usageLine, format, a...) }
+	bad := func(m i18n.Msg) error { return fail(codeUsage, i18n.M("person.hint_usage", "usage", usageLine), m) }
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if a == "--" {
@@ -55,7 +57,7 @@ func parseArgs(args []string, defaultInstance string) (options, error) {
 				return val, nil
 			}
 			if i+1 >= len(args) {
-				return "", bad("--%s needs a value", name)
+				return "", bad(i18n.M("person.needs_value", "name", name))
 			}
 			i++
 			return args[i], nil
@@ -82,16 +84,16 @@ func parseArgs(args []string, defaultInstance string) (options, error) {
 				}
 			}
 		case "help":
-			return o, bad("mestre attach shows, and with --write types into, the terminal of a character")
+			return o, bad(i18n.M("person.help"))
 		default:
-			err = bad("unknown flag --%s", name)
+			err = bad(i18n.M("person.unknown_flag", "name", name))
 		}
 		if err != nil {
 			return o, err
 		}
 	}
 	if len(rest) != 1 || strings.TrimSpace(rest[0]) == "" {
-		return o, bad("mestre attach takes the name of one character")
+		return o, bad(i18n.M("person.needs_a_character"))
 	}
 	o.character = strings.TrimSpace(rest[0])
 	if o.server != "" {
@@ -135,7 +137,7 @@ func parseKey(s string) (byte, error) {
 	case strings.HasPrefix(l, "^"):
 		c = l[1:]
 	default:
-		return 0, fail(codeUsage, "use a control key, such as ctrl-] or ctrl-a", "--detach-key %q is not a control key", s)
+		return 0, fail(codeUsage, i18n.M("person.bad_detach_key_hint"), i18n.M("person.bad_detach_key", "value", s))
 	}
 	if len(c) == 1 {
 		var b byte
@@ -150,5 +152,5 @@ func parseKey(s string) (byte, error) {
 			return b, nil
 		}
 	}
-	return 0, fail(codeUsage, "use a control key, such as ctrl-] or ctrl-a", "--detach-key %q is not a control key", s)
+	return 0, fail(codeUsage, i18n.M("person.bad_detach_key_hint"), i18n.M("person.bad_detach_key", "value", s))
 }

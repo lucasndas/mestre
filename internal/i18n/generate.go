@@ -18,7 +18,8 @@ const GeneratedTS = "web/src/gen/messages.ts"
 // catalogs of the engine, in both languages, so that the panel says a refusal,
 // a notice or a card in the language of the user from its code and params and
 // never repeats the text in catalogs of its own. The area api (the message of an
-// error of the API, for a client that has not the code) stays out: the panel
+// error of the API, for a client that has not the code) and the area person (the
+// texts of the CLI of a person, which the panel never shows) stay out: the panel
 // translates those errors by their code, in its own catalog of errors. Same input, same bytes, so a
 // test can regenerate in memory and compare with the committed file.
 func GenerateTS() ([]byte, error) {
@@ -29,8 +30,8 @@ func GenerateTS() ([]byte, error) {
 		cat := Catalog(lang)
 		keys := make([]string, 0, len(cat))
 		for k := range cat {
-			if strings.HasPrefix(k, "api.") {
-				continue // the texts of the codes of the API: the panel has its own by the code
+			if strings.HasPrefix(k, "api.") || strings.HasPrefix(k, "person.") {
+				continue // the API (the panel has its own by the code) and the CLI of a person (the panel never shows it)
 			}
 			keys = append(keys, k)
 		}
