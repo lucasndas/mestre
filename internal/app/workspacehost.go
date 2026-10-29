@@ -104,9 +104,13 @@ func (h workspaceHost) stages(orc *Orchestration, w workspaces.Workspace) []pane
 			st.State = panel.StageCurrent
 			if f := w.StageFailure; f != nil {
 				st.State = panel.StageFailed
-				st.Failure = &panel.StageFailureInfo{Code: f.Code, Reason: f.Reason, Failures: f.Failures, At: f.At, RetryAt: f.RetryAt}
+				rm := f.ReasonMsg()
+				st.Failure = &panel.StageFailureInfo{Code: f.Code, Reason: f.Reason, ReasonMsg: &rm, Failures: f.Failures, At: f.At, RetryAt: f.RetryAt}
 			} else if why, ok := orc.Workspaces.Waiting(w.Slug); ok {
 				st.State, st.Waiting = panel.StageWaiting, why
+				if m, ok := orc.Workspaces.WaitingMsg(w.Slug); ok {
+					st.WaitingMsg = &m
+				}
 			}
 		case !reached:
 			st.State = panel.StageDone

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
 )
 
@@ -25,7 +26,7 @@ func TestWaitingStageHoldsTheWorkspaceWithoutAFailureAndGoesOnByItself(t *testin
 	if err := r.svc.Register(workspaces.StageApps, func(_ context.Context, w workspaces.Workspace) error {
 		runs.Add(1)
 		if !ready.Load() {
-			return &workspaces.WaitError{Reason: "Apps ainda não instalados", Poll: 30 * time.Second}
+			return &workspaces.WaitError{Reason: "Apps ainda não instalados", Msg: i18n.M("workspace.stage_waiting_apps", "repo", "lucas/meu-app", "apps", "mestre"), Poll: 30 * time.Second}
 		}
 		return nil
 	}); err != nil {
@@ -44,6 +45,9 @@ func TestWaitingStageHoldsTheWorkspaceWithoutAFailureAndGoesOnByItself(t *testin
 	}
 	if reason, ok := r.svc.Waiting(w.Slug); !ok || reason != "Apps ainda não instalados" {
 		t.Fatalf("Waiting = %q, %v", reason, ok)
+	}
+	if msg, ok := r.svc.WaitingMsg(w.Slug); !ok || i18n.Render(i18n.En, msg) != "Apps not installed yet in lucas/meu-app: mestre" {
+		t.Fatalf("WaitingMsg = %+v, %v", msg, ok)
 	}
 	if r.git.Handle(r.svc.Layout().Mirror(w.Slug)) != nil || len(log.list()) != 0 {
 		t.Fatal("a later stage ran while the stage waited")

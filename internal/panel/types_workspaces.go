@@ -18,11 +18,14 @@ const (
 // StageFailureInfo is a stage that failed: the code and the reason the engine
 // recorded, how many times and when it tries again.
 type StageFailureInfo struct {
-	Code     string    `json:"code"`
-	Reason   string    `json:"reason"`
-	Failures int       `json:"failures"`
-	At       time.Time `json:"at"`
-	RetryAt  time.Time `json:"retry_at"`
+	Code   string `json:"code"`
+	Reason string `json:"reason"`
+	// ReasonMsg is the failure as a message of the engine, to translate; Reason
+	// (masked) is the detail the program that failed gave, in the message as a text.
+	ReasonMsg *i18n.Msg `json:"reason_msg,omitempty"`
+	Failures  int       `json:"failures"`
+	At        time.Time `json:"at"`
+	RetryAt   time.Time `json:"retry_at"`
 }
 
 // WorkspaceStage is one step of the session zero, in the order they run.
@@ -32,8 +35,10 @@ type WorkspaceStage struct {
 	// State is StageDone, StageCurrent, StageWaiting, StageFailed or StagePending.
 	State string `json:"state"`
 	// Waiting is what the current stage waits for, when it waits.
-	Waiting string            `json:"waiting,omitempty"`
-	Failure *StageFailureInfo `json:"failure,omitempty"`
+	Waiting string `json:"waiting,omitempty"`
+	// WaitingMsg is Waiting as a message of the engine, to translate.
+	WaitingMsg *i18n.Msg         `json:"waiting_msg,omitempty"`
+	Failure    *StageFailureInfo `json:"failure,omitempty"`
 }
 
 // WorkspaceRow is a workspace in the list.

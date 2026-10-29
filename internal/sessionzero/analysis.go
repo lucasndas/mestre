@@ -123,7 +123,7 @@ func (s *Service) proposeAgentsMD(ctx context.Context, slug string, st State, a 
 		return nil // already proposed (and maybe decided): never twice
 	}
 	if strings.TrimSpace(a.ProposedAgentsMD) == "" {
-		return code("analysis_failed", errors.New("a análise não trouxe a proposta de AGENTS.md"))
+		return code("analysis_failed", errors.New("the analysis did not bring the AGENTS.md proposal"))
 	}
 	id, err := s.o.Approvals.RequestAgentsMD(ctx, slug, a.ProposedAgentsMD)
 	if err != nil {

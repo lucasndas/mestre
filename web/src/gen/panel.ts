@@ -2714,6 +2714,11 @@ export const StagePending = "pending";
 export interface StageFailureInfo {
   code: string;
   reason: string;
+  /**
+   * ReasonMsg is the failure as a message of the engine, to translate; Reason
+   * (masked) is the detail the program that failed gave, in the message as a text.
+   */
+  reason_msg?: any /* i18n.Msg */;
   failures: number /* int */;
   at: string;
   retry_at: string;
@@ -2734,6 +2739,10 @@ export interface WorkspaceStage {
    * Waiting is what the current stage waits for, when it waits.
    */
   waiting?: string;
+  /**
+   * WaitingMsg is Waiting as a message of the engine, to translate.
+   */
+  waiting_msg?: any /* i18n.Msg */;
   failure?: StageFailureInfo;
 }
 /**

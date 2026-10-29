@@ -1,6 +1,6 @@
 package github
 
-import "fmt"
+import "github.com/mestre-ia/mestre/internal/i18n"
 
 // RulesetName is the ruleset of the plan B.
 const RulesetName = "mestre-aprovacao"
@@ -35,18 +35,18 @@ func PlanBRuleset(r ReviewRules, branch string, grandMasterAppID int64) map[stri
 
 // PlanBChange describes the whole change of the plan B for the Owner: the new
 // ruleset and, where the review is asked today, what to take out of there, so
-// the review is not asked twice.
-func PlanBChange(r ReviewRules) string {
-	text := fmt.Sprintf("Criar o ruleset %q na branch principal com só a regra de %d aprovação(ões), e o App Grão-Mestre na lista de exceção.", RulesetName, max(r.Approvals, 1))
+// the review is not asked twice. It is a message, for each reader to translate.
+func PlanBChange(r ReviewRules) i18n.Msg {
+	parts := []i18n.Msg{i18n.M("approval.plan_b_create", "ruleset", RulesetName, "count", max(r.Approvals, 1))}
 	if r.Classic {
-		text += " Tirar a exigência de revisão da proteção clássica da branch."
+		parts = append(parts, i18n.M("approval.plan_b_classic"))
 	}
 	for _, rs := range r.Rulesets {
 		if rs.Shared {
-			text += fmt.Sprintf(" Tirar a regra de revisão do ruleset #%d (ele tem outras regras, que ficam).", rs.ID)
+			parts = append(parts, i18n.M("approval.plan_b_ruleset_shared", "id", rs.ID))
 		} else {
-			text += fmt.Sprintf(" Apagar o ruleset #%d, que só pede a revisão.", rs.ID)
+			parts = append(parts, i18n.M("approval.plan_b_ruleset_delete", "id", rs.ID))
 		}
 	}
-	return text
+	return i18n.Join(i18n.Text(" "), parts...)
 }
