@@ -10,3 +10,14 @@
 /web/.vitest/
 /e2eserver
 /e2eserver.exe
+
+# Binaries left by `go build` inside a tool's folder.
+/tools/codecheck/codecheck
+/tools/conformance/conformance
+/tools/docscheck/docscheck
+/tools/e2eserver/e2eserver
+/tools/realaccount/realaccount
+/tools/rulesetcheck/rulesetcheck
+/tools/testrun/testrun
+/tools/winsandbox/winsandbox
+/tools/*/*.exe
