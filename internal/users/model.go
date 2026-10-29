@@ -1,7 +1,6 @@
 package users
 
 import (
-	"errors"
 	"slices"
 	"time"
 
@@ -69,23 +68,23 @@ func (u User) MayHoldGitHub() bool {
 
 // The errors.
 var (
-	ErrNoUser        = errors.New("users: no such user")
-	ErrOwnerExists   = errors.New("users: there is already an Owner")
-	ErrBadLevel      = errors.New("users: not a level")
-	ErrSelf          = errors.New("users: the Owner can not suspend or remove self: transfer the post first")
-	ErrTelegramTaken = errors.New("users: the Telegram id belongs to another user")
+	ErrNoUser        = i18n.Err("user.err_no_user")
+	ErrOwnerExists   = i18n.Err("user.err_owner_exists")
+	ErrBadLevel      = i18n.Err("user.err_bad_level")
+	ErrSelf          = i18n.Err("user.err_self")
+	ErrTelegramTaken = i18n.Err("user.err_telegram_taken")
 	// ErrSilent is a refusal the bot does not answer (too many wrong codes).
-	ErrSilent = errors.New("users: too many attempts")
+	ErrSilent = i18n.Err("user.err_silent")
 	// ErrBadCode is the answer to a wrong, expired or used code.
-	ErrBadCode     = errors.New("users: invalid or expired code")
-	ErrNotPrivate  = errors.New("users: the pairing is only in a private chat")
-	ErrWrongID     = errors.New("users: the Telegram id is not the one of the registration")
-	ErrNoPIN       = errors.New("users: the user has no PIN")
-	ErrPINLocked   = errors.New("users: the PIN is locked")
-	ErrBadPIN      = errors.New("users: wrong PIN")
-	ErrPINRequest  = errors.New("users: the request of PIN is over")
-	ErrNoTransfer  = errors.New("users: no transfer waits")
-	ErrTransferBad = errors.New("users: the transfer is not possible")
+	ErrBadCode     = i18n.Err("user.err_bad_code")
+	ErrNotPrivate  = i18n.Err("user.err_not_private")
+	ErrWrongID     = i18n.Err("user.err_wrong_id")
+	ErrNoPIN       = i18n.Err("user.err_no_pin")
+	ErrPINLocked   = i18n.Err("user.err_pin_locked_err")
+	ErrBadPIN      = i18n.Err("user.err_bad_pin")
+	ErrPINRequest  = i18n.Err("user.err_pin_request_over")
+	ErrNoTransfer  = i18n.Err("user.err_no_transfer")
+	ErrTransferBad = i18n.Err("user.err_transfer_bad")
 )
 
 // Languages are the languages of the panel.
@@ -105,4 +104,4 @@ func (u User) LanguageFor(hint string) string {
 }
 
 // ErrBadLanguage is the refusal of a language the panel does not have.
-var ErrBadLanguage = errors.New("users: not a language of the panel")
+var ErrBadLanguage = i18n.Err("user.err_bad_language")

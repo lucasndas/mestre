@@ -68,6 +68,8 @@ type GuildChannel struct {
 	// Pending lists the entry and promotion requests that wait; only the Owner
 	// sees them. Nil, or an error, leaves them out.
 	Pending func(ctx context.Context) ([]GuildPending, error)
+	// Zone is the time zone of the Guild, where the moments of the requests are said (nil: UTC).
+	Zone func() *time.Location
 
 	bot *Bot
 }
@@ -138,13 +140,13 @@ func (c *GuildChannel) pendingLines(ps []GuildPending) []i18n.Msg {
 	for _, p := range ps {
 		switch p.Kind {
 		case PendingEntry:
-			line := i18n.M("bot.guild_entry", "name", plainGuildText(p.Name), "since", p.At)
+			line := i18n.M("bot.guild_entry", "name", plainGuildText(p.Name), "since", c.inZone(p.At))
 			if p.Code != "" {
 				line = i18n.Concat(line, i18n.M("bot.guild_entry_code", "code", plainGuildText(p.Code)))
 			}
 			out = append(out, line)
 		case PendingPromotion:
-			out = append(out, i18n.M("bot.guild_promotion", "name", plainGuildText(p.Name), "since", p.At))
+			out = append(out, i18n.M("bot.guild_promotion", "name", plainGuildText(p.Name), "since", c.inZone(p.At)))
 		}
 	}
 	if len(out) == 0 {
@@ -237,4 +239,14 @@ func (c *GuildChannel) tell(ctx context.Context, u users.User, m i18n.Msg) {
 	if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: m, Origin: "motor"}); err != nil {
 		c.bot.log.Warn("telegram: the user was not told the result of an exclusion", "err", err)
 	}
+}
+
+// inZone puts an instant in the time zone of the Guild (UTC when none is given).
+func (c *GuildChannel) inZone(t time.Time) time.Time {
+	if c.Zone != nil {
+		if loc := c.Zone(); loc != nil {
+			return t.In(loc)
+		}
+	}
+	return t.UTC()
 }
