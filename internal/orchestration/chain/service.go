@@ -190,7 +190,9 @@ type OpenRequest struct {
 	Action *classes.Action
 	Event  *providers.Event
 	// About is the action and the rule that asked, in one line.
-	About         string
+	About string
+	// AboutMsg is About as a message of the engine; when set, About is its English text.
+	AboutMsg      i18n.Msg
 	Justification string
 	// Risk is the classification; zero is the risk of the type.
 	Risk    classes.RiskResult
@@ -241,7 +243,7 @@ func description(ev providers.Event) string {
 // designer of the quest never decides it.
 func (s *Service) OpenMissionPoint(ctx context.Context, p quests.MissionPoint) (int64, error) {
 	return s.Request(ctx, OpenRequest{Type: classes.RequestMissionPoint, Workspace: p.Workspace, Table: p.Table, Requester: p.Character, Designer: p.Designer,
-		About: fmt.Sprintf("ponto de aprovação (%s) da etapa %s da missão %s", p.When, p.StepName, p.QuestName), Task: p.Summary,
+		AboutMsg: i18n.M("approval.about_mission_point", "when", p.When, "step", p.StepName, "quest", p.QuestName), Task: p.Summary,
 		Mission: &Mission{Quest: p.Quest, QuestName: p.QuestName, Step: p.Step, StepName: p.StepName, When: p.When, Summary: p.Summary}})
 }
 
@@ -252,7 +254,7 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 		o.Type = classes.RequestClassPermission
 	}
 	r := Request{Workspace: o.Workspace, Table: o.Table, Type: o.Type, State: Open, Requester: o.Requester, Designer: o.Designer, Proposer: o.Proposer,
-		Cross: o.Cross, Ask: o.Ask, Action: o.Action, Event: o.Event, About: o.About, Justification: o.Justification, Risk: o.Risk, Mission: o.Mission, PR: o.PR, Require: o.Require, Task: o.Task,
+		Cross: o.Cross, Ask: o.Ask, Action: o.Action, Event: o.Event, About: aboutText(o.About, o.AboutMsg), AboutMsg: o.AboutMsg, Justification: o.Justification, Risk: o.Risk, Mission: o.Mission, PR: o.PR, Require: o.Require, Task: o.Task,
 		CreatedAt: s.clk.Now()}
 	if len(o.Target) > 0 {
 		imp, err := Impress(o.Target)

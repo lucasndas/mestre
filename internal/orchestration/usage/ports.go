@@ -77,8 +77,8 @@ type ExtraRequest struct {
 	Unit             classes.Unit
 	Used, Limit      float64
 	Extra            float64
-	// About is the line the approver reads.
-	About string
+	// About is the line the approver reads, as a message.
+	About i18n.Msg
 	Risk  classes.RiskResult
 	// Target is the exact thing that is asked, as JSON.
 	Target json.RawMessage

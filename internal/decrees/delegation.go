@@ -3,7 +3,6 @@ package decrees
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/i18n"
@@ -118,9 +117,9 @@ func (s *Service) Renew(ctx context.Context, number int64, userID string) (Pendi
 		return Pending{}, ErrNotAllowed
 	}
 	validity, _ := s.delegationTimes(ctx, d.Workspace)
+	order := i18n.M("decree.order_renew", "number", d.Number, "span", spanMsg(validity), "text", d.Text)
 	return s.Propose(ctx, Proposal{Author: userID, Kind: KindRule, Effect: d.Effect, Target: d.Target, Workspace: d.Workspace, Mesa: d.Mesa, Scope: d.Scope,
-		Until: s.clk.Now().Add(validity), Text: fmt.Sprintf("Renovar a delegação %d por mais %s: %s", d.Number, spanText(validity), d.Text),
-		Origin: Origin{Channel: "renewal"}})
+		Until: s.clk.Now().Add(validity), Text: i18n.Render("en", order), Origin: Origin{Channel: "renewal", OrderMsg: order}})
 }
 
 // RevokeAllDelegations is the emergency button of the Owner: every delegation (of
@@ -220,10 +219,10 @@ func (s *Service) SetTableOpen(f func(ctx context.Context, workspace, table stri
 	s.o.TableOpen = f
 }
 
-// spanText says a validity in days when it is of whole days, else in hours.
-func spanText(d time.Duration) string {
+// spanMsg says a validity in days when it is of whole days, else in hours.
+func spanMsg(d time.Duration) i18n.Msg {
 	if d >= 24*time.Hour && d%(24*time.Hour) == 0 {
-		return fmt.Sprintf("%d dias", int(d/(24*time.Hour)))
+		return i18n.M("decree.span_days", "count", int(d/(24*time.Hour)))
 	}
-	return fmt.Sprintf("%d horas", int(d.Round(time.Hour)/time.Hour))
+	return i18n.M("decree.span_hours", "count", int(d.Round(time.Hour)/time.Hour))
 }

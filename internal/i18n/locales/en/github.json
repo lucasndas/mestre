@@ -28,5 +28,14 @@
   "github.pr_of_table": "The PR is the table's.",
   "github.push_to_main": "Pushing to the main branch is not done: the table works on its own branch.",
   "github.quota_exhausted": "The GitHub request limit is over: the queries of all campaigns resume at {{at}} UTC.",
-  "github.target_kind": "The target is an issue or a PR; a comment counts for what contains it."
+  "github.target_kind": "The target is an issue or a PR; a comment counts for what contains it.",
+  "github.why_app_not_read": "the App was not read",
+  "github.why_app_not_registered": "the App was not registered",
+  "github.why_code_late": "the manifest code was not handed back within 1 hour",
+  "github.why_exchange_unfinished": "the exchange of the code did not finish",
+  "github.why_incomplete_response": "the answer of GitHub came incomplete",
+  "github.why_key_not_stored": "the key was not kept in the vault",
+  "github.why_no_client_secret": "the answer of GitHub came without the client secret",
+  "github.why_other_account": "the App was created in the account \"{{login}}\", which is not the Guildmaster's; delete it in that account and ask for another link, opening it with the right GitHub account",
+  "github.why_secret_not_stored": "the client secret was not kept in the vault"
 }

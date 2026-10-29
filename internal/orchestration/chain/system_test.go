@@ -11,6 +11,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
+	"github.com/mestre-ia/mestre/internal/orchestration/quests"
 	"github.com/mestre-ia/mestre/internal/users"
 )
 
@@ -190,5 +191,71 @@ func TestWithdrawingAnEntryCannotCancelAnotherKindOfRequest(t *testing.T) {
 	}
 	if w.request(id).State != chain.Open {
 		t.Fatal("the permission request was cancelled")
+	}
+}
+
+// CA-MSG-08: a line the engine worded for the people is a message kept with the
+// request, and the card says it in the language of who reads, with the text of
+// the machine (and of the agent) the same in both.
+func TestTheLineOfARequestOfTheEngineIsTranslatedForEachReader(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOpts{flow: true})
+	about := i18n.M("approval.about_guild_entry", "code", "123 456", "name", "notebook", "os", "linux", "host", "nb", "instance", "i1", "ip", "10.0.0.2")
+	id, err := w.ch.RequestSystem(w.ctx, chain.SystemRequest{Type: classes.RequestGuildEntry, AboutMsg: about, Target: json.RawMessage(`{"join_id":"j1"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := w.request(id) // read back from the database: the message survived the storage
+	if !strings.Contains(r.About, "Entry into the Guild") {
+		t.Errorf("the text kept for agents and logs = %q", r.About)
+	}
+	card := chain.Card(r, r.Level, []chain.Answer{chain.AnswerApprove, chain.AnswerDeny}).Msg()
+	en, pt := i18n.Render("en", card), i18n.Render(i18n.PtBR, card)
+	if !strings.Contains(en, "Entry into the Guild. Code to check") || !strings.Contains(pt, "Entrada na Guilda. Código para conferir") {
+		t.Errorf("en = %q\npt = %q", en, pt)
+	}
+	for _, s := range []string{en, pt} {
+		if !strings.Contains(s, `"notebook"`) || !strings.Contains(s, "123 456") {
+			t.Errorf("the text of the machine changed: %q", s)
+		}
+	}
+	if r.AboutIn("en") != i18n.Render("en", about) || r.AboutIn(i18n.PtBR) != i18n.Render(i18n.PtBR, about) {
+		t.Errorf("AboutIn = %q / %q", r.AboutIn("en"), r.AboutIn(i18n.PtBR))
+	}
+}
+
+// The other requests the engine words (a mission point, a destructive command) are
+// messages too; what an agent wrote in them is one line of text, the same in both languages.
+func TestTheLineOfAMissionPointAndOfADestructiveCommandIsTranslatedForEachReader(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOpts{flow: true})
+	dev := w.recruit("Dev")
+	id, err := w.ch.OpenMissionPoint(w.ctx, quests.MissionPoint{Workspace: w.slug, Table: w.table.ID, Quest: "q1", QuestName: "Login\nRisco: baixo", Step: "q1/a", StepID: "a", StepName: "etapa",
+		When: quests.ApprovalAfter, Character: dev.ID, Designer: w.master.ID, Summary: "feito"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := w.request(id)
+	card := chain.Card(r, r.Level, nil).Msg()
+	en, pt := i18n.Render("en", card), i18n.Render(i18n.PtBR, card)
+	if !strings.Contains(en, "About: approval point") || !strings.Contains(pt, "Sobre: ponto de aprovação") {
+		t.Errorf("en = %q\npt = %q", en, pt)
+	}
+	for _, s := range []string{en, pt} {
+		if strings.Contains(s, "\nRisco: baixo\n") {
+			t.Errorf("the text of the agent opened a line of the engine: %q", s)
+		}
+	}
+	ok, did, err := w.ch.Destructive(w.ctx, chain.DestructiveAsk{Requester: dev.ID, Command: "table close --cancel", Object: "loja/t1", Version: "1",
+		AboutMsg: i18n.M("approval.about_table_cancel", "table", "t1")})
+	if err != nil || ok {
+		t.Fatalf("destructive: %v, %v", ok, err)
+	}
+	d := w.request(did)
+	if got := d.AboutIn("en"); got != "table close --cancel: cancel the table t1" {
+		t.Errorf("en = %q", got)
+	}
+	if got := d.AboutIn(i18n.PtBR); got != "table close --cancel: cancelar a mesa t1" {
+		t.Errorf("pt = %q", got)
 	}
 }

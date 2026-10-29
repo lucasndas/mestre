@@ -135,6 +135,11 @@ func TestPausesAt100PercentWithoutCuttingTheTurn(t *testing.T) {
 	if r := reqs[0]; r.Used != 10.5 || r.Limit != 10 || r.Extra != 5 || r.Table != "t1" || r.Scope != usage.ScopeTable {
 		t.Errorf("request = %+v, want the use so far, the limit and 50%% more", r)
 	}
+	// the line the approver reads is a message, read in the language of each reader
+	if en, pt := i18n.Render("en", reqs[0].About), i18n.Render(i18n.PtBR, reqs[0].About); !strings.Contains(en, "extra cost") || !strings.Contains(pt, "custo extra") ||
+		strings.Contains(en, "custo") || strings.Contains(pt, "extra cost") {
+		t.Errorf("about: en = %q, pt = %q", en, pt)
+	}
 	// the turn ends normally, and nothing asks again
 	w.clk.Advance(time.Minute)
 	w.svc.OnEvent(w.ctx, providers.Event{AgentID: "c1", Event: providers.EventTurnEnd, ReceivedAt: w.clk.Now()})

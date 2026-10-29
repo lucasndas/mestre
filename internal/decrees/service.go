@@ -187,7 +187,7 @@ func (s *Service) Propose(ctx context.Context, p Proposal) (Pending, error) {
 		return Pending{}, err
 	}
 	pending := confirmationMsg(p, s.InGuildZone(ctx, p.Until), why)
-	return Pending{ID: id, Author: u.ID, PIN: why != "", Why: why, WhyMsg: whyMsg(why), Msg: pending, Text: i18n.Render(i18n.PtBR, pending), Order: p.Text, Workspace: p.Workspace, Mesa: p.Mesa}, nil
+	return Pending{ID: id, Author: u.ID, PIN: why != "", Why: why, WhyMsg: whyMsg(why), Msg: pending, Text: i18n.Render(i18n.PtBR, pending), Order: p.Text, OrderMsg: p.Origin.OrderMsg, Workspace: p.Workspace, Mesa: p.Mesa}, nil
 }
 
 // normalize fills what an exception implies.

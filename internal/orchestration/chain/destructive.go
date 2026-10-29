@@ -6,9 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // A destructive action (`note delete`, `ritual delete`, `class delete`,
@@ -28,6 +28,9 @@ type DestructiveAsk struct {
 	Command, Object, Version string
 	// About is the line the people read; Reason what the character wrote.
 	About, Reason string
+	// AboutMsg is About as a message of the engine, when the line has words (About
+	// then is left empty); a name or an id alone stays in About.
+	AboutMsg i18n.Msg
 }
 
 // DestructiveTarget is the target a destructive request is bound to.
@@ -118,7 +121,7 @@ func (s *Service) Destructive(ctx context.Context, a DestructiveAsk) (granted bo
 			return false, 0, err
 		}
 	}
-	id, err := s.Request(ctx, OpenRequest{Type: classes.RequestDestructive, Requester: a.Requester, About: fmt.Sprintf("%s: %s", a.Command, a.About),
+	id, err := s.Request(ctx, OpenRequest{Type: classes.RequestDestructive, Requester: a.Requester, AboutMsg: i18n.M("approval.about_destructive", "command", a.Command, "about", destructiveAbout(a)),
 		Justification: a.Reason, Target: target, Fingerprint: fp})
 	return false, id, err
 }
@@ -127,4 +130,13 @@ func (s *Service) Destructive(ctx context.Context, a DestructiveAsk) (granted bo
 func IsNoRequest(err error) bool {
 	var r *Refusal
 	return errors.As(err, &r) && r.Code == CodeNoRequest
+}
+
+// destructiveAbout is the object of a destructive command: a message when the
+// engine worded it, else the name or the id it came with.
+func destructiveAbout(a DestructiveAsk) any {
+	if !a.AboutMsg.IsZero() {
+		return a.AboutMsg
+	}
+	return a.About
 }

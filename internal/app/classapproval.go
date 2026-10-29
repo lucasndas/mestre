@@ -72,7 +72,7 @@ func (a classAlerts) ClassChanged(ctx context.Context, al classes.ClassAlert) er
 		return err
 	}
 	_, err = svc.Request(ctx, chain.OpenRequest{Type: classes.RequestWorkspaceClass, Workspace: a.workspace, Proposer: p.By, Target: target,
-		About: fmt.Sprintf("criar ou mudar a classe %s da campanha (proposta %d, pacote %s)", al.Key.Name, p.ID, shortHash(p.Hash))})
+		AboutMsg: i18n.M("approval.about_class", "class", al.Key.Name, "proposal", p.ID, "hash", shortHash(p.Hash))})
 	if err != nil {
 		return fmt.Errorf("app: asking the people about the class %s: %w", al.Key.Name, err)
 	}

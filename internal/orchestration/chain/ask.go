@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
@@ -78,6 +79,6 @@ func (s *Service) AskAction(ctx context.Context, by characters.Character, tableI
 		return 0, refuse(CodeNotAtLevel, "approval.only_grand_master_asks")
 	}
 	note.By = by.ID
-	return s.Request(ctx, OpenRequest{Type: classes.RequestGMAction, Workspace: by.Workspace, Table: tableID, Requester: by.ID, About: "pergunta do Grão-Mestre sobre uma ação",
+	return s.Request(ctx, OpenRequest{Type: classes.RequestGMAction, Workspace: by.Workspace, Table: tableID, Requester: by.ID, AboutMsg: i18n.M("approval.about_gm_ask"),
 		Ask: &note, Task: note.Summary})
 }

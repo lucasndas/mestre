@@ -342,7 +342,7 @@ func (c *Creation) Open(ctx context.Context, token string, who users.User) (Page
 		c.audit(ctx, r.app, "opened", who.ID, "")
 	case "opened":
 		if !now.Before(r.deadline) {
-			c.fail(ctx, r, "opened", "o código do manifesto não foi entregue em 1 hora")
+			c.fail(ctx, r, "opened", i18n.M("github.why_code_late"))
 			return Page{}, ErrCodeLate
 		}
 		if r.openedBy != who.ID { // authorized by what is recorded: the one who opened it
@@ -418,13 +418,13 @@ func (c *Creation) expire(ctx context.Context, r request) {
 // fail ends a request whose code was not handed back: the App may exist at
 // GitHub without its key here, so the Owner is told to delete it, and the next
 // request takes the next name.
-func (c *Creation) fail(ctx context.Context, r request, from, why string) {
+func (c *Creation) fail(ctx context.Context, r request, from string, why i18n.Msg) {
 	moved, err := c.setStatus(ctx, r.id, from, "failed")
 	if err != nil || !moved {
 		return
 	}
 	_ = c.o.Apps.SetState(ctx, r.app, classes.AppFailed)
-	c.audit(ctx, r.app, "failed", "", why)
+	c.audit(ctx, r.app, "failed", "", i18n.Render("en", why))
 	c.tell(ctx, i18n.M("github.app_creation_failed", "app", r.app, "why", why))
 }
 
@@ -464,7 +464,7 @@ func (c *Creation) Callback(ctx context.Context, code, state string, who users.U
 		return "", ErrOwnerOnly
 	}
 	if !c.clk.Now().Before(r.deadline) {
-		c.fail(ctx, r, "opened", "o código do manifesto não foi entregue em 1 hora")
+		c.fail(ctx, r, "opened", i18n.M("github.why_code_late"))
 		return "", ErrCodeLate
 	}
 	// who the Owner is must be known before the code is spent
@@ -492,40 +492,40 @@ func (c *Creation) Callback(ctx context.Context, code, state string, who users.U
 		return "", err
 	}
 	if conv.ID == 0 || conv.Slug == "" || conv.PEM == "" {
-		c.abort(bg, r, who.ID, "a resposta do GitHub veio incompleta")
+		c.abort(bg, r, who.ID, i18n.M("github.why_incomplete_response"))
 		return "", errors.New("github: the answer of the conversion is incomplete")
 	}
 	if !strings.EqualFold(owner, conv.Owner.Login) {
 		// the key was never put in the vault: nothing to erase, and the App is not used
-		c.abort(bg, r, who.ID, fmt.Sprintf("o App foi criado na conta %q, que não é a do Senhor da Guilda; exclua-o naquela conta e peça outro link, abrindo-o com a conta certa do GitHub", conv.Owner.Login))
+		c.abort(bg, r, who.ID, i18n.M("github.why_other_account", "login", conv.Owner.Login))
 		return "", ErrWrongOwner
 	}
 	if err := c.o.Vault.Put(bg, KeySecret(r.app), vault.TypeGitHubAppKey, []byte(conv.PEM), nil); err != nil {
-		c.abort(bg, r, who.ID, "a chave não foi guardada no cofre")
+		c.abort(bg, r, who.ID, i18n.M("github.why_key_not_stored"))
 		return "", fmt.Errorf("github: the key of the App %q did not go to the vault: %w", r.app, err)
 	}
 	app, err := c.o.Apps.Get(bg, r.app)
 	if err != nil {
 		_ = c.o.Vault.Delete(bg, KeySecret(r.app))
-		c.abort(bg, r, who.ID, "o App não foi lido")
+		c.abort(bg, r, who.ID, i18n.M("github.why_app_not_read"))
 		return "", err
 	}
 	if app.Role == RoleGrandMaster {
 		if conv.ClientSecret == "" {
 			_ = c.o.Vault.Delete(bg, KeySecret(r.app))
-			c.abort(bg, r, who.ID, "a resposta do GitHub veio sem o segredo do cliente")
+			c.abort(bg, r, who.ID, i18n.M("github.why_no_client_secret"))
 			return "", errors.New("github: the answer of the conversion has no client secret")
 		}
 		if err := c.o.Vault.Put(bg, ClientSecretName(r.app), vault.TypeGitHubAppKey, []byte(conv.ClientSecret), nil); err != nil {
 			_ = c.o.Vault.Delete(bg, KeySecret(r.app))
-			c.abort(bg, r, who.ID, "o segredo do cliente não foi guardado no cofre")
+			c.abort(bg, r, who.ID, i18n.M("github.why_secret_not_stored"))
 			return "", fmt.Errorf("github: the client secret of the App %q did not go to the vault: %w", r.app, err)
 		}
 	}
 	if err := c.o.Apps.Created(bg, r.app, conv.Slug, conv.ID, conv.ClientID); err != nil {
 		_ = c.o.Vault.Delete(bg, KeySecret(r.app))
 		_ = c.o.Vault.Delete(bg, ClientSecretName(r.app))
-		c.abort(bg, r, who.ID, "o App não foi registrado")
+		c.abort(bg, r, who.ID, i18n.M("github.why_app_not_registered"))
 		return "", err
 	}
 	if _, err := c.setStatus(bg, r.id, "exchanging", "created"); err != nil {
@@ -538,10 +538,10 @@ func (c *Creation) Callback(ctx context.Context, code, state string, who users.U
 // abort ends a request whose code was spent and whose App can not be used: the
 // App is falhou, the audit says why and the Owner is told to delete the App at
 // GitHub.
-func (c *Creation) abort(ctx context.Context, r request, user, why string) {
+func (c *Creation) abort(ctx context.Context, r request, user string, why i18n.Msg) {
 	_, _ = c.setStatus(ctx, r.id, "exchanging", "failed")
 	_ = c.o.Apps.SetState(ctx, r.app, classes.AppFailed)
-	c.audit(ctx, r.app, "aborted", user, why)
+	c.audit(ctx, r.app, "aborted", user, i18n.Render("en", why))
 	c.tell(ctx, i18n.M("github.app_not_used", "app", r.app, "why", why))
 }
 
@@ -845,9 +845,9 @@ func (c *Creation) Sweep(ctx context.Context) error {
 		case r.status == "link" && !now.Before(r.linkExpires):
 			c.expire(ctx, r)
 		case r.status == "opened" && !now.Before(r.deadline):
-			c.fail(ctx, r, "opened", "o código do manifesto não foi entregue em 1 hora")
+			c.fail(ctx, r, "opened", i18n.M("github.why_code_late"))
 		case r.status == "exchanging" && !now.Before(r.deadline): // the process left in the middle of the exchange
-			c.fail(ctx, r, "exchanging", "a troca do código não terminou")
+			c.fail(ctx, r, "exchanging", i18n.M("github.why_exchange_unfinished"))
 		case r.status == "created" && owner != "":
 			c.poll(ctx, r, owner)
 		}

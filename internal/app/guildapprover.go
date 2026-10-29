@@ -65,9 +65,9 @@ func (a EntryApprover) Ask(ctx context.Context, r guild.ApprovalRequest) (string
 	}
 	// the code is the engine's, first and alone; what the machine said about itself
 	// comes after, without the marks the channel turns into a link or bold
-	about := fmt.Sprintf("Entrada na Guilda. Código para conferir com o da tela do instalador: %s. A máquina diz ser %q (sistema %q, host %q, instância %q, vinda de %q).",
-		r.Code, plainText(r.Name), plainText(r.OS), plainText(r.Hostname), plainText(r.Instance), plainText(r.RemoteIP))
-	id, err := svc.RequestSystem(ctx, chain.SystemRequest{Type: classes.RequestGuildEntry, About: about, Target: target})
+	about := i18n.M("approval.about_guild_entry", "code", r.Code,
+		"name", plainText(r.Name), "os", plainText(r.OS), "host", plainText(r.Hostname), "instance", plainText(r.Instance), "ip", plainText(r.RemoteIP))
+	id, err := svc.RequestSystem(ctx, chain.SystemRequest{Type: classes.RequestGuildEntry, AboutMsg: about, Target: target})
 	if err != nil {
 		return "", fmt.Errorf("app: asking the Owner about the entry: %w", err)
 	}

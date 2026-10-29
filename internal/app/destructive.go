@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/rituals"
@@ -96,7 +97,7 @@ func (g tableGate) Allowed(ctx context.Context, a tables.DestructiveAction) (boo
 		return false, err
 	}
 	ok, _, err := g.b.ask(ctx, chain.DestructiveAsk{Requester: a.By, Command: "table close --cancel", Object: a.Workspace + "/" + a.Table, Version: version,
-		About: "cancelar a mesa " + a.Table, Reason: a.Reason})
+		AboutMsg: i18n.M("approval.about_table_cancel", "table", a.Table), Reason: a.Reason})
 	return ok, err
 }
 

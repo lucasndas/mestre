@@ -103,7 +103,11 @@ func (c *DecreeChannel) Offer(ctx context.Context, p decrees.Pending) error {
 		parts = []i18n.Msg{i18n.Text(p.Text)}
 	}
 	if p.Order != "" {
-		parts = append(parts, i18n.M("bot.decree_your_order", "order", p.Order))
+		var order any = p.Order // what the user wrote stays text; what the engine worded is translated
+		if !p.OrderMsg.IsZero() {
+			order = p.OrderMsg
+		}
+		parts = append(parts, i18n.M("bot.decree_your_order", "order", order))
 	}
 	if p.PIN {
 		why := p.WhyMsg

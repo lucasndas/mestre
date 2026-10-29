@@ -217,9 +217,6 @@ func whatMsg(lim Limit, r Record, capital bool) i18n.Msg {
 	return i18n.M("usage.what_installation")
 }
 
-// whatText is what the limit covers in pt-BR, for the text that is kept with a request.
-func whatText(lim Limit, r Record) string { return i18n.Render(i18n.PtBR, whatMsg(lim, r, false)) }
-
 func orElse(a, b string) string {
 	if a != "" {
 		return a
@@ -239,7 +236,6 @@ func amountMsg(u classes.Unit, v float64) i18n.Msg {
 }
 
 // amount is amountMsg in pt-BR, for the text that is kept with a request.
-func amount(u classes.Unit, v float64) string { return i18n.Render(i18n.PtBR, amountMsg(u, v)) }
 
 // reached is a limit at 100%: it pauses what the limit covers and asks for
 // the extra. Nothing interrupts a turn.
@@ -293,7 +289,7 @@ func (s *Service) askExtra(ctx context.Context, r Record, lim Limit, req request
 		return 0, err
 	}
 	return s.o.Extras.OpenExtra(ctx, ExtraRequest{Workspace: r.Workspace, Table: r.Table, Scope: lim.Scope, Unit: lim.Unit, Used: req.Used, Limit: req.Cap, Extra: req.Extra,
-		About: fmt.Sprintf("custo extra: %s chegou a %s de %s; pede mais %s", whatText(lim, r), amount(lim.Unit, req.Used), amount(lim.Unit, req.Cap), amount(lim.Unit, req.Extra)),
+		About: i18n.M("approval.about_extra_cost", "what", whatMsg(lim, r, false), "used", amountMsg(lim.Unit, req.Used), "cap", amountMsg(lim.Unit, req.Cap), "extra", amountMsg(lim.Unit, req.Extra)),
 		Risk:  risk, Target: target})
 }
 

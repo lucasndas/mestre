@@ -201,6 +201,11 @@ func TestADelegationIsRemindedRenewedAndExpires(t *testing.T) {
 	if err != nil || !pend.PIN {
 		t.Fatalf("renew = %+v, %v", pend, err)
 	}
+	// the order the engine worded for the renewal is read in each reader's language
+	if en, pt := i18n.Render("en", pend.OrderMsg), i18n.Render(i18n.PtBR, pend.OrderMsg); !strings.Contains(en, "Renew the delegation") || !strings.Contains(en, "30 days") ||
+		!strings.Contains(pt, "Renovar a delegação") || !strings.Contains(pt, "30 dias") || pend.Order != en {
+		t.Errorf("order: en = %q, pt = %q, text = %q", en, pt, pend.Order)
+	}
 	pinReq, err := svc.BeginPIN(w.ctx, pend.ID, w.owner.ID)
 	if err != nil {
 		t.Fatal(err)

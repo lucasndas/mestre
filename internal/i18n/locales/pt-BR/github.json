@@ -28,5 +28,14 @@
   "github.pr_of_table": "O PR é da mesa.",
   "github.push_to_main": "O envio na branch principal não é feito: a mesa trabalha na sua branch.",
   "github.quota_exhausted": "O limite de requisições do GitHub acabou: as consultas de todas as campanhas voltam às {{at}} UTC.",
-  "github.target_kind": "O alvo é uma issue ou um PR; um comentário vale pelo que o contém."
+  "github.target_kind": "O alvo é uma issue ou um PR; um comentário vale pelo que o contém.",
+  "github.why_app_not_read": "o App não foi lido",
+  "github.why_app_not_registered": "o App não foi registrado",
+  "github.why_code_late": "o código do manifesto não foi entregue em 1 hora",
+  "github.why_exchange_unfinished": "a troca do código não terminou",
+  "github.why_incomplete_response": "a resposta do GitHub veio incompleta",
+  "github.why_key_not_stored": "a chave não foi guardada no cofre",
+  "github.why_no_client_secret": "a resposta do GitHub veio sem o segredo do cliente",
+  "github.why_other_account": "o App foi criado na conta \"{{login}}\", que não é a do Senhor da Guilda; exclua-o naquela conta e peça outro link, abrindo-o com a conta certa do GitHub",
+  "github.why_secret_not_stored": "o segredo do cliente não foi guardado no cofre"
 }

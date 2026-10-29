@@ -76,6 +76,7 @@ type creationRig struct {
 	beforeSend atomic.Pointer[func(*http.Request)]
 	mu         sync.Mutex
 	told       []string
+	toldMsgs   []i18n.Msg
 	ready      []string
 	login      string
 }
@@ -93,6 +94,7 @@ func newCreation(t *testing.T) *creationRig {
 		Tell: func(_ context.Context, m i18n.Msg) {
 			r.mu.Lock()
 			r.told = append(r.told, i18n.Render(i18n.PtBR, m))
+			r.toldMsgs = append(r.toldMsgs, m)
 			r.mu.Unlock()
 		},
 		OnReady: func(_ context.Context, a github.App) { r.mu.Lock(); r.ready = append(r.ready, a.Name); r.mu.Unlock() },
@@ -367,6 +369,33 @@ func TestTheOwnerHandsTheCodeBackInAnHourOrTheRequestFails(t *testing.T) {
 	}
 	if got, _ := r2.apps.Get(r2.ctx, app2.Name); got.State != classes.AppFailed {
 		t.Errorf("after the sweep the App is %s", got.State)
+	}
+}
+
+// The reason a creation failed is a message nested in the notice, and each reader
+// has it in his language.
+func TestTheReasonOfAFailedCreationIsTranslatedWithTheNotice(t *testing.T) {
+	t.Parallel()
+	r := newCreation(t)
+	app := r.request(dev)
+	_, state := r.opened(app)
+	r.conversion("c1", app, 31, "lucas")
+	r.clk.Advance(github.CodeLife + time.Second)
+	if _, err := r.c.Callback(r.ctx, "c1", state, r.owner); !errors.Is(err, github.ErrCodeLate) {
+		t.Fatalf("callback: %v", err)
+	}
+	r.mu.Lock()
+	msgs := append([]i18n.Msg(nil), r.toldMsgs...)
+	r.mu.Unlock()
+	if len(msgs) != 1 {
+		t.Fatalf("notices = %v", msgs)
+	}
+	en, pt := i18n.Render("en", msgs[0]), i18n.Render(i18n.PtBR, msgs[0])
+	if !strings.Contains(en, "was not handed back within 1 hour") || !strings.Contains(pt, "não foi entregue em 1 hora") {
+		t.Errorf("en = %q, pt = %q", en, pt)
+	}
+	if strings.Contains(en, "entregue") || strings.Contains(pt, "handed back") {
+		t.Errorf("a reason in the wrong language: en = %q, pt = %q", en, pt)
 	}
 }
 
