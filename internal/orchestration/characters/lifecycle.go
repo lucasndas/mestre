@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/i18n"
@@ -18,6 +19,16 @@ import (
 // the process, so the report is applied even when the diagram has no such
 // edge (it is logged); a report older than one already applied is dropped.
 func (s *Service) Report(ctx context.Context, r Report) error {
+	// The check of the order and the write of the transition are one step per
+	// character: two reports in flight at once (the start and the first idle
+	// of a character) must not swap, or the older would overwrite the newer.
+	// The lock is let go before the observers run, which may report again.
+	unlock := s.lockReports(r.Character)
+	defer func() {
+		if unlock != nil {
+			unlock()
+		}
+	}()
 	s.mu.Lock()
 	if r.Seq != 0 && r.Seq <= s.seq[r.Character] {
 		s.mu.Unlock()
@@ -58,6 +69,8 @@ func (s *Service) Report(ctx context.Context, r Report) error {
 	if err != nil {
 		return err
 	}
+	unlock()
+	unlock = nil
 	if !changed {
 		return nil
 	}
@@ -65,6 +78,20 @@ func (s *Service) Report(ctx context.Context, r Report) error {
 	err = s.after(ctx, c, from)
 	s.observe(func(o Observer) error { return o.StateChanged(ctx, c, from) })
 	return err
+}
+
+// lockReports takes the lock that orders the reports of one character and
+// returns the function that lets it go (once).
+func (s *Service) lockReports(id string) func() {
+	s.mu.Lock()
+	m := s.reportLocks[id]
+	if m == nil {
+		m = &sync.Mutex{}
+		s.reportLocks[id] = m
+	}
+	s.mu.Unlock()
+	m.Lock()
+	return m.Unlock
 }
 
 // ErrForeignTerminal: a report names a terminal that is not the character's.

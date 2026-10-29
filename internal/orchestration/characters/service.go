@@ -97,6 +97,8 @@ type Service struct {
 	mu sync.Mutex
 	// seq is the last report applied of each character.
 	seq map[string]uint64
+	// reportLocks order the reports of each character (see Report).
+	reportLocks map[string]*sync.Mutex
 	// satisfied maps a wait for a vacancy to the character it created.
 	satisfied map[string]string
 	// summarized are the characters whose summary was already written.
@@ -143,7 +145,7 @@ func NewService(o ServiceOptions) (*Service, error) {
 		o.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	return &Service{o: o, clk: o.Clock, ids: protocol.NewIDGen(o.Clock), log: o.Logger,
-		seq: map[string]uint64{}, satisfied: map[string]string{}, summarized: map[string]bool{}, refused: map[string]bool{}, replacing: map[string]bool{}}, nil
+		seq: map[string]uint64{}, reportLocks: map[string]*sync.Mutex{}, satisfied: map[string]string{}, summarized: map[string]bool{}, refused: map[string]bool{}, replacing: map[string]bool{}}, nil
 }
 
 // Limits are the limits in force (the defaults filled in), for the grimoires to
