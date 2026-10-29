@@ -9,9 +9,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/panel"
 )
 
@@ -82,6 +84,7 @@ func TestTheLoginSpeaksTheMachineLanguageAndThenTheUsers(t *testing.T) {
 	t.Parallel()
 	t.Run("en machine, pt-BR user", func(t *testing.T) {
 		t.Parallel()
+		onWindowsTheInterfaceDecides(t, "en_US.UTF-8")
 		server, folder := panelFor(t, "pt-BR")
 		con := &scriptedConsole{fakeConsole: fakeConsole{interactive: true, cols: 80, rows: 24}}
 		out := runAgainst(t, server, folder, map[string]string{"LANG": "en_US.UTF-8"}, con)
@@ -97,6 +100,7 @@ func TestTheLoginSpeaksTheMachineLanguageAndThenTheUsers(t *testing.T) {
 	})
 	t.Run("pt-BR machine, en user", func(t *testing.T) {
 		t.Parallel()
+		onWindowsTheInterfaceDecides(t, "pt_BR.UTF-8")
 		server, folder := panelFor(t, "en")
 		con := &scriptedConsole{fakeConsole: fakeConsole{interactive: true, cols: 80, rows: 24}}
 		out := runAgainst(t, server, folder, map[string]string{"LANG": "pt_BR.UTF-8"}, con)
@@ -109,6 +113,7 @@ func TestTheLoginSpeaksTheMachineLanguageAndThenTheUsers(t *testing.T) {
 	})
 	t.Run("a user with no language keeps the machine's", func(t *testing.T) {
 		t.Parallel()
+		onWindowsTheInterfaceDecides(t, "en_GB.UTF-8")
 		server, folder := panelFor(t, "")
 		con := &scriptedConsole{fakeConsole: fakeConsole{interactive: true, cols: 80, rows: 24}}
 		runAgainst(t, server, folder, map[string]string{"LC_ALL": "en_GB.UTF-8", "LANG": "pt_BR.UTF-8"}, con)
@@ -122,6 +127,9 @@ func TestTheLoginSpeaksTheMachineLanguageAndThenTheUsers(t *testing.T) {
 func TestAnErrorKeepsItsPrefixesInTheLanguageOfTheMachine(t *testing.T) {
 	t.Parallel()
 	for lang, want := range map[string]string{"en_US.UTF-8": "needs a terminal", "pt_BR.UTF-8": "precisa de um terminal"} {
+		if runtime.GOOS == "windows" && i18n.MachineLanguage() != i18n.Match(lang) {
+			continue // the interface of this Windows decides (onWindowsTheInterfaceDecides)
+		}
 		con := &fakeConsole{interactive: false}
 		env, _, stderr := envWith(con, map[string]string{"LANG": lang})
 		if code := Run(context.Background(), env, []string{"Dev-1", "--dir", t.TempDir()}); code != 2 {
@@ -146,5 +154,17 @@ func TestTheRefusalOfAnAgentIgnoresTheLocale(t *testing.T) {
 	}
 	if texts[0] != texts[1] || texts[1] != texts[2] || !strings.Contains(texts[0], "is not a command of agents") {
 		t.Fatalf("the refusal changes with the locale: %q", texts)
+	}
+}
+
+// onWindowsTheInterfaceDecides skips a case that needs the machine to say lang
+// through its locale variables when the machine is a Windows whose interface says
+// another language: there the interface decides and the variables do not count
+// (docs/plataforma/idioma-por-canal.md#cli; TestMachineLanguageIsTheInterfaceLanguageOnWindows
+// proves it). The other cases run on both systems.
+func onWindowsTheInterfaceDecides(t *testing.T, lang string) {
+	t.Helper()
+	if runtime.GOOS == "windows" && i18n.MachineLanguage() != i18n.Match(lang) {
+		t.Skipf("the interface of this Windows says %s, the case needs %s", i18n.MachineLanguage(), i18n.Match(lang))
 	}
 }

@@ -2,10 +2,12 @@ package app_test
 
 import (
 	"bytes"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/mestre-ia/mestre/internal/app"
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // An agent never starts the engine: MESTRE_AGENT_ID in the environment, even
@@ -35,6 +37,9 @@ func TestTheEngineDoesNotStartWithMESTRE_AGENT_IDInTheEnvironmentEvenEmpty(t *te
 func TestTheStartErrorsOfTheEngineSpeakTheLanguageOfTheMachine(t *testing.T) {
 	t.Parallel()
 	for lang, want := range map[string]string{"pt_BR.UTF-8": "error: não consigo ler a configuração:", "en_US.UTF-8": "error: cannot read the configuration:"} {
+		if runtime.GOOS == "windows" && i18n.MachineLanguage() != i18n.Match(lang) {
+			continue // the interface of this Windows decides (onWindowsTheInterfaceDecides)
+		}
 		var out bytes.Buffer
 		lookup := func(k string) (string, bool) {
 			if k == "LANG" {
