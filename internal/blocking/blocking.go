@@ -69,8 +69,7 @@ func (e *UsageError) Error() string {
 	for _, m := range Motives() {
 		names = append(names, string(m))
 	}
-	// mestre:allow pt-text: the answer of the CLI to an agent, not a text for a person
-	return fmt.Sprintf("motivo %q fora do vocabulário; os valores aceitos são %s", e.Got, strings.Join(names, ", "))
+	return fmt.Sprintf("motive %q is outside the vocabulary; the accepted values are %s", e.Got, strings.Join(names, ", "))
 }
 
 // ParseMotive reads a motive; one outside the vocabulary is a *UsageError.

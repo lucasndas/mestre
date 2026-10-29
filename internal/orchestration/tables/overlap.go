@@ -122,7 +122,7 @@ func (s *Service) Overlap(ctx context.Context, workspace string, globs []string)
 	out := Overlap{Base: w.DefaultBranch}
 	tip, err := mirror.ResolveRef(ctx, "refs/remotes/origin/"+w.DefaultBranch)
 	if err != nil {
-		return Overlap{}, fmt.Errorf("a branch base origin/%s não foi lida: %w", w.DefaultBranch, err)
+		return Overlap{}, codedErr(err, "table.base_unread", "base", w.DefaultBranch, "cause", causeOf(err))
 	}
 	// only the last commits are read: the range stops at overlapScan, and a
 	// history shorter than that is read whole
@@ -198,7 +198,7 @@ func (s *Service) handleOverlap(ctx context.Context, c *localchan.Call) localcha
 	}
 	commits := make([]map[string]any, 0, len(res.Commits))
 	var text strings.Builder
-	fmt.Fprintf(&text, "Base %s: %d commits recentes nos caminhos", res.Base, len(res.Commits))
+	fmt.Fprintf(&text, "Base %s: %d recent commits on the paths", res.Base, len(res.Commits))
 	for _, c := range res.Commits {
 		commits = append(commits, map[string]any{"hash": c.Hash, "subject": c.Subject, "author": c.Author, "when": c.When.UTC().Format(time.RFC3339), "files": c.Files})
 		fmt.Fprintf(&text, "\n- %.8s %s (%s)", c.Hash, oneLine(c.Subject), strings.Join(c.Files, ", "))
@@ -206,7 +206,7 @@ func (s *Service) handleOverlap(ctx context.Context, c *localchan.Call) localcha
 	tables := make([]map[string]any, 0, len(res.Tables))
 	for _, t := range res.Tables {
 		tables = append(tables, map[string]any{"name": t.Table, "epic": t.Epic, "files": t.Files})
-		fmt.Fprintf(&text, "\nMesa %s (épico #%d): %s", t.Table, t.Epic, strings.Join(t.Files, ", "))
+		fmt.Fprintf(&text, "\nTable %s (epic #%d): %s", t.Table, t.Epic, strings.Join(t.Files, ", "))
 	}
 	if globs == nil {
 		globs = []string{}

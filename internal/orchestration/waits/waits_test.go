@@ -44,7 +44,7 @@ func notYet(t *testing.T, ch <-chan askRes, what string) {
 }
 
 // CA-ESP-04 (the service: pending at 90 s, the late answer whole, no resend;
-// the text "sem resposta no prazo" is asserted at the command, in
+// the text "no answer in time" is asserted at the command, in
 // internal/app/cli_comm_test.go and in TestTheAskCommandAnswersPendingBatchAndNotConnected)
 func TestAnAskThatRunsOutOfTimeReturnsPendingAndTheLateAnswerComesWholeAsAnAnswerWithoutAResend(t *testing.T) {
 	t.Parallel()
@@ -639,7 +639,7 @@ func TestAskRawIntoTheTerminalOfASpawnWorksInAnyState(t *testing.T) {
 }
 
 // Part of CA-ESP-04, the command: past the time limit the answer is exit 6, pending,
-// "sem resposta no prazo".
+// "no answer in time".
 func TestTheAskCommandAnswersPendingBatchAndNotConnected(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -682,7 +682,7 @@ func TestTheAskCommandAnswersPendingBatchAndNotConnected(t *testing.T) {
 	w.clk.BlockUntil(armed + 1)
 	w.clk.Advance(5 * time.Minute)
 	resp = <-done
-	if resp.OK || resp.ExitCode() != localchan.ExitTimeout || resp.Error.Details["status"] != "pending" || !strings.Contains(resp.Error.Message, "sem resposta no prazo") {
+	if resp.OK || resp.ExitCode() != localchan.ExitTimeout || resp.Error.Details["status"] != "pending" || !strings.Contains(resp.Error.Message, "no answer in time") {
 		t.Fatalf("pending: %+v", resp)
 	}
 	// the maximum is 9 minutes, whatever is asked for

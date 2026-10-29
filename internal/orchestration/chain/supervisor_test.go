@@ -439,7 +439,7 @@ func TestThePauseIsAuditedWithWhoAndWhyAndTheLevelRulesHoldForPausingAndResuming
 		t.Fatal(err)
 	}
 	st := w.fwd.Forward(w.ctx, &localchan.Call{Request: localchan.Request{Cmd: "table status", Args: localchan.TextArgs(w.table.ID)}, Caller: localchan.Caller{Identified: true, AgentID: w.gm.ID}})
-	if !st.OK || !strings.Contains(string(st.Data), "Autonomia do Mestre da mesa pausada") {
+	if !st.OK || !strings.Contains(string(st.Data), "Autonomy of the Table Master paused") {
 		t.Errorf("table status = %s", st.Data)
 	}
 }

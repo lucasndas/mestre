@@ -115,7 +115,7 @@ func TestTableOverlapListsTheCommitsOfTheBaseAndTheFilesOfTheTablesInThePaths(t 
 	data := dataOf(t, r)
 	text, _ := data["text"].(string)
 	commitLine := fmt.Sprintf("- %.8s feat: login session (src/login/session.ts)", baseCommit)
-	tableLine := fmt.Sprintf("Mesa %s (épico #15): src/login/form.ts", tbl.ID)
+	tableLine := fmt.Sprintf("Table %s (epic #15): src/login/form.ts", tbl.ID)
 	ci, ti := strings.Index(text, commitLine), strings.Index(text, tableLine)
 	if ci < 0 || ti < 0 || ci > ti {
 		t.Fatalf("the output = %q, want the commit line %q and then, under the table, %q", text, commitLine, tableLine)

@@ -534,7 +534,7 @@ func TestTextThatStartsWithTwoHyphensIsDataUnlessItIsAFlag(t *testing.T) {
 
 // CA-CLI-COM-01: a target that does not answer in the default time limit: exit
 // 6, status pending, and the late answer reaches the inbox of who asked.
-// Part of CA-ESP-04, at the command: at 90 s the answer is "sem resposta no prazo".
+// Part of CA-ESP-04, at the command: at 90 s the answer is "no answer in time".
 func TestAskThatRunsOutOfTimeIsPendingAndTheLateAnswerComesToTheInbox(t *testing.T) {
 	t.Parallel()
 	w := newCommWorld(t)
@@ -546,10 +546,10 @@ func TestAskThatRunsOutOfTimeIsPendingAndTheLateAnswerComesToTheInbox(t *testing
 	if r.code != 6 || v.OK || v.Error.Code != "timeout" || v.Error.Details["status"] != "pending" || v.Error.Details["to"] != "Revisor" || v.Error.Details["request_id"] == "" {
 		t.Fatalf("ask that ran out of time = %d %s", r.code, r.stdout)
 	}
-	if !strings.Contains(v.Error.Message, "sem resposta no prazo") {
-		t.Errorf("message = %q, want \"sem resposta no prazo\"", v.Error.Message)
+	if !strings.Contains(v.Error.Message, "no answer in time") {
+		t.Errorf("message = %q, want \"no answer in time\"", v.Error.Message)
 	}
-	if !strings.Contains(v.Error.Hint, "não reenvie") {
+	if !strings.Contains(v.Error.Hint, "do not send it again") {
 		t.Errorf("hint = %q", v.Error.Hint)
 	}
 	// The request goes on: the target answers later, in the turn that handled it.
@@ -573,7 +573,7 @@ func TestAskThatRunsOutOfTimeIsPendingAndTheLateAnswerComesToTheInbox(t *testing
 	// The text mode of a request that is still pending.
 	done = w.ask(dev, "Revisor", "e agora?", "--timeout", "1m")
 	w.clk.Advance(time.Minute)
-	if r := <-done; r.code != 6 || !strings.Contains(r.stderr, "error: sem resposta no prazo") || !strings.Contains(r.stderr, "hint: ") {
+	if r := <-done; r.code != 6 || !strings.Contains(r.stderr, "error: no answer in time") || !strings.Contains(r.stderr, "hint: ") {
 		t.Errorf("text of the pending ask: %+v", r)
 	}
 }

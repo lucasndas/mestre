@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
@@ -49,29 +50,39 @@ func Refusal(err error) localchan.Response {
 	case errors.As(err, &na):
 		return localchan.Fail("workspace_not_active", na.Error(), "wait for the workspace to become active, or resume it if it is paused").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrEpicNotFound):
-		return localchan.Fail("epic_not_found", err.Error(), "create the epic with `mestre gh epic create` first; `table open` never creates an epic").WithExit(localchan.ExitNotFound)
+		return refuse("epic_not_found", err, "create the epic with `mestre gh epic create` first; `table open` never creates an epic").WithExit(localchan.ExitNotFound)
 	case errors.Is(err, ErrEpicClosed):
-		return localchan.Fail("epic_closed", err.Error(), "reopen the epic or create another").WithExit(localchan.ExitConflict)
+		return refuse("epic_closed", err, "reopen the epic or create another").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrTableExists):
-		return localchan.Fail("table_exists", err.Error(), "see `mestre table list`").WithExit(localchan.ExitConflict)
+		return refuse("table_exists", err, "see `mestre table list`").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrNotMerged):
-		return localchan.Fail("not_merged", err.Error(), "o merge do PR precisa estar confirmado; o motor avisa quando estiver").WithExit(localchan.ExitConflict)
+		return refuse("not_merged", err, "the merge of the PR must be confirmed first; the engine tells you when it is").WithExit(localchan.ExitConflict)
 	case errors.As(err, &miss):
 		return missingResponse(miss)
 	case errors.Is(err, ErrApprovalRequired):
 		return localchan.Fail("pending", "cancelling a table is a destructive action: it waits for the approval of a user", "the decision arrives in your inbox").WithExit(localchan.ExitPending)
 	case errors.Is(err, ErrNoTable):
-		return localchan.Fail("not_found", err.Error(), "see `mestre table list`")
+		return refuse("not_found", err, "see `mestre table list`")
 	case errors.Is(err, ErrBadTransition):
-		return localchan.Fail("bad_state", err.Error(), "").WithExit(localchan.ExitConflict)
+		return refuse("bad_state", err, "").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrRefMoved):
-		return localchan.Fail("ref_moved", err.Error(), "um Administrador precisa conferir e confiar de novo na ref").WithExit(localchan.ExitConflict)
+		return refuse("ref_moved", err, "an Administrator must check and trust the ref again").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrMachineUnreachable):
-		return localchan.Fail("machine_unreachable", err.Error(), "")
+		return refuse("machine_unreachable", err, "")
 	case errors.Is(err, workspaces.ErrNotFound):
-		return localchan.Fail("not_found", err.Error(), "")
+		return refuse("not_found", err, "")
 	}
-	return localchan.Fail(localchan.CodeInternal, err.Error(), "")
+	return refuse(localchan.CodeInternal, err, "")
+}
+
+// refuse is the refusal for an error: a coded error goes to the catalog in
+// English with its parameters, any other keeps its text.
+func refuse(code string, err error, hint string) localchan.Response {
+	var m i18n.Messager
+	if errors.As(err, &m) {
+		return localchan.FailMsg(code, m.Msg(), hint)
+	}
+	return localchan.Fail(code, err.Error(), hint)
 }
 
 // missingResponse answers a table that cannot end yet: unmerged_changes with
@@ -80,9 +91,9 @@ func Refusal(err error) localchan.Response {
 func missingResponse(m *MissingError) localchan.Response {
 	var r localchan.Response
 	if len(m.Decide) > 0 {
-		r = localchan.Fail("unmerged_changes", m.Error(), "ask the users and call `table close` again (with --keep to keep the worktrees)").WithExit(localchan.ExitConflict)
+		r = localchan.FailMsg("unmerged_changes", m.Msg(), "ask the users and call `table close` again (with --keep to keep the worktrees)").WithExit(localchan.ExitConflict)
 	} else {
-		r = localchan.Fail("scheduled", m.Error(), "the engine goes on with the closing by itself and tells you when it ends").WithExit(localchan.ExitPending)
+		r = localchan.FailMsg("scheduled", m.Msg(), "the engine goes on with the closing by itself and tells you when it ends").WithExit(localchan.ExitPending)
 	}
 	r.Error.Details = map[string]any{"table": m.Table, "decide": orEmpty(m.Decide), "pending": orEmpty(m.Pending)}
 	return r
@@ -139,15 +150,15 @@ func (s *Service) handleOpen(ctx context.Context, c *localchan.Call) localchan.R
 	}
 	master := map[string]any{"name": res.Master.Name, "id": res.Master.ID, "machine": res.Master.Machine}
 	return localchan.OK(map[string]any{
-		"text": fmt.Sprintf("mesa %s aberta (branch %s); Mestre da mesa %s recrutado", res.Table.ID, res.Table.Branch, res.Master.Name),
+		"text": fmt.Sprintf("table %s opened (branch %s); Table Master %s recruited", res.Table.ID, res.Table.Branch, res.Master.Name),
 		"name": res.Table.ID, "branch": res.Table.Branch, "epic": res.Table.Epic, "worktree": res.Worktree, "master": master,
 	})
 }
 
-// statePT is the state as the people read it, with the mark of the pause.
-var statePT = map[State]string{
-	StateOpen: "aberta", StateWorking: "em trabalho", StateInReview: "em revisão", StateClosing: "encerrando",
-	StateClosed: "encerrada", StateCancelling: "cancelando", StateCancelled: "cancelada",
+// stateLabel is the state as the agent reads it, with the mark of the pause.
+var stateLabel = map[State]string{
+	StateOpen: "open", StateWorking: "working", StateInReview: "in review", StateClosing: "closing",
+	StateClosed: "closed", StateCancelling: "cancelling", StateCancelled: "cancelled",
 }
 
 func (s *Service) handleList(ctx context.Context, c *localchan.Call) localchan.Response {
@@ -195,15 +206,15 @@ func (s *Service) handleList(ctx context.Context, c *localchan.Call) localchan.R
 			}
 		}
 		rows = append(rows, r)
-		st := statePT[t.State]
+		st := stateLabel[t.State]
 		if t.Paused {
-			st += " (pausada)"
+			st += " (paused)"
 		}
 		st += waitingLabel(r.WaitingFor)
-		fmt.Fprintf(&text, "- %s: %s, épico #%d, branch %s, PR %s\n", t.ID, st, t.Epic, t.Branch, prLabel(t.PRNumber))
+		fmt.Fprintf(&text, "- %s: %s, epic #%d, branch %s, PR %s\n", t.ID, st, t.Epic, t.Branch, prLabel(t.PRNumber))
 	}
 	if len(rows) == 0 {
-		text.WriteString("nenhuma mesa\n")
+		text.WriteString("no tables\n")
 	}
 	return localchan.OK(map[string]any{"text": strings.TrimRight(text.String(), "\n"), "tables": rows})
 }
@@ -230,11 +241,11 @@ func waitingLabel(on []int) string {
 	for i, e := range on {
 		parts[i] = "#" + strconv.Itoa(e)
 	}
-	noun := "a mesa "
+	noun := "table "
 	if len(on) > 1 {
-		noun = "as mesas "
+		noun = "tables "
 	}
-	return " (aguardando " + noun + strings.Join(parts, ", ") + ")"
+	return " (waiting for " + noun + strings.Join(parts, ", ") + ")"
 }
 
 func prLabel(n int) string {
@@ -274,7 +285,7 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 			text.WriteString(line + "\n\n")
 		}
 		if len(rows) == 0 {
-			text.WriteString("nenhuma mesa aberta")
+			text.WriteString("no open tables")
 		}
 		return localchan.OK(map[string]any{"tables": rows, "text": strings.TrimRight(text.String(), "\n")})
 	}
@@ -315,32 +326,32 @@ func (s *Service) statusOf(ctx context.Context, t Table) (map[string]any, string
 		}
 	}
 	var text strings.Builder
-	st := statePT[t.State]
+	st := stateLabel[t.State]
 	if t.Paused {
-		st += " (pausada: " + t.PausedReason + ")"
+		st += " (paused: " + t.PausedReason + ")"
 	}
 	waiting := s.waitingFor(ctx, t)
 	st += waitingLabel(waiting)
-	fmt.Fprintf(&text, "Mesa %s: %s. Épico #%d, branch %s, PR %s", t.ID, st, t.Epic, t.Branch, prLabel(t.PRNumber))
+	fmt.Fprintf(&text, "Table %s: %s. Epic #%d, branch %s, PR %s", t.ID, st, t.Epic, t.Branch, prLabel(t.PRNumber))
 	if t.Merged {
-		text.WriteString(" (mesclado)")
+		text.WriteString(" (merged)")
 	}
-	text.WriteString(".\nPersonagens:\n")
+	text.WriteString(".\nCharacters:\n")
 	for _, ch := range chars {
 		fmt.Fprintf(&text, "- %s (%s): %s\n", ch.Name, ch.Role, ch.State)
 	}
 	if len(chars) == 0 {
-		text.WriteString("- ninguém\n")
+		text.WriteString("- nobody\n")
 	}
 	issues, pr, folders := s.issuesOf(ctx, t), s.prOf(ctx, t), s.foldersOf(ctx, t)
 	if list, ok := issues.([]map[string]any); ok {
-		fmt.Fprintf(&text, "\nIssues abertas: %d", len(list))
+		fmt.Fprintf(&text, "\nOpen issues: %d", len(list))
 	}
 	if pr["error"] == nil && t.PRNumber != 0 {
-		fmt.Fprintf(&text, "\nPR: %v arquivos, %v linhas, CI %v", pr["files"], pr["lines"], pr["ci"])
+		fmt.Fprintf(&text, "\nPR: %v files, %v lines, CI %v", pr["files"], pr["lines"], pr["ci"])
 	}
 	if len(folders) > 0 {
-		fmt.Fprintf(&text, "\nPastas alteradas: %s", strings.Join(folders, ", "))
+		fmt.Fprintf(&text, "\nChanged folders: %s", strings.Join(folders, ", "))
 	}
 	data := map[string]any{"name": t.ID, "state": string(t.State), "paused": t.Paused,
 		"pause_reason": t.PausedReason, "epic": s.epicOf(ctx, t), "issues_open": issues, "branch": t.Branch, "pr": pr, "merged": t.Merged,
@@ -352,7 +363,7 @@ func (s *Service) statusOf(ctx context.Context, t Table) (map[string]any, string
 		}
 		data["autonomy_paused"], data["autonomy_reason"], data["approval_queue"] = paused, reason, queue
 		if paused {
-			fmt.Fprintf(&text, "\nAutonomia do Mestre da mesa pausada: %s", reason)
+			fmt.Fprintf(&text, "\nAutonomy of the Table Master paused: %s", reason)
 		}
 		if queue != "" {
 			fmt.Fprintf(&text, "\n%s", queue)
@@ -361,7 +372,7 @@ func (s *Service) statusOf(ctx context.Context, t Table) (map[string]any, string
 	data["last_delivery_at"] = ""
 	if at, err := s.LastDelivery(ctx, t.Workspace, t.ID); err == nil && !at.IsZero() {
 		data["last_delivery_at"] = at.UTC().Format(time.RFC3339)
-		fmt.Fprintf(&text, "\nÚltima entrega útil: %s", at.UTC().Format("2006-01-02 15:04 UTC"))
+		fmt.Fprintf(&text, "\nLast useful delivery: %s", at.UTC().Format("2006-01-02 15:04 UTC"))
 	}
 	data["proofs"] = s.proofsOf(ctx, t)
 	line := strings.TrimRight(text.String(), "\n")
@@ -536,13 +547,13 @@ func (s *Service) handleClose(ctx context.Context, c *localchan.Call) localchan.
 	if err != nil {
 		return Refusal(err)
 	}
-	verb := "encerrada"
+	verb := "closed"
 	if res.Table.State == StateCancelled {
-		verb = "cancelada"
+		verb = "cancelled"
 	}
-	text := fmt.Sprintf("mesa %s %s", res.Table.ID, verb)
+	text := fmt.Sprintf("table %s %s", res.Table.ID, verb)
 	if len(res.Retained) > 0 {
-		text += "; worktrees mantidos por decisão: " + strings.Join(res.Retained, ", ")
+		text += "; worktrees kept by decision: " + strings.Join(res.Retained, ", ")
 	}
 	return localchan.OK(map[string]any{"text": text, "name": res.Table.ID, "state": string(res.Table.State), "retained": orEmpty(res.Retained)})
 }

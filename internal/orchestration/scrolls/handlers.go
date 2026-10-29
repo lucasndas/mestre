@@ -149,7 +149,7 @@ func (h handlers) create(ctx context.Context, c *localchan.Call) localchan.Respo
 	if err != nil {
 		return Refusal(err)
 	}
-	return localchan.OK(noteData(n, fmt.Sprintf("pergaminho criado: %s (%s, revisão %d), conectado a você", n.Name, n.ID, n.Revision)))
+	return localchan.OK(noteData(n, fmt.Sprintf("scroll created: %s (%s, revision %d), connected to you", n.Name, n.ID, n.Revision)))
 }
 
 func (h handlers) read(ctx context.Context, c *localchan.Call) localchan.Response {
@@ -187,7 +187,7 @@ func (h handlers) write(ctx context.Context, c *localchan.Call) localchan.Respon
 	if err != nil {
 		return Refusal(err)
 	}
-	return localchan.OK(noteData(n, fmt.Sprintf("%s gravado (revisão %d)", n.Name, n.Revision)))
+	return localchan.OK(noteData(n, fmt.Sprintf("%s written (revision %d)", n.Name, n.Revision)))
 }
 
 func (h handlers) edit(ctx context.Context, c *localchan.Call) localchan.Response {
@@ -209,7 +209,7 @@ func (h handlers) edit(ctx context.Context, c *localchan.Call) localchan.Respons
 	if err != nil {
 		return Refusal(err)
 	}
-	return localchan.OK(noteData(n, fmt.Sprintf("%s alterado (revisão %d)", n.Name, n.Revision)))
+	return localchan.OK(noteData(n, fmt.Sprintf("%s changed (revision %d)", n.Name, n.Revision)))
 }
 
 func (h handlers) stack(ctx context.Context, c *localchan.Call) localchan.Response {
