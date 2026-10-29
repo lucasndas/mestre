@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/providers"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -137,8 +138,13 @@ func (s *Service) request(ctx context.Context, id int64) (chain.Request, error) 
 
 // proposalOf turns the answer of a person into the proposal the checks apply to.
 func (s *Service) proposalOf(r chain.Request, g chain.DecreeGrant) (Proposal, error) {
-	p := Proposal{Author: g.By, Kind: KindRule, Workspace: r.Workspace, Mesa: g.Table, Origin: Origin{Channel: "approval"},
-		Text: fmt.Sprintf("Resposta %q ao pedido %d: %s", g.Answer, r.ID, r.About), Target: Target{Kind: TargetClass, Name: g.Class}}
+	var about any = r.About // what an agent wrote stays text
+	if !r.AboutMsg.IsZero() {
+		about = r.AboutMsg
+	}
+	order := i18n.M("decree.order_answer", "answer", string(g.Answer), "id", r.ID, "about", about)
+	p := Proposal{Author: g.By, Kind: KindRule, Workspace: r.Workspace, Mesa: g.Table, Origin: Origin{Channel: "approval", OrderMsg: order},
+		Text: i18n.Render("en", order), Target: Target{Kind: TargetClass, Name: g.Class}}
 	if g.Class == "" && g.Answer != chain.AnswerDelegate {
 		return Proposal{}, errors.New("decrees: the request has no class to make a rule for")
 	}

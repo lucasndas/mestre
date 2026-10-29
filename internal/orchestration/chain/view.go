@@ -149,6 +149,8 @@ func describe(r Request) i18n.Msg {
 			}
 			parts = append(parts, i18n.M("approval.card_paths", "text", strings.Join(paths, ", ")))
 		}
+	} else if !r.AboutMsg.IsZero() && r.Action == nil {
+		parts = append(parts, i18n.M("approval.card_about", "text", r.AboutMsg))
 	} else if r.Action != nil {
 		parts = append(parts, i18n.M("approval.card_action", "text", oneLine(r.About)))
 	} else if r.About != "" {

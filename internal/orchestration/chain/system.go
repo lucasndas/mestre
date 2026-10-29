@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // The requests of the Guild are of a fixed rule: they do not enter the chain of
@@ -29,8 +30,10 @@ type SystemRequest struct {
 	Type classes.RequestType
 	// About is the one line the people read; Target is what the request is bound
 	// to (a join id for an entry), kept with the request and read back from it.
-	About  string
-	Target json.RawMessage
+	About string
+	// AboutMsg is the same line as a message, read in the language of each reader.
+	AboutMsg i18n.Msg
+	Target   json.RawMessage
 }
 
 // RequestSystem opens a request of the engine at the level of the people: no
@@ -39,7 +42,7 @@ func (s *Service) RequestSystem(ctx context.Context, o SystemRequest) (int64, er
 	if !IsSystem(o.Type) {
 		return 0, fmt.Errorf("%w: %q", ErrNotSystem, o.Type)
 	}
-	r := Request{Type: o.Type, State: Open, About: o.About, Target: o.Target, Level: Level{Kind: LevelPeople}, CreatedAt: s.clk.Now(),
+	r := Request{Type: o.Type, State: Open, About: aboutText(o.About, o.AboutMsg), AboutMsg: o.AboutMsg, Target: o.Target, Level: Level{Kind: LevelPeople}, CreatedAt: s.clk.Now(),
 		Risk: classes.ClassifyRisk(classes.Env{}, nil, classes.RiskRequest{Type: o.Type})}
 	if r.Risk.Risk != classes.RiskFixed {
 		return 0, fmt.Errorf("chain: the request of type %s is not of a fixed rule", o.Type)

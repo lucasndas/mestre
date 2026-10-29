@@ -92,6 +92,19 @@ type Origin struct {
 	Audio      bool   `json:"audio,omitempty"`
 	Attachment string `json:"attachment,omitempty"`
 	Transcript string `json:"transcript,omitempty"`
+	// OrderMsg is the order as a message, when the engine worded it (a suggestion
+	// of the summary, the answer to a request, a renewal) and not the user: each
+	// reader translates it, and Text holds it in English. Zero for what a user wrote.
+	OrderMsg i18n.Msg `json:"order_msg,omitzero"`
+}
+
+// TextIn is the order in a language: the message of the engine translated, or
+// the text as it was kept (what a user wrote, or an order kept before the message).
+func (d Decree) TextIn(lang string) string {
+	if d.Origin.OrderMsg.IsZero() {
+		return d.Text
+	}
+	return i18n.Render(lang, d.Origin.OrderMsg)
 }
 
 // Proposal is what the Grand Master sends to the engine after it read the
@@ -133,8 +146,10 @@ type Pending struct {
 	// blanks at the ends): shown with the proposal so he sees what was understood
 	// next to what he said.
 	Order string
-	PIN   bool
-	Why   string
+	// OrderMsg is the order as a message when the engine worded it (Order is then its English text).
+	OrderMsg i18n.Msg
+	PIN      bool
+	Why      string
 	// Author is the only user whose click counts; Workspace and Mesa are the
 	// scope that will be stored, and the one the message must name.
 	Author          string

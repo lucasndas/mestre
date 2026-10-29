@@ -102,7 +102,7 @@ func (p *Panel) decreeRow(ctx context.Context, b RulesBackend, me users.User, v 
 		level = v.AuthorLevel
 	}
 	row := DecreeRow{Number: v.Number, Kind: string(v.Kind), State: string(v.State), Workspace: v.Workspace, Mesa: v.Mesa, Scope: v.Scope,
-		Effect: v.Effect.Kind, Summary: v.Summary(), Text: v.Text, Author: v.Author, AuthorName: v.AuthorName, Level: string(level),
+		Effect: v.Effect.Kind, Summary: v.Summary(), Text: v.TextIn(me.LanguageFor(me.TelegramLanguage)), Author: v.Author, AuthorName: v.AuthorName, Level: string(level),
 		CreatedAt: v.CreatedAt.UTC(), Until: timePtr(v.Until), EndedAt: timePtr(v.EndedAt), Frozen: v.Frozen,
 		Uses: []DecreeUse{}}
 	v.Level = level
@@ -306,7 +306,7 @@ func (p *Panel) handleProposeDecree(w http.ResponseWriter, r *http.Request) {
 	}
 	p.audit(ctx, "panel.decree.proposed", map[string]any{"user_id": me.ID, "workspace": in.Workspace, "proposal": pending.ID, "kind": in.Kind,
 		"after": map[string]any{"summary": pending.Text, "pin": pending.PIN}, "ip": clientIP(r)})
-	WriteJSON(w, http.StatusCreated, DecreeProposal{ID: pending.ID, Text: pending.Text, Order: pending.Order, PIN: pending.PIN, Why: pending.Why})
+	WriteJSON(w, http.StatusCreated, DecreeProposal{ID: pending.ID, Text: pending.Text, Order: orderIn(me.LanguageFor(me.TelegramLanguage), pending), PIN: pending.PIN, Why: pending.Why})
 }
 
 // handleConfirmDecree is the click of the author. The engine says whether the PIN is
@@ -393,5 +393,14 @@ func (p *Panel) handleRenewDelegation(w http.ResponseWriter, r *http.Request) {
 	}
 	p.audit(ctx, "panel.decree.renewal_proposed", map[string]any{"user_id": me.ID, "workspace": before.Workspace, "decree": n, "proposal": pending.ID,
 		"after": map[string]any{"summary": pending.Text}, "ip": clientIP(r)})
-	WriteJSON(w, http.StatusCreated, DecreeProposal{ID: pending.ID, Text: pending.Text, Order: pending.Order, PIN: pending.PIN, Why: pending.Why})
+	WriteJSON(w, http.StatusCreated, DecreeProposal{ID: pending.ID, Text: pending.Text, Order: orderIn(me.LanguageFor(me.TelegramLanguage), pending), PIN: pending.PIN, Why: pending.Why})
+}
+
+// orderIn is the order of a proposal in the language of who reads: the engine's
+// own wording translated, or what the user wrote as he wrote it.
+func orderIn(lang string, p decrees.Pending) string {
+	if p.OrderMsg.IsZero() {
+		return p.Order
+	}
+	return i18n.Render(lang, p.OrderMsg)
 }

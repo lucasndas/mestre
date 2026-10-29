@@ -201,7 +201,7 @@ func (p *Panel) approvalItem(ctx context.Context, u users.User, pd approvals.Pen
 	engine, agent := splitAgent(lang, p.m(text))
 	it := ApprovalItem{
 		ID: r.ID, Workspace: r.Workspace, Table: r.Table, Type: orPermission(r.Type), Risk: string(r.Risk.Risk), State: string(r.State),
-		About: p.m(r.About), Text: engine, Agent: agent, Requester: p.m(r.RequesterName), CreatedAt: r.CreatedAt.UTC(),
+		About: p.m(r.AboutIn(lang)), Text: engine, Agent: agent, Requester: p.m(r.RequesterName), CreatedAt: r.CreatedAt.UTC(),
 		Approvals: pd.Approvals, Counted: pd.Counted, Voted: pd.Voted, Answers: []ApprovalAnswer{}, Members: []ApprovalMember{},
 	}
 	if !r.Deadline.IsZero() {
@@ -573,7 +573,7 @@ func (p *Panel) handleApprovalHistory(w http.ResponseWriter, r *http.Request) {
 			if (!from.IsZero() && rq.ClosedAt.Before(from)) || (!to.IsZero() && !rq.ClosedAt.Before(to)) {
 				continue
 			}
-			item := p.historyItem(ctx, rq, names)
+			item := p.historyItem(ctx, u.LanguageFor(u.TelegramLanguage), rq, names)
 			switch {
 			case by == "agent" && item.ByUser, by == "agent" && item.By == "":
 				continue
@@ -637,9 +637,9 @@ func (p *Panel) endedRequests(ctx context.Context, u users.User, before int64, s
 	return ids, rows.Err()
 }
 
-func (p *Panel) historyItem(ctx context.Context, r chain.Request, names map[string]string) ApprovalHistoryItem {
+func (p *Panel) historyItem(ctx context.Context, lang string, r chain.Request, names map[string]string) ApprovalHistoryItem {
 	it := ApprovalHistoryItem{ID: r.ID, Workspace: r.Workspace, Table: r.Table, Type: orPermission(r.Type), Risk: string(r.Risk.Risk), State: string(r.State),
-		About: p.m(r.About), CreatedAt: r.CreatedAt.UTC(), ClosedAt: r.ClosedAt.UTC(), LevelKind: string(r.Level.Kind), Level: r.Level.Label()}
+		About: p.m(r.AboutIn(lang)), CreatedAt: r.CreatedAt.UTC(), ClosedAt: r.ClosedAt.UTC(), LevelKind: string(r.Level.Kind), Level: r.Level.Label()}
 	d := r.Decision
 	if d == nil {
 		return it

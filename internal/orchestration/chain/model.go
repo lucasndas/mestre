@@ -202,6 +202,10 @@ type Request struct {
 	// About is what the request is about, in one line (the action and the
 	// rule that asked).
 	About string
+	// AboutMsg is About as a message of the engine, for each reader to translate
+	// (a request the engine itself words); About then holds it in English, for
+	// agents and logs. Empty when About is what an agent wrote.
+	AboutMsg i18n.Msg `json:"about_msg,omitzero"`
 	// Machine, Class and Task are what the approver sees of who asked.
 	Machine, Class, Task string
 	// Justification is what the requester wrote: shown last, as text of the
@@ -374,4 +378,23 @@ type Outcome struct {
 	// Applied is what became of the answer ("exception", "temporary_rule",
 	// "suggestion", "asked_back", "climbed", "denied").
 	Applied string
+}
+
+// aboutText is the line of a request kept as text: what the agent wrote, or, for
+// a line the engine worded, its English form, which agents and logs read.
+func aboutText(text string, m i18n.Msg) string {
+	if m.IsZero() {
+		return text
+	}
+	return i18n.Render("en", m)
+}
+
+// AboutIn is what the request is about in a language: the message of the engine
+// translated, or the text as it was kept (written by an agent, or before the
+// message existed).
+func (r Request) AboutIn(lang string) string {
+	if r.AboutMsg.IsZero() {
+		return r.About
+	}
+	return i18n.Render(lang, r.AboutMsg)
 }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // A branch that changes .github/workflows/ is sent by a class with
@@ -120,7 +121,7 @@ func (s *Service) workflowsAsk(ctx context.Context, a WorkflowsAsk, workspace, t
 		}
 	}
 	id, err := s.Request(ctx, OpenRequest{Type: classes.RequestWorkflows, Workspace: workspace, Table: table, Requester: a.Requester,
-		About: fmt.Sprintf("enviar a branch %s (%.8s) com mudança em .github/workflows/: %s", a.Branch, a.Head, a.About), Target: target, Fingerprint: fp})
+		AboutMsg: i18n.M("approval.about_workflows", "branch", a.Branch, "head", fmt.Sprintf("%.8s", a.Head), "about", oneLine(a.About)), Target: target, Fingerprint: fp})
 	return false, id, err
 }
 

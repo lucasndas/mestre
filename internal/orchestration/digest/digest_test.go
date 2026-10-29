@@ -326,6 +326,15 @@ func TestRepeatedApprovalsBecomeASuggestionAcceptedWithThePIN(t *testing.T) {
 	if err != nil || d.Target.Name != "dev" || d.Author != w.owner.ID || d.Effect.Allow == nil || d.Effect.Allow.Commands[0] != "npm install *" {
 		t.Fatalf("decree = %+v, %v", d, err)
 	}
+	// the order the engine worded is read in the language of each reader
+	for lang, want := range map[string]string{"en": "allow `npm install *` for the class dev", i18n.PtBR: "permitir `npm install *` para a classe dev"} {
+		if got := i18n.Render(lang, pend.OrderMsg); !strings.Contains(got, want) || d.TextIn(lang) != got {
+			t.Errorf("%s: order = %q, decree = %q, want %q", lang, got, d.TextIn(lang), want)
+		}
+	}
+	if !strings.Contains(d.Text, "allow `npm install *`") {
+		t.Errorf("the English text kept for agents and logs = %q", d.Text)
+	}
 }
 
 // CA-APROV-RES-02, the half of Recusar (30 days) and of the week

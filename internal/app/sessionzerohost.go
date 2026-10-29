@@ -147,7 +147,7 @@ func (a szApprovals) RequestAgentsMD(ctx context.Context, workspace, text string
 		return "", errors.New("app: this period has no chain of approval for the AGENTS.md proposal")
 	}
 	id, err := a.orc.Chain.Request(ctx, chain.OpenRequest{Type: classes.RequestAgentsMD, Workspace: workspace,
-		About: "Proposta de AGENTS.md para o projeto " + workspace + " (o texto inteiro está no bloco do agente)", Task: text, Target: agentsMDTarget(workspace, text)})
+		AboutMsg: i18n.M("approval.about_agents_md", "workspace", workspace), Task: text, Target: agentsMDTarget(workspace, text)})
 	if err != nil {
 		return "", err
 	}

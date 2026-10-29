@@ -856,9 +856,14 @@ func (s *Service) Accept(ctx context.Context, id int64, userID string) (decrees.
 	if !claimed {
 		return decrees.Pending{}, ErrNotOpen
 	}
+	verb := i18n.M("decree.order_summary_allow")
+	if x.Effect == "deny" {
+		verb = i18n.M("decree.order_summary_deny")
+	}
+	order := i18n.M("decree.order_summary_suggestion", "id", x.ID, "verb", verb, "pattern", x.Pattern, "class", x.Class)
 	pend, err := s.o.Decrees.Propose(ctx, decrees.Proposal{Author: userID, Kind: decrees.KindRule, Effect: eff, Target: decrees.Target{Kind: decrees.TargetClass, Name: x.Class},
-		Workspace: x.Workspace, Mesa: x.Mesa, Text: fmt.Sprintf("Sugestão do resumo %d: %s `%s` para a classe %s", x.ID, map[string]string{"allow": "permitir", "deny": "negar"}[x.Effect], x.Pattern, x.Class),
-		Origin: decrees.Origin{Channel: "summary"}})
+		Workspace: x.Workspace, Mesa: x.Mesa, Text: i18n.Render("en", order),
+		Origin: decrees.Origin{Channel: "summary", OrderMsg: order}})
 	if err != nil {
 		// nothing was proposed: the suggestion is open again
 		_ = s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
