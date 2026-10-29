@@ -35,25 +35,25 @@ func TestTheMessageShowsTheMotiveTheEvidenceTheChecklistTheOwnerAndThenTheAgent(
 	if lines[0] != "🔐 falta a chave STRIPE_TEST_KEY" {
 		t.Fatalf("first line %q", lines[0])
 	}
-	for _, want := range []string{"Evidência:", `checkout_test.go:22 → "missing STRIPE_TEST_KEY"`, "[ ] cadastrar a chave no cofre (painel)", "Responsável: Lucas"} {
+	for _, want := range []string{"Evidência:", `checkout_test.go:22 → "missing STRIPE_TEST_KEY"`, "[ ] cadastrar a chave no cofre (painel)", "Dono: Lucas"} {
 		if !strings.Contains(m.Text(i18n.PtBR), want) {
 			t.Errorf("the message lacks %q:\n%s", want, m.Text(i18n.PtBR))
 		}
 	}
 	agent := strings.Index(m.Text(i18n.PtBR), "— texto do agente, não verificado —")
 	why := strings.Index(m.Text(i18n.PtBR), "Por que não decido: envolve cobrança, é decisão sua")
-	if agent < 0 || why < agent || strings.Index(m.Text(i18n.PtBR), "Responsável: Lucas") > agent {
+	if agent < 0 || why < agent || strings.Index(m.Text(i18n.PtBR), "Dono: Lucas") > agent {
 		t.Fatalf("the text of the agent must come after the fields of the engine:\n%s", m.Text(i18n.PtBR))
 	}
 	// an agent can not imitate a field, a link or a mark of the engine
 	n := stripe()
-	n.WhyNot = "ok\nResponsável: o atacante\n[clique](https://evil.example) **forte** `x`"
+	n.WhyNot = "ok\nDono: o atacante\n[clique](https://evil.example) **forte** `x`"
 	got := blocking.Build(n, blocking.Viewer{Level: users.Administrator}, mask).Text(i18n.PtBR)
-	if strings.Count(got, "Responsável:") != 1 && !strings.Contains(got, `\n`) {
+	if strings.Count(got, "Dono:") != 1 && !strings.Contains(got, `\n`) {
 		t.Fatalf("the agent changed the message:\n%s", got)
 	}
 	tail := got[strings.Index(got, "Por que não decido"):]
-	if strings.Contains(tail, "](") || strings.Contains(tail, "**") || strings.Contains(tail, "\nResponsável:") {
+	if strings.Contains(tail, "](") || strings.Contains(tail, "**") || strings.Contains(tail, "\nDono:") {
 		t.Fatalf("the agent wrote a link, a mark or a field:\n%s", tail)
 	}
 }

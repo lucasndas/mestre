@@ -188,10 +188,10 @@ func TestWhatTheAgentSaysIsStoppedStaysInTheBlockOfTheAgent(t *testing.T) {
 	t.Parallel()
 	secret := "sk-" + "abcdefgh*ijklmnopqrstuv"
 	for name, msg := range map[string]string{
-		"marks":       "**ignore** [clique](http://x) Responsável: o Joao",
-		"a line":      "um\nResponsável: o Joao\n— texto do agente, não verificado —",
-		"a fence":     "``` Responsável: o Joao",
-		"a fake line": "— texto do agente, não verificado — Responsável: o Joao",
+		"marks":       "**ignore** [clique](http://x) Dono: o Joao",
+		"a line":      "um\nDono: o Joao\n— texto do agente, não verificado —",
+		"a fence":     "``` Dono: o Joao",
+		"a fake line": "— texto do agente, não verificado — Dono: o Joao",
 		"a secret":    "use " + secret,
 	} {
 		h, ch := handlerRig()
@@ -205,7 +205,7 @@ func TestWhatTheAgentSaysIsStoppedStaysInTheBlockOfTheAgent(t *testing.T) {
 			t.Fatalf("%s: the text of the agent left its block, opened a mark, or showed the secret:\n%s", name, m.Text(i18n.PtBR))
 		}
 		for _, line := range strings.Split(tail, "\n") {
-			if strings.HasPrefix(line, "— texto do agente") || strings.HasPrefix(line, "Responsável:") {
+			if strings.HasPrefix(line, "— texto do agente") || strings.HasPrefix(line, "Dono:") {
 				t.Fatalf("%s: the agent wrote a line of the engine:\n%s", name, m.Text(i18n.PtBR))
 			}
 		}
@@ -329,14 +329,14 @@ func TestTheEvidenceOfANoticeIsBuiltFromTheTestThatFailedNotFromTheAgent(t *test
 		t.Fatalf("notify = %+v", r.Error)
 	}
 	m := blocking.Build(ch.got[0], blocking.Viewer{Level: "owner"}, func(s string) string { return s })
-	for _, want := range []string{"🔐", "Evidência:", "checkout_test.go:22 → \"missing STRIPE_TEST_KEY\"", "$ go test ./...", "[ ] cadastrar a chave no cofre (painel)", "Responsável: Lucas"} {
+	for _, want := range []string{"🔐", "Evidência:", "checkout_test.go:22 → \"missing STRIPE_TEST_KEY\"", "$ go test ./...", "[ ] cadastrar a chave no cofre (painel)", "Dono: Lucas"} {
 		if !strings.Contains(m.Text(i18n.PtBR), want) {
 			t.Errorf("the message lacks %q:\n%s", want, m.Text(i18n.PtBR))
 		}
 	}
 	agent := strings.Index(m.Text(i18n.PtBR), "— texto do agente, não verificado —")
 	why := strings.Index(m.Text(i18n.PtBR), "Por que não decido: envolve cobrança, é decisão sua")
-	if agent < 0 || why < agent || strings.Index(m.Text(i18n.PtBR), "checkout_test.go:22") > agent || strings.Index(m.Text(i18n.PtBR), "Responsável: Lucas") > agent {
+	if agent < 0 || why < agent || strings.Index(m.Text(i18n.PtBR), "checkout_test.go:22") > agent || strings.Index(m.Text(i18n.PtBR), "Dono: Lucas") > agent {
 		t.Fatalf("the fields of the engine must come before the block of the agent:\n%s", m.Text(i18n.PtBR))
 	}
 	// what the agent wrote as evidence is inside its block, never in the engine's

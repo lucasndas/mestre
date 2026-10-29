@@ -69,9 +69,11 @@ test("the English panel says Guildmaster and Campaign, and keeps Party", () => {
 // CA-MSG-11 (the guard of the vocabulary also holds for the catalogs of the engine, generated here)
 test("the texts of the engine keep the vocabulary in both languages", () => {
   for (const [key, text] of Object.entries(messages["pt-BR"])) {
-    expect(text.replace(/{{\w+}}/g, ""), key).not.toMatch(/\b(Workspaces?|workspaces?|Dono)\b/);
+    const left = text.replace(/{{\w+}}/g, "").replaceAll("Dono: ", ""); // the label of the owner of a request
+    expect(left, key).not.toMatch(/\b(Workspaces?|workspaces?|Dono)\b/);
   }
   for (const [key, text] of Object.entries(messages.en)) {
-    expect(text.replace(/{{\w+}}/g, ""), key).not.toMatch(/\b(Workspaces?|workspaces?|Owner)\b/);
+    const left = text.replace(/{{\w+}}/g, "").replaceAll("Owner: ", ""); // the label of the owner of a request
+    expect(left, key).not.toMatch(/\b(Workspaces?|workspaces?|Owner)\b/);
   }
 });

@@ -123,7 +123,7 @@
   "approval.not_reached_people": "The request #{{id}} did not reach the people: look at it again.",
   "approval.only_grand_master_asks": "Only the Grand Master asks the people about an action.",
   "approval.only_requester_answers": "Only who asked answers the question.",
-  "approval.owner_line": "In charge: {{owner}}\n",
+  "approval.owner_line": "Owner: {{owner}}\n",
   "approval.pattern_above_ceiling": "The pattern reaches risk {{risk}} ({{rule}}), above the ceiling of this level ({{ceiling}}).",
   "approval.pattern_for_action": "A pattern is for a request of an action.",
   "approval.pattern_needs_flag": "approve-pattern needs --pattern.",

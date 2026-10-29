@@ -123,7 +123,7 @@
   "approval.not_reached_people": "O pedido #{{id}} não chegou às pessoas: olhe-o de novo.",
   "approval.only_grand_master_asks": "Só o Grão-Mestre pergunta às pessoas sobre uma ação.",
   "approval.only_requester_answers": "Só quem pediu responde à pergunta.",
-  "approval.owner_line": "Responsável: {{owner}}\n",
+  "approval.owner_line": "Dono: {{owner}}\n",
   "approval.pattern_above_ceiling": "O padrão alcança o risco {{risk}} ({{rule}}), acima do teto deste nível ({{ceiling}}).",
   "approval.pattern_for_action": "Um padrão é para um pedido de ação.",
   "approval.pattern_needs_flag": "approve-pattern precisa de --pattern.",

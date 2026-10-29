@@ -117,13 +117,13 @@ var status = map[Code]int{
 // Err makes an error of the API: the code of the API, the code of the text in the
 // catalog (api.<what>) and the params the client and the text use.
 func Err(code Code, msg string, params map[string]any) *APIError {
-	return &APIError{Code: code, Params: params, msg: i18n.Msg{Code: msg, Params: params}}
+	return &APIError{Code: code, Params: i18n.WireParams(params), msg: i18n.Msg{Code: msg, Params: params}}
 }
 
 // ErrMsg makes the error of a refusal of the engine: the code of the message is the
 // code of the error, and its params the params.
 func ErrMsg(m i18n.Msg) *APIError {
-	return &APIError{Code: Code(m.Code), Params: m.Params, msg: m}
+	return &APIError{Code: Code(m.Code), Params: i18n.WireParams(m.Params), msg: m}
 }
 
 // errForbidden is the refusal of level: the text says which level is needed when
