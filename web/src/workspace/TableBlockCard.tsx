@@ -11,6 +11,7 @@ import { MaxPauseReason } from "../gen/panel";
 import { api } from "../lib/api";
 import { errorText } from "../lib/errors";
 import { formatNumber } from "../lib/format";
+import { engineText } from "../lib/messages";
 import { enc } from "./queries";
 import { SituationChip } from "./SituationChip";
 import { CYCLE, type Situation } from "./situation";
@@ -277,7 +278,7 @@ export function TableBlockCard({
           role="note"
           className="m-0 rounded-field bg-warn px-2 py-1 text-sm font-semibold text-warn-ink"
         >
-          ⚠ {t("block.noIssue", { reason: block.issue_warning })}
+          ⚠ {t("block.noIssue", { reason: engineText(i18n.language, block.issue_warning) })}
         </p>
       ) : null}
 

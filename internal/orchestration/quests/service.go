@@ -206,8 +206,10 @@ func (s *Service) Get(ctx context.Context, workspace, table, nameOrID string) (Q
 type StepView struct {
 	Step
 	Def StepDef
-	// Waiting is what holds a step that is being prepared, in words.
-	Waiting string
+	// Waiting is what holds a step that is being prepared, in words (for agents,
+	// in pt-BR); WaitingMsg is the same as a message, for the people.
+	Waiting    string
+	WaitingMsg i18n.Msg
 }
 
 // View is a quest with its steps.
@@ -225,23 +227,31 @@ func (s *Service) Status(ctx context.Context, q Quest) (View, error) {
 	v := View{Quest: q}
 	for _, st := range steps {
 		sv := StepView{Step: st, Def: q.Def.Steps[st.Pos]}
-		switch {
-		case st.Blocker == blockBusy:
-			sv.Waiting = "o personagem está em outra etapa"
-		case strings.HasPrefix(st.Blocker, blockApproval):
-			sv.Waiting = "aprovação " + strings.TrimPrefix(st.Blocker, blockApproval)
-		case strings.HasPrefix(st.Blocker, blockSlot):
-			sv.Waiting = "vaga para o personagem"
-		case st.Blocker == blockSync:
-			sv.Waiting = "sincronização da branch"
-		case st.Blocker == blockResume:
-			sv.Waiting = "retomada do personagem"
-		case st.State == StepApproving:
-			sv.Waiting = "aprovação " + fmt.Sprint(st.Approval)
-		}
+		sv.Waiting, sv.WaitingMsg = waitingOf(st)
 		v.Steps = append(v.Steps, sv)
 	}
 	return v, nil
+}
+
+// waitingOf says what holds a step: the words for agents and the message for people.
+func waitingOf(st Step) (string, i18n.Msg) {
+	switch {
+	case st.Blocker == blockBusy:
+		return "o personagem está em outra etapa", i18n.M("table.wait_busy")
+	case strings.HasPrefix(st.Blocker, blockApproval):
+		n := strings.TrimPrefix(st.Blocker, blockApproval)
+		return "aprovação " + n, i18n.M("table.wait_approval", "request", n)
+	case strings.HasPrefix(st.Blocker, blockSlot):
+		return "vaga para o personagem", i18n.M("table.wait_slot")
+	case st.Blocker == blockSync:
+		return "sincronização da branch", i18n.M("table.wait_sync")
+	case st.Blocker == blockResume:
+		return "retomada do personagem", i18n.M("table.wait_resume")
+	case st.State == StepApproving:
+		n := fmt.Sprint(st.Approval)
+		return "aprovação " + n, i18n.M("table.wait_approval", "request", n)
+	}
+	return "", i18n.Msg{}
 }
 
 // List returns the quests of a table.

@@ -267,7 +267,7 @@ test("a verification file that the engine refuses is not confirmed and says why"
         file: "version: 1",
         commands: [],
         outside: true,
-        file_error: "no command",
+        file_error: { code: "api.detail", params: { detail: "no command" } },
         confirmed: {
           doc: 'version: 1\ncomandos: ["make"]\n',
           hash: "h",

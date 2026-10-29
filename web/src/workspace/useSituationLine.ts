@@ -1,14 +1,25 @@
 import { useTranslation } from "react-i18next";
 import type { TableBlock } from "../gen/panel";
+import { engineText } from "../lib/messages";
 import type { Situation } from "./situation";
 
 type Say = (k: string, o?: object) => string;
 
 /** The sentence of the card for a situation, from the catalog (the engine's own words only where it says why). */
 export function useSituationLine(): (b: TableBlock, s: Situation) => string {
-  const { t } = useTranslation("workspace");
+  const { t, i18n } = useTranslation("workspace");
   const say = t as unknown as Say;
-  return (b, s) => {
+  return (b, s0) => {
+    // the reason the engine gives as a code is said in the language of the screen
+    const s = s0.reasonMsg
+      ? {
+          ...s0,
+          params: {
+            ...s0.params,
+            reason: engineText(i18n.language, s0.reasonMsg, String(s0.params.reason ?? "")),
+          },
+        }
+      : s0;
     switch (s.key) {
       case "delivered":
         return say(

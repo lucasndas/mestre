@@ -1,6 +1,10 @@
 {
+  "table.issue_missing": "a issue do épico não foi criada no GitHub",
   "table.level_denied": "Seu nível não permite pausar mesas.",
   "table.over": "Esta mesa já terminou.",
+  "table.pause_return_limit": "limite de voltas",
+  "table.pause_same_failure": "mesma falha repetida",
+  "table.pause_usage_limit": "limite de uso",
   "table.ref_alert": "Alerta: a ref {{ref}} da mesa {{table}}: {{reason}} (registrado {{registered}}, agora {{current}}). Nada desta mesa é enviado nem sincronizado até um Administrador confiar de novo na ref.",
   "table.ref_branch_gone": "a branch desapareceu do espelho",
   "table.ref_foreign_commits": "recebeu commits que são da mesa {{table}}",
@@ -9,5 +13,11 @@
   "table.ref_no_living_on": "avançou, mas nenhum personagem da mesa está vivo na Torre {{machine}} para ter feito isso",
   "table.ref_not_continuation": "não é continuação do que o motor registrou",
   "table.secret": "Não escreva senhas no motivo; diga só por que pausar.",
-  "table.unavailable": "A pausa de mesa não está disponível agora."
+  "table.unavailable": "A pausa de mesa não está disponível agora.",
+  "table.wait_approval": "aprovação {{request}}",
+  "table.wait_busy": "o personagem está em outra etapa",
+  "table.wait_merge": "aguarda o merge de outra mesa",
+  "table.wait_resume": "retomada do personagem",
+  "table.wait_slot": "vaga para o personagem",
+  "table.wait_sync": "sincronização da branch"
 }

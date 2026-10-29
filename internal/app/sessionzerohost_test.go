@@ -634,7 +634,7 @@ func TestAVerificationFileThatIsALinkDoesNotBlockTheScreenOrTheConfirmation(t *t
 		t.Skip("no symbolic links here:", err)
 	}
 	v, err := h.Verification(w.ctx, "novo")
-	if err != nil || v.FileError == "" || !v.Outside || v.Confirmed == nil || v.Confirmed.Doc != string(doc) {
+	if err != nil || v.FileError == nil || v.FileError.Code != "workspace.file_link" || !v.Outside || v.Confirmed == nil || v.Confirmed.Doc != string(doc) {
 		t.Fatalf("the view of a link is %+v, %v", v, err)
 	}
 	w.run.checkOutsideEdits(w.ctx)

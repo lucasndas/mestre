@@ -1,6 +1,10 @@
 package panel
 
-import "time"
+import (
+	"time"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
+)
 
 // The workspace view (docs/painel/visao-do-workspace.md): GET
 // /api/workspaces/{slug}/view. The screen follows the "workspaces:all" topic; each
@@ -43,10 +47,13 @@ type ViewMachine struct {
 // ViewWait is something a table waits for. Fingerprint and Where are set for the
 // same failure again ("arquivo:linha" when the return brought `--where`).
 type ViewWait struct {
-	Kind        string `json:"kind"`
-	Reason      string `json:"reason"`
-	Fingerprint string `json:"fingerprint,omitempty"`
-	Where       string `json:"where,omitempty"`
+	Kind string `json:"kind"`
+	// Reason is the text of a person or an agent (the reason to pause); ReasonMsg is
+	// what the engine says as a code and params, which the screen says in its own language.
+	Reason      string    `json:"reason"`
+	ReasonMsg   *i18n.Msg `json:"reason_msg,omitempty"`
+	Fingerprint string    `json:"fingerprint,omitempty"`
+	Where       string    `json:"where,omitempty"`
 }
 
 // ViewCriteria is the proof of the criteria of the current mission: Total criteria,
@@ -77,7 +84,7 @@ type TableBlock struct {
 	State     string `json:"state"`
 	Paused    bool   `json:"paused"`
 	// IssueWarning is why the table has no issue on GitHub ("" when it has).
-	IssueWarning string        `json:"issue_warning,omitempty"`
+	IssueWarning *i18n.Msg     `json:"issue_warning,omitempty"`
 	Quest        *ViewQuest    `json:"quest,omitempty"`
 	Party        []ViewMachine `json:"party"`
 	PartySize    int           `json:"party_size"`

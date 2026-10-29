@@ -1,6 +1,10 @@
 {
+  "table.issue_missing": "the issue of the epic was not created on GitHub",
   "table.level_denied": "Your level does not allow pausing tables.",
   "table.over": "This table is over already.",
+  "table.pause_return_limit": "limit of returns",
+  "table.pause_same_failure": "the same failure again",
+  "table.pause_usage_limit": "limit of use",
   "table.ref_alert": "Alert: the ref {{ref}} of the table {{table}}: {{reason}} (registered {{registered}}, now {{current}}). Nothing of this table is sent or synchronised until an Administrator trusts the ref again.",
   "table.ref_branch_gone": "the branch disappeared from the mirror",
   "table.ref_foreign_commits": "it received commits that belong to the table {{table}}",
@@ -9,5 +13,11 @@
   "table.ref_no_living_on": "it advanced, but no character of the table is alive in the Tower {{machine}} to have done it",
   "table.ref_not_continuation": "it is not a continuation of what the engine registered",
   "table.secret": "Do not write passwords in the reason; say only why to pause.",
-  "table.unavailable": "Pausing a table is not available right now."
+  "table.unavailable": "Pausing a table is not available right now.",
+  "table.wait_approval": "approval {{request}}",
+  "table.wait_busy": "the character is on another step",
+  "table.wait_merge": "waits for the merge of another table",
+  "table.wait_resume": "the character to come back",
+  "table.wait_slot": "a vacancy for the character",
+  "table.wait_sync": "the synchronisation of the branch"
 }

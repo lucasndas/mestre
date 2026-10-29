@@ -1,6 +1,10 @@
 package panel
 
-import "time"
+import (
+	"time"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
+)
 
 // The canvas of a table (docs/painel/canvas.md). The topic is
 // "canvas:<workspace>/<table>": its snapshot is a CanvasState and EventChanged
@@ -125,8 +129,8 @@ type CanvasStep struct {
 	Returns  int    `json:"returns"`
 	// Current says it is the step in progress.
 	Current bool `json:"current"`
-	// Waiting is what holds the step before it starts, in words.
-	Waiting string `json:"waiting,omitempty"`
+	// WaitingMsg is what holds the step before it starts, as a code and params.
+	WaitingMsg *i18n.Msg `json:"waiting_msg,omitempty"`
 }
 
 // CanvasWait is a dashed line from who waits to what it waits for. Target is the

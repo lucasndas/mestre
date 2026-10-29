@@ -219,7 +219,7 @@ test("a block shows the quest, the party, the usage and the warning of a table w
       view([
         table({
           epic: 0,
-          issue_warning: "a issue do épico não foi criada no GitHub",
+          issue_warning: { code: "table.issue_missing" },
           quest: { id: "q1", name: "Refatorar", issue: 50, state: "running", step: "Implementar" },
           party: [{ machine: "m1", machine_name: "windows-pc", characters: 2 }],
           party_size: 2,

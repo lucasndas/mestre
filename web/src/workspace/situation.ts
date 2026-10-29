@@ -40,6 +40,8 @@ export interface Situation {
   icon: Icon;
   /** Needs the user: a decision the user can make, a failure that came back or a table that delivers nothing. */
   urgent: boolean;
+  /** What the engine says about the wait as a code and params (`reason` in the params is the text of a person). */
+  reasonMsg?: unknown;
   /** The parameters of the sentence of the card (`situation.line.<key>`). */
   params: Record<string, string | number>;
   /** The step of the cycle: the position in Aberta, Em trabalho, Em revisão, Encerrando, Encerrada; -1 when the table was cancelled. */
@@ -106,6 +108,7 @@ export function situationOf(b: TableBlock, canDecide: boolean): Situation {
       tone: "accent",
       icon: "hand",
       urgent: canDecide,
+      reasonMsg: approval.reason_msg,
       params: { reason: approval.reason },
     };
   }
@@ -116,6 +119,7 @@ export function situationOf(b: TableBlock, canDecide: boolean): Situation {
       label: "waiting",
       tone: "warn",
       icon: "wait",
+      reasonMsg: b.waits.find((w) => w.kind === "paused")?.reason_msg,
       params: { reason: pausedReason(b) },
     };
   }
@@ -127,6 +131,7 @@ export function situationOf(b: TableBlock, canDecide: boolean): Situation {
       label: "waiting",
       tone: "warn",
       icon: "wait",
+      reasonMsg: other.reason_msg,
       params: { kind: other.kind, reason: other.reason },
     };
   }

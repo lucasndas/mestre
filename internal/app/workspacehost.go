@@ -280,11 +280,13 @@ func (h workspaceHost) Verification(ctx context.Context, slug string) (panel.Ver
 	case err != nil:
 		// a link, a folder, a pipe or a file too big is not read and does not block
 		// the screen: it is said, and a confirmation still makes the file right
-		v.FileError, unreadable = fileProblem(err), true
+		m := fileProblem(err)
+		v.FileError, unreadable = &m, true
 	default:
 		v.File = string(data)
 		if doc, perr := verification.Parse(data); perr != nil {
-			v.FileError = perr.Error()
+			e := i18n.M("api.detail", "detail", perr.Error())
+			v.FileError = &e
 		} else {
 			v.Commands = doc.Commands
 		}
@@ -301,16 +303,16 @@ func (h workspaceHost) Verification(ctx context.Context, slug string) (panel.Ver
 }
 
 // fileProblem says in a few words why the file could not be read.
-func fileProblem(err error) string {
+func fileProblem(err error) i18n.Msg {
 	switch {
 	case errors.Is(err, safefile.ErrLink):
-		return "o arquivo é um link simbólico"
+		return i18n.M("workspace.file_link")
 	case errors.Is(err, safefile.ErrTooLarge):
-		return "o arquivo passa do limite de tamanho"
+		return i18n.M("workspace.file_too_large")
 	case safefile.Refused(err):
-		return "o arquivo não é um arquivo comum"
+		return i18n.M("workspace.file_not_regular")
 	}
-	return "o arquivo não pôde ser lido"
+	return i18n.M("workspace.file_unreadable")
 }
 
 // userName is the name of a user for the screen (the id when the user is gone).
@@ -387,7 +389,7 @@ func (r *stdRun) checkOutsideEdits(ctx context.Context) {
 		case err != nil:
 			// a link, a folder, a pipe or a file too big is an edit outside the panel
 			// too: told once for each reason
-			data = []byte("unreadable: " + fileProblem(err))
+			data = []byte("unreadable: " + i18n.Render("en", fileProblem(err)))
 		}
 		changed, err := h.verifications().OutsideEdit(ctx, w.Slug, data)
 		if err != nil {

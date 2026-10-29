@@ -6,6 +6,7 @@ import { Alert, Button } from "../../components/ui";
 import type { VerificationView } from "../../gen/panel";
 import { api } from "../../lib/api";
 import { errorText } from "../../lib/errors";
+import { engineText } from "../../lib/messages";
 import { Badge } from "../admin/kit";
 import { verificationQuery } from "./queries";
 
@@ -32,7 +33,7 @@ function Editor({
   view: VerificationView;
   canConfirm: boolean;
 }) {
-  const { t } = useTranslation("workspaces");
+  const { t, i18n } = useTranslation("workspaces");
   const { t: te } = useTranslation("errors");
   const fmt = useFormatDateTime();
   const qc = useQueryClient();
@@ -89,7 +90,9 @@ function Editor({
         </details>
       ) : null}
       {view.file_error ? (
-        <Alert>{t("verification.fileError", { error: view.file_error })}</Alert>
+        <Alert>
+          {t("verification.fileError", { error: engineText(i18n.language, view.file_error) })}
+        </Alert>
       ) : null}
       {view.commands.length > 0 && !inForce ? (
         <div>
