@@ -145,7 +145,7 @@ func reviewView(pr github.PullData, files []github.PullFile, checks []github.Che
 		out["diff"] = github.HideMarkers(d.String())
 	}
 	var text strings.Builder
-	fmt.Fprintf(&text, "PR #%d %q (%s, cabeça %.8s): %d arquivos, +%d −%d", pr.Number, oneLine(github.HideMarkers(pr.Title)), pr.State, pr.HeadSHA, len(files), add, del)
+	fmt.Fprintf(&text, "PR #%d %q (%s, head %.8s): %d files, +%d -%d", pr.Number, oneLine(github.HideMarkers(pr.Title)), pr.State, pr.HeadSHA, len(files), add, del)
 	for _, ch := range checks {
 		fmt.Fprintf(&text, "\n- CI %s: %s", oneLine(ch.Name), ch.State)
 	}
@@ -191,7 +191,7 @@ func (h *Handlers) sendReview(ctx context.Context, who caller, pr github.PullDat
 		}
 		return refusal(err)
 	}
-	return localchan.OK(map[string]any{"review": id, "head_sha": pr.HeadSHA, "text": fmt.Sprintf("revisão enviada ao PR #%d", pr.Number)})
+	return localchan.OK(map[string]any{"review": id, "head_sha": pr.HeadSHA, "text": fmt.Sprintf("review sent to PR #%d", pr.Number)})
 }
 
 // Settings is what `gh settings show` reads besides the rules on GitHub: the
@@ -264,7 +264,7 @@ func (h *Handlers) settingsShow(ctx context.Context, c *localchan.Call) localcha
 		"branch": branch, "approvals": rules.Approvals, "code_owners": rules.CodeOwners, "dismiss_stale": rules.DismissStale, "last_push": rules.LastPush,
 		"up_to_date": rules.UpToDate, "classic_protection": rules.Classic, "rulesets": rulesets, "rules": rules.Summary,
 		"approval_mode": mode, "approval_mode_why": why, "apps": apps,
-		"text": fmt.Sprintf("branch %s: %d aprovações exigidas; modo de aprovação %s", branch, rules.Approvals, mode),
+		"text": fmt.Sprintf("branch %s: %d approvals required; approval mode %s", branch, rules.Approvals, mode),
 	})
 }
 

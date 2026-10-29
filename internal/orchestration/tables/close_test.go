@@ -85,7 +85,7 @@ func TestACommitThatIsNotInThePullRequestKeepsTheWorktree(t *testing.T) {
 	commit(t, w.be, w.git, w.repoOf(tbl), "depois.go", "package depois\n", "feat: depois do merge")
 	_, err := w.svc.Close(w.ctx, tables.CloseRequest{By: w.gm, Table: tbl.ID})
 	var miss *tables.MissingError
-	if !errors.As(err, &miss) || len(miss.Decide) != 1 || !strings.Contains(miss.Decide[0], "não está integrada") {
+	if !errors.As(err, &miss) || len(miss.Decide) != 1 || !strings.Contains(miss.Decide[0], "is not integrated") {
 		t.Fatalf("Close = %v; want the commit that is not integrated", err)
 	}
 }
@@ -229,7 +229,7 @@ func TestAPinnedCharacterKeepsTheTableClosing(t *testing.T) {
 	}
 	_, err := w.svc.Close(w.ctx, tables.CloseRequest{By: w.gm, Table: tbl.ID})
 	var miss *tables.MissingError
-	if !errors.As(err, &miss) || len(miss.Decide) != 1 || !strings.Contains(miss.Decide[0], "Revisor está fixado") {
+	if !errors.As(err, &miss) || len(miss.Decide) != 1 || !strings.Contains(miss.Decide[0], "Revisor is pinned") {
 		t.Fatalf("Close = %v; want the pinned character listed", err)
 	}
 	if err := w.reg.SetPinned(w.ctx, dev.Character.ID, false); err != nil {

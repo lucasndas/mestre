@@ -119,7 +119,7 @@ func (s *Service) confirmMerge(ctx context.Context, workspace, id, head string) 
 	case t.State != StateInReview && t.State != StateWorking:
 		return t, fmt.Errorf("%w: merge confirmed in %s", ErrBadTransition, t.State)
 	case t.PRNumber == 0:
-		return t, fmt.Errorf("%w: a mesa %s não tem pull request", ErrBadTransition, id)
+		return t, codedErr(ErrBadTransition, "table.no_pr", "table", id)
 	}
 	if head == "" {
 		head = t.PRHead

@@ -149,7 +149,7 @@ var codeLiteral = regexp.MustCompile(`^[a-z][a-z0-9]*\.[a-z][a-z0-9_]*$`)
 // area with a file in the catalogs is a code the code declares.
 var makers = map[string]bool{
 	"M": true, "Refuse": true, "ErrMsg": true, "Err": true, "refuse": true, "refuseMsg": true,
-	"human": true, "FailMsg": true, "Fail": true, "Msg": true,
+	"human": true, "FailMsg": true, "Fail": true, "Msg": true, "codedErr": true,
 }
 
 func calleeName(e ast.Expr) string {

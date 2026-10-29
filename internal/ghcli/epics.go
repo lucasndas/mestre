@@ -87,7 +87,7 @@ func (h *Handlers) epicCreate(ctx context.Context, c *localchan.Call, who caller
 		return refusal(err)
 	}
 	return localchan.OK(map[string]any{"number": made.Number, "id": made.ID, "url": made.URL,
-		"text": fmt.Sprintf("épico #%d criado: %s", made.Number, made.URL)})
+		"text": fmt.Sprintf("epic #%d created: %s", made.Number, made.URL)})
 }
 
 // isEpic reads an issue and says whether it is an epic.
@@ -249,7 +249,7 @@ func (h *Handlers) epicUpdate(ctx context.Context, c *localchan.Call, who caller
 	if len(release) > 0 && len(released) == 0 && len(already) > 0 && in.Title == nil && in.Body == nil && in.State == "" && len(depends) == 0 && flagStr(c, "state") != "closed" {
 		return localchan.Fail("not_found", fmt.Sprintf("#%d does not wait for %s", n, epicList(already)), "see `mestre table list`").WithExit(localchan.ExitNotFound)
 	}
-	data["text"] = fmt.Sprintf("épico #%d atualizado", n)
+	data["text"] = fmt.Sprintf("epic #%d updated", n)
 	return localchan.OK(data)
 }
 
@@ -299,7 +299,7 @@ func (h *Handlers) epicList(ctx context.Context, c *localchan.Call) localchan.Re
 		}
 	}
 	if len(out) == 0 {
-		text.WriteString("nenhum épico\n")
+		text.WriteString("no epics\n")
 	}
 	return localchan.OK(map[string]any{"epics": out, "text": strings.TrimRight(text.String(), "\n")})
 }
