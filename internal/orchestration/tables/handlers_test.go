@@ -146,7 +146,7 @@ func TestTheCommandsListAndStatus(t *testing.T) {
 		!list.Tables[1].Paused || list.Tables[1].State != "working" {
 		t.Errorf("list = %+v", list)
 	}
-	if !strings.Contains(list.Text, "(pausada)") {
+	if !strings.Contains(list.Text, "(paused)") {
 		t.Errorf("text = %q", list.Text)
 	}
 	if r := w.run(w.gm.ID, "table list", map[string]any{"state": "closed"}); !r.OK || strings.Contains(string(r.Data), "42-login") {

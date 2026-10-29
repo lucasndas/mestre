@@ -110,8 +110,8 @@ func TestATableWhoseEpicWaitsForAnotherOpensWithTheRequestHeldAndTheListSaysWhy(
 	}
 
 	r := w.run(w.gm.ID, "table list", nil)
-	if !r.OK || !strings.Contains(dataOf(t, r)["text"].(string), "aguardando a mesa #12") {
-		t.Fatalf("table list = %s, want the table 'aguardando a mesa #12'", r.Data)
+	if !r.OK || !strings.Contains(dataOf(t, r)["text"].(string), "waiting for table #12") {
+		t.Fatalf("table list = %s, want the table 'waiting for table #12'", r.Data)
 	}
 	rows := dataOf(t, r)["tables"].([]any)
 	for _, row := range rows {
@@ -124,7 +124,7 @@ func TestATableWhoseEpicWaitsForAnotherOpensWithTheRequestHeldAndTheListSaysWhy(
 			t.Fatalf("waiting_for of %v = %v, want %v", m["name"], got, want)
 		}
 	}
-	if r := w.run(w.gm.ID, "table status", nil, res.Table.ID); !strings.Contains(dataOf(t, r)["text"].(string), "aguardando a mesa #12") {
+	if r := w.run(w.gm.ID, "table status", nil, res.Table.ID); !strings.Contains(dataOf(t, r)["text"].(string), "waiting for table #12") {
 		t.Fatalf("table status = %s, want the wait", r.Data)
 	}
 

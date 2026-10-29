@@ -108,5 +108,5 @@ func (h *SubHandler) handle(ctx context.Context, c *localchan.Call) localchan.Re
 		return localchan.Fail(localchan.CodeInternal, "the delegation could not be made", "")
 	}
 	return localchan.OK(map[string]any{"id": sub.ID, "table": sub.Mesa, "type": sub.Type, "until": sub.Until.UTC().Format(time.RFC3339), "origin": sub.Origin,
-		"text": fmt.Sprintf("subdelegação %d: o Mestre da mesa %s decide %s até %s", sub.ID, sub.Mesa, sub.Type, sub.Until.UTC().Format(time.RFC3339))})
+		"text": fmt.Sprintf("subdelegation %d: the Table Master of %s decides %s until %s", sub.ID, sub.Mesa, sub.Type, sub.Until.UTC().Format(time.RFC3339))})
 }

@@ -184,7 +184,7 @@ func (h *Handlers) sent(ctx context.Context, tableKey string, number int, url, h
 	if h.Unreachable != nil {
 		if towers := h.Unreachable(ctx, tableKey); len(towers) > 0 {
 			data["unreachable_towers"] = towers
-			data["warning"] = fmt.Sprintf("a branch foi enviada da Cidadela sem as Torres desconectadas (%s); o que elas têm da mesa só chega ao reconectar", strings.Join(towers, ", "))
+			data["warning"] = fmt.Sprintf("the branch was sent from the Citadel without the disconnected Towers (%s); what they have of the table only arrives when they reconnect", strings.Join(towers, ", "))
 		}
 	}
 	return localchan.OK(data)

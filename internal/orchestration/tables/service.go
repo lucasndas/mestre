@@ -283,14 +283,14 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, er
 	case err != nil:
 		return OpenResult{}, err
 	case !epic.HasLabel(EpicLabel):
-		return OpenResult{}, fmt.Errorf("%w: #%d não tem o rótulo `%s`", ErrEpicNotFound, req.Epic, EpicLabel)
+		return OpenResult{}, codedErr(ErrEpicNotFound, "table.epic_no_label", "epic", req.Epic, "label", EpicLabel)
 	case !epic.Open:
-		return OpenResult{}, fmt.Errorf("%w: #%d", ErrEpicClosed, req.Epic)
+		return OpenResult{}, codedErr(ErrEpicClosed, "table.epic_closed", "epic", req.Epic)
 	}
 	if t, ok, err := s.store.ByEpic(ctx, ws, req.Epic); err != nil {
 		return OpenResult{}, err
 	} else if ok {
-		return OpenResult{}, fmt.Errorf("%w: #%d é da mesa %s", ErrTableExists, req.Epic, t.ID)
+		return OpenResult{}, codedErr(ErrTableExists, "table.epic_has_table", "epic", req.Epic, "table", t.ID)
 	}
 	w, err := s.o.Workspaces.Get(ctx, ws)
 	if err != nil {
@@ -301,7 +301,7 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, er
 		base = w.DefaultBranch
 	}
 	if !validBranch(base) {
-		return OpenResult{}, fmt.Errorf("a branch base %q não é válida", base)
+		return OpenResult{}, codedErr(nil, "table.base_invalid", "base", base)
 	}
 	origin, hasOrigin, err := s.origin(ctx, ws, req.FromMessage)
 	if err != nil {
@@ -309,7 +309,7 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, er
 	}
 
 	if err := s.o.Workspaces.Fetch(ctx, ws); err != nil {
-		return OpenResult{}, fmt.Errorf("o espelho não foi atualizado antes de abrir a mesa: %w", err)
+		return OpenResult{}, codedErr(err, "table.mirror_not_updated", "cause", causeOf(err))
 	}
 	mirror, err := s.o.Workspaces.OpenMirror(ctx, ws)
 	if err != nil {
@@ -318,7 +318,7 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, er
 	start, err := mirror.ResolveRef(ctx, "refs/remotes/origin/"+base)
 	if err != nil {
 		if errors.Is(err, gitx.ErrRefNotFound) {
-			return OpenResult{}, fmt.Errorf("a branch base origin/%s não existe no espelho: %w", base, err)
+			return OpenResult{}, codedErr(err, "table.base_missing", "base", base, "cause", causeOf(err))
 		}
 		return OpenResult{}, err
 	}
@@ -335,7 +335,7 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, er
 	prefix := s.o.Settings.BranchPrefix(ws)
 	branch := prefix + id
 	if !validBranch(branch) || strings.HasPrefix(branch, "refs/") || strings.HasPrefix(branch, "mestre/") {
-		return OpenResult{}, fmt.Errorf("o prefixo de branch %q da campanha não gera um nome de branch válido (%q)", prefix, branch)
+		return OpenResult{}, codedErr(nil, "table.prefix_invalid", "prefix", prefix, "branch", branch)
 	}
 	t := Table{Workspace: ws, ID: id, Epic: epic.Number, EpicTitle: epic.Title, Branch: branch, BaseBranch: base, BaseCommit: string(start),
 		State: StateOpen, OpenedBy: gm.ID, CreatedAt: now, UpdatedAt: now}
@@ -354,18 +354,18 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, er
 	}()
 
 	if err = mirror.CreateBranch(ctx, branch, string(start)); err != nil {
-		return OpenResult{}, fmt.Errorf("a branch %s não foi criada: %w", branch, err)
+		return OpenResult{}, codedErr(err, "table.branch_not_created", "branch", branch, "cause", causeOf(err))
 	}
 	undo.add("branch", func(ctx context.Context) error { return mirror.DeleteBranch(ctx, branch) })
 
 	dir := filepath.Join(s.o.Workspaces.Layout().Tables(ws), id)
 	if _, err = mirror.AddWorktree(ctx, dir, gitx.WorktreeOptions{Branch: branch}); err != nil {
-		return OpenResult{}, fmt.Errorf("o worktree da mesa não foi criado: %w", err)
+		return OpenResult{}, codedErr(err, "table.worktree_not_created", "cause", causeOf(err))
 	}
 	undo.add("worktree", func(ctx context.Context) error { return mirror.RemoveWorktree(ctx, dir, true) })
 	rec, err := s.o.Git.Record(ctx, dir)
 	if err != nil {
-		return OpenResult{}, fmt.Errorf("o registro do worktree da mesa: %w", err)
+		return OpenResult{}, codedErr(err, "table.worktree_record", "cause", causeOf(err))
 	}
 	if err = s.store.PutWorktree(ctx, Worktree{Workspace: ws, Table: id, Machine: s.o.Machine, Dir: rec.Dir, GitDir: rec.GitDir, Common: rec.Common,
 		LastCommit: string(start), CreatedAt: now, UpdatedAt: now}); err != nil {
@@ -376,18 +376,18 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, er
 		return OpenResult{}, err
 	}
 	if _, err = s.o.Files.Prepare(ctx, tr); err != nil {
-		return OpenResult{}, fmt.Errorf("a sessão zero da mesa: %w", err)
+		return OpenResult{}, codedErr(err, "table.session_zero", "cause", causeOf(err))
 	}
 	undo.add("session zero", func(context.Context) error { return s.o.Files.Release(tr) })
 
 	var files []string
 	if hasOrigin && len(origin.Attachments) > 0 && s.o.Attachments != nil {
 		if err = s.o.Attachments.Forward(ctx, ws, id, origin.Attachments); err != nil {
-			return OpenResult{}, fmt.Errorf("os anexos não foram repassados: %w", err)
+			return OpenResult{}, codedErr(err, "table.attachments_not_forwarded", "cause", causeOf(err))
 		}
 		// The session zero copies them into the worktree.
 		if _, err = s.o.Files.Prepare(ctx, tr); err != nil {
-			return OpenResult{}, fmt.Errorf("a sessão zero da mesa: %w", err)
+			return OpenResult{}, codedErr(err, "table.session_zero", "cause", causeOf(err))
 		}
 		for _, f := range origin.Attachments {
 			files = append(files, ".mestre/anexos/"+f.Path)
@@ -401,11 +401,11 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, er
 	cr, err := s.o.Characters.Create(ctx, characters.CreateRequest{Sheet: sheet, Workspace: ws, Table: id, Role: characters.RoleTableMaster,
 		Creator: characters.Creator{Kind: characters.CreatedByCharacter, ID: gm.ID}})
 	if err != nil {
-		return OpenResult{}, fmt.Errorf("o Mestre da mesa não foi recrutado: %w", err)
+		return OpenResult{}, codedErr(err, "table.master_not_recruited", "cause", causeOf(err))
 	}
 	master := cr.Character
 	if master.ID == "" {
-		return OpenResult{}, fmt.Errorf("o Mestre da mesa ficou esperando uma vaga (%s); uma mesa não abre sem ele", cr.Pending)
+		return OpenResult{}, codedErr(nil, "table.master_waiting", "pending", fmt.Sprint(cr.Pending))
 	}
 	undo.add("table master", func(ctx context.Context) error {
 		_ = s.o.Registry.SetPinned(ctx, master.ID, false)
@@ -420,7 +420,7 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, er
 	// (Paused) until the other is merged.
 	if s.o.Dependencies != nil {
 		if err = s.o.Dependencies.Opened(ctx, ws, t); err != nil {
-			return OpenResult{}, fmt.Errorf("a espera da mesa por outro épico: %w", err)
+			return OpenResult{}, codedErr(err, "table.dependency_wait", "cause", causeOf(err))
 		}
 		undo.add("dependencies", func(ctx context.Context) error { return s.o.Dependencies.Dropped(ctx, ws, t) })
 	}
@@ -432,7 +432,7 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, er
 		item.Kind, item.Origin, item.Sender, item.SenderID = inbox.KindUser, &o, o.UserName, ""
 	}
 	if _, err = s.o.Inbox.Enqueue(ctx, item); err != nil {
-		return OpenResult{}, fmt.Errorf("o pedido não chegou ao Mestre da mesa: %w", err)
+		return OpenResult{}, codedErr(err, "table.request_not_delivered", "cause", causeOf(err))
 	}
 	got, err := s.store.Get(ctx, ws, id)
 	if err != nil {
@@ -448,11 +448,11 @@ func (s *Service) origin(ctx context.Context, workspace, id string) (Message, bo
 		return Message{}, false, nil
 	}
 	if s.o.Messages == nil {
-		return Message{}, false, fmt.Errorf("a mensagem %s não pode ser lida: o canal dos usuários não está ligado", id)
+		return Message{}, false, codedErr(nil, "table.message_unreadable", "id", id)
 	}
 	m, err := s.o.Messages.Message(ctx, workspace, id)
 	if err != nil {
-		return Message{}, false, fmt.Errorf("a mensagem %s: %w", id, err)
+		return Message{}, false, codedErr(err, "table.message_read", "id", id, "cause", causeOf(err))
 	}
 	return m, true, nil
 }
@@ -534,7 +534,7 @@ func (s *Service) freeID(ctx context.Context, workspace, id string) (string, err
 			return "", err
 		}
 	}
-	return "", fmt.Errorf("%w: o épico já foi aberto vezes demais", ErrTableExists)
+	return "", codedErr(ErrTableExists, "table.epic_opened_too_often")
 }
 
 // validBranch is a conservative branch name: no option, no revision syntax.

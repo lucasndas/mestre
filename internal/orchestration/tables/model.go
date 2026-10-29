@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 )
 
@@ -183,15 +184,18 @@ type MissingError struct {
 	Decide  []string
 }
 
-func (e *MissingError) Error() string {
-	var parts []string
-	if len(e.Decide) > 0 {
-		parts = append(parts, "falta decidir: "+strings.Join(e.Decide, "; "))
+func (e *MissingError) Error() string { return i18n.Render(i18n.En, e.Msg()) }
+
+// Msg is the message of the error: what is left to decide and what is awaited.
+func (e *MissingError) Msg() i18n.Msg {
+	decide, pending := strings.Join(e.Decide, "; "), strings.Join(e.Pending, "; ")
+	switch {
+	case decide != "" && pending != "":
+		return i18n.M("table.closing_both", "table", e.Table, "decide", decide, "pending", pending)
+	case decide != "":
+		return i18n.M("table.closing_decide", "table", e.Table, "decide", decide)
 	}
-	if len(e.Pending) > 0 {
-		parts = append(parts, "aguardando: "+strings.Join(e.Pending, "; "))
-	}
-	return "a mesa " + e.Table + " continua encerrando — " + strings.Join(parts, " — ")
+	return i18n.M("table.closing_pending", "table", e.Table, "pending", pending)
 }
 
 // Is makes errors.Is(err, ErrUnmergedChanges) true.

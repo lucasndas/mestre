@@ -124,7 +124,7 @@ type ConflictError struct {
 }
 
 func (e *ConflictError) Error() string {
-	return fmt.Sprintf("%s está na revisão %d, e a esperada era %d", e.Name, e.Have, e.Expected)
+	return fmt.Sprintf("%s is at revision %d, and the expected one was %d", e.Name, e.Have, e.Expected)
 }
 
 // Unwrap makes errors.Is(err, ErrRevision) true.
@@ -137,7 +137,7 @@ type SizeError struct {
 }
 
 func (e *SizeError) Error() string {
-	return fmt.Sprintf("o conteúdo de %s teria %d bytes, e o limite é %d", e.Name, e.Size, e.Limit)
+	return fmt.Sprintf("the content of %s would have %d bytes, and the limit is %d", e.Name, e.Size, e.Limit)
 }
 
 // Unwrap makes errors.Is(err, ErrTooLarge) true.

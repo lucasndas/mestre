@@ -191,7 +191,7 @@ func (s *Service) ensureTower(ctx context.Context, workspace, table, machine str
 		return "", err
 	}
 	if !t.State.Accepts() {
-		return "", fmt.Errorf("%w: a mesa %s está %s", ErrBadTransition, table, t.State)
+		return "", codedErr(ErrBadTransition, "table.not_accepting", "table", table, "state", string(t.State))
 	}
 	if err := s.SyncTower(ctx, workspace, table, machine); err != nil {
 		return "", err
@@ -230,7 +230,7 @@ func (s *Service) SyncTower(ctx context.Context, workspace, table, machine strin
 		return fmt.Errorf("%w: %s", ErrMachineUnreachable, machine)
 	}
 	if !t.State.Accepts() {
-		return fmt.Errorf("%w: a mesa %s está %s", ErrBadTransition, table, t.State)
+		return codedErr(ErrBadTransition, "table.not_accepting", "table", table, "state", string(t.State))
 	}
 	if err := s.guard(ctx, t); err != nil {
 		return err

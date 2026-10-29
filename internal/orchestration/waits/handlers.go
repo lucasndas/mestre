@@ -162,8 +162,8 @@ func askResponse(out AskOutcome) localchan.Response {
 		data["response"], data["text"] = out.Response, out.Response
 		return localchan.OK(data)
 	case StatusPending:
-		r := localchan.Fail("timeout", "sem resposta no prazo: o pedido continua aberto e a resposta chega na sua caixa de entrada",
-			"não reenvie; use `mestre check` e espere")
+		r := localchan.Fail("timeout", "no answer in time: the request is still open and the answer arrives in your inbox",
+			"do not send it again; use `mestre check` and wait")
 		r.Error.Details = data
 		return r
 	case StatusEnded:
@@ -394,7 +394,7 @@ func (s *Service) handleWait(ctx context.Context, c *localchan.Call) localchan.R
 	for i, t := range w.Targets {
 		targets[i] = t.Name
 	}
-	data := map[string]any{"wait_id": w.ID, "kind": string(w.Kind), "targets": targets, "text": fmt.Sprintf("espera %s registrada (aguardando %s); encerre o turno: o motor acorda você", w.ID, w.Reason)}
+	data := map[string]any{"wait_id": w.ID, "kind": string(w.Kind), "targets": targets, "text": fmt.Sprintf("wait %s registered (waiting for %s); end your turn: the engine wakes you up", w.ID, w.Reason)}
 	if !w.TimeoutAt.IsZero() {
 		data["timeout_at"] = w.TimeoutAt.Format(time.RFC3339)
 	}
@@ -457,7 +457,7 @@ func (s *Service) handleWaits(ctx context.Context, c *localchan.Call) localchan.
 func (s *Service) passOn(ctx context.Context, x, target characters.Character, id, note string) (string, error) {
 	it, err := s.o.Inbox.Store().Get(ctx, id)
 	if err != nil || it.Target != x.ID {
-		return "", fmt.Errorf("%w: a mensagem %s não está na sua caixa de entrada", inbox.ErrNoItem, id)
+		return "", fmt.Errorf("%w: the message %s is not in your inbox", inbox.ErrNoItem, id)
 	}
 	var b strings.Builder
 	if strings.TrimSpace(note) != "" {
@@ -467,7 +467,7 @@ func (s *Service) passOn(ctx context.Context, x, target characters.Character, id
 	b.WriteString(it.Text)
 	if len(it.Attachments) > 0 {
 		if s.o.Attachments == nil {
-			return "", fmt.Errorf("%w: os anexos da mensagem %s não podem ser repassados", ErrNoAttachments, id)
+			return "", fmt.Errorf("%w: the attachments of the message %s cannot be forwarded", ErrNoAttachments, id)
 		}
 		copies, err := s.o.Attachments.Forward(ctx, target.Workspace, target.Table, it.Attachments)
 		if err != nil {

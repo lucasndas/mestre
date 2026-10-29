@@ -69,13 +69,13 @@ func (s *Service) Close(ctx context.Context, req CloseRequest) (CloseResult, err
 	case StateClosing:
 	case StateInReview:
 		if !t.Merged {
-			return CloseResult{}, fmt.Errorf("%w: o PR da mesa %s ainda não foi mesclado", ErrNotMerged, t.ID)
+			return CloseResult{}, codedErr(ErrNotMerged, "table.not_merged_pr", "table", t.ID)
 		}
 		if t, err = s.apply(ctx, t, EventClose); err != nil {
 			return CloseResult{}, err
 		}
 	case StateOpen, StateWorking:
-		return CloseResult{}, fmt.Errorf("%w: a mesa %s está em %s, sem PR mesclado", ErrNotMerged, t.ID, t.State)
+		return CloseResult{}, codedErr(ErrNotMerged, "table.not_merged_state", "table", t.ID, "state", string(t.State))
 	default:
 		return CloseResult{}, fmt.Errorf("%w: close in %s", ErrBadTransition, t.State)
 	}
@@ -98,7 +98,7 @@ func (s *Service) cancel(ctx context.Context, t Table, req CloseRequest) (CloseR
 	case StateOpen, StateWorking, StateInReview:
 		retention := s.o.Settings.CancelRetention(t.Workspace)
 		if retention <= 0 {
-			return CloseResult{}, fmt.Errorf("a retenção da branch de uma mesa cancelada (%s) não é válida: precisa ser positiva", retention)
+			return CloseResult{}, codedErr(nil, "table.retention_invalid", "retention", retention.String())
 		}
 		if s.o.Destructive == nil {
 			return CloseResult{}, ErrApprovalRequired
@@ -222,28 +222,28 @@ func (s *Service) endCharacters(ctx context.Context, t Table, m *MissingError) e
 	}
 	end := func(c characters.Character) error {
 		if c.State == characters.Stopping {
-			m.Pending = append(m.Pending, c.Name+" está encerrando")
+			m.Pending = append(m.Pending, c.Name+" is ending")
 			return nil
 		}
 		if c.Pinned {
-			m.Decide = append(m.Decide, c.Name+" está fixado: só um usuário desafixa")
+			m.Decide = append(m.Decide, c.Name+" is pinned: only a user unpins")
 			return nil
 		}
 		res, err := s.o.Characters.Dismiss(ctx, characters.DismissRequest{ID: c.ID, By: engineCreator, Reason: "table " + string(t.State)})
 		switch {
 		case errors.Is(err, characters.ErrPinned):
-			m.Decide = append(m.Decide, c.Name+" está fixado: só um usuário desafixa")
+			m.Decide = append(m.Decide, c.Name+" is pinned: only a user unpins")
 			return nil
 		case errors.Is(err, characters.ErrNoCharacter):
 			return nil
 		case err != nil:
 			return fmt.Errorf("end %s: %w", c.Name, err)
 		case res.Status == characters.Scheduled:
-			m.Pending = append(m.Pending, c.Name+" termina no próximo ponto seguro")
+			m.Pending = append(m.Pending, c.Name+" ends at the next safe point")
 			return nil
 		}
 		if now, err := s.o.Registry.Get(ctx, c.ID); err == nil && now.State.Alive() {
-			m.Pending = append(m.Pending, c.Name+" está encerrando")
+			m.Pending = append(m.Pending, c.Name+" is ending")
 		}
 		return nil
 	}
@@ -325,7 +325,7 @@ func (s *Service) endWorktrees(ctx context.Context, t Table, m *MissingError) (r
 		}
 		in, err := s.inspect(ctx, wt)
 		if err != nil {
-			m.Decide = append(m.Decide, fmt.Sprintf("%s: o worktree não pôde ser examinado (%v)", label, err))
+			m.Decide = append(m.Decide, fmt.Sprintf("%s: the worktree could not be examined (%v)", label, err))
 			removed = false
 			continue
 		}
@@ -338,7 +338,7 @@ func (s *Service) endWorktrees(ctx context.Context, t Table, m *MissingError) (r
 			if errors.Is(err, gitx.ErrWorktreeBusy) {
 				// Files kept open (Windows: an editor, the antivirus) stop
 				// the removal; it is tried again at the next sweep.
-				m.Pending = append(m.Pending, fmt.Sprintf("%s: o worktree tem arquivos em uso; a remoção será tentada de novo", label))
+				m.Pending = append(m.Pending, fmt.Sprintf("%s: the worktree has files in use; the removal will be tried again", label))
 				removed = false
 				continue
 			}
@@ -352,7 +352,7 @@ func (s *Service) endWorktrees(ctx context.Context, t Table, m *MissingError) (r
 func (s *Service) whyKept(ctx context.Context, mirror gitx.Repo, t Table, wt Worktree, in Inspection) string {
 	var reasons []string
 	if len(in.Dirty) > 0 {
-		reasons = append(reasons, "alterações não commitadas em "+strings.Join(in.Dirty, ", "))
+		reasons = append(reasons, "uncommitted changes in "+strings.Join(in.Dirty, ", "))
 	}
 	if t.State == StateCancelling {
 		// What the worktree has must be in the branch of the mirror, which
@@ -362,7 +362,7 @@ func (s *Service) whyKept(ctx context.Context, mirror gitx.Repo, t Table, wt Wor
 		// bundle is in refs/mestre/torres/, not in the branch).
 		ok, err := mirror.IsAncestor(ctx, in.Tip, "refs/heads/"+t.Branch)
 		if in.Tip == "" || err != nil || !ok {
-			reasons = append(reasons, fmt.Sprintf("commits que a branch %s do espelho não tem (ponta %s)", t.Branch, gitx.Hash(in.Tip).Short()))
+			reasons = append(reasons, fmt.Sprintf("commits that the branch %s of the mirror does not have (tip %s)", t.Branch, gitx.Hash(in.Tip).Short()))
 		}
 	} else {
 		head := t.MergedHead
@@ -375,7 +375,7 @@ func (s *Service) whyKept(ctx context.Context, mirror gitx.Repo, t Table, wt Wor
 			integrated = err == nil && ok
 		}
 		if !integrated {
-			reasons = append(reasons, fmt.Sprintf("a ponta %s não está integrada ao PR mesclado", gitx.Hash(in.Tip).Short()))
+			reasons = append(reasons, fmt.Sprintf("the tip %s is not integrated into the merged PR", gitx.Hash(in.Tip).Short()))
 		}
 	}
 	return strings.Join(reasons, "; ")
