@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/mestre-ia/mestre/internal/approvals"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -123,7 +124,7 @@ func TestTheAnswerOfAGroupStandsForTheListedRequestsAndNoOtherJoinsIt(t *testing
 	if got := w.msg.Sent(); got != 2*4 { // the group (a, b) and the three alone, for each of the two users
 		t.Fatalf("%d messages were sent; want 8", got)
 	}
-	if rep, err := w.flow.Answer(w.ctx, ana.ID, approvals.Input{Request: a.ID, Answer: chain.AnswerDeny}); err != nil || rep.Text != "Negado." {
+	if rep, err := w.flow.Answer(w.ctx, ana.ID, approvals.Input{Request: a.ID, Answer: chain.AnswerDeny}); err != nil || i18n.Render(i18n.PtBR, rep.Msg) != "Negado." {
 		t.Fatalf("deny: %+v, %v", rep, err)
 	}
 	for _, r := range []chain.Request{a, b} {

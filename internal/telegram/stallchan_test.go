@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/digest"
 	"github.com/mestre-ia/mestre/internal/telegram"
@@ -74,7 +75,7 @@ func TestTheWarningOfAStalledTableHasTheButtonToPauseItForAnApproverOfTheWorkspa
 func TestAnApproverPausesTheTableByTheButtonButIsRefusedTheCommandAndTheMistakeButtonAndAnObserverHasNone(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, rigOpts{block: true, decrees: true, digest: true, commands: []telegram.Command{
-		{Name: "pausar", Description: "pausa", Capability: users.Pause, Run: func(context.Context, telegram.Call) (string, error) { return "pausado", nil }},
+		{Name: "pausar", Description: i18n.Text("pausa"), Capability: users.Pause, Run: func(context.Context, telegram.Call) (i18n.Msg, error) { return i18n.Text("pausado"), nil }},
 	}})
 	w.pairOwnerTelegram()
 	apr, approver := w.user("Caio", users.Approver, "loja")
@@ -122,7 +123,7 @@ func TestAnApproverPausesTheTableByTheButtonButIsRefusedTheCommandAndTheMistakeB
 		{Text: "Pausar mesa", Action: telegram.PauseTableAction, Arg: "loja:42-login", Capability: users.PauseButtons},
 		{Text: "Foi um erro", Action: digest.MistakeAction, Arg: "1", Capability: users.RevokeTemporaryRules},
 	} {
-		if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: observer.ID, UserID: obs.ID, Text: "botão " + b.Text, Origin: "motor", Buttons: [][]telegram.Button{{b}}}); err != nil {
+		if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: observer.ID, UserID: obs.ID, Msg: i18n.Text("botão " + b.Text), Origin: "motor", Buttons: [][]telegram.Button{{b}}}); err != nil {
 			t.Fatal(err)
 		}
 		w.drain()

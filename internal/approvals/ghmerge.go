@@ -54,6 +54,7 @@ func MergeRequest(o MergeOrder) (chain.OpenRequest, error) {
 	}
 	return chain.OpenRequest{
 		Type: classes.RequestMerge, Workspace: o.Workspace, Table: o.Table, Requester: o.Requester, Proposer: o.Proposer,
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		About:  fmt.Sprintf("merge do PR #%d de %s (%s) em %s, método %s", o.Number, o.Repo, shortSHA(o.Head), o.Base, o.Method),
 		PR:     &chain.PRRef{Repo: o.Repo, Number: o.Number, SHA: o.Head},
 		Target: PRTarget(o.Repo, o.Number, o.Head, o.Base),

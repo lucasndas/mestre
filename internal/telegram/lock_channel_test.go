@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/telegram"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -12,8 +13,8 @@ import (
 func lockChanWorld(t *testing.T) *world {
 	t.Helper()
 	return newWorld(t, rigOpts{lockdown: true, commands: []telegram.Command{
-		{Name: "status", Description: "estado", Query: true, Run: func(context.Context, telegram.Call) (string, error) { return "Cidadela online", nil }},
-		{Name: "pausar", Description: "pausa", Capability: users.Pause, Run: func(context.Context, telegram.Call) (string, error) { return "pausado", nil }},
+		{Name: "status", Description: i18n.Text("estado"), Query: true, Run: func(context.Context, telegram.Call) (i18n.Msg, error) { return i18n.Text("Cidadela online"), nil }},
+		{Name: "pausar", Description: i18n.Text("pausa"), Capability: users.Pause, Run: func(context.Context, telegram.Call) (i18n.Msg, error) { return i18n.Text("pausado"), nil }},
 	}})
 }
 

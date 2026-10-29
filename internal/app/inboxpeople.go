@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 )
 
@@ -15,12 +16,12 @@ var _ inbox.Users = inboxUsers{}
 
 // NotifyOwner implements inbox.Users.
 func (u inboxUsers) NotifyOwner(ctx context.Context, _, text string) error {
-	u.r.alert.OwnerAlert(ctx, text)
+	u.r.alert.OwnerAlert(ctx, i18n.Text(text))
 	return nil
 }
 
 // NotifyUser implements inbox.Users: user is the id of the user.
 func (u inboxUsers) NotifyUser(ctx context.Context, _, user, text string) error {
-	u.r.alert.Tell(ctx, user, text)
+	u.r.alert.Tell(ctx, user, i18n.Text(text))
 	return nil
 }

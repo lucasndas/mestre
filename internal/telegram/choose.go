@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
+
 	"github.com/mestre-ia/mestre/internal/blocking"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
@@ -107,8 +109,8 @@ func (c *ChooseChannel) Ask(ctx context.Context, q ChoiceQuestion, recommend int
 	for _, i := range order {
 		rows = append(rows, []Button{{Text: q.Options[i], Action: ChooseAction, Arg: strconv.FormatInt(id, 10) + ":" + strconv.Itoa(i)}})
 	}
-	text := fmt.Sprintf("%s\n(pergunta %d do Grão-Mestre)", strings.TrimSpace(q.Question), id)
-	if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Workspace: q.Workspace, Mesa: q.Mesa, Origin: "escolha", Buttons: rows}); err != nil {
+	text := i18n.M("bot.question_card", "question", strings.TrimSpace(q.Question), "id", id)
+	if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: text, Workspace: q.Workspace, Mesa: q.Mesa, Origin: "escolha", Buttons: rows}); err != nil {
 		_ = c.bot.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 			_, err := tx.ExecContext(ctx, `DELETE FROM choose_questions WHERE id = ? AND state = 'open'`, id)
 			return err
@@ -119,29 +121,29 @@ func (c *ChooseChannel) Ask(ctx context.Context, q ChoiceQuestion, recommend int
 }
 
 // click takes the answer of the user asked, once.
-func (c *ChooseChannel) click(ctx context.Context, k Click) (string, string, error) {
+func (c *ChooseChannel) click(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	qid, opt, ok := strings.Cut(k.Arg, ":")
 	id, err1 := strconv.ParseInt(qid, 10, 64)
 	idx, err2 := strconv.Atoi(opt)
 	if !ok || err1 != nil || err2 != nil {
-		return "", "", errors.New("botão inválido")
+		return i18n.Msg{}, i18n.Msg{}, errInvalidButton
 	}
 	var q ChoiceQuestion
 	var options, state string
 	err := c.bot.o.DB.Reader().QueryRowContext(ctx, `SELECT workspace, mesa, asker, user_id, question, options, state FROM choose_questions WHERE id = ? AND channel = 'telegram'`, id).
 		Scan(&q.Workspace, &q.Mesa, &q.Asker, &q.UserID, &q.Question, &options, &state)
 	if err != nil {
-		return "", "", errors.New("essa pergunta não existe mais")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.question_gone")
 	}
 	if q.UserID != k.User.ID {
-		return "", "", errors.New("essa pergunta não é sua")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.question_not_yours")
 	}
 	if err := json.Unmarshal([]byte(options), &q.Options); err != nil || idx < 0 || idx >= len(q.Options) {
-		return "", "", errors.New("botão inválido")
+		return i18n.Msg{}, i18n.Msg{}, errInvalidButton
 	}
 	u, err := c.Users.Get(ctx, k.User.ID) // the workspaces as stored now
 	if err != nil || u.State != users.Active || !u.Acts(q.Workspace) {
-		return "", "", errors.New("essa pergunta não é de uma campanha sua")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.question_not_workspace")
 	}
 	q.ID = id
 	var claimed bool
@@ -154,10 +156,10 @@ func (c *ChooseChannel) click(ctx context.Context, k Click) (string, string, err
 		claimed = n > 0
 		return nil
 	}); err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
 	if !claimed {
-		return "Essa pergunta já foi respondida.", "", nil
+		return i18n.M("bot.question_answered"), i18n.Msg{}, nil
 	}
 	if err := c.Answered(ctx, q, u, q.Options[idx]); err != nil {
 		// the answer is not lost to a failure of the inbox: the question is open again
@@ -165,9 +167,9 @@ func (c *ChooseChannel) click(ctx context.Context, k Click) (string, string, err
 			_, err := tx.ExecContext(ctx, `UPDATE choose_questions SET state = 'open', answer = '', answered_at = 0 WHERE id = ? AND state = 'answered'`, id)
 			return err
 		})
-		return "", "", errors.New("não consegui entregar a resposta ao Grão-Mestre; toque de novo")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.answer_not_delivered")
 	}
-	return "Anotado: " + q.Options[idx], fmt.Sprintf("%s\nResposta: %s", strings.TrimSpace(q.Question), q.Options[idx]), nil
+	return i18n.M("bot.noted", "option", q.Options[idx]), i18n.M("bot.question_answer", "question", strings.TrimSpace(q.Question), "option", q.Options[idx]), nil
 }
 
 // AnswerItem is the message the answer becomes in the inbox of the Grão-Mestre: a

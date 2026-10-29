@@ -3,7 +3,8 @@ package telegram
 import (
 	"context"
 	"errors"
-	"fmt"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 
 	"github.com/mestre-ia/mestre/internal/lockdown"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -34,51 +35,51 @@ func (c *LockChannel) Bind(bot *Bot) {
 // while locked, since it is how it ends.
 func (c *LockChannel) Commands() []Command {
 	return []Command{
-		{Name: "travar", Description: "trava o Mestre: nada é executado até o Senhor da Guilda destravar", Capability: users.Lock, Run: c.lock},
-		{Name: "destravar", Description: "destrava o Mestre (só o Senhor da Guilda, com o PIN)", Capability: users.Unlock, Query: true, Run: c.unlock},
+		{Name: "travar", Description: i18n.M("bot.cmd_lock"), Capability: users.Lock, Run: c.lock},
+		{Name: "destravar", Description: i18n.M("bot.cmd_unlock"), Capability: users.Unlock, Query: true, Run: c.unlock},
 	}
 }
 
 // Actions are the buttons, for Options.Actions.
 func (c *LockChannel) Actions() map[string]Action { return map[string]Action{LockAction: c.confirm} }
 
-func (c *LockChannel) lock(ctx context.Context, call Call) (string, error) {
+func (c *LockChannel) lock(ctx context.Context, call Call) (i18n.Msg, error) {
 	if c.Svc.Locked(ctx) {
-		return "O Mestre já está travado.", nil
+		return i18n.M("bot.lock_already"), nil
 	}
 	_, err := c.bot.Send(ctx, Out{ChatID: call.ChatID, UserID: call.User.ID, Origin: "motor",
-		Text:    "Travar o Mestre? Os decretos ficam suspensos, toda ferramenta é negada, a caixa de entrada para de entregar, nada é feito no GitHub e missões, rituais e recrutamentos pausam. Os terminais continuam abertos. Só o Senhor da Guilda destrava, com o PIN.",
-		Buttons: [][]Button{{{Text: "Confirmar travamento", Action: LockAction, Capability: users.Lock}}}})
-	return "", err
+		Msg:     i18n.M("bot.lock_ask"),
+		Buttons: [][]Button{{{Msg: i18n.M("bot.lock_confirm"), Action: LockAction, Capability: users.Lock}}}})
+	return i18n.Msg{}, err
 }
 
-func (c *LockChannel) confirm(ctx context.Context, k Click) (string, string, error) {
+func (c *LockChannel) confirm(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	if err := c.Svc.Lock(ctx, k.User); err != nil {
 		if errors.Is(err, lockdown.ErrLevel) {
-			return "", "", errors.New("o seu nível não trava o Mestre")
+			return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.lock_level")
 		}
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
-	return "Travado.", fmt.Sprintf("Mestre travado por %s.", k.User.Name), nil
+	return i18n.M("bot.locked_toast"), i18n.M("bot.locked_result", "name", k.User.Name), nil
 }
 
-func (c *LockChannel) unlock(ctx context.Context, call Call) (string, error) {
+func (c *LockChannel) unlock(ctx context.Context, call Call) (i18n.Msg, error) {
 	if !c.Svc.Locked(ctx) {
-		return "O Mestre não está travado.", nil
+		return i18n.M("bot.not_locked"), nil
 	}
 	req, err := c.Users.StartPIN(ctx, call.User.ID, lockdown.UnlockAction)
 	switch {
 	case errors.Is(err, users.ErrNoPIN):
-		return "Cadastre o seu PIN primeiro.", nil
+		return i18n.M("bot.register_pin_first"), nil
 	case errors.Is(err, users.ErrPINLocked):
-		return "O seu PIN está bloqueado por um tempo.", nil
+		return i18n.M("bot.your_pin_locked"), nil
 	case err != nil:
-		return "", err
+		return i18n.Msg{}, err
 	}
-	if err := c.bot.Ask(ctx, call.User.ID, PINKind, req.ID, "Digite o seu PIN para destravar o Mestre. A mensagem com o PIN é apagada.", promptTTL); err != nil {
-		return "", err
+	if err := c.bot.Ask(ctx, call.User.ID, PINKind, req.ID, i18n.M("bot.pin_prompt_unlock"), promptTTL); err != nil {
+		return i18n.Msg{}, err
 	}
-	return "", nil
+	return i18n.Msg{}, nil
 }
 
 // pinDone is told whether the PIN of the unlock was right.
@@ -88,7 +89,7 @@ func (c *LockChannel) pinDone(ctx context.Context, u users.User, requestID strin
 	}
 	if uerr := c.Svc.Unlock(ctx, u, requestID); uerr != nil {
 		if u.TelegramID != 0 {
-			_, _ = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: "Não destravei: " + uerr.Error(), Origin: "motor"})
+			_, _ = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.M("bot.unlock_failed", "reason", i18n.OfError(uerr)), Origin: "motor"})
 		}
 	}
 }

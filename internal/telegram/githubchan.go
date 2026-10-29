@@ -3,10 +3,11 @@ package telegram
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 
 	"github.com/mestre-ia/mestre/internal/github"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -30,9 +31,9 @@ type GitHubChannel struct {
 	Personal PersonalGitHub
 	Clock    clock.Clock
 	Logger   *slog.Logger
-	// Moment writes an instant in the time zone of the Guild (decrees.Service.Moment);
+	// Moment puts an instant in the time zone of the Guild (decrees.Service.InGuildZone);
 	// nil: UTC.
-	Moment func(ctx context.Context, t time.Time) string
+	Moment func(ctx context.Context, t time.Time) time.Time
 
 	bot  *Bot
 	base context.Context
@@ -73,39 +74,39 @@ func (c *GitHubChannel) Bind(bot *Bot, ctx context.Context) {
 
 // moment is when the code expires, in the time zone of the Guild (Moment), or in
 // UTC, saying so, when none is given: never the zone of the server.
-func (c *GitHubChannel) moment(ctx context.Context, t time.Time) string {
+func (c *GitHubChannel) moment(ctx context.Context, t time.Time) time.Time {
 	if c.Moment != nil {
 		return c.Moment(ctx, t)
 	}
-	return t.UTC().Format("02/01/2006 15:04") + " UTC"
+	return t.UTC()
 }
 
 // Commands is /github, for Options.Commands. It begins something, so the lock of
 // the Mestre holds it.
 func (c *GitHubChannel) Commands() []Command {
-	return []Command{{Name: "github", Description: "conecta o seu GitHub (credencial pessoal): mostra um código para digitar no GitHub", Capability: users.ConnectOwnGitHub, Run: c.begin}}
+	return []Command{{Name: "github", Description: i18n.M("bot.cmd_github"), Capability: users.ConnectOwnGitHub, Run: c.begin}}
 }
 
 // Wait returns when no wait for an authorization is running (for the tests).
 func (c *GitHubChannel) Wait() { c.wg.Wait() }
 
-func (c *GitHubChannel) say(ctx context.Context, chat int64, userID, text string) {
+func (c *GitHubChannel) say(ctx context.Context, chat int64, userID string, m i18n.Msg) {
 	c.mu.Lock()
 	bot := c.bot
 	c.mu.Unlock()
 	if bot == nil {
 		return
 	}
-	if _, err := bot.Send(ctx, Out{ChatID: chat, UserID: userID, Origin: "motor", Text: text}); err != nil {
+	if _, err := bot.Send(ctx, Out{ChatID: chat, UserID: userID, Origin: "motor", Msg: m}); err != nil {
 		c.Logger.Warn("telegram: a message about the GitHub connection was not queued", "user", userID, "err", bot.maskText(err.Error()))
 	}
 }
 
-func (c *GitHubChannel) begin(ctx context.Context, call Call) (string, error) {
+func (c *GitHubChannel) begin(ctx context.Context, call Call) (i18n.Msg, error) {
 	u := call.User
 	// the Owner acts in every workspace; the others in the ones of their list
 	if u.Level != users.Owner && len(u.Workspaces) == 0 {
-		return "Você ainda não atua em nenhuma campanha: peça a um Administrador. O GitHub pessoal é usado só nas campanhas em que você atua.", nil
+		return i18n.M("bot.github_no_workspace"), nil
 	}
 	ch, err := c.Personal.Begin(ctx, u.ID)
 	if err != nil {
@@ -115,7 +116,7 @@ func (c *GitHubChannel) begin(ctx context.Context, call Call) (string, error) {
 	base := c.base
 	if base == nil || c.bot == nil {
 		c.mu.Unlock()
-		return "O bot ainda não está pronto; tente de novo em instantes.", nil
+		return i18n.M("bot.github_not_ready"), nil
 	}
 	if old := c.watching[u.ID]; old != nil {
 		old.cancel() // a new code replaces the one he was waiting for
@@ -129,8 +130,7 @@ func (c *GitHubChannel) begin(ctx context.Context, call Call) (string, error) {
 	c.wg.Add(1)
 	c.mu.Unlock()
 	go c.watch(wctx, w, u.ID, call.ChatID, ch)
-	return fmt.Sprintf("Para conectar o seu GitHub, abra %s e digite o código %s (vale até %s). Entre com a conta cadastrada para você. Eu aviso aqui quando a conexão estiver feita; o token vai direto para o cofre e não passa por esta conversa.",
-		ch.VerificationURI, ch.UserCode, c.moment(ctx, ch.ExpiresAt)), nil
+	return i18n.M("bot.github_connect", "uri", ch.VerificationURI, "code", ch.UserCode, "until", c.moment(ctx, ch.ExpiresAt)), nil
 }
 
 // watch asks GitHub at the pace it allows, until the end of the connection.
@@ -164,7 +164,7 @@ func (c *GitHubChannel) watch(ctx context.Context, w *githubWatch, userID string
 			c.say(ctx, chat, userID, c.explain(err))
 			return
 		case res == github.PollConnected:
-			c.say(ctx, chat, userID, "GitHub conectado. O Mestre passa a usar a sua credencial pessoal onde ela vale; você pode desconectar quando quiser.")
+			c.say(ctx, chat, userID, i18n.M("bot.github_connected"))
 			return
 		}
 		t.Reset(interval)
@@ -176,25 +176,25 @@ const DefaultGitHubPoll = 5 * time.Second
 
 // explain is the answer for each refusal, in plain words; what GitHub said is
 // never repeated.
-func (c *GitHubChannel) explain(err error) string {
+func (c *GitHubChannel) explain(err error) i18n.Msg {
 	switch {
 	case errors.Is(err, github.ErrNoCredential):
-		return "O seu cadastro não pode conectar o GitHub agora (usuário suspenso, removido ou Observador)."
+		return i18n.M("bot.github_no_credential")
 	case errors.Is(err, github.ErrNoGitHubLogin):
-		return "O seu cadastro não tem login do GitHub: peça a um Administrador para preencher e tente de novo com /github."
+		return i18n.M("bot.github_no_login")
 	case errors.Is(err, github.ErrDeviceFlowOff):
-		return "O App Grão-Mestre está com o device flow desligado no GitHub: o Senhor da Guilda precisa ligar a opção Enable Device Flow nas configurações do App."
+		return i18n.M("bot.github_device_flow_off")
 	case errors.Is(err, github.ErrAppNotReady):
-		return "O App Grão-Mestre ainda não está pronto: o Senhor da Guilda precisa terminar a criação dele."
+		return i18n.M("bot.github_app_not_ready")
 	case errors.Is(err, github.ErrDeviceDenied):
-		return "A autorização foi recusada no GitHub. Se foi engano, envie /github de novo."
+		return i18n.M("bot.github_denied")
 	case errors.Is(err, github.ErrDeviceExpired):
-		return "O código expirou antes da autorização. Envie /github para pedir outro."
+		return i18n.M("bot.github_expired")
 	case errors.Is(err, github.ErrLoginMismatch):
-		return "A conta do GitHub que autorizou não é a cadastrada para você. Nada foi guardado; entre com a conta certa e envie /github de novo."
+		return i18n.M("bot.github_mismatch")
 	case errors.Is(err, github.ErrNoClientSecret):
-		return "O segredo do App Grão-Mestre não está no cofre: o Senhor da Guilda precisa recriar o App (veja o painel)."
+		return i18n.M("bot.github_no_secret")
 	}
 	c.Logger.Warn("telegram: the GitHub connection failed", "err", err)
-	return "Não consegui conectar o GitHub agora. Tente de novo em alguns minutos; o Senhor da Guilda recebe o detalhe no log."
+	return i18n.M("bot.github_failed")
 }

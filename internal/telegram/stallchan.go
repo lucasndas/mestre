@@ -3,8 +3,9 @@ package telegram
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
@@ -74,8 +75,8 @@ func (c *StallChannel) StalledTable(ctx context.Context, n chain.StallNotice) er
 		if u.State != users.Active || u.TelegramID == 0 || !u.Acts(n.Workspace) || !users.Can(u.Level, users.PauseButtons) {
 			continue
 		}
-		rows := [][]Button{{{Text: "Pausar mesa", Action: PauseTableAction, Arg: n.Workspace + ":" + n.Table, Capability: users.PauseButtons}}}
-		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: n.Text, Workspace: n.Workspace, Mesa: n.Table, Origin: "mesa_parada", Buttons: rows}); err != nil {
+		rows := [][]Button{{{Msg: i18n.M("bot.pause_table"), Action: PauseTableAction, Arg: n.Workspace + ":" + n.Table, Capability: users.PauseButtons}}}
+		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.Text(n.Text), Workspace: n.Workspace, Mesa: n.Table, Origin: "mesa_parada", Buttons: rows}); err != nil {
 			c.bot.log.Warn("telegram: the warning of a stalled table was not queued", "user", u.ID, "err", err)
 			continue
 		}
@@ -89,30 +90,31 @@ func (c *StallChannel) StalledTable(ctx context.Context, n chain.StallNotice) er
 
 // pause is the button: it pauses the table of the warning in the name of the
 // user who touched it, if the user still acts in the workspace.
-func (c *StallChannel) pause(ctx context.Context, k Click) (string, string, error) {
+func (c *StallChannel) pause(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	ws, table, ok := strings.Cut(k.Arg, ":")
 	if !ok || ws == "" || table == "" {
-		return "", "", errors.New("botão inválido")
+		return i18n.Msg{}, i18n.Msg{}, errInvalidButton
 	}
 	if c.Pauser == nil {
-		return "", "", errors.New("a pausa de mesa não está disponível agora")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.pause_unavailable")
 	}
 	u, err := c.Users.Get(ctx, k.User.ID) // the level and the workspaces as stored now
 	if err != nil || !u.Acts(ws) {
-		return "", "", errors.New("essa mesa não é de uma campanha sua")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.table_not_yours")
 	}
 	changed, err := c.Pauser.PauseStalled(ctx, chain.PauseRequest{Workspace: ws, Table: table,
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		Reason: "a mesa trabalhava há horas sem entregar nada; pausada pelo botão do aviso",
 		By:     chain.Actor{User: u.ID, UserLevel: characters.UserLevel(u.Level)}})
 	switch {
 	case errors.Is(err, chain.ErrTableOver):
-		return "", "", errors.New("essa mesa já terminou")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.table_over")
 	case err != nil:
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	case !changed:
-		return "A mesa já estava pausada.", "", nil
+		return i18n.M("bot.table_already_paused"), i18n.Msg{}, nil
 	}
-	return fmt.Sprintf("Mesa %s pausada.", table), "", nil
+	return i18n.M("bot.table_paused", "table", table), i18n.Msg{}, nil
 }
 
 // QueueAccumulating implements chain.QueuePeople: the warning of a queue that
@@ -132,8 +134,8 @@ func (c *StallChannel) QueueAccumulating(ctx context.Context, n chain.QueueNotic
 		if u.State != users.Active || u.TelegramID == 0 || !u.Acts(n.Workspace) || !users.Can(u.Level, users.PauseButtons) {
 			continue
 		}
-		rows := [][]Button{{{Text: "Pausar autonomia", Action: PauseAutonomyAction, Arg: n.Workspace + ":" + n.Table, Capability: users.PauseButtons}}}
-		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: n.Text, Workspace: n.Workspace, Mesa: n.Table, Origin: "fila", Buttons: rows}); err != nil {
+		rows := [][]Button{{{Msg: i18n.M("bot.pause_autonomy"), Action: PauseAutonomyAction, Arg: n.Workspace + ":" + n.Table, Capability: users.PauseButtons}}}
+		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.Text(n.Text), Workspace: n.Workspace, Mesa: n.Table, Origin: "fila", Buttons: rows}); err != nil {
 			c.bot.log.Warn("telegram: the warning of a queue was not queued", "user", u.ID, "err", err)
 			continue
 		}
@@ -148,30 +150,31 @@ func (c *StallChannel) QueueAccumulating(ctx context.Context, n chain.QueueNotic
 // pauseAutonomy is the button: it pauses the autonomy of the table of the
 // warning in the name of the user who touched it, if he still acts in the
 // workspace. It only restricts, so it asks no PIN.
-func (c *StallChannel) pauseAutonomy(ctx context.Context, k Click) (string, string, error) {
+func (c *StallChannel) pauseAutonomy(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	ws, table, ok := strings.Cut(k.Arg, ":")
 	if !ok || ws == "" || table == "" {
-		return "", "", errors.New("botão inválido")
+		return i18n.Msg{}, i18n.Msg{}, errInvalidButton
 	}
 	if c.Autonomy == nil {
-		return "", "", errors.New("a pausa de autonomia não está disponível agora")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.pause_autonomy_unavailable")
 	}
 	u, err := c.Users.Get(ctx, k.User.ID) // the level and the workspaces as stored now
 	if err != nil || !u.Acts(ws) {
-		return "", "", errors.New("essa mesa não é de uma campanha sua")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.table_not_yours")
 	}
 	changed, err := c.Autonomy.PauseAutonomy(ctx, chain.PauseRequest{Workspace: ws, Table: table,
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		Reason: "a fila de aprovações da mesa acumulou; autonomia pausada pelo botão do aviso",
 		By:     chain.Actor{User: u.ID, UserLevel: characters.UserLevel(u.Level)}})
 	switch {
 	case errors.Is(err, chain.ErrTableOver):
-		return "", "", errors.New("essa mesa já terminou")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.table_over")
 	case errors.Is(err, chain.ErrLevelDenied):
-		return "", "", errors.New("o seu nível não pausa a autonomia de uma mesa")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.pause_autonomy_level")
 	case err != nil:
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	case !changed:
-		return "A autonomia da mesa já estava pausada.", "", nil
+		return i18n.M("bot.autonomy_already_paused"), i18n.Msg{}, nil
 	}
-	return fmt.Sprintf("Autonomia da mesa %s pausada.", table), "", nil
+	return i18n.M("bot.autonomy_paused", "table", table), i18n.Msg{}, nil
 }

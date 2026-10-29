@@ -9,6 +9,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -52,8 +53,8 @@ func TestARequestToEnterTheGuildGoesOnlyToTheOwnerWhoApprovesOrDeniesWithThePIN(
 	if len(msg.Answers) != 2 || msg.Answers[0] != chain.AnswerApprove || msg.Answers[1] != chain.AnswerDeny {
 		t.Errorf("the Owner was offered %v, want only approve and deny", msg.Answers)
 	}
-	if !strings.Contains(msg.Text, "123 456") && !strings.Contains(msg.Text, "notebook") {
-		t.Errorf("the question does not say what is asked: %q", msg.Text)
+	if !strings.Contains(i18n.Render(i18n.PtBR, msg.Msg), "123 456") && !strings.Contains(i18n.Render(i18n.PtBR, msg.Msg), "notebook") {
+		t.Errorf("the question does not say what is asked: %q", i18n.Render(i18n.PtBR, msg.Msg))
 	}
 	untouched := func(when string) {
 		t.Helper()

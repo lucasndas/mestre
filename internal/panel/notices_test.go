@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/notices"
 	"github.com/mestre-ia/mestre/internal/panel"
 )
@@ -114,7 +115,7 @@ func TestTheAlertOfAnUnknownSenderIsForTheOwnerAndTheAdministrators(t *testing.T
 			t.Fatalf("a user sees %d, want %d", len(got.Notices), want)
 		}
 	}
-	if err := a.feed.Update(a.ctx, id, "Remetente não autorizado\nID: 99\n3 tentativas desde 09:00 (um alerta por hora)"); err != nil {
+	if err := a.feed.Update(a.ctx, id, i18n.Text("Remetente não autorizado\nID: 99\n3 tentativas desde 09:00 (um alerta por hora)")); err != nil {
 		t.Fatal(err)
 	}
 	got := a.notices(a.adminTok)

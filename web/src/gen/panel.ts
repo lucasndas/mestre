@@ -993,7 +993,13 @@ export interface NoticeView {
   kind: string;
   workspace: string;
   table: string;
+  /**
+   * Text is the notice in the language of the user (all a notice from before the
+   * messages has); Msg is the code and the parameters, which the screen says in its own
+   * language from the generated catalog.
+   */
   text: string;
+  msg?: any /* i18n.Msg */;
   link: NoticeLink;
   created_at: string;
   read: boolean;

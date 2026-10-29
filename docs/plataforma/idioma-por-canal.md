@@ -24,7 +24,7 @@ Cada pessoa lê o Mestre no seu idioma (pt-BR ou en) em qualquer canal, e o Grã
 - A mensagem a um usuário pareado sai no `Language` dele; sem escolha, no `language_code` que o Telegram manda no último update daquela pessoa (o motor passa a ler o campo e guarda o último junto do usuário do Telegram, sem gravar `Language`); sem nenhum dos dois, em pt-BR.
 - Quem ainda não é usuário (um código de pareamento inválido) recebe a resposta pelo `language_code` do update.
 - Um aviso para várias pessoas sai traduzido para cada uma.
-- **Comando `/idioma`** (com o nome `/language` também): mostra o idioma em uso e dois botões, Português e English; o toque grava `Language`, como o seletor do painel, e responde já no idioma novo.
+- **Comando `/idioma`** (com o nome `/language` também, `telegram.LanguageChannel`): mostra o idioma em uso e dois botões, Português e English; o toque grava `Language`, como o seletor do painel, e responde já no idioma novo.
 - O menu de comandos do bot é registrado nos dois idiomas (`setMyCommands` com `language_code` `en` e o padrão em pt-BR). Os nomes dos comandos não mudam (`/destravar` continua `/destravar`); só a descrição muda.
 - A explicação de termos do glossário nas mensagens ([ajuda](../telegram/bot.md)) usa os nomes e as explicações do idioma da mensagem (`glossario-en.md` em en).
 

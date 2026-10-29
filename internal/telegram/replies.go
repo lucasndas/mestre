@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -69,6 +70,6 @@ func (r *Replies) Send(ctx context.Context, o inbox.Outbound) error {
 			return fmt.Errorf("telegram: the user of the answer %d is not active in that chat", o.ID)
 		}
 	}
-	_, err = bot.Send(ctx, Out{ChatID: chat, UserID: o.User, Text: o.Text, Workspace: o.Workspace, Origin: "grao_mestre"})
+	_, err = bot.Send(ctx, Out{ChatID: chat, UserID: o.User, Msg: i18n.Text(o.Text), Workspace: o.Workspace, Origin: "grao_mestre"})
 	return err
 }

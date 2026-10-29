@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"slices"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/users"
 )
 
@@ -276,8 +276,7 @@ func (p *Panel) warnBlocked(ctx context.Context, login string, until time.Time) 
 	if err != nil {
 		return // a login nobody has: nothing to warn about
 	}
-	p.alerts.OwnerAlert(ctx, fmt.Sprintf("O login de %s foi bloqueado por %d minutos: %d senhas erradas em %d minutos.",
-		u.Name, int(LoginBlockFor/time.Minute), LoginErrors, int(AttemptWindow/time.Minute)))
+	p.alerts.OwnerAlert(ctx, i18n.M("user.login_blocked", "name", u.Name, "minutes", int(LoginBlockFor/time.Minute), "errors", LoginErrors, "window", int(AttemptWindow/time.Minute)))
 }
 
 func (p *Panel) handleFirstAccess(w http.ResponseWriter, r *http.Request) {

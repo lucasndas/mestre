@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // TransferTTL is how long the chosen user has to accept the post of Owner.
@@ -22,7 +24,7 @@ const (
 // for ActionStartTransfer that was answered right, and it is spent here.
 func (s *Service) StartTransfer(ctx context.Context, by User, toID, pinRequest string) error {
 	now := s.clk.Now()
-	var told string
+	var told i18n.Msg
 	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		me, err := s.actor(ctx, tx, by, TransferOwner)
 		if err != nil {
@@ -47,7 +49,7 @@ func (s *Service) StartTransfer(ctx context.Context, by User, toID, pinRequest s
 			me.ID, toID, ms(now), ms(now.Add(TransferTTL))); err != nil {
 			return err
 		}
-		told = fmt.Sprintf("%s quer passar o posto de Senhor da Guilda a você. Aceite com o seu PIN em até 24 horas.", me.Name)
+		told = i18n.M("user.transfer_offer", "name", me.Name)
 		return nil
 	})
 	if err != nil {
@@ -144,8 +146,8 @@ func (s *Service) AcceptTransfer(ctx context.Context, by User, pinRequest string
 	s.sessionsEnded(ctx, by.ID)
 	s.levelsChanged(ctx) // the Owner of the decrees is another now
 	if s.o.Alerts != nil {
-		s.o.Alerts.Tell(ctx, from, fmt.Sprintf("%s aceitou o posto de Senhor da Guilda. Você agora é Administrador.", newName))
-		s.o.Alerts.Tell(ctx, by.ID, "Você é o Senhor da Guilda.")
+		s.o.Alerts.Tell(ctx, from, i18n.M("user.transfer_accepted", "name", newName))
+		s.o.Alerts.Tell(ctx, by.ID, i18n.M("user.you_are_owner"))
 	}
 	return nil
 }

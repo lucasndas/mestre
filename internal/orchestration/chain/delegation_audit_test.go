@@ -14,6 +14,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/tablerules"
@@ -236,9 +237,9 @@ func TestAnAdministratorDelegatesNoHighTypeAndDelegarOnAMergeMedioIsAPolicyOfIts
 // nopAlerts are the alerts of the bot, which these tests do not read.
 type nopAlerts struct{}
 
-func (nopAlerts) Unauthorized(context.Context, int64, string) {}
-func (nopAlerts) OwnerAlert(context.Context, string)          {}
-func (nopAlerts) Tell(context.Context, string, string)        {}
+func (nopAlerts) Unauthorized(context.Context, int64, i18n.Msg) {}
+func (nopAlerts) OwnerAlert(context.Context, i18n.Msg)          {}
+func (nopAlerts) Tell(context.Context, string, i18n.Msg)        {}
 
 type nopRouter struct{}
 

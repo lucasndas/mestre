@@ -197,7 +197,7 @@ func TestGuildListingShowsOnlineAndThePendingRequestsOnlyToTheOwner(t *testing.T
 	w.say(owner, "/guilda")
 	w.drain()
 	text := strings.Join(texts(w, owner.ID), "\n")
-	for _, want := range []string{"casa · Cidadela · online", "notebook · Torre · offline", "cliquehttp://x.io · Torre · online", "Pedido de entrada: xhttp://evil.io novo, desde 19/10 12:00, código 482 913", "Pedido de promoção a Cidadela: notebook, desde 19/10 12:00"} {
+	for _, want := range []string{"casa · Cidadela · online", "notebook · Torre · offline", "cliquehttp://x.io · Torre · online", "Pedido de entrada: xhttp://evil.io novo, desde 19/10/2026 12:00 UTC, código 482 913", "Pedido de promoção a Cidadela: notebook, desde 19/10/2026 12:00 UTC"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("the Owner's listing lacks %q:\n%s", want, text)
 		}

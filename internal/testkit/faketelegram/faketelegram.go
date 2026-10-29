@@ -259,7 +259,7 @@ var knownParams = map[string]map[string]bool{
 	"answerCallbackQuery": {"callback_query_id": true, "text": true, "show_alert": true},
 	"deleteMessage":       {"chat_id": true, "message_id": true},
 	"deleteWebhook":       {"drop_pending_updates": true},
-	"setMyCommands":       {"commands": true},
+	"setMyCommands":       {"commands": true, "language_code": true},
 	"leaveChat":           {"chat_id": true},
 	"sendDocument":        {"chat_id": true, "document": true, "caption": true, "parse_mode": true},
 	"getFile":             {"file_id": true},

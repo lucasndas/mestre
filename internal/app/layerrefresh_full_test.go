@@ -15,6 +15,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/logging"
 	"github.com/mestre-ia/mestre/internal/orchestration/accounts"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
@@ -33,9 +34,9 @@ const refreshPIN = "482913"
 
 type refreshAlerts struct{}
 
-func (refreshAlerts) Unauthorized(context.Context, int64, string) {}
-func (refreshAlerts) OwnerAlert(context.Context, string)          {}
-func (refreshAlerts) Tell(context.Context, string, string)        {}
+func (refreshAlerts) Unauthorized(context.Context, int64, i18n.Msg) {}
+func (refreshAlerts) OwnerAlert(context.Context, i18n.Msg)          {}
+func (refreshAlerts) Tell(context.Context, string, i18n.Msg)        {}
 
 // refreshBirths keeps the births in memory (BirthsDB has its own tests).
 type refreshBirths struct {

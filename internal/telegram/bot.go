@@ -15,6 +15,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/attachments"
 	"github.com/mestre-ia/mestre/internal/glossary"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/users"
 	"github.com/mestre-ia/mestre/pkg/clock"
@@ -73,8 +74,13 @@ type Inbound struct {
 type Stranger struct {
 	ID             int64
 	Name, Username string
-	Text           string
-	Kind           Kind
+	// Text is what the stranger wrote; Omitted says the engine left it out because it
+	// held a password; Reason, when set, is why the alert is made (a click, an
+	// unknown sender through another door) and is said in place of the text.
+	Text    string
+	Omitted bool
+	Reason  i18n.Msg
+	Kind    Kind
 }
 
 // Strangers is told of every message of a stranger; it groups the alerts (an
@@ -103,14 +109,15 @@ type Locker interface {
 
 // Command is a quick command, answered by the engine at once.
 type Command struct {
-	Name        string
-	Description string
+	Name string
+	// Description is what the menu of commands of the Telegram says, in each language.
+	Description i18n.Msg
 	// Query says the command only reads (or unlocks): it is answered while the
 	// Mestre is locked.
 	Query bool
 	// Capability is what the level needs ("" is any user).
 	Capability users.Capability
-	Run        func(ctx context.Context, c Call) (string, error)
+	Run        func(ctx context.Context, c Call) (i18n.Msg, error)
 }
 
 // Click is what the action of a button receives.
@@ -125,13 +132,13 @@ type Click struct {
 // idempotence are the action's: after an error the button can be clicked again.
 // It gives the text for the toast and the text that
 // replaces the message ("" keeps it).
-type Action func(ctx context.Context, c Click) (toast, result string, err error)
+type Action func(ctx context.Context, c Click) (toast, result i18n.Msg, err error)
 
 // CaptureFunc takes the answer a user typed to a prompt of the bot (a PIN, a
 // second factor). The text is never kept: not in the inbox, not in the
 // history, not in a log. again keeps the prompt open for another try (a wrong
 // PIN of a request that still has tries).
-type CaptureFunc func(ctx context.Context, user users.User, ref, text string) (reply string, again bool, err error)
+type CaptureFunc func(ctx context.Context, user users.User, ref, text string) (reply i18n.Msg, again bool, err error)
 
 // Options are the pieces of the Bot.
 type Options struct {
@@ -262,11 +269,19 @@ func (b *Bot) Start(ctx context.Context) error {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	list := []map[string]string{{"command": "start", "description": "Parear com um código ou ver a ajuda"}}
-	for _, n := range names {
-		list = append(list, map[string]string{"command": n, "description": b.cmds[n].Description})
+	// the menu is registered in both languages: the default in pt-BR, and the one the
+	// Telegram shows to whoever has it in English; the names of the commands are the same
+	menu := func(lang string) []map[string]string {
+		list := []map[string]string{{"command": "start", "description": i18n.Render(lang, i18n.M("bot.cmd_start"))}}
+		for _, n := range names {
+			list = append(list, map[string]string{"command": n, "description": i18n.RenderOrEmpty(lang, b.cmds[n].Description)})
+		}
+		return list
 	}
-	_, err := b.o.Client.Call(ctx, "setMyCommands", map[string]any{"commands": list})
+	if _, err := b.o.Client.Call(ctx, "setMyCommands", map[string]any{"commands": menu(i18n.PtBR)}); err != nil {
+		return err
+	}
+	_, err := b.o.Client.Call(ctx, "setMyCommands", map[string]any{"commands": menu(i18n.En), "language_code": "en"})
 	return err
 }
 
@@ -504,8 +519,8 @@ func (b *Bot) handle(ctx context.Context, up Update) {
 }
 
 // say sends a text to a user, in his private chat.
-func (b *Bot) say(ctx context.Context, chat int64, user, text string) {
-	if _, err := b.Send(ctx, Out{ChatID: chat, UserID: user, Text: text, Origin: "motor"}); err != nil {
+func (b *Bot) say(ctx context.Context, chat int64, user string, m i18n.Msg) {
+	if _, err := b.Send(ctx, Out{ChatID: chat, UserID: user, Msg: m, Origin: "motor"}); err != nil {
 		b.log.Warn("telegram: a reply was not queued", "err", err)
 	}
 }
@@ -572,21 +587,21 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 		return
 	}
 	if m.Kind() == KindOther {
-		b.say(ctx, m.Chat.ID, u.ID, "Não aceito esse tipo de mensagem. Posso receber texto, voz, áudio, foto e documento. Para mandar um vídeo, envie-o como arquivo.")
+		b.say(ctx, m.Chat.ID, u.ID, i18n.M("bot.kind_not_accepted"))
 		return
 	}
 	text := strings.TrimSpace(m.Text)
 	locked := b.o.Lock != nil && b.o.Lock.Locked(ctx)
 	if strings.HasPrefix(text, "/") {
 		if locked && !b.answeredWhenLocked(text) {
-			b.say(ctx, m.Chat.ID, u.ID, "O Mestre está travado: só respondo às consultas e ao /destravar.")
+			b.say(ctx, m.Chat.ID, u.ID, i18n.M("bot.locked_queries_only"))
 			return
 		}
 		b.command(ctx, u, m, text)
 		return
 	}
 	if err := users.Require(u.Level, users.TalkToGrandMaster); err != nil {
-		b.say(ctx, m.Chat.ID, u.ID, "Com o seu nível você não fala com o Grão-Mestre. "+b.allowedCommands(u))
+		b.say(ctx, m.Chat.ID, u.ID, i18n.M("bot.level_no_talk", "commands", b.allowedCommands(u)))
 		return
 	}
 	in := Inbound{User: u, Kind: m.Kind(), Text: text, ChatID: m.Chat.ID, MessageID: m.MessageID, File: m.FileOf()}
@@ -611,10 +626,10 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 		// kept, and delivered in order when the Mestre is unlocked
 		if err := b.st.Hold(ctx, in); err != nil {
 			b.log.Warn("telegram: a message was not kept while the Mestre is locked", "err", err)
-			b.say(ctx, m.Chat.ID, u.ID, "O Mestre está travado e não consegui guardar a mensagem. Mande de novo depois.")
+			b.say(ctx, m.Chat.ID, u.ID, i18n.M("bot.locked_not_kept"))
 			return
 		}
-		b.say(ctx, m.Chat.ID, u.ID, "O Mestre está travado: a sua mensagem fica guardada e vai ao Grão-Mestre quando o Senhor da Guilda destravar.")
+		b.say(ctx, m.Chat.ID, u.ID, i18n.M("bot.locked_kept"))
 		return
 	}
 	if b.o.Router == nil {
@@ -622,7 +637,7 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 	}
 	if err := b.o.Router.Deliver(ctx, in); err != nil {
 		b.log.Warn("telegram: the message was not delivered", "err", err)
-		b.say(ctx, m.Chat.ID, u.ID, "Não consegui entregar a mensagem ao Grão-Mestre. Tente de novo em instantes.")
+		b.say(ctx, m.Chat.ID, u.ID, i18n.M("bot.not_delivered"))
 	}
 }
 
@@ -670,6 +685,11 @@ func (b *Bot) ReleaseHeld(ctx context.Context) error {
 // stranger is a sender who is not a user: only a pairing code is looked at.
 func (b *Bot) stranger(ctx context.Context, m *Message) {
 	text := strings.TrimSpace(m.Text)
+	omitted := false
+	lang := ""
+	if m.From != nil {
+		lang = m.From.LanguageCode
+	}
 	if !users.LooksLikeCode(text) {
 		if b.o.Strangers != nil {
 			if text == "" {
@@ -679,32 +699,32 @@ func (b *Bot) stranger(ctx context.Context, m *Message) {
 			switch kind, clean := b.screen(text); {
 			case kind.Held():
 				b.blockedStranger(ctx, m, kind)
-				text = "[mensagem com senha omitida pelo motor]"
+				text, omitted = "", true
 			case kind == secretFormat:
 				b.blockedStranger(ctx, m, kind)
 				text = strings.TrimSpace(clean)
 			}
-			b.o.Strangers.Stranger(ctx, Stranger{ID: m.From.ID, Name: strings.TrimSpace(m.From.FirstName), Username: m.From.Username, Text: text, Kind: m.Kind()})
+			b.o.Strangers.Stranger(ctx, Stranger{ID: m.From.ID, Name: strings.TrimSpace(m.From.FirstName), Username: m.From.Username, Text: text, Omitted: omitted, Kind: m.Kind()})
 			return
 		}
 		if b.o.Alerts != nil {
-			b.o.Alerts.Unauthorized(ctx, m.From.ID, "remetente desconhecido")
+			b.o.Alerts.Unauthorized(ctx, m.From.ID, i18n.M("bot.unknown_sender"))
 		}
 		return
 	}
 	u, err := b.o.Users.Pair(ctx, users.PairRequest{Text: text, TelegramID: m.From.ID, Private: m.Chat.Type == "private"})
 	switch {
 	case err == nil:
-		b.say(ctx, m.Chat.ID, u.ID, fmt.Sprintf("Pareado, %s. O seu nível é %s.", u.Name, u.Level.Name()))
+		b.say(ctx, m.Chat.ID, u.ID, i18n.M("bot.paired", "name", u.Name, "level", u.Level.Msg()))
 	case errors.Is(err, users.ErrSilent):
 	default:
-		b.reply(ctx, m.Chat.ID, "Código inválido ou expirado.")
+		b.reply(ctx, m.Chat.ID, lang, i18n.M("bot.bad_code"))
 	}
 }
 
 // reply sends a text to a chat of someone who is not a user (no explanation, no buttons).
-func (b *Bot) reply(ctx context.Context, chat int64, text string) {
-	if _, err := b.Send(ctx, Out{ChatID: chat, Text: text, Origin: "motor"}); err != nil {
+func (b *Bot) reply(ctx context.Context, chat int64, language string, m i18n.Msg) {
+	if _, err := b.Send(ctx, Out{ChatID: chat, Msg: m, Language: language, Origin: "motor"}); err != nil {
 		b.log.Warn("telegram: a reply was not queued", "err", err)
 	}
 }
@@ -715,7 +735,7 @@ func (b *Bot) leave(ctx context.Context, c Chat) {
 		b.log.Warn("telegram: the bot did not leave the chat", "err", err)
 	}
 	if b.o.Alerts != nil {
-		b.o.Alerts.OwnerAlert(ctx, "O bot foi adicionado a um chat que não é privado e saiu dele.")
+		b.o.Alerts.OwnerAlert(ctx, i18n.M("bot.left_chat"))
 	}
 }
 
@@ -725,35 +745,35 @@ func (b *Bot) command(ctx context.Context, u users.User, m *Message, text string
 	args = strings.TrimSpace(args)
 	if name == "start" {
 		if args == "" {
-			b.say(ctx, m.Chat.ID, u.ID, "Você já está pareado. "+b.allowedCommands(u))
+			b.say(ctx, m.Chat.ID, u.ID, i18n.M("bot.already_paired_commands", "commands", b.allowedCommands(u)))
 		} else {
-			b.say(ctx, m.Chat.ID, u.ID, "Você já está pareado.")
+			b.say(ctx, m.Chat.ID, u.ID, i18n.M("bot.already_paired"))
 		}
 		return
 	}
 	cmd, ok := b.cmds[name]
 	if !ok {
-		b.say(ctx, m.Chat.ID, u.ID, "Comando desconhecido. "+b.allowedCommands(u))
+		b.say(ctx, m.Chat.ID, u.ID, i18n.M("bot.unknown_command", "commands", b.allowedCommands(u)))
 		return
 	}
 	if cmd.Capability != "" {
 		if err := users.Require(u.Level, cmd.Capability); err != nil {
-			b.say(ctx, m.Chat.ID, u.ID, "/"+name+" "+err.Error())
+			b.say(ctx, m.Chat.ID, u.ID, i18n.M("bot.command_level", "name", name, "reason", i18n.OfError(err)))
 			return
 		}
 	}
 	out, err := cmd.Run(ctx, Call{User: u, Args: args, ChatID: m.Chat.ID, MessageID: m.MessageID})
 	if err != nil {
 		b.log.Warn("telegram: a command failed", "command", name)
-		out = "Não consegui executar /" + name + ": " + b.o.Mask(err.Error())
+		out = i18n.M("bot.command_failed", "name", name, "reason", i18n.OfError(err))
 	}
-	if out != "" {
+	if !out.IsZero() {
 		b.say(ctx, m.Chat.ID, u.ID, out)
 	}
 }
 
 // allowedCommands lists the commands the level of the user may use.
-func (b *Bot) allowedCommands(u users.User) string {
+func (b *Bot) allowedCommands(u users.User) i18n.Msg {
 	var names []string
 	for n, c := range b.cmds {
 		if c.Capability == "" || users.Can(u.Level, c.Capability) {
@@ -762,14 +782,14 @@ func (b *Bot) allowedCommands(u users.User) string {
 	}
 	sort.Strings(names)
 	if len(names) == 0 {
-		return "Não há comandos para o seu nível."
+		return i18n.M("bot.no_commands")
 	}
-	return "Comandos permitidos: " + strings.Join(names, ", ") + "."
+	return i18n.M("bot.allowed_commands", "list", strings.Join(names, ", "))
 }
 
 // Ask sends a prompt that opens the reply box and makes the bot wait for the next
 // text of the user: it is taken by Captures[kind] and goes nowhere else.
-func (b *Bot) Ask(ctx context.Context, userID, kind, ref, prompt string, ttl time.Duration) error {
+func (b *Bot) Ask(ctx context.Context, userID, kind, ref string, prompt i18n.Msg, ttl time.Duration) error {
 	u, err := b.o.Users.Get(ctx, userID)
 	if err != nil {
 		return err
@@ -788,7 +808,7 @@ func (b *Bot) Ask(ctx context.Context, userID, kind, ref, prompt string, ttl tim
 	if _, ok := b.o.Captures[kind]; !ok {
 		return fmt.Errorf("telegram: no capture of kind %q", kind)
 	}
-	id, err := b.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: prompt, ForceReply: true, Origin: "motor"})
+	id, err := b.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: prompt, ForceReply: true, Origin: "motor"})
 	if err != nil {
 		return err
 	}
@@ -804,10 +824,10 @@ func (b *Bot) capture(ctx context.Context, u users.User, c Capture, m *Message) 
 	switch {
 	case c.Expired:
 		b.endCapture(ctx, u, c, m.Chat.ID)
-		b.say(ctx, m.Chat.ID, u.ID, "O pedido expirou. Peça de novo a ação que o fez.")
+		b.say(ctx, m.Chat.ID, u.ID, i18n.M("bot.capture_expired"))
 		return
 	case m.Kind() != KindText:
-		b.say(ctx, m.Chat.ID, u.ID, "Responda ao pedido com texto.")
+		b.say(ctx, m.Chat.ID, u.ID, i18n.M("bot.capture_text_only"))
 		return
 	}
 	fn := b.o.Captures[c.Kind]
@@ -818,12 +838,12 @@ func (b *Bot) capture(ctx context.Context, u users.User, c Capture, m *Message) 
 	reply, again, err := fn(ctx, u, c.Ref, m.Text)
 	if err != nil {
 		b.log.Warn("telegram: a capture failed", "kind", c.Kind)
-		reply, again = "Não consegui usar a resposta.", false
+		reply, again = i18n.M("bot.capture_failed"), false
 	}
 	if !again {
 		b.endCapture(ctx, u, c, m.Chat.ID)
 	}
-	if reply != "" {
+	if !reply.IsZero() {
 		b.say(ctx, m.Chat.ID, u.ID, reply)
 	}
 	if next := b.takeThen(u.ID); next != nil && !again {
@@ -874,30 +894,33 @@ func (b *Bot) deleteMessage(ctx context.Context, chat, message int64) {
 // PIN of the users, the text is checked and never kept; done is told whether the
 // PIN was right (the action that asked for it is applied there, once).
 func PINCapture(svc *users.Service, done func(ctx context.Context, user users.User, requestID string, err error)) CaptureFunc {
-	return func(ctx context.Context, user users.User, ref, text string) (string, bool, error) {
+	return func(ctx context.Context, user users.User, ref, text string) (i18n.Msg, bool, error) {
 		err := svc.CheckPIN(ctx, ref, strings.TrimSpace(text))
 		if done != nil {
 			done(ctx, user, ref, err)
 		}
 		switch {
 		case err == nil:
-			return "PIN confirmado.", false, nil
+			return i18n.M("bot.pin_confirmed"), false, nil
 		case errors.Is(err, users.ErrPINLocked):
-			return "O PIN está bloqueado por um tempo.", false, nil
+			return i18n.M("bot.pin_locked"), false, nil
 		case err == users.ErrBadPIN:
-			return "PIN incorreto. Tente de novo.", true, nil // the request still has tries
+			return i18n.M("bot.pin_wrong"), true, nil // the request still has tries
 		default:
-			return "PIN incorreto ou pedido encerrado.", false, nil
+			return i18n.M("bot.pin_wrong_or_over"), false, nil
 		}
 	}
 }
 
 // click runs a button: only the user it was given to, at the level it needs, once.
 func (b *Bot) click(ctx context.Context, cq *CallbackQuery) {
-	answer := func(text string) {
+	lang := users.MatchLanguage(cq.From.LanguageCode)
+	answer := func(m i18n.Msg) {
 		p := map[string]any{"callback_query_id": cq.ID}
-		if text != "" {
-			p["text"] = text
+		if !m.IsZero() {
+			if text := b.o.Mask(i18n.Render(lang, m)); text != "" {
+				p["text"] = text
+			}
 		}
 		if _, err := b.o.Client.Call(ctx, "answerCallbackQuery", p); err != nil {
 			b.log.Warn("telegram: a click was not answered", "err", err)
@@ -906,48 +929,49 @@ func (b *Bot) click(ctx context.Context, cq *CallbackQuery) {
 	u, err := b.o.Users.ByTelegram(ctx, cq.From.ID)
 	if err != nil || u.State != users.Active {
 		if b.o.Alerts != nil && errors.Is(err, users.ErrNoUser) {
-			b.o.Alerts.Unauthorized(ctx, cq.From.ID, "clique de remetente desconhecido")
+			b.o.Alerts.Unauthorized(ctx, cq.From.ID, i18n.M("bot.unknown_click"))
 		}
-		answer("")
+		answer(i18n.Msg{})
 		return
 	}
 	b.noteLanguage(ctx, &u, &cq.From)
+	lang = u.LanguageFor(u.TelegramLanguage)
 	cb, ok, err := b.st.Callback(ctx, cq.Data)
 	if err != nil || !ok {
-		answer("Esse botão expirou.")
+		answer(i18n.M("bot.button_expired"))
 		return
 	}
 	switch {
 	case cb.UserID != u.ID:
-		answer("Esse botão não é seu.")
+		answer(i18n.M("bot.button_not_yours"))
 		return
 	case !b.clk.Now().Before(cb.Expires):
-		answer("Esse botão expirou.")
+		answer(i18n.M("bot.button_expired"))
 		return
 	case cb.State == "void":
-		answer("Esse botão foi substituído por um novo.")
+		answer(i18n.M("bot.button_replaced"))
 		return
 	case cb.State != "open":
 		name := cb.DecidedBy
 		if d, err := b.o.Users.Get(ctx, cb.DecidedBy); err == nil {
 			name = d.Name
 		}
-		answer("Já respondido por " + name + ".")
+		answer(i18n.M("bot.already_answered_by", "name", name))
 		return
 	}
 	if cb.Capability != "" {
 		if err := users.Require(u.Level, users.Capability(cb.Capability)); err != nil {
-			answer("Seu nível não permite: " + b.o.Mask(err.Error()))
+			answer(i18n.M("bot.level_not_allowed", "reason", i18n.OfError(err)))
 			return
 		}
 	}
 	act := b.o.Actions[cb.Action]
 	if act == nil {
-		answer("Ação desconhecida.")
+		answer(i18n.M("bot.unknown_action"))
 		return
 	}
 	if took, err := b.st.Take(ctx, cb.Key, u.ID); err != nil || !took {
-		answer("Já respondido.")
+		answer(i18n.M("bot.already_answered"))
 		return
 	}
 	var chat, msg int64
@@ -957,15 +981,16 @@ func (b *Bot) click(ctx context.Context, cq *CallbackQuery) {
 	toast, result, err := act(ctx, Click{User: u, Arg: cb.Arg, ChatID: chat, MessageID: msg})
 	if err != nil {
 		_ = b.st.Release(ctx, cb.Key)
-		answer(b.o.Mask(err.Error()))
+		answer(i18n.OfError(err))
 		return
 	}
-	answer(b.o.Mask(toast))
-	if result != "" && msg != 0 {
-		result = b.maskText(result)
+	lang = b.langFor(ctx, u.ID, cq.From.LanguageCode) // the action may have changed it (/idioma)
+	answer(toast)
+	if !result.IsZero() && msg != 0 {
+		text := b.maskText(i18n.Render(lang, result))
 		// the message keeps its header: where it came from is still true
 		ws, mesa, _, _ := b.st.MessageOrigin(ctx, chat, msg)
-		h, plain, ok := render(headOf(u.ID, ws, mesa), result)
+		h, plain, ok := render(headOf(lang, u.ID, ws, mesa), text)
 		p := map[string]any{"chat_id": chat, "message_id": msg}
 		if ok {
 			p["text"], p["parse_mode"] = b.o.Mask(h), "HTML"

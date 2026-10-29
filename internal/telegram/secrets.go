@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
+
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/secretscreen"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -20,16 +22,10 @@ const (
 	RemovedSecret = secretscreen.Removed
 	// HeldNotice is all the Grand Master receives of a message with a password
 	// phrase: the notice, never the content. It tells him what to do.
+	// mestre:allow pt-text: the notice the Grand Master (an agent) receives instead of a secret
 	HeldNotice = "[mensagem retida: o usuário mandou uma senha pelo Telegram; o motor a apagou e não a entregou. " +
+		// mestre:allow pt-text: the notice the Grand Master (an agent) receives instead of a secret
 		"Recuse, peça o cadastro pelo painel e recomende trocar a senha.]"
-)
-
-// What the author is told.
-const (
-	heldAdvice = "Apaguei a sua mensagem: ela parecia trazer uma senha, e o Telegram não tem criptografia ponta a ponta. " +
-		"Não mandei nada dela ao Grão-Mestre. Cadastre credenciais pelo painel e troque essa senha, que já passou por aqui."
-	maskedAdvice = "Apaguei a sua mensagem: ela trazia um segredo (um token, uma chave), e o Telegram não tem criptografia ponta a ponta. " +
-		"O Grão-Mestre recebeu a mensagem sem o trecho. Troque esse segredo: ele já passou por aqui."
 )
 
 // secretKind says how the engine saw the secret (the filter is shared with the panel:
@@ -114,9 +110,9 @@ func (b *Bot) blocked(ctx context.Context, u users.User, m *Message, kind secret
 	if err := inbox.AuditSecretAttempt(ctx, b.o.DB, id, b.clk.Now(), b.o.Machine, u.ID, inbox.ChannelTelegram, string(kind)); err != nil {
 		b.log.Warn("telegram: the attempt to send a secret was not audited", "err", err)
 	}
-	advice := maskedAdvice
+	advice := i18n.M("bot.secret_masked_advice")
 	if kind.Held() {
-		advice = heldAdvice
+		advice = i18n.M("bot.secret_held_advice")
 	}
 	b.say(ctx, m.Chat.ID, u.ID, advice)
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/notices"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -73,8 +74,14 @@ func (p *Panel) handleNotices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := NoticeList{Notices: make([]NoticeView, 0, len(list))}
+	lang := u.LanguageFor(u.TelegramLanguage)
 	for _, n := range list {
-		out.Notices = append(out.Notices, NoticeView{ID: n.ID, Kind: string(n.Kind), Workspace: n.Workspace, Table: n.Mesa, Text: n.Text,
+		var msg *i18n.Msg
+		if !n.Msg.IsZero() {
+			m := n.Msg
+			msg = &m
+		}
+		out.Notices = append(out.Notices, NoticeView{ID: n.ID, Kind: string(n.Kind), Workspace: n.Workspace, Table: n.Mesa, Text: n.In(lang), Msg: msg,
 			Link: NoticeLink{Kind: n.LinkKind, Ref: n.LinkRef}, CreatedAt: n.At, Read: n.Read})
 		if !n.Read {
 			out.Unread++

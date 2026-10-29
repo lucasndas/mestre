@@ -7,9 +7,11 @@ package i18n
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -263,9 +265,17 @@ func interpolate(cats map[string]map[string]string, lang, text string, params ma
 	return b.String()
 }
 
+// instant is the shape of an instant in RFC 3339 with a zone: a time.Time that went through JSON.
+var instant = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`)
+
 func format(cats map[string]map[string]string, lang string, v any) string {
 	switch x := v.(type) {
 	case string:
+		if instant.MatchString(x) { // an instant that went through JSON
+			if t, err := time.Parse(time.RFC3339Nano, x); err == nil {
+				return Moment(lang, t)
+			}
+		}
 		return x
 	case Msg:
 		return render(cats, lang, x)
@@ -316,8 +326,14 @@ func Moment(lang string, t time.Time) string {
 		layout += ":05"
 	}
 	loc := t.Location()
-	if loc == time.UTC || loc.String() == "UTC" || loc.String() == "" {
+	switch {
+	case loc == time.UTC || loc.String() == "UTC":
 		return t.UTC().Format(layout) + " UTC"
+	case loc.String() == "" || loc.String() == "Local": // a zone that came as an offset only
+		if _, off := t.Zone(); off == 0 {
+			return t.UTC().Format(layout) + " UTC"
+		}
+		return t.Format(layout) + " (UTC" + t.Format("-07:00") + ")"
 	}
 	return t.Format(layout) + " (" + loc.String() + ", UTC" + t.Format("-07:00") + ")"
 }
@@ -339,4 +355,81 @@ func PlainParams(lang string, m Msg) map[string]any {
 		}
 	}
 	return out
+}
+
+// Text is a message that is only a text, shown as it is in every language: what an
+// agent or a person wrote. The text is never interpreted.
+func Text(s string) Msg { return Msg{Code: "msg.text", Params: map[string]any{"text": s}} }
+
+// Error is an error that carries a message for a person: whoever shows it
+// translates the message, and the log gets the code and the parameters.
+type Error struct{ M Msg }
+
+// Error is the form of the error for a log: never translated.
+func (e *Error) Error() string { return e.M.String() }
+
+// Msg is the message of the error.
+func (e *Error) Msg() Msg { return e.M }
+
+// Err makes an error from a code and pairs of name and value.
+func Err(code string, kv ...any) error { return &Error{M: M(code, kv...)} }
+
+// Messager is an error that can say itself as a message (users.LevelError, i18n.Error).
+type Messager interface{ Msg() Msg }
+
+// OfError is the message of an error for a person: the message the error carries,
+// or else its text as a detail (the text of a program is not translated).
+func OfError(err error) Msg {
+	if err == nil {
+		return Msg{}
+	}
+	var m Messager
+	if errors.As(err, &m) {
+		return m.Msg()
+	}
+	return M("api.detail", "detail", err.Error())
+}
+
+// IsZero says the message is empty (no code).
+func (m Msg) IsZero() bool { return m.Code == "" }
+
+// RenderOrEmpty is Render, and "" for an empty message.
+func RenderOrEmpty(lang string, m Msg) string {
+	if m.IsZero() {
+		return ""
+	}
+	return Render(lang, m)
+}
+
+// Concat joins messages, in order, with nothing between them; empty messages are
+// left out. It is for a text made of optional parts, each with its own line breaks.
+func Concat(parts ...Msg) Msg {
+	var kept []Msg
+	for _, p := range parts {
+		if !p.IsZero() {
+			kept = append(kept, p)
+		}
+	}
+	switch len(kept) {
+	case 0:
+		return Text("")
+	case 1:
+		return kept[0]
+	}
+	return M("msg.join", "a", kept[0], "b", Concat(kept[1:]...))
+}
+
+// Join is Concat with a separator between the messages.
+func Join(sep Msg, parts ...Msg) Msg {
+	var out []Msg
+	for _, p := range parts {
+		if p.IsZero() {
+			continue
+		}
+		if len(out) > 0 {
+			out = append(out, sep)
+		}
+		out = append(out, p)
+	}
+	return Concat(out...)
 }

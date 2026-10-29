@@ -1,12 +1,12 @@
 package decrees
 
 import (
-	"fmt"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/providers"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -348,64 +348,70 @@ func validDecisionScope(scope string) bool {
 	return false
 }
 
-// describeEffect is the sentence of the confirmation and of /decretos.
+// describeEffect is the sentence of the confirmation and of /decretos, in pt-BR (what
+// is kept in the audit). describeMsg is the same as a message.
 func describeEffect(e Effect, t Target, kind Kind, a *classes.Action) string {
-	for_ := ""
+	return i18n.Render(i18n.PtBR, describeMsg(e, t, kind, a))
+}
+
+// describeMsg is the sentence of the confirmation and of /decretos as a message.
+func describeMsg(e Effect, t Target, kind Kind, a *classes.Action) i18n.Msg {
+	var for_ i18n.Msg
 	switch t.Kind {
 	case TargetClass:
-		for_ = " para a classe " + t.Name
+		for_ = i18n.M("decree.for_class", "name", t.Name)
 	case TargetCharacter:
-		for_ = " para " + t.Name
+		for_ = i18n.M("decree.for_character", "name", t.Name)
 	case TargetWorkspace:
-		for_ = " na campanha " + t.Name
+		for_ = i18n.M("decree.for_workspace", "name", t.Name)
 	case TargetTable:
-		for_ = " na mesa " + t.Name
+		for_ = i18n.M("decree.for_table", "name", t.Name)
 	}
 	switch e.Kind {
 	case EffectPermission:
-		var parts []string
+		var parts []i18n.Msg
 		if a != nil {
-			parts = append(parts, "permitir uma vez "+a.String())
+			parts = append(parts, i18n.M("decree.allow_once", "action", a.String()))
 		}
-		if g := grantText(e.Allow); g != "" {
-			parts = append(parts, "permitir "+g)
+		if g := grantMsg(e.Allow); !g.IsZero() {
+			parts = append(parts, i18n.M("decree.allow", "what", g))
 		}
-		if g := grantText(e.Deny); g != "" {
-			parts = append(parts, "proibir "+g)
+		if g := grantMsg(e.Deny); !g.IsZero() {
+			parts = append(parts, i18n.M("decree.deny", "what", g))
 		}
-		return strings.Join(parts, "; ") + for_
+		return i18n.Concat(i18n.Join(i18n.Text("; "), parts...), for_)
 	case EffectBehavior:
-		return fmt.Sprintf("instruir%s: %s", for_, strings.TrimSpace(e.Instruction))
+		return i18n.M("decree.instruct", "for", for_, "text", strings.TrimSpace(e.Instruction))
 	case EffectPolicy:
-		verb := "apertar"
+		verb := i18n.M("decree.policy_tighten", "setting", e.Setting)
 		if e.Loosens {
-			verb = "afrouxar"
+			verb = i18n.M("decree.policy_loosen", "setting", e.Setting)
 		}
-		return fmt.Sprintf("%s a política de %s%s", verb, e.Setting, for_)
+		return i18n.Concat(verb, for_)
 	case EffectCeiling:
-		return "ampliar o teto com " + grantText(e.Allow) + for_
+		return i18n.Concat(i18n.M("decree.ceiling_raise", "what", grantMsg(e.Allow)), for_)
 	case EffectDelegation:
-		return fmt.Sprintf("deixar o Grão-Mestre decidir pedidos %q%s", e.Setting, for_)
+		return i18n.Concat(i18n.M("decree.delegation_effect", "setting", e.Setting), for_)
 	}
 	_ = kind
-	return e.Kind + for_
+	return i18n.Concat(i18n.Text(e.Kind), for_)
 }
 
-func grantText(g *classes.Grant) string {
+func grantMsg(g *classes.Grant) i18n.Msg {
 	if g == nil {
-		return ""
+		return i18n.Msg{}
 	}
-	var parts []string
-	add := func(label string, l []string) {
+	var parts []i18n.Msg
+	add := func(code i18n.Msg, l []string) {
 		if len(l) > 0 {
-			parts = append(parts, label+" "+strings.Join(l, ", "))
+			parts = append(parts, i18n.M(code.Code, "list", strings.Join(l, ", ")))
 		}
 	}
-	add("arquivos", g.Files)
-	add("comandos", g.Commands)
-	add("ferramentas", g.Tools)
-	add("domínios", g.Domains)
-	return strings.Join(parts, "; ")
+	add(i18n.M("decree.grant_files"), g.Files)
+	add(i18n.M("decree.grant_commands"), g.Commands)
+	add(i18n.M("decree.grant_tools"), g.Tools)
+	add(i18n.M("decree.grant_domains"), g.Domains)
+	return i18n.Join(i18n.Text("; "), parts...)
 }
 
 // hostOf is the host of a URL ("" when it has none).

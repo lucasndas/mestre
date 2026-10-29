@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
@@ -144,6 +145,7 @@ func (h *Handler) handle(ctx context.Context, c *localchan.Call) localchan.Respo
 		if sent == 0 && panel == 0 {
 			return localchan.Fail("not_delivered", "no user of this workspace could be told now", "try again, or tell the user in the channel of his message").WithExit(localchan.ExitConflict)
 		}
+		// mestre:allow pt-text: the answer of the CLI to an agent, not a text for a person
 		return localchan.OK(map[string]any{"text": fmt.Sprintf("aviso enviado a %d usuário(s) no Telegram e %d no painel", sent, panel), "delivered": map[string]any{"panel": panel, "telegram": sent}, "queued": false})
 	}
 	motive, err := ParseMotive(blocked)
@@ -179,7 +181,7 @@ func (h *Handler) handle(ctx context.Context, c *localchan.Call) localchan.Respo
 	}
 	n.Owner = NoticeOwner(motive, owner)
 	if motive == Credential {
-		n.Steps = []Step{{Text: "cadastrar a chave no cofre", Kind: StepVault}}
+		n.Steps = []Step{{Text: i18n.M("block.step_vault"), Kind: StepVault}}
 	}
 	cctx, stored := WithPanelCount(ctx)
 	id, sent, err := h.Channel.Notify(cctx, n)
@@ -191,6 +193,7 @@ func (h *Handler) handle(ctx context.Context, c *localchan.Call) localchan.Respo
 		return localchan.Fail("not_delivered", "no user who acts in this workspace could be told (the notice #"+strconv.FormatInt(id, 10)+" is kept for the panel)", "tell a user through another way, or try again").WithExit(localchan.ExitConflict)
 	}
 	return localchan.OK(map[string]any{
+		// mestre:allow pt-text: the answer of the CLI to an agent, not a text for a person
 		"text": fmt.Sprintf("aviso %d enviado a %d usuário(s) no Telegram e %d no painel", id, sent, panel), "id": id,
 		"delivered": map[string]any{"panel": panel, "telegram": sent}, "queued": false, "blocked_by": orEmpty(n.BlockedBy),
 	})

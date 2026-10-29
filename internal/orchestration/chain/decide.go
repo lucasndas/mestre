@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/providers"
@@ -467,7 +468,10 @@ func (s *Service) Reply(ctx context.Context, request int64, from, text string) e
 	body := fmt.Sprintf("Resposta de %s à sua pergunta sobre o pedido de aprovação #%d:\n%s\n\nO pedido segue com você.", orDefault(r.RequesterName, r.Requester), r.ID, Unverified(text))
 	if cur.Level.Kind == LevelPeople {
 		if s.o.Users != nil {
-			s.o.Users.Ask(ctx, s.question(cur, Text(cur, cur.Level, AnswersFor(LevelPeople, cur))+"\n"+body, AnswersFor(LevelPeople, cur))) //nolint:errcheck // logged by the channel
+			v := Card(cur, cur.Level, AnswersFor(LevelPeople, cur))
+			block := i18n.Concat(i18n.M("approval.unverified_open"), i18n.Text("\n"+inbox.Quote(text)+"\n"), i18n.M("approval.unverified_close"))
+			v.Agent = i18n.Concat(v.Agent, i18n.Text("\n"), i18n.M("approval.answer_to_question", "name", orDefault(r.RequesterName, r.Requester), "id", r.ID, "block", block))
+			s.o.Users.Ask(ctx, s.question(cur, v, AnswersFor(LevelPeople, cur))) //nolint:errcheck // logged by the channel
 		}
 	} else if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: r.Workspace, Target: cur.Level.Agent, Kind: inbox.KindAnswer, Sender: "Motor", Text: body,
 		Refs: inbox.Refs{Approval: r.ID, Table: r.Table}}); err != nil {

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/attachments"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/logging"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
@@ -509,7 +510,7 @@ func TestEveryTextThatLeavesIsMasked(t *testing.T) {
 	if _, err := r.svc.AskChoice(r.ctx, panelchat.Question{Workspace: "loja", Asker: "gm-loja", UserID: r.bia.ID, Text: "Usar " + token + "?", Options: []string{"sim " + token, "não"}}, 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.svc.SetProgress(r.ctx, "loja", "2 mesas\n- "+token); err != nil {
+	if err := r.svc.SetProgress(r.ctx, "loja", i18n.Text("2 mesas\n- "+token)); err != nil {
 		t.Fatal(err)
 	}
 	c := r.conv(r.bia, "loja")
@@ -582,11 +583,11 @@ func TestAChoiceGoesBackOnceAndTheProgressIsOneCard(t *testing.T) {
 	}
 
 	// progress: one card, in place, only for the Owner and the Administrators
-	if err := r.svc.SetProgress(r.ctx, "loja", "2 mesas, 1 trabalhando\n- Mesa 42: aguardando você"); err != nil {
+	if err := r.svc.SetProgress(r.ctx, "loja", i18n.Text("2 mesas, 1 trabalhando\n- Mesa 42: aguardando você")); err != nil {
 		t.Fatal(err)
 	}
 	r.clk.Advance(time.Minute)
-	if err := r.svc.SetProgress(r.ctx, "loja", "2 mesas, 2 trabalhando"); err != nil {
+	if err := r.svc.SetProgress(r.ctx, "loja", i18n.Text("2 mesas, 2 trabalhando")); err != nil {
 		t.Fatal(err)
 	}
 	p := r.conv(r.bia, "loja").Progress
@@ -600,7 +601,7 @@ func TestAChoiceGoesBackOnceAndTheProgressIsOneCard(t *testing.T) {
 	}
 	// the same text again does not touch the card
 	before := len(r.heard())
-	if err := r.svc.SetProgress(r.ctx, "loja", "2 mesas, 2 trabalhando"); err != nil || len(r.heard()) != before {
+	if err := r.svc.SetProgress(r.ctx, "loja", i18n.Text("2 mesas, 2 trabalhando")); err != nil || len(r.heard()) != before {
 		t.Fatalf("a repeat of the message moved the card: %v", err)
 	}
 }

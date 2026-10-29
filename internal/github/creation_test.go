@@ -15,6 +15,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/testkit/fakegithub"
 	"github.com/mestre-ia/mestre/internal/users"
 	"github.com/mestre-ia/mestre/internal/vault"
@@ -89,9 +90,13 @@ func newCreation(t *testing.T) *creationRig {
 		Apps: w.apps, Tokens: w.tokens, Vault: r.kv, API: w.srv.URL, Web: w.srv.URL, HTTP: &http.Client{Transport: hookTransport{r: r, next: w.srv.Client().Transport}},
 		Panel:      func() string { return "https://mestre.local:8443" },
 		OwnerLogin: func(context.Context) (string, error) { return r.login, nil },
-		Tell:       func(_ context.Context, text string) { r.mu.Lock(); r.told = append(r.told, text); r.mu.Unlock() },
-		OnReady:    func(_ context.Context, a github.App) { r.mu.Lock(); r.ready = append(r.ready, a.Name); r.mu.Unlock() },
-		Logger:     slog.New(slog.NewTextHandler(r.logs, nil)),
+		Tell: func(_ context.Context, m i18n.Msg) {
+			r.mu.Lock()
+			r.told = append(r.told, i18n.Render(i18n.PtBR, m))
+			r.mu.Unlock()
+		},
+		OnReady: func(_ context.Context, a github.App) { r.mu.Lock(); r.ready = append(r.ready, a.Name); r.mu.Unlock() },
+		Logger:  slog.New(slog.NewTextHandler(r.logs, nil)),
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -3,7 +3,6 @@ package telegram
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -75,8 +74,8 @@ func (c *DecreeChannel) Bind(bot *Bot) {
 // while the Mestre is locked.
 func (c *DecreeChannel) Commands() []Command {
 	return []Command{
-		{Name: "decretos", Description: "lista os decretos ativos e suspensos e as regras temporárias de mesa", Query: true, Capability: users.Status, Run: c.list},
-		{Name: "revogar_tudo", Description: "revoga todas as delegações e regras temporárias de mesa (só o Senhor da Guilda)", Capability: users.DelegateHigh, Query: true, Run: c.revokeAllAsk},
+		{Name: "decretos", Description: i18n.M("bot.cmd_decrees"), Query: true, Capability: users.Status, Run: c.list},
+		{Name: "revogar_tudo", Description: i18n.M("bot.cmd_revoke_all"), Capability: users.DelegateHigh, Query: true, Run: c.revokeAllAsk},
 	}
 }
 
@@ -99,97 +98,105 @@ func (c *DecreeChannel) Offer(ctx context.Context, p decrees.Pending) error {
 	if u.TelegramID == 0 {
 		return errors.New("telegram: the author has no Telegram")
 	}
-	text := p.Text
+	parts := []i18n.Msg{p.Msg}
+	if p.Msg.IsZero() {
+		parts = []i18n.Msg{i18n.Text(p.Text)}
+	}
 	if p.Order != "" {
-		text += "\nSua ordem: " + p.Order
+		parts = append(parts, i18n.M("bot.decree_your_order", "order", p.Order))
 	}
 	if p.PIN {
-		text += "\nPara confirmar vou pedir o seu PIN (" + p.Why + ")."
+		why := p.WhyMsg
+		if why.IsZero() {
+			why = i18n.Text(p.Why)
+		}
+		parts = append(parts, i18n.M("bot.decree_ask_pin", "why", why))
 	}
-	_, err = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Workspace: p.Workspace, Mesa: p.Mesa, Origin: "motor",
-		Buttons: [][]Button{{{Text: "Confirmar", Action: DecreeAction, Arg: "c:" + p.ID}, {Text: "Cancelar", Action: DecreeAction, Arg: "x:" + p.ID}}}})
+	_, err = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.Concat(parts...), Workspace: p.Workspace, Mesa: p.Mesa, Origin: "motor",
+		Buttons: [][]Button{{{Msg: i18n.M("bot.confirm"), Action: DecreeAction, Arg: "c:" + p.ID}, {Msg: i18n.M("bot.cancel"), Action: DecreeAction, Arg: "x:" + p.ID}}}})
 	return err
 }
 
-func (c *DecreeChannel) click(ctx context.Context, k Click) (string, string, error) {
+func (c *DecreeChannel) click(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	verb, id, ok := strings.Cut(k.Arg, ":")
 	if !ok || id == "" {
-		return "", "", errors.New("botão inválido")
+		return i18n.Msg{}, i18n.Msg{}, errInvalidButton
 	}
 	if verb == "x" {
 		if err := c.Svc.Cancel(ctx, id, k.User.ID); err != nil {
-			return "", "", c.say(err)
+			return i18n.Msg{}, i18n.Msg{}, c.say(err)
 		}
-		return "Cancelado.", "Proposta cancelada: nada foi gravado.", nil
+		return i18n.M("bot.cancelled"), i18n.M("bot.proposal_cancelled"), nil
 	}
 	d, err := c.Svc.Confirm(ctx, id, k.User.ID, "")
 	switch {
 	case errors.Is(err, decrees.ErrPINRequired):
 		return c.askPIN(ctx, k.User, id)
 	case err != nil:
-		return "", "", c.say(err)
+		return i18n.Msg{}, i18n.Msg{}, c.say(err)
 	}
-	return fmt.Sprintf("Decreto %d.", d.Number), c.confirmed(ctx, d), nil
+	return i18n.M("bot.decree_toast", "number", d.Number), c.confirmed(ctx, d), nil
 }
 
 // askPIN opens the request of PIN of the proposal and asks it.
-func (c *DecreeChannel) askPIN(ctx context.Context, u users.User, proposal string) (string, string, error) {
+func (c *DecreeChannel) askPIN(ctx context.Context, u users.User, proposal string) (i18n.Msg, i18n.Msg, error) {
 	req, err := c.Svc.BeginPIN(ctx, proposal, u.ID)
 	if err != nil {
-		return "", "", c.pinError(err)
+		return i18n.Msg{}, i18n.Msg{}, c.pinError(err)
 	}
-	if err := c.bot.Ask(ctx, u.ID, PINKind, req.ID, "Digite o seu PIN para confirmar o decreto. A mensagem com o PIN é apagada.", promptTTL); err != nil {
+	if err := c.bot.Ask(ctx, u.ID, PINKind, req.ID, i18n.M("bot.pin_prompt_decree"), promptTTL); err != nil {
 		if errors.Is(err, ErrCaptureBusy) {
-			return "", "", errors.New("termine a resposta anterior primeiro")
+			return i18n.Msg{}, i18n.Msg{}, errFinishFirst
 		}
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
-	return "Confirme com o PIN.", "", nil
+	return i18n.M("bot.confirm_with_pin"), i18n.Msg{}, nil
 }
 
 func (c *DecreeChannel) pinError(err error) error {
 	switch {
 	case errors.Is(err, users.ErrNoPIN):
-		return errors.New("cadastre o seu PIN primeiro")
+		return errNoPIN
 	case errors.Is(err, users.ErrPINLocked):
-		return errors.New("o seu PIN está bloqueado por um tempo")
+		return errPINLocked
 	}
 	return c.say(err)
 }
 
-// say is the error a user reads: the engine's own words for a refusal.
+// say is the error a user reads: the engine's own words for a refusal, said by whoever
+// shows it in the language of the user.
 func (c *DecreeChannel) say(err error) error {
 	var ref *decrees.Refusal
 	switch {
 	case errors.As(err, &ref):
-		return errors.New(i18n.Render(i18n.PtBR, ref.Msg))
+		return &i18n.Error{M: ref.Msg}
 	case errors.Is(err, decrees.ErrNotAuthor):
-		return errors.New("só o autor da ordem confirma")
+		return i18n.Err("bot.decree_not_author")
 	case errors.Is(err, decrees.ErrNoProposal):
-		return errors.New("essa proposta expirou ou já foi respondida")
+		return i18n.Err("bot.decree_no_proposal")
 	case errors.Is(err, decrees.ErrNotAllowed):
-		return errors.New("o seu nível não revoga esse decreto")
+		return i18n.Err("bot.decree_not_allowed")
 	case errors.Is(err, decrees.ErrEnded):
-		return errors.New("esse decreto já acabou")
+		return i18n.Err("bot.decree_ended")
 	case errors.Is(err, decrees.ErrNoDecree):
-		return errors.New("não existe esse decreto")
+		return i18n.Err("bot.decree_none")
 	case errors.Is(err, decrees.ErrLocked):
-		return errors.New("o Mestre está travado: só o Senhor da Guilda destrava")
+		return i18n.Err("bot.decree_locked")
 	case errors.Is(err, decrees.ErrPINFailed):
-		return errors.New("PIN incorreto ou expirado")
+		return i18n.Err("bot.decree_pin_failed")
 	}
 	return err
 }
 
-func (c *DecreeChannel) confirmed(ctx context.Context, d decrees.Decree) string {
-	text := fmt.Sprintf("Decreto %d ativo: %s.", d.Number, d.Summary())
+func (c *DecreeChannel) confirmed(ctx context.Context, d decrees.Decree) i18n.Msg {
+	parts := []i18n.Msg{i18n.M("bot.decree_active", "number", d.Number, "summary", d.SummaryMsg())}
 	if !d.Until.IsZero() {
-		text += " Vale até " + c.Svc.Moment(ctx, d.Until) + "."
+		parts = append(parts, i18n.M("bot.decree_until", "moment", c.Svc.InGuildZone(ctx, d.Until)))
 	}
 	if d.State == decrees.Suspended {
-		text += " Ficou suspenso: ele se opõe a outro decreto do mesmo nível, e os dois autores e o Senhor da Guilda foram avisados."
+		parts = append(parts, i18n.M("bot.decree_suspended"))
 	}
-	return text
+	return i18n.Concat(parts...)
 }
 
 // pinProposal is told whether the PIN of a confirmation was right.
@@ -206,50 +213,50 @@ func (c *DecreeChannel) pinProposal(ctx context.Context, u users.User, requestID
 	if err != nil {
 		// a wrong or expired PIN leaves the proposal cancelled
 		_ = c.Svc.Cancel(ctx, proposal, u.ID)
-		c.tell(ctx, u, "PIN incorreto ou expirado: a proposta foi cancelada e nada foi gravado.")
+		c.tell(ctx, u, i18n.M("bot.decree_pin_cancelled"))
 		return
 	}
 	d, cerr := c.Svc.Confirm(ctx, proposal, u.ID, requestID)
 	if cerr != nil {
-		c.tell(ctx, u, "Não gravei o decreto: "+c.say(cerr).Error())
+		c.tell(ctx, u, i18n.M("bot.decree_not_saved", "reason", i18n.OfError(c.say(cerr))))
 		return
 	}
 	c.tell(ctx, u, c.confirmed(ctx, d))
 }
 
-func (c *DecreeChannel) tell(ctx context.Context, u users.User, text string) {
+func (c *DecreeChannel) tell(ctx context.Context, u users.User, m i18n.Msg) {
 	if u.TelegramID == 0 {
 		return
 	}
-	if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Origin: "motor"}); err != nil {
+	if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: m, Origin: "motor"}); err != nil {
 		c.bot.log.Warn("telegram: the user was not told the result of a decree", "err", err)
 	}
 }
 
 // revoke is the Revogar of a decree.
-func (c *DecreeChannel) revoke(ctx context.Context, k Click) (string, string, error) {
+func (c *DecreeChannel) revoke(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	n, err := strconv.ParseInt(k.Arg, 10, 64)
 	if err != nil {
-		return "", "", errors.New("botão inválido")
+		return i18n.Msg{}, i18n.Msg{}, errInvalidButton
 	}
 	err = c.Svc.Revoke(ctx, n, k.User.ID, "")
 	switch {
 	case errors.Is(err, decrees.ErrPINRequired):
 		req, err := c.Svc.BeginRevokePIN(ctx, n, k.User.ID)
 		if err != nil {
-			return "", "", c.pinError(err)
+			return i18n.Msg{}, i18n.Msg{}, c.pinError(err)
 		}
-		if err := c.bot.Ask(ctx, k.User.ID, PINKind, req.ID, fmt.Sprintf("Digite o seu PIN para revogar o decreto %d, que restringia algo. A mensagem com o PIN é apagada.", n), promptTTL); err != nil {
+		if err := c.bot.Ask(ctx, k.User.ID, PINKind, req.ID, i18n.M("bot.pin_prompt_revoke", "number", n), promptTTL); err != nil {
 			if errors.Is(err, ErrCaptureBusy) {
-				return "", "", errors.New("termine a resposta anterior primeiro")
+				return i18n.Msg{}, i18n.Msg{}, errFinishFirst
 			}
-			return "", "", err
+			return i18n.Msg{}, i18n.Msg{}, err
 		}
-		return "Confirme com o PIN.", "", nil
+		return i18n.M("bot.confirm_with_pin"), i18n.Msg{}, nil
 	case err != nil:
-		return "", "", c.say(err)
+		return i18n.Msg{}, i18n.Msg{}, c.say(err)
 	}
-	return "Revogado.", fmt.Sprintf("Decreto %d revogado por %s.", n, k.User.Name), nil
+	return i18n.M("bot.revoked"), i18n.M("bot.decree_revoked_by", "number", n, "name", k.User.Name), nil
 }
 
 // pinRevoke is told whether the PIN of a revocation was right.
@@ -258,7 +265,7 @@ func (c *DecreeChannel) pinRevoke(ctx context.Context, u users.User, requestID s
 		return
 	}
 	if err != nil {
-		c.tell(ctx, u, "PIN incorreto ou expirado: o decreto não foi revogado.")
+		c.tell(ctx, u, i18n.M("bot.decree_pin_not_revoked"))
 		return
 	}
 	action, aerr := c.Users.PINAction(ctx, requestID)
@@ -270,51 +277,51 @@ func (c *DecreeChannel) pinRevoke(ctx context.Context, u users.User, requestID s
 		return
 	}
 	if rerr := c.Svc.Revoke(ctx, n, u.ID, requestID); rerr != nil {
-		c.tell(ctx, u, "Não revoguei: "+c.say(rerr).Error())
+		c.tell(ctx, u, i18n.M("bot.decree_not_revoked", "reason", i18n.OfError(c.say(rerr))))
 		return
 	}
-	c.tell(ctx, u, fmt.Sprintf("Decreto %d revogado por %s.", n, u.Name))
+	c.tell(ctx, u, i18n.M("bot.decree_revoked_by", "number", n, "name", u.Name))
 }
 
 // revokeRule is the Revogar of a temporary table rule: an Administrator or above.
-func (c *DecreeChannel) revokeRule(ctx context.Context, k Click) (string, string, error) {
+func (c *DecreeChannel) revokeRule(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	id, err := strconv.ParseInt(k.Arg, 10, 64)
 	if err != nil || c.Rules == nil {
-		return "", "", errors.New("botão inválido")
+		return i18n.Msg{}, i18n.Msg{}, errInvalidButton
 	}
 	live, err := c.Rules.Live(ctx)
 	if err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
 	for _, r := range live {
 		if r.ID != id {
 			continue
 		}
 		if !k.User.Acts(r.Workspace) {
-			return "", "", errors.New("essa regra não é de uma campanha sua")
+			return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.rule_not_yours")
 		}
 	}
 	err = c.Rules.Revoke(ctx, id, tablerules.Revoker{Administrator: users.Can(k.User.Level, users.RevokeTemporaryRules), ID: k.User.ID})
 	switch {
 	case errors.Is(err, tablerules.ErrNotAllowed):
-		return "", "", errors.New("o seu nível não revoga regras temporárias de mesa")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.rule_level")
 	case errors.Is(err, tablerules.ErrEnded):
-		return "", "", errors.New("essa regra já acabou")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.rule_ended")
 	case err != nil:
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
-	return "Revogada.", fmt.Sprintf("Regra temporária de mesa %d revogada por %s.", id, k.User.Name), nil
+	return i18n.M("bot.rule_revoked_toast"), i18n.M("bot.rule_revoked_by", "id", id, "name", k.User.Name), nil
 }
 
 // list is /decretos: the active and suspended decrees of the workspaces of the
 // user, with the table rules marked as such. The buttons Revogar are the ones
 // the level of the user may use.
-func (c *DecreeChannel) list(ctx context.Context, call Call) (string, error) {
+func (c *DecreeChannel) list(ctx context.Context, call Call) (i18n.Msg, error) {
 	views, err := c.Svc.List(ctx, call.User.ID)
 	if err != nil {
-		return "", err
+		return i18n.Msg{}, err
 	}
-	var lines []string
+	var lines []i18n.Msg
 	var buttons [][]Button
 	addButton := func(b Button) {
 		if len(buttons) < maxListed {
@@ -322,32 +329,32 @@ func (c *DecreeChannel) list(ctx context.Context, call Call) (string, error) {
 		}
 	}
 	for _, v := range views {
-		line := fmt.Sprintf("#%d · %s (%s) · %s", v.Number, v.AuthorName, levelName(v), v.Summary())
+		line := []i18n.Msg{i18n.M("bot.decrees_line", "number", v.Number, "author", v.AuthorName, "level", levelName(v), "summary", v.SummaryMsg())}
 		switch {
 		case v.Kind == decrees.KindException:
-			line += " · exceção pontual"
+			line = append(line, i18n.M("bot.decrees_exception"))
 		case v.Until.IsZero():
-			line += " · permanente"
+			line = append(line, i18n.M("bot.decrees_permanent"))
 		default:
-			line += " · até " + c.Svc.Moment(ctx, v.Until)
+			line = append(line, i18n.M("bot.decrees_until", "moment", c.Svc.InGuildZone(ctx, v.Until)))
 		}
 		switch {
 		case v.Frozen:
-			line += " · SUSPENSO (sistema travado)"
+			line = append(line, i18n.M("bot.decrees_frozen"))
 		case v.State == decrees.Suspended:
-			line += " · SUSPENSO"
+			line = append(line, i18n.M("bot.decrees_suspended"))
 		case v.OverriddenBy != 0:
-			line += fmt.Sprintf(" · sobreposto pelo decreto %d", v.OverriddenBy)
+			line = append(line, i18n.M("bot.decrees_overridden", "number", v.OverriddenBy))
 		}
-		lines = append(lines, line)
+		lines = append(lines, i18n.Concat(line...))
 		if !v.Frozen && canRevoke(call.User, v) {
-			addButton(Button{Text: fmt.Sprintf("Revogar #%d", v.Number), Action: DecreeRevokeAction, Arg: strconv.FormatInt(v.Number, 10)})
+			addButton(Button{Msg: i18n.M("bot.decrees_revoke_button", "number", v.Number), Action: DecreeRevokeAction, Arg: strconv.FormatInt(v.Number, 10)})
 		}
 	}
 	if c.Rules != nil {
 		live, err := c.Rules.Live(ctx)
 		if err != nil {
-			return "", err
+			return i18n.Msg{}, err
 		}
 		for _, r := range live {
 			if !call.User.Acts(r.Workspace) {
@@ -357,35 +364,35 @@ func (c *DecreeChannel) list(ctx context.Context, call Call) (string, error) {
 			if r.Action != nil {
 				what = r.Action.String()
 			}
-			line := fmt.Sprintf("regra temporária de mesa %d · mesa %s · classe %s · %s · até %s", r.ID, r.Table, r.Class, what, c.Svc.Moment(ctx, r.Until))
+			line := []i18n.Msg{i18n.M("bot.rule_line", "id", r.ID, "table", r.Table, "class", r.Class, "what", what, "moment", c.Svc.InGuildZone(ctx, r.Until))}
 			if r.State == tablerules.Suspended {
-				line += " · SUSPENSA"
+				line = append(line, i18n.M("bot.rule_suspended"))
 			}
-			lines = append(lines, line)
+			lines = append(lines, i18n.Concat(line...))
 			if users.Can(call.User.Level, users.RevokeTemporaryRules) {
-				addButton(Button{Text: fmt.Sprintf("Revogar regra de mesa %d", r.ID), Action: TableRuleRevokeAction, Arg: strconv.FormatInt(r.ID, 10), Capability: users.RevokeTemporaryRules})
+				addButton(Button{Msg: i18n.M("bot.rule_revoke_button", "id", r.ID), Action: TableRuleRevokeAction, Arg: strconv.FormatInt(r.ID, 10), Capability: users.RevokeTemporaryRules})
 			}
 		}
 	}
 	if len(lines) == 0 {
-		return "Nenhum decreto ativo nos seus workspaces.", nil
+		return i18n.M("bot.decrees_none"), nil
 	}
-	_, err = c.bot.Send(ctx, Out{ChatID: call.ChatID, UserID: call.User.ID, Origin: "motor", Text: "Decretos:\n" + strings.Join(lines, "\n"), Buttons: buttons})
-	return "", err
+	_, err = c.bot.Send(ctx, Out{ChatID: call.ChatID, UserID: call.User.ID, Origin: "motor", Msg: i18n.M("bot.decrees_list", "lines", i18n.Join(i18n.Text("\n"), lines...)), Buttons: buttons})
+	return i18n.Msg{}, err
 }
 
-func levelName(v decrees.View) string {
+func levelName(v decrees.View) i18n.Msg {
 	switch v.Level {
 	case classes.LevelOwner:
-		return users.Owner.Name()
+		return users.Owner.Msg()
 	case classes.LevelAdmin:
-		return users.Administrator.Name()
+		return users.Administrator.Msg()
 	case classes.LevelApprover:
-		return users.Approver.Name()
+		return users.Approver.Msg()
 	case "":
-		return "sem nível"
+		return i18n.M("bot.decrees_no_level")
 	}
-	return string(v.Level)
+	return i18n.Text(string(v.Level))
 }
 
 // canRevoke says the user may be offered the Revogar of a decree: the level

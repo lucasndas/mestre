@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/mestre-ia/mestre/internal/attachments"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/orchestration/progress"
@@ -76,7 +77,7 @@ func (r *stdRun) newChat() (*panelchat.Service, error) {
 		},
 		Locked:     func(ctx context.Context) bool { return r.lock != nil && r.lock.Locked(ctx) },
 		Mask:       r.env.Masker.Mask,
-		AlertOwner: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) },
+		AlertOwner: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, i18n.Text(text)) },
 		Discard: func(ctx context.Context, workspace string, st attachments.Stored) error {
 			f := r.files.Load()
 			if f == nil {
@@ -158,7 +159,7 @@ var _ progress.Sender = progressFanout{}
 
 // Send implements progress.Sender.
 func (p progressFanout) Send(ctx context.Context, userID, workspace, text string) error {
-	if err := p.chat.SetProgress(ctx, workspace, text); err != nil && p.log != nil {
+	if err := p.chat.SetProgress(ctx, workspace, i18n.Text(text)); err != nil && p.log != nil {
 		p.log("app: the card of progress of the panel was not kept", err)
 	}
 	return p.bot.Send(ctx, userID, workspace, text)

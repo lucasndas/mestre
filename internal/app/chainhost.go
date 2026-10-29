@@ -12,6 +12,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/hook"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/grimoires"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
@@ -29,7 +30,7 @@ import (
 
 // ownerTeller is what the integration gives the chain to reach the Owner.
 type ownerTeller interface {
-	OwnerAlert(ctx context.Context, text string)
+	OwnerAlert(ctx context.Context, m i18n.Msg)
 }
 
 // chainPeople is what the integration gives the Citadel to build the chain: the
@@ -117,7 +118,7 @@ func policyFileFor(layout workspaces.Layout, tell ownerTeller, log *slog.Logger,
 		pf.Alert = func(workspace string, err error) {
 			// in its own goroutine: the alert is read by the sweeps of other services inside
 			// a write of the database, and sending it writes to the same database
-			go tell.OwnerAlert(context.Background(), fmt.Sprintf("O arquivo de política de aprovação da campanha %s não vale (%v); continua valendo a última versão válida.", workspace, err))
+			go tell.OwnerAlert(context.Background(), i18n.M("approval.policy_file_invalid", "workspace", workspace, "reason", err.Error()))
 		}
 	}
 	return pf
@@ -128,16 +129,16 @@ type chainOwnerAlerts struct{ tell ownerTeller }
 
 func (a chainOwnerAlerts) Notify(ctx context.Context, workspace, text string) error {
 	if t, ok := a.tell.(workspaceTeller); ok && workspace != "" {
-		t.OwnerWorkspaceAlert(ctx, workspace, text) // the header of the message is the workspace's
+		t.OwnerWorkspaceAlert(ctx, workspace, i18n.Text(text)) // the header of the message is the workspace's
 		return nil
 	}
-	a.tell.OwnerAlert(ctx, fmt.Sprintf("[%s] %s", workspace, text))
+	a.tell.OwnerAlert(ctx, i18n.M("bot.workspace_prefixed", "workspace", workspace, "text", i18n.Text(text)))
 	return nil
 }
 
 // workspaceTeller is the Owner told about a workspace, with its header.
 type workspaceTeller interface {
-	OwnerWorkspaceAlert(ctx context.Context, workspace, text string)
+	OwnerWorkspaceAlert(ctx context.Context, workspace string, m i18n.Msg)
 }
 
 // userGrimoires says which workspaces a user may use for the grimoires: the

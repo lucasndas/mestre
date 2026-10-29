@@ -1,6 +1,6 @@
 # Pedido que bloqueia
 
-> **Assunto:** os campos da mensagem que pede algo ao usuário porque uma mesa não segue sem ele: por que parou, evidência, o que já foi conferido, por que o agente não decide, o que fazer, quem age e o motivo no vocabulário fixo · **Componente:** Motor · **Atualizado:** 2026-10-26
+> **Assunto:** os campos da mensagem que pede algo ao usuário porque uma mesa não segue sem ele: por que parou, evidência, o que já foi conferido, por que o agente não decide, o que fazer, quem age e o motivo no vocabulário fixo · **Componente:** Motor · **Atualizado:** 2026-10-28
 
 ## Objetivo
 
@@ -46,14 +46,14 @@ Só o Grão-Mestre envia, com os campos do agente em flags ([CLI](../cli/grao-me
 
 ### Como chega ao usuário
 
-Uma mensagem curta (no pedido de aprovação, o motivo com o ícone abre o texto e a linha `Dono:` vem antes do bloco dos agentes, montados em `internal/approvals`), com o cabeçalho de origem ([roteamento](../telegram/roteamento.md#cabeçalho)), os campos do motor e depois o bloco do agente. A evidência vai truncada em 3 linhas, com o resto no painel, e passa pelo mascarador antes de sair. Os botões são os do catálogo de respostas do tipo ([cadeia](../orquestracao/cadeia-de-aprovacao.md)) que **aquele** usuário pode dar, mais um por passo que o bot sabe fazer **e** que o usuário pode fazer, com o nível e o PIN do passo; o aviso, sem catálogo, só tem esses botões e **Ver detalhes**. Cadastrar um segredo exige o Senhor da Guilda, com PIN, e só se faz no painel ([cofre](../plataforma/cofre.md#uso)): o passo vira o botão **Abrir no painel** (um link) para o Senhor da Guilda; para os outros, nenhum botão de cadastro. Exemplo de aviso `credencial`:
+Uma mensagem curta (no pedido de aprovação, o motivo com o ícone abre o texto e a linha `Responsável:` (em en, `In charge:`) vem antes do bloco dos agentes, montados em `internal/approvals`), com o cabeçalho de origem ([roteamento](../telegram/roteamento.md#cabeçalho)), os campos do motor e depois o bloco do agente. A evidência vai truncada em 3 linhas, com o resto no painel, e passa pelo mascarador antes de sair. Os botões são os do catálogo de respostas do tipo ([cadeia](../orquestracao/cadeia-de-aprovacao.md)) que **aquele** usuário pode dar, mais um por passo que o bot sabe fazer **e** que o usuário pode fazer, com o nível e o PIN do passo; o aviso, sem catálogo, só tem esses botões e **Ver detalhes**. Cadastrar um segredo exige o Senhor da Guilda, com PIN, e só se faz no painel ([cofre](../plataforma/cofre.md#uso)): o passo vira o botão **Abrir no painel** (um link) para o Senhor da Guilda; para os outros, nenhum botão de cadastro. Exemplo de aviso `credencial`:
 
 ```
 Loja · Mesa #42 Checkout
 🔐 falta a chave STRIPE_TEST_KEY
 Evidência: checkout_test.go:22 → "missing STRIPE_TEST_KEY"
 Para destravar: [ ] cadastrar a chave no cofre (painel)
-Dono: Lucas
+Responsável: Lucas
 — texto do agente, não verificado —
 Por que não decido: envolve cobrança, é decisão sua
 [Abrir no painel] [Ver detalhes]

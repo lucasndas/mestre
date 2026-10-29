@@ -10,6 +10,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/tablerules"
@@ -105,7 +106,8 @@ type gmNotices struct {
 	got map[string][]string
 }
 
-func (g *gmNotices) tell(_ context.Context, ws, text string) {
+func (g *gmNotices) tell(_ context.Context, ws string, m i18n.Msg) {
+	text := i18n.Render(i18n.PtBR, m)
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.got == nil {
@@ -206,7 +208,7 @@ func TestRevogarTudoIsTheOwnersAndTellsTheAdministrators(t *testing.T) {
 	if _, keys := w.buttons(adminTG); keys["Revogar todas as delegações"] != "" {
 		t.Fatal("an Administrator was offered the emergency button")
 	}
-	if got := lastText(w, adminTG); !strings.Contains(got, "exige o nível Senhor da Guilda") {
+	if got := lastText(w, adminTG); !strings.Contains(got, "Exige o nível Senhor da Guilda") {
 		t.Fatalf("the Administrator was told %q, want the level it needs", got)
 	}
 	untouched("after the Administrator")

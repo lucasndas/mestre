@@ -12,7 +12,9 @@
 //   - private-dir: os.MkdirAll and os.Mkdir with 0o700 only in internal/privdir;
 //   - secret-receiver: the printing methods of a secret use value receivers;
 //   - agent-files: no file IO by path in internal/providers, and no os.Chmod
-//     in internal/classes: internal/safefile.
+//     in internal/classes: internal/safefile;
+//   - pt-text: no literal with Portuguese text in the packages that talk to
+//     people (telegram, panel, notices, blocking, approvals): the catalogs.
 //
 // A violation is excused by `// mestre:allow <rule>: <reason>` on its line or
 // the line above. The command runs as TestCodeRules and alone as
@@ -42,6 +44,7 @@ const (
 	rulePrivateDir = "private-dir"
 	ruleSecret     = "secret-receiver"
 	ruleAgentFiles = "agent-files"
+	rulePtText     = "pt-text"
 )
 
 // Issue is one violation.
@@ -146,6 +149,7 @@ func Check(fsys fs.FS) ([]Issue, error) {
 		// are most of all a Windows matter.
 		if !s.isTest() {
 			checkAgentFiles(s, add)
+			checkPortugueseText(s, add)
 		}
 	}
 	checkSecretReceivers(srcs, add)

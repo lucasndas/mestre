@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/users"
 	"github.com/mestre-ia/mestre/pkg/clock"
@@ -52,7 +53,7 @@ type Options struct {
 	Clock clock.Clock
 	Users Users
 	// Tell sends a notice "Sistema" to a user (the bot); nil tells nobody.
-	Tell func(ctx context.Context, userID, text string)
+	Tell func(ctx context.Context, userID string, m i18n.Msg)
 	// Operator ends the session of the Operator on /travar.
 	Operator OperatorSession
 	Location *time.Location
@@ -171,11 +172,11 @@ func (s *Service) Lock(ctx context.Context, by users.User) error {
 		}
 	}
 	s.changed(true)
-	s.tellAll(ctx, fmt.Sprintf("Sistema: %s travou o Mestre às %s. Nada é executado até o Senhor da Guilda destravar.", cur.Name, now.In(s.o.Location).Format("15:04")))
+	s.tellAll(ctx, i18n.M("guild.locked_by", "name", cur.Name, "hour", now.In(s.o.Location).Format("15:04")))
 	return nil
 }
 
-func (s *Service) tellAll(ctx context.Context, text string) {
+func (s *Service) tellAll(ctx context.Context, m i18n.Msg) {
 	if s.o.Tell == nil {
 		return
 	}
@@ -185,7 +186,7 @@ func (s *Service) tellAll(ctx context.Context, text string) {
 	}
 	for _, u := range all {
 		if u.State == users.Active {
-			s.o.Tell(ctx, u.ID, text)
+			s.o.Tell(ctx, u.ID, m)
 		}
 	}
 }
@@ -224,7 +225,7 @@ func (s *Service) Unlock(ctx context.Context, by users.User, pinRequest string) 
 	s.audit(ctx, cur.ID, "unlock", "accepted", "")
 	if was {
 		s.changed(false)
-		s.tellAll(ctx, fmt.Sprintf("Sistema: %s destravou o Mestre às %s.", cur.Name, s.o.Clock.Now().In(s.o.Location).Format("15:04")))
+		s.tellAll(ctx, i18n.M("guild.unlocked_by", "name", cur.Name, "hour", s.o.Clock.Now().In(s.o.Location).Format("15:04")))
 	}
 	return nil
 }

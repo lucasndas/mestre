@@ -1,6 +1,10 @@
 package panel
 
-import "time"
+import (
+	"time"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
+)
 
 // The payloads of the central of approvals and of the bell of the notices. tygo
 // turns them into web/src/gen/approvals.ts (go generate in this package).
@@ -216,11 +220,15 @@ type NoticeLink struct {
 
 // NoticeView is a notice of the bell.
 type NoticeView struct {
-	ID        int64      `json:"id"`
-	Kind      string     `json:"kind"`
-	Workspace string     `json:"workspace"`
-	Table     string     `json:"table"`
+	ID        int64  `json:"id"`
+	Kind      string `json:"kind"`
+	Workspace string `json:"workspace"`
+	Table     string `json:"table"`
+	// Text is the notice in the language of the user (all a notice from before the
+	// messages has); Msg is the code and the parameters, which the screen says in its own
+	// language from the generated catalog.
 	Text      string     `json:"text"`
+	Msg       *i18n.Msg  `json:"msg,omitempty"`
 	Link      NoticeLink `json:"link"`
 	CreatedAt time.Time  `json:"created_at"`
 	Read      bool       `json:"read"`

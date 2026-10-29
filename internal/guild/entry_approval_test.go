@@ -13,6 +13,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
@@ -124,7 +125,7 @@ func newEntryWorld(t *testing.T, clk clock.Clock) *entryWorld {
 		}
 		entry := app.EntryApprover{Chain: func() *chain.Service { return ew.chain },
 			Decide: func(ctx context.Context, id string, d guild.Decision) error { return ew.citadel.Decide(ctx, id, d) },
-			Tell:   func(context.Context, string) {}}
+			Tell:   func(context.Context, i18n.Msg) {}}
 		if ew.chain, err = chain.NewService(chain.Options{Store: &chain.Store{DB: db}, Clock: clk, Characters: noCharacters{}, Inbox: noInbox{}, Classes: noClasses{},
 			Policy: chain.StaticPolicy{}, Users: ew.flow, Sinks: map[classes.RequestType]chain.Sink{classes.RequestGuildEntry: entry}}); err != nil {
 			t.Fatal(err)
@@ -144,7 +145,7 @@ func (ew *entryWorld) pending(t *testing.T) (int64, string) {
 	if !ok {
 		t.Fatal("the Owner was not asked")
 	}
-	return msg.Request.ID, msg.Text
+	return msg.Request.ID, i18n.Render(i18n.PtBR, msg.Msg)
 }
 
 // CA-GUILDA-02

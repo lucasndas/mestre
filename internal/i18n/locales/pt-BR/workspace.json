@@ -2,6 +2,8 @@
   "workspace.bad_grand_master_sheet": "Essa ficha não serve para o Grão-Mestre: use um agente, que não seja o Operador do PC e que rode em toda máquina não excluída.",
   "workspace.bad_state": "O estado da campanha não permite isso agora.",
   "workspace.creation_failed": "Não foi possível criar a campanha: o GitHub ou o Mestre recusou. Nada foi criado.",
+  "workspace.install_apps": "A campanha {{workspace}} precisa dos Apps do Mestre no repositório. Abra o link, escolha o repositório e clique em Install:",
+  "workspace.install_link": "\n- {{app}}: {{url}}",
   "workspace.invalid_document": "O arquivo de verificação não vale: confira o formato, os comandos e o tempo. Nada foi confirmado.",
   "workspace.invalid_repo": "O repositório precisa estar no formato dono/nome.",
   "workspace.invalid_slug": "O apelido não vale. Sugestão: {{suggestion}}.",
@@ -10,5 +12,7 @@
   "workspace.not_ready": "O clone principal da campanha ainda não existe. Espere a etapa do espelho.",
   "workspace.preparing": "Uma campanha em preparação não pode ser pausada.",
   "workspace.repo_taken": "Esse repositório já é a campanha {{slug}}.",
-  "workspace.unknown_sheet": "Essa ficha não existe ou não roda um agente. Nada foi criado."
+  "workspace.unknown_sheet": "Essa ficha não existe ou não roda um agente. Nada foi criado.",
+  "workspace.verification_edited": "O arquivo {{file}} da campanha {{workspace}} foi mudado fora do painel. Vale a última versão confirmada; para aplicar a mudança, confirme-a na tela de campanhas.",
+  "workspace.versioning_pending": "Pergunta pendente da campanha {{workspace}}: a pasta .mestre/ deve ser versionada no projeto ou ficar só local? Até a resposta ela fica só local. A resposta é dada no painel."
 }

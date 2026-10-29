@@ -77,7 +77,7 @@ var (
 	// ErrSilent is a refusal the bot does not answer (too many wrong codes).
 	ErrSilent = errors.New("users: too many attempts")
 	// ErrBadCode is the answer to a wrong, expired or used code.
-	ErrBadCode     = errors.New("código inválido ou expirado")
+	ErrBadCode     = errors.New("users: invalid or expired code")
 	ErrNotPrivate  = errors.New("users: the pairing is only in a private chat")
 	ErrWrongID     = errors.New("users: the Telegram id is not the one of the registration")
 	ErrNoPIN       = errors.New("users: the user has no PIN")

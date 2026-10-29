@@ -3,13 +3,20 @@
   "guild.bad_timezone": "That time zone is not in the IANA database.",
   "guild.citadel_protected": "The Citadel cannot be excluded or removed: pass the Citadel to another machine first.",
   "guild.confirm_required": "Read the warning of the removal and confirm.",
+  "guild.entry_not_applied": "The answer about the entry of the machine \"{{name}}\" could not be applied now ({{reason}}). Nothing was issued; ask it to try again.",
+  "guild.entry_not_waiting": "The entry of the machine \"{{name}}\" was no longer waiting (the time ran out or it was decided): nothing was issued. Ask it to try again.",
   "guild.excluded_machine": "An excluded machine never becomes the Citadel.",
+  "guild.github_back": "GitHub is back. {{queued}} actions leave the queue, in order.",
+  "guild.github_down": "GitHub down since {{since}}. Last error: {{why}}. Telegram and the command go on; the actions on GitHub wait in the queue ({{queued}} so far).",
+  "guild.github_down_no_detail": "no detail",
   "guild.handover_in_progress": "A Citadel switch is already under way: wait for it to end.",
+  "guild.locked_by": "System: {{name}} locked the Mestre at {{hour}}. Nothing runs until the Guildmaster unlocks it.",
   "guild.no_lock": "The Guild has no lock at GitHub configured: the switch is not possible yet.",
   "guild.not_active": "The machine is no longer in the Guild.",
   "guild.not_online": "The machine is not online now.",
   "guild.not_pending": "This request was already decided or expired.",
   "guild.not_revealed": "The machine has not shown its code yet: wait for the installer to display it.",
   "guild.outside_local_network": "This machine is outside the local network: nobody in the Guild reaches it through mestre.local, so it cannot receive the Citadel.",
-  "guild.suspended": "The Citadel is suspended and takes no changes now."
+  "guild.suspended": "The Citadel is suspended and takes no changes now.",
+  "guild.unlocked_by": "System: {{name}} unlocked the Mestre at {{hour}}."
 }

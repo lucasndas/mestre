@@ -10,6 +10,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/workspaces"
@@ -45,12 +46,12 @@ func (chainRun) Extend(o *OrchestrationOptions) { o.Builder = orcfakes.Builder{}
 func (chainRun) Attach(*Orchestration, *localchan.LocalForwarder) []ExternalFunc {
 	return nil
 }
-func (chainRun) BindFence(*guild.Fence)             {}
-func (chainRun) FenceChanged(guild.FenceState)      {}
-func (chainRun) Close()                             {}
-func (chainRun) OwnerAlert(context.Context, string) {}
-func (chainRun) CharacterDecrees() CharacterDecrees { return noDecrees{} }
-func (r chainRun) Users() *users.Service            { return r.users }
+func (chainRun) BindFence(*guild.Fence)               {}
+func (chainRun) FenceChanged(guild.FenceState)        {}
+func (chainRun) Close()                               {}
+func (chainRun) OwnerAlert(context.Context, i18n.Msg) {}
+func (chainRun) CharacterDecrees() CharacterDecrees   { return noDecrees{} }
+func (r chainRun) Users() *users.Service              { return r.users }
 
 // approveClassOn approves a class of the workspace in the Guild database of the
 // Citadel, the way the library of the period reads it. files is the package.

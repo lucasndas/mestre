@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/telegram"
 	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
@@ -36,9 +37,9 @@ type guildBot struct {
 
 type noAlerts struct{}
 
-func (noAlerts) Unauthorized(context.Context, int64, string) {}
-func (noAlerts) OwnerAlert(context.Context, string)          {}
-func (noAlerts) Tell(context.Context, string, string)        {}
+func (noAlerts) Unauthorized(context.Context, int64, i18n.Msg) {}
+func (noAlerts) OwnerAlert(context.Context, i18n.Msg)          {}
+func (noAlerts) Tell(context.Context, string, i18n.Msg)        {}
 
 type noRouter struct{}
 

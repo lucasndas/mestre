@@ -9,6 +9,7 @@ import { approvalCountQuery, noticesQuery } from "../lib/approvalQueries";
 import { formatTime } from "../lib/format";
 import { noticePath, useGoto } from "../lib/links";
 import { useLiveEvents } from "../lib/live";
+import { messageText } from "../lib/messages";
 import { useTableNames } from "../workspace/names";
 import { Button } from "./ui";
 
@@ -41,6 +42,12 @@ export function useApprovalsCount(): number {
 type Kind = "request" | "notify" | "blocked" | "alert" | "system" | "stranger" | "github";
 
 /** What a notice is, for the label: an approval (the request link) or the kind the engine gave. */
+/** The notice in the language of the screen: from its code and params when the engine sent them, else as written. */
+function noticeText(n: NoticeView, language: string): string {
+  const msg = n.msg as { code: string; params?: Record<string, unknown> } | undefined;
+  return (msg && messageText(language, msg.code, msg.params, undefined)) || n.text;
+}
+
 function kindOf(n: NoticeView): Kind {
   if (n.link.kind === "request") return "request";
   const known: Kind[] = ["notify", "blocked", "alert", "system", "stranger", "github"];
@@ -104,7 +111,7 @@ function NoticeRow({
         <strong className="text-ink">{say(`bell.kind.${kind}`)}</strong> · {place} · {time}
         {n.read ? null : <span className="ml-2 font-semibold text-ink">{t("bell.unread")}</span>}
       </p>
-      <p className="break-words whitespace-pre-line">{n.text}</p>
+      <p className="break-words whitespace-pre-line">{noticeText(n, i18n.language)}</p>
       {path ? (
         <div>
           <Button variant="quiet" onPress={() => onOpen(n)}>

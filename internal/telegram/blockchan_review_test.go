@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/mestre-ia/mestre/internal/blocking"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/users"
 )
 
@@ -68,14 +69,14 @@ func TestANoticeWithAMotiveOutsideTheVocabularyIsRefusedAndEvidenceIsBounded(t *
 	n.Evidence = strings.Repeat("x", 10000) + "\r" + strings.Repeat("y", 10000)
 	n.WhyNot = strings.Repeat("z", 10000)
 	m := blocking.Build(n, blocking.Viewer{Level: users.Owner}, func(s string) string { return s })
-	if len([]rune(m.Text)) > 1500 || strings.Count(m.Text, "```") != 2 {
-		t.Fatalf("%d characters:\n%.200s", len([]rune(m.Text)), m.Text)
+	if len([]rune(m.Text(i18n.PtBR))) > 1500 || strings.Count(m.Text(i18n.PtBR), "```") != 2 {
+		t.Fatalf("%d characters:\n%.200s", len([]rune(m.Text(i18n.PtBR))), m.Text(i18n.PtBR))
 	}
 	n.Evidence = " \t\n"
-	if got := blocking.Build(n, blocking.Viewer{Level: users.Owner}, func(s string) string { return s }).Text; strings.Contains(got, "```") || !strings.Contains(got, "sem evidência verificada") {
+	if got := blocking.Build(n, blocking.Viewer{Level: users.Owner}, func(s string) string { return s }).Text(i18n.PtBR); strings.Contains(got, "```") || !strings.Contains(got, "sem evidência verificada") {
 		t.Fatalf("%s", got)
 	}
-	if strings.Contains(blocking.Full(n, func(s string) string { return s }), "Evidência") {
+	if strings.Contains(i18n.Render(i18n.PtBR, blocking.Full(n, func(s string) string { return s })), "Evidência") {
 		t.Fatal("the full text shows an empty evidence")
 	}
 }

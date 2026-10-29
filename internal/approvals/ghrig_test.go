@@ -14,6 +14,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/internal/testkit/fakegithub"
@@ -49,7 +50,8 @@ type teller struct {
 	ws   []string
 }
 
-func (t *teller) Tell(_ context.Context, userID, text string) error {
+func (t *teller) Tell(_ context.Context, userID string, m i18n.Msg) error {
+	text := i18n.Render(i18n.PtBR, m)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.user == nil {
@@ -59,7 +61,8 @@ func (t *teller) Tell(_ context.Context, userID, text string) error {
 	return nil
 }
 
-func (t *teller) toWorkspace(_ context.Context, _, text string) {
+func (t *teller) toWorkspace(_ context.Context, _ string, m i18n.Msg) {
+	text := i18n.Render(i18n.PtBR, m)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.ws = append(t.ws, text)

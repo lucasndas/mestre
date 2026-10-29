@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/protocol"
 	"github.com/mestre-ia/mestre/internal/store"
 	"github.com/mestre-ia/mestre/pkg/clock"
@@ -23,12 +24,12 @@ type Alerts interface {
 	// Unauthorized records an attempt that was not authorized: a wrong pairing
 	// code, a pairing in a group, a code of another user
 	// (docs/telegram/seguranca-do-canal.md).
-	Unauthorized(ctx context.Context, telegramID int64, reason string)
+	Unauthorized(ctx context.Context, telegramID int64, reason i18n.Msg)
 	// OwnerAlert tells the Owner about something he must know: the PIN of a
 	// user was locked, a user was paired, a transfer was asked.
-	OwnerAlert(ctx context.Context, text string)
+	OwnerAlert(ctx context.Context, m i18n.Msg)
 	// Tell sends a notice to one user.
-	Tell(ctx context.Context, userID, text string)
+	Tell(ctx context.Context, userID string, m i18n.Msg)
 }
 
 // Approvals invalidates what a user approved and was not executed yet, when he

@@ -9,6 +9,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/github"
 	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/telegram"
 	"github.com/mestre-ia/mestre/internal/testkit/fakegithub"
 	"github.com/mestre-ia/mestre/internal/testkit/fakenet"
@@ -107,7 +108,7 @@ func TestA409OfTheGetUpdatesMakesTheBotCheckTheLockAndStopOnlyWithAHigherEpoch(t
 	for _, higher := range []bool{true, false} {
 		lw := newLockWorld(t)
 		a, ta := lw.user("Ana", users.Approver)
-		if _, err := lw.bot.Send(lw.ctx, telegram.Out{ChatID: ta.ID, UserID: a.ID, Text: "na fila"}); err != nil {
+		if _, err := lw.bot.Send(lw.ctx, telegram.Out{ChatID: ta.ID, UserID: a.ID, Msg: i18n.Text("na fila")}); err != nil {
 			t.Fatal(err)
 		}
 		if higher {
@@ -150,13 +151,16 @@ func TestACitadelThatReadAHigherEpochCallsNothingOnTheTelegram(t *testing.T) {
 	t.Parallel()
 	ran := 0
 	lw := newLockWorld(t)
-	lw.opts.Actions = map[string]telegram.Action{"approve": func(context.Context, telegram.Click) (string, string, error) { ran++; return "", "", nil }}
+	lw.opts.Actions = map[string]telegram.Action{"approve": func(context.Context, telegram.Click) (i18n.Msg, i18n.Msg, error) {
+		ran++
+		return i18n.Msg{}, i18n.Msg{}, nil
+	}}
 	var err error
 	if lw.bot, err = telegram.New(lw.opts); err != nil {
 		t.Fatal(err)
 	}
 	a, ta := lw.user("Ana", users.Approver)
-	if _, err := lw.bot.Send(lw.ctx, telegram.Out{ChatID: ta.ID, UserID: a.ID, Text: "Aprovar?", Buttons: [][]telegram.Button{{{Text: "Sim", Action: "approve", Capability: users.DecideApprovals}}}}); err != nil {
+	if _, err := lw.bot.Send(lw.ctx, telegram.Out{ChatID: ta.ID, UserID: a.ID, Msg: i18n.Text("Aprovar?"), Buttons: [][]telegram.Button{{{Msg: i18n.Text("Sim"), Action: "approve", Capability: users.DecideApprovals}}}}); err != nil {
 		t.Fatal(err)
 	}
 	lw.flush()
@@ -168,7 +172,7 @@ func TestACitadelThatReadAHigherEpochCallsNothingOnTheTelegram(t *testing.T) {
 	lw.gh.AddRef(lairRepo, "refs/mestre/epoca-4", "machine b, epoch 4")
 	lw.clk.Advance(guild.LeaseInterval)
 	<-lw.higher
-	if _, err := lw.bot.Send(lw.ctx, telegram.Out{ChatID: ta.ID, UserID: a.ID, Text: "depois"}); err != nil {
+	if _, err := lw.bot.Send(lw.ctx, telegram.Out{ChatID: ta.ID, UserID: a.ID, Msg: i18n.Text("depois")}); err != nil {
 		t.Fatal(err)
 	}
 	calls := map[string]int{}
@@ -200,7 +204,7 @@ func TestWithTheLeaseGoneA409StopsTheTelegramUntilTheEpochIsConfirmed(t *testing
 	if s := <-lw.changed; s != guild.FenceLockDown {
 		t.Fatalf("state %s, want GitHub fora", s)
 	}
-	if _, err := lw.bot.Send(lw.ctx, telegram.Out{ChatID: ta.ID, UserID: a.ID, Text: "oi"}); err != nil {
+	if _, err := lw.bot.Send(lw.ctx, telegram.Out{ChatID: ta.ID, UserID: a.ID, Msg: i18n.Text("oi")}); err != nil {
 		t.Fatal(err)
 	}
 	lw.conflict()

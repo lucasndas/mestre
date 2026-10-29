@@ -3,9 +3,10 @@ package telegram
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
+
+	"github.com/mestre-ia/mestre/internal/i18n"
 
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -80,7 +81,7 @@ func (c *GuildChannel) Bind(bot *Bot) {
 // Commands is /guilda, for Options.Commands. It only reads, so it is answered
 // while the Mestre is locked.
 func (c *GuildChannel) Commands() []Command {
-	return []Command{{Name: "guilda", Description: "máquinas da Guilda; o Senhor da Guilda exclui ou desfaz a exclusão de uma Torre, com o PIN", Query: true, Capability: users.Status, Run: c.list}}
+	return []Command{{Name: "guilda", Description: i18n.M("bot.cmd_guild"), Query: true, Capability: users.Status, Run: c.list}}
 }
 
 // Actions are the buttons, for Options.Actions.
@@ -88,38 +89,38 @@ func (c *GuildChannel) Actions() map[string]Action {
 	return map[string]Action{GuildExcludeAction: c.click}
 }
 
-func (c *GuildChannel) list(ctx context.Context, call Call) (string, error) {
+func (c *GuildChannel) list(ctx context.Context, call Call) (i18n.Msg, error) {
 	if c.Machines == nil {
-		return "Só a Cidadela lista as máquinas da Guilda.", nil
+		return i18n.M("bot.guild_only_citadel"), nil
 	}
 	ms, epoch, err := c.Machines(ctx)
 	if err != nil {
-		return "Não consegui listar as máquinas agora: " + err.Error(), nil
+		return i18n.M("bot.guild_not_listed", "reason", i18n.OfError(err)), nil
 	}
 	owner := users.Can(call.User.Level, users.ManageMachines)
-	lines := []string{fmt.Sprintf("Guilda, época %d:", epoch)}
+	lines := []i18n.Msg{i18n.M("bot.guild_head", "epoch", epoch)}
 	var buttons [][]Button
 	for _, m := range ms {
-		role := "Torre"
+		role := i18n.M("bot.guild_tower")
 		if m.Citadel {
-			role = "Cidadela"
+			role = i18n.M("bot.guild_citadel")
 		}
-		state := "offline"
+		state := i18n.M("bot.guild_offline")
 		if m.Online {
-			state = "online"
+			state = i18n.M("bot.guild_online")
 		}
-		line := fmt.Sprintf("%s · %s", plainGuildText(m.Name), role)
+		line := []i18n.Msg{i18n.M("bot.guild_machine", "name", plainGuildText(m.Name), "role", role)}
 		if m.Excluded {
-			line += " · excluída"
+			line = append(line, i18n.M("bot.guild_excluded"))
 		}
-		line += " · " + state
-		lines = append(lines, line)
+		line = append(line, i18n.M("bot.guild_state", "state", state))
+		lines = append(lines, i18n.Concat(line...))
 		switch {
 		case !owner || m.Citadel || len(buttons) >= maxListed:
 		case m.Excluded:
-			buttons = append(buttons, []Button{{Text: "Desfazer exclusão de " + m.Name, Action: GuildExcludeAction, Arg: "u:" + m.ID, Capability: users.ManageMachines}})
+			buttons = append(buttons, []Button{{Msg: i18n.M("bot.guild_undo_button", "name", m.Name), Action: GuildExcludeAction, Arg: "u:" + m.ID, Capability: users.ManageMachines}})
 		default:
-			buttons = append(buttons, []Button{{Text: "Excluir " + m.Name, Action: GuildExcludeAction, Arg: "x:" + m.ID, Capability: users.ManageMachines}})
+			buttons = append(buttons, []Button{{Msg: i18n.M("bot.guild_exclude_button", "name", m.Name), Action: GuildExcludeAction, Arg: "x:" + m.ID, Capability: users.ManageMachines}})
 		}
 	}
 	if owner && c.Pending != nil {
@@ -127,30 +128,29 @@ func (c *GuildChannel) list(ctx context.Context, call Call) (string, error) {
 			lines = append(lines, c.pendingLines(ps)...)
 		}
 	}
-	_, err = c.bot.Send(ctx, Out{ChatID: call.ChatID, UserID: call.User.ID, Origin: "motor", Text: strings.Join(lines, "\n"), Buttons: buttons})
-	return "", err
+	_, err = c.bot.Send(ctx, Out{ChatID: call.ChatID, UserID: call.User.ID, Origin: "motor", Msg: i18n.Join(i18n.Text("\n"), lines...), Buttons: buttons})
+	return i18n.Msg{}, err
 }
 
 // pendingLines is the text of what waits for the Owner, oldest first as given.
-func (c *GuildChannel) pendingLines(ps []GuildPending) []string {
-	var out []string
+func (c *GuildChannel) pendingLines(ps []GuildPending) []i18n.Msg {
+	var out []i18n.Msg
 	for _, p := range ps {
-		at := p.At.Format("02/01 15:04")
 		switch p.Kind {
 		case PendingEntry:
-			line := fmt.Sprintf("Pedido de entrada: %s, desde %s", plainGuildText(p.Name), at)
+			line := i18n.M("bot.guild_entry", "name", plainGuildText(p.Name), "since", p.At)
 			if p.Code != "" {
-				line += ", código " + plainGuildText(p.Code)
+				line = i18n.Concat(line, i18n.M("bot.guild_entry_code", "code", plainGuildText(p.Code)))
 			}
 			out = append(out, line)
 		case PendingPromotion:
-			out = append(out, fmt.Sprintf("Pedido de promoção a Cidadela: %s, desde %s", plainGuildText(p.Name), at))
+			out = append(out, i18n.M("bot.guild_promotion", "name", plainGuildText(p.Name), "since", p.At))
 		}
 	}
 	if len(out) == 0 {
 		return nil
 	}
-	return append([]string{"", "Esperam o Senhor da Guilda (a resposta é no pedido de aprovação):"}, out...)
+	return append([]i18n.Msg{i18n.Text(""), i18n.M("bot.guild_waiting")}, out...)
 }
 
 // plainGuildText drops the marks the Telegram turns into links, bold or code,
@@ -165,31 +165,31 @@ func plainGuildText(s string) string {
 }
 
 // click asks the PIN: the exclusion is made when it is right.
-func (c *GuildChannel) click(ctx context.Context, k Click) (string, string, error) {
+func (c *GuildChannel) click(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	verb, id, ok := strings.Cut(k.Arg, ":")
 	if !ok || id == "" || (verb != "x" && verb != "u") {
-		return "", "", errors.New("botão inválido")
+		return i18n.Msg{}, i18n.Msg{}, errInvalidButton
 	}
 	req, err := c.Users.StartPIN(ctx, k.User.ID, guildExcludePrefix+k.Arg)
 	switch {
 	case errors.Is(err, users.ErrNoPIN):
-		return "", "", errors.New("cadastre o seu PIN primeiro")
+		return i18n.Msg{}, i18n.Msg{}, errNoPIN
 	case errors.Is(err, users.ErrPINLocked):
-		return "", "", errors.New("o seu PIN está bloqueado por um tempo")
+		return i18n.Msg{}, i18n.Msg{}, errPINLocked
 	case err != nil:
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
-	what := "excluir a máquina do cofre"
+	prompt := i18n.M("bot.pin_prompt_exclude")
 	if verb == "u" {
-		what = "desfazer a exclusão da máquina"
+		prompt = i18n.M("bot.pin_prompt_undo_exclude")
 	}
-	if err := c.bot.Ask(ctx, k.User.ID, PINKind, req.ID, "Digite o seu PIN para "+what+". A mensagem com o PIN é apagada.", promptTTL); err != nil {
+	if err := c.bot.Ask(ctx, k.User.ID, PINKind, req.ID, prompt, promptTTL); err != nil {
 		if errors.Is(err, ErrCaptureBusy) {
-			return "", "", errors.New("termine a resposta anterior primeiro")
+			return i18n.Msg{}, i18n.Msg{}, errFinishFirst
 		}
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
-	return "Confirme com o PIN.", "", nil
+	return i18n.M("bot.confirm_with_pin"), i18n.Msg{}, nil
 }
 
 // pinDone is told whether the PIN of an exclusion was right.
@@ -198,7 +198,7 @@ func (c *GuildChannel) pinDone(ctx context.Context, u users.User, requestID stri
 		return
 	}
 	if err != nil {
-		c.tell(ctx, u, "PIN incorreto ou expirado: nada foi mudado na Guilda.")
+		c.tell(ctx, u, i18n.M("bot.guild_pin_wrong"))
 		return
 	}
 	action, aerr := c.Users.PINAction(ctx, requestID)
@@ -208,33 +208,33 @@ func (c *GuildChannel) pinDone(ctx context.Context, u users.User, requestID stri
 	verb, id, _ := strings.Cut(strings.TrimPrefix(action, guildExcludePrefix), ":")
 	cur, gerr := c.Users.Get(ctx, u.ID)
 	if gerr != nil || users.Require(cur.Level, users.ManageMachines) != nil {
-		c.tell(ctx, u, "O seu nível não exclui máquinas.")
+		c.tell(ctx, u, i18n.M("bot.guild_level"))
 		return
 	}
 	if cerr := c.Users.Consume(ctx, requestID, u.ID, action); cerr != nil {
 		return
 	}
 	if c.SetExcluded == nil {
-		c.tell(ctx, u, "Só a Cidadela muda a exclusão de uma máquina.")
+		c.tell(ctx, u, i18n.M("bot.guild_only_citadel_changes"))
 		return
 	}
 	excluded := verb == "x"
 	if serr := c.SetExcluded(ctx, id, excluded); serr != nil {
-		c.tell(ctx, u, "Não mudei a exclusão: "+serr.Error())
+		c.tell(ctx, u, i18n.M("bot.guild_not_changed", "reason", i18n.OfError(serr)))
 		return
 	}
 	if excluded {
-		c.tell(ctx, u, "Máquina excluída: ela apaga o cofre e não é promovida.")
+		c.tell(ctx, u, i18n.M("bot.guild_excluded_done"))
 		return
 	}
-	c.tell(ctx, u, "Exclusão desfeita: a máquina recebe o cofre de novo.")
+	c.tell(ctx, u, i18n.M("bot.guild_exclusion_undone"))
 }
 
-func (c *GuildChannel) tell(ctx context.Context, u users.User, text string) {
+func (c *GuildChannel) tell(ctx context.Context, u users.User, m i18n.Msg) {
 	if u.TelegramID == 0 {
 		return
 	}
-	if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Origin: "motor"}); err != nil {
+	if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: m, Origin: "motor"}); err != nil {
 		c.bot.log.Warn("telegram: the user was not told the result of an exclusion", "err", err)
 	}
 }

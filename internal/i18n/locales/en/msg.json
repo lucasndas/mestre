@@ -1,0 +1,4 @@
+{
+  "msg.join": "{{a}}{{b}}",
+  "msg.text": "{{text}}"
+}

@@ -14,6 +14,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/approvals"
 	"github.com/mestre-ia/mestre/internal/blocking"
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/logging"
 	"github.com/mestre-ia/mestre/internal/notices"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
@@ -165,8 +166,8 @@ func (a *apprRig) open(o reqOpt) chain.Request {
 	if min == "" {
 		min = classes.LevelApprover
 	}
-	text := chain.Text(r, chain.Level{Kind: chain.LevelPeople}, chain.AnswersFor(chain.LevelPeople, r))
-	q := chain.PeopleQuestion{Request: r, Text: text, Approvals: max(o.approvals, 1), MinLevel: min, PIN: o.pin, Answers: chain.AnswersFor(chain.LevelPeople, r)}
+	card := chain.Card(r, chain.Level{Kind: chain.LevelPeople}, chain.AnswersFor(chain.LevelPeople, r))
+	q := chain.PeopleQuestion{Request: r, Text: i18n.Render(i18n.PtBR, card.Msg()), Engine: card.Engine, Agent: card.Agent, Approvals: max(o.approvals, 1), MinLevel: min, PIN: o.pin, Answers: chain.AnswersFor(chain.LevelPeople, r)}
 	if err := a.flow.Ask(a.ctx, q); err != nil {
 		a.t.Fatal(err)
 	}
@@ -474,7 +475,7 @@ func TestABlockingNoticeShowsTheWholeMaskedEvidenceAndTheStepOnlyToTheOwner(t *t
 		ev = append(ev, line)
 	}
 	n := blocking.Notice{Workspace: "loja", Mesa: "42-login", Motive: blocking.Credential, Stopped: "falta a chave STRIPE_TEST_KEY", Evidence: strings.Join(ev, "\n"),
-		Steps: []blocking.Step{{Text: "cadastrar a chave no cofre", Kind: blocking.StepVault}}, Owner: "Lucas",
+		Steps: []blocking.Step{{Text: i18n.M("block.step_vault"), Kind: blocking.StepVault}}, Owner: i18n.Text("Lucas"),
 		WhyNot: "envolve cobrança, é decisão sua", Checked: "a chave não está no cofre"}
 	id, err := a.blk.Save(a.ctx, n, a.mask)
 	if err != nil {

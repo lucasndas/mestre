@@ -12,6 +12,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/providers"
@@ -30,15 +31,17 @@ type alerts struct {
 	owner []string
 }
 
-func (a *alerts) Unauthorized(context.Context, int64, string) {}
+func (a *alerts) Unauthorized(context.Context, int64, i18n.Msg) {}
 
-func (a *alerts) OwnerAlert(_ context.Context, text string) {
+func (a *alerts) OwnerAlert(_ context.Context, m i18n.Msg) {
+	text := i18n.Render(i18n.PtBR, m)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.owner = append(a.owner, text)
 }
 
-func (a *alerts) Tell(_ context.Context, user, text string) {
+func (a *alerts) Tell(_ context.Context, user string, m i18n.Msg) {
+	text := i18n.Render(i18n.PtBR, m)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.tells == nil {

@@ -21,6 +21,7 @@ import (
 	"github.com/mestre-ia/mestre/internal/ghcli"
 	"github.com/mestre-ia/mestre/internal/github"
 	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/localchan"
 	"github.com/mestre-ia/mestre/internal/lockdown"
 	"github.com/mestre-ia/mestre/internal/notices"
@@ -141,7 +142,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r.stall = &telegram.StallChannel{Users: svc}
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
 	r.gc = &telegram.GuildChannel{Users: svc, PINs: r.pins, Machines: env.Machines, SetExcluded: env.SetExcluded, Pending: env.Pending}
-	r.gh = &telegram.GitHubChannel{Users: svc, Personal: r.personal, Clock: env.Clock, Logger: env.Log, Moment: r.decrees.Moment}
+	r.gh = &telegram.GitHubChannel{Users: svc, Personal: r.personal, Clock: env.Clock, Logger: env.Log, Moment: r.decrees.InGuildZone}
 	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
 		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log, OnChange: r.flowChanged,
@@ -154,7 +155,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 		return nil, fmt.Errorf("app: the flow of approval: %w", err)
 	}
 	r.flow = flow
-	r.notice = &guild.DownNotice{Tell: func(ctx context.Context, text string) { r.alert.OwnerNotice(ctx, notices.GitHubDown, text) }, Clock: env.Clock,
+	r.notice = &guild.DownNotice{Tell: func(ctx context.Context, m i18n.Msg) { r.alert.OwnerNotice(ctx, notices.GitHubDown, m) }, Clock: env.Clock, Location: r.guildZone(),
 		Queued: func() int {
 			if f := r.fence.Load(); f != nil {
 				return f.Queued()
@@ -602,7 +603,7 @@ func (r *stdRun) entries() EntryApprover {
 		decide = func(context.Context, string, guild.Decision) error { return errNoCitadelYet }
 	}
 	return EntryApprover{Chain: r.chain.Load, Decide: decide, Log: r.env.Log,
-		Tell: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) }}
+		Tell: func(ctx context.Context, m i18n.Msg) { r.alert.OwnerAlert(ctx, m) }}
 }
 
 // GuildApprover implements GuildApprover: the Citadel asks the Owner about an
@@ -621,14 +622,14 @@ func (r *stdRun) GuildLock(ctx context.Context) (guild.Lock, error) {
 
 // OwnerAlert, CharacterDecrees and Users make the run the people of the chain
 // (chainPeople).
-func (r *stdRun) OwnerAlert(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) }
+func (r *stdRun) OwnerAlert(ctx context.Context, m i18n.Msg) { r.alert.OwnerAlert(ctx, m) }
 
 // DecreesChanged has the effective rules published again after the decrees in
 // force changed.
 func (r *stdRun) DecreesChanged(f func(context.Context)) { r.decrees.SetChanged(f) }
 
-func (r *stdRun) OwnerWorkspaceAlert(ctx context.Context, workspace, text string) {
-	r.alert.OwnerWorkspaceAlert(ctx, workspace, text)
+func (r *stdRun) OwnerWorkspaceAlert(ctx context.Context, workspace string, m i18n.Msg) {
+	r.alert.OwnerWorkspaceAlert(ctx, workspace, m)
 }
 
 func (r *stdRun) CharacterDecrees() CharacterDecrees { return r.decrees }
@@ -748,7 +749,8 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	}
 	r.decrees.SetReminder(r.dc)
 	r.decrees.SetRevokeHooks(telegram.RevokeAllHooks{Rules: orc.TableRules, Users: r.users, Channel: r.dc,
-		GrandMaster: func(ctx context.Context, workspace, text string) {
+		GrandMaster: func(ctx context.Context, workspace string, m i18n.Msg) {
+			text := i18n.Render(i18n.PtBR, m) // the Grand Master is an agent: the engine tells it as before
 			gm, ok, err := orc.Registry.GrandMaster(ctx, workspace)
 			if err != nil || !ok {
 				return
@@ -806,7 +808,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	}
 	h := r.ghHandlers(orc)
 	h.Register(fwd)
-	(&ghcli.Apps{Characters: orc.Registry, Store: &github.Registry{DB: r.env.DB}, Creator: appCreator{c: r.creation, tell: r.alert.OwnerPrivate}}).Register(fwd)
+	(&ghcli.Apps{Characters: orc.Registry, Store: &github.Registry{DB: r.env.DB}, Creator: appCreator{c: r.creation, tell: func(ctx context.Context, text string) { r.alert.OwnerPrivate(ctx, i18n.Text(text)) }}}).Register(fwd)
 	(&decrees.ProposeHandler{Service: r.decrees, Characters: orc.Registry, Message: inboxMessages{&inbox.Store{DB: r.env.DB}}.Source, Offer: r.dc}).Register(fwd)
 	(&decrees.SubHandler{Service: r.decrees, Characters: orc.Registry}).Register(fwd)
 	poll, perr := r.poller(orc)
@@ -884,7 +886,7 @@ func (r *stdRun) ownerName(ctx context.Context, _ string) string {
 // lateSink is the sink of an approval that ends on GitHub: it goes out under the
 // lease of the epoch like every other call to GitHub.
 func (r *stdRun) lateSink(get func() chain.Sink) lateSink {
-	return lateSink{get: get, alert: r.alert.OwnerAlert, lease: stdLease{r}.Do}
+	return lateSink{get: get, alert: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, i18n.Text(text)) }, lease: stdLease{r}.Do}
 }
 
 // stdLease is the lease of the epoch over GitHub: the fence of the period.
@@ -1146,7 +1148,7 @@ type adminAlerts struct {
 
 func (a adminAlerts) Operational(ctx context.Context, al workspaces.Alert) error {
 	a.log.Warn("app: operational alert", "workspace", al.Workspace, "kind", string(al.Kind))
-	told, err := a.r.alert.AdminAlert(ctx, al.Workspace, al.Detail)
+	told, err := a.r.alert.AdminAlert(ctx, al.Workspace, i18n.Text(al.Detail))
 	switch {
 	case errors.Is(err, telegram.ErrQueued):
 		return nil // it waits for the bot, once: the caller does not send it again
@@ -1154,4 +1156,18 @@ func (a adminAlerts) Operational(ctx context.Context, al workspaces.Alert) error
 		a.log.Warn("app: no Administrator could be told of an operational alert", "workspace", al.Workspace, "kind", string(al.Kind))
 	}
 	return err
+}
+
+// guildZone is the time zone of the Guild as it is now (UTC when none is kept), where the moments
+// of the notices are said.
+func (r *stdRun) guildZone() *time.Location {
+	var name string
+	if err := r.env.DB.Reader().QueryRowContext(context.Background(), `SELECT timezone FROM guild WHERE id = 1`).Scan(&name); err != nil || name == "" || name == "Local" {
+		return nil
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return nil
+	}
+	return loc
 }

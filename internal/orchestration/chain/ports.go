@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/classes"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
 	"github.com/mestre-ia/mestre/internal/orchestration/waits"
@@ -125,9 +126,13 @@ type UserAsker interface {
 
 // PeopleQuestion is what the people see.
 type PeopleQuestion struct {
-	Request  Request
-	Text     string
-	Deadline time.Time
+	Request Request
+	// Text is the question in pt-BR; Engine and Agent are the same as messages, said
+	// in the language of each person: the fields of the engine and the block of the
+	// text of the agents.
+	Text          string
+	Engine, Agent i18n.Msg
+	Deadline      time.Time
 	// Answers are those the people may give.
 	Answers []Answer
 	// Approvals is how many approvals the request needs (the quorum), Require

@@ -57,7 +57,8 @@ func (h *hooks) Reroute(_ context.Context, ws string) error {
 	return nil
 }
 
-func (h *hooks) Told(_ context.Context, ws, text string) {
+func (h *hooks) Told(_ context.Context, ws string, m i18n.Msg) {
+	text := i18n.Render(i18n.PtBR, m)
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.told == nil {

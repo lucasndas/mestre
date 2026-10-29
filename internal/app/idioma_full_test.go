@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/testkit/faketelegram"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
-// Part of CA-IDIOMA-10 (the header reaches the agent and the reply arrives as written; the frame in en comes with unit B)
+// CA-IDIOMA-10
 func TestTheGrandMasterGetsTheLanguageOfTheUserInTheHeaderAndItsReplyArrivesAsWritten(t *testing.T) {
 	t.Parallel()
 	w := newChatWorld(t)
@@ -59,6 +60,18 @@ func TestTheGrandMasterGetsTheLanguageOfTheUserInTheHeaderAndItsReplyArrivesAsWr
 	}
 	if !found {
 		t.Fatalf("the Telegram did not get the reply as written: %q", w.chatTexts(biaChat))
+	}
+	// the frame of the engine around it is in en: a notice of the engine for the same user
+	w.run.alert.Tell(w.ctx, w.bia.ID, i18n.M("bot.table_paused", "table", "42"))
+	if _, err := bot.Flush(w.ctx); err != nil {
+		t.Fatal(err)
+	}
+	framed := false
+	for _, p := range w.chatTexts(biaChat) {
+		framed = framed || strings.Contains(p, "Table 42 paused.") && strings.Contains(p, "System")
+	}
+	if !framed {
+		t.Fatalf("the frame of the engine is not in en: %q", w.chatTexts(biaChat))
 	}
 	if u, err := w.run.users.Get(w.ctx, w.bia.ID); err != nil || u.Language != "en" || u.TelegramLanguage != "pt-BR" {
 		t.Fatalf("the user %+v, %v", u, err)

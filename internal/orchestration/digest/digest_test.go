@@ -14,6 +14,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/digest"
 	"github.com/mestre-ia/mestre/internal/orchestration/tablerules"
@@ -98,9 +99,9 @@ type noClasses struct{ chain.Classes }
 
 type alerts struct{}
 
-func (alerts) Unauthorized(context.Context, int64, string) {}
-func (alerts) OwnerAlert(context.Context, string)          {}
-func (alerts) Tell(context.Context, string, string)        {}
+func (alerts) Unauthorized(context.Context, int64, i18n.Msg) {}
+func (alerts) OwnerAlert(context.Context, i18n.Msg)          {}
+func (alerts) Tell(context.Context, string, i18n.Msg)        {}
 
 type world struct {
 	t     *testing.T

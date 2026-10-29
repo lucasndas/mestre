@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
+
 	"github.com/mestre-ia/mestre/internal/blocking"
 	"github.com/mestre-ia/mestre/internal/notices"
 	"github.com/mestre-ia/mestre/internal/users"
@@ -67,8 +69,8 @@ func (c *BlockChannel) Notify(ctx context.Context, n blocking.Notice) (id int64,
 		return 0, 0, err
 	}
 	if c.Panel != nil {
-		text := n.Motive.Icon() + " " + blocking.Line(summary, mask)
-		if _, seen, err := c.Panel.Add(ctx, notices.Notice{Kind: notices.Blocked, Workspace: n.Workspace, Mesa: n.Mesa, Audience: notices.Admins, Text: text,
+		text := i18n.Text(n.Motive.Icon() + " " + blocking.Line(summary, mask))
+		if _, seen, err := c.Panel.Add(ctx, notices.Notice{Kind: notices.Blocked, Workspace: n.Workspace, Mesa: n.Mesa, Audience: notices.Admins, Msg: text,
 			LinkKind: notices.LinkBlocking, LinkRef: strconv.FormatInt(id, 10)}); err != nil {
 			c.bot.log.Warn("telegram: a notice was not kept for the panel", "err", err)
 		} else {
@@ -89,13 +91,13 @@ func (c *BlockChannel) Notify(ctx context.Context, n blocking.Notice) (id int64,
 			switch {
 			case b.Panel:
 				if panelURL(c.PanelURL) {
-					rows = append(rows, []Button{{Text: b.Text, URL: c.PanelURL}})
+					rows = append(rows, []Button{{Msg: b.Text, URL: c.PanelURL}})
 				}
 			case b.Details:
-				rows = append(rows, []Button{{Text: b.Text, Action: BlockDetailsAction, Arg: strconv.FormatInt(id, 10)}})
+				rows = append(rows, []Button{{Msg: b.Text, Action: BlockDetailsAction, Arg: strconv.FormatInt(id, 10)}})
 			}
 		}
-		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: m.Text, Workspace: n.Workspace, Mesa: n.Mesa, Origin: "bloqueio", Buttons: rows}); err != nil {
+		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: m.Msg, Workspace: n.Workspace, Mesa: n.Mesa, Origin: "bloqueio", Buttons: rows}); err != nil {
 			c.bot.log.Warn("telegram: a notice was not queued", "user", u.ID, "err", err)
 			continue
 		}
@@ -106,24 +108,28 @@ func (c *BlockChannel) Notify(ctx context.Context, n blocking.Notice) (id int64,
 
 // details sends the whole text of the notice, masked, to a user who acts in its
 // workspace.
-func (c *BlockChannel) details(ctx context.Context, k Click) (string, string, error) {
+func (c *BlockChannel) details(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	id, err := strconv.ParseInt(k.Arg, 10, 64)
 	if err != nil {
-		return "", "", errors.New("botão inválido")
+		return i18n.Msg{}, i18n.Msg{}, errInvalidButton
 	}
-	var ws, mesa, full string
-	err = c.bot.o.DB.Reader().QueryRowContext(ctx, `SELECT workspace, mesa, full FROM blocking_notices WHERE id = ?`, id).Scan(&ws, &mesa, &full)
+	saved, err := (&blocking.Store{DB: c.bot.o.DB, Clock: c.bot.clk}).Get(ctx, id)
 	if err != nil {
-		return "", "", errors.New("esse aviso não existe mais")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.notice_gone")
 	}
 	u, err := c.Users.Get(ctx, k.User.ID) // the workspaces as stored now
-	if err != nil || !u.Acts(ws) {
-		return "", "", errors.New("esse aviso não é de uma campanha sua")
+	if err != nil || !u.Acts(saved.Workspace) {
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.notice_not_workspace")
 	}
-	if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: fmt.Sprintf("Detalhes do aviso %d:\n%s", id, full), Workspace: ws, Mesa: mesa, Origin: "bloqueio"}); err != nil {
-		return "", "", err
+	// the frame is said in the language of who reads; a notice from before the messages is shown as written
+	full := saved.Msg.Full
+	if full.IsZero() {
+		full = i18n.Text(saved.Full)
 	}
-	return "Enviei os detalhes.", "", nil
+	if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.M("bot.notice_details", "id", id, "text", full), Workspace: saved.Workspace, Mesa: saved.Mesa, Origin: "bloqueio"}); err != nil {
+		return i18n.Msg{}, i18n.Msg{}, err
+	}
+	return i18n.M("bot.details_sent"), i18n.Msg{}, nil
 }
 
 // panelURL says the link of the panel is one the Telegram takes in a button: a
@@ -168,7 +174,7 @@ func (c *BlockChannel) Say(ctx context.Context, workspace, mesa, text string) (i
 		return 0, err
 	}
 	if c.Panel != nil {
-		n := notices.Notice{Kind: notices.Notify, Workspace: workspace, Mesa: mesa, Audience: notices.Workspace, Text: "Aviso do Grão-Mestre (texto do agente, não verificado):\n" + body}
+		n := notices.Notice{Kind: notices.Notify, Workspace: workspace, Mesa: mesa, Audience: notices.Workspace, Msg: i18n.M("bot.gm_notice", "body", body)}
 		if mesa != "" {
 			n.LinkKind, n.LinkRef = notices.LinkTable, mesa
 		}
@@ -183,7 +189,7 @@ func (c *BlockChannel) Say(ctx context.Context, workspace, mesa, text string) (i
 		if u.State != users.Active || u.TelegramID == 0 || !u.Acts(workspace) || !users.Can(u.Level, users.Notifications) {
 			continue
 		}
-		out := Out{ChatID: u.TelegramID, UserID: u.ID, Text: "Aviso do Grão-Mestre (texto do agente, não verificado):\n" + body, Workspace: workspace, Mesa: mesa, Origin: "aviso"}
+		out := Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.M("bot.gm_notice", "body", body), Workspace: workspace, Mesa: mesa, Origin: "aviso"}
 		if _, err := c.bot.Send(ctx, out); err != nil {
 			c.bot.log.Warn("telegram: a notice was not queued", "user", u.ID, "err", err)
 			continue

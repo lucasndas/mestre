@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/users"
 )
 
@@ -62,8 +63,11 @@ func TestAnApproverCannotMakeAPermanentRuleAndIsToldWhichLevelIsNeeded(t *testin
 	if !errors.Is(err, users.ErrLevel) || !errors.As(err, &le) || le.Need != users.Administrator {
 		t.Fatalf("Require = %v, want a refusal that needs an Administrator", err)
 	}
-	if !strings.Contains(err.Error(), "Administrador ou acima") {
-		t.Errorf("the refusal does not say the level: %q", err.Error())
+	if got := i18n.Render(i18n.PtBR, le.Msg()); !strings.Contains(got, "Administrador ou acima") {
+		t.Errorf("the refusal does not say the level: %q", got)
+	}
+	if got := i18n.Render(i18n.En, le.Msg()); !strings.Contains(got, "Administrator level or above") {
+		t.Errorf("the refusal in English does not say the level: %q", got)
 	}
 	if err := users.Require(users.Owner, users.Unlock); err != nil {
 		t.Errorf("the Owner is refused: %v", err)

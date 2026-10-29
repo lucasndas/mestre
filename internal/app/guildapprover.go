@@ -11,6 +11,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/guild"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 )
 
@@ -25,7 +26,7 @@ type EntryApprover struct {
 	// could not be applied.
 	Chain  func() *chain.Service
 	Decide func(ctx context.Context, joinID string, d guild.Decision) error
-	Tell   func(ctx context.Context, text string)
+	Tell   func(ctx context.Context, m i18n.Msg)
 	Log    *slog.Logger
 }
 
@@ -109,9 +110,9 @@ func (a EntryApprover) Decided(ctx context.Context, res chain.Result) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, guild.ErrExpired), errors.Is(err, guild.ErrNotPending):
-		a.Tell(ctx, fmt.Sprintf("A entrada da máquina %q já não estava esperando (a hora acabou ou foi decidida): nada foi emitido. Peça que ela tente de novo.", plainText(t.Name)))
+		a.Tell(ctx, i18n.M("guild.entry_not_waiting", "name", plainText(t.Name)))
 	default:
-		a.Tell(ctx, fmt.Sprintf("A resposta sobre a entrada da máquina %q não pôde ser aplicada agora (%v). Nada foi emitido; peça que ela tente de novo.", plainText(t.Name), err))
+		a.Tell(ctx, i18n.M("guild.entry_not_applied", "name", plainText(t.Name), "reason", err.Error()))
 	}
 	return err
 }

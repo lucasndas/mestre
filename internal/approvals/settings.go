@@ -11,6 +11,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/github"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 )
 
@@ -58,7 +59,7 @@ type Settings struct {
 	// GrandMaster gives the client of the App "Grão-Mestre" and its id.
 	GrandMaster func(ctx context.Context, workspace string) (SettingsClient, int64, error)
 	// Tell warns the Owner (the bot and the panel).
-	Tell   func(ctx context.Context, workspace, text string)
+	Tell   func(ctx context.Context, workspace string, m i18n.Msg)
 	Logger *slog.Logger
 }
 
@@ -85,7 +86,7 @@ func (s *Settings) ProposePlanB(ctx context.Context, workspace string) (int64, e
 	if rules.CodeOwners || rules.LastPush {
 		// the exception skips every rule of its ruleset: the code owner review and the
 		// approval of the last push would stop being enforced for the Grão-Mestre
-		why := "o repositório exige review de code owner ou aprovação do último push, que a exceção do ruleset deixaria de impor"
+		why := i18n.M("approval.why_code_owner")
 		if err := s.human(ctx, workspace, why); err != nil {
 			return 0, err
 		}
@@ -96,6 +97,7 @@ func (s *Settings) ProposePlanB(ctx context.Context, workspace string) (int64, e
 		return 0, err
 	}
 	return s.Requests.Request(ctx, chain.OpenRequest{Type: classes.RequestRepoSettings, Workspace: workspace, Target: target,
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		About: "plano B da aprovação: " + github.PlanBChange(rules)})
 }
 
@@ -191,11 +193,13 @@ func describeRuleset(body map[string]any) string {
 	for _, r := range body["rules"].([]any) {
 		rules = append(rules, r.(map[string]any)["type"].(string))
 	}
+	// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 	out := fmt.Sprintf("ruleset %q (%v, aplicação %v): regras [%s]", body["name"], orDefault(body["target"], "branch"), body["enforcement"], strings.Join(rules, ", "))
 	if c, ok := body["conditions"].(map[string]any); ok {
 		raw, _ := json.Marshal(c["ref_name"])
 		out += "; refs " + string(raw)
 	} else {
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		out += "; refs: as do GitHub por padrão (nenhuma condição dada)"
 	}
 	if ba, _ := body["bypass_actors"].([]any); len(ba) > 0 {
@@ -204,8 +208,10 @@ func describeRuleset(body map[string]any) string {
 			m := x.(map[string]any)
 			ex = append(ex, fmt.Sprintf("%v #%.0f (%v)", m["actor_type"], m["actor_id"], m["bypass_mode"]))
 		}
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		out += "; exceções: " + strings.Join(ex, ", ")
 	} else {
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		out += "; sem exceções"
 	}
 	return out
@@ -241,6 +247,7 @@ func (s *Settings) ProposeRuleset(ctx context.Context, workspace, proposer strin
 		return 0, err
 	}
 	return s.Requests.Request(ctx, chain.OpenRequest{Type: classes.RequestRepoSettings, Workspace: workspace, Proposer: proposer, Target: target,
+		// mestre:allow pt-text: the reason or the subject kept in Portuguese in the audit and the log of the request, not a sentence shown by a channel
 		About: describeRuleset(body) + " no repositório " + repo})
 }
 
@@ -255,7 +262,7 @@ func (s *Settings) Decided(ctx context.Context, r chain.Result) error {
 	ws := r.Request.Workspace
 	if !r.Approved {
 		if t.PlanB {
-			return s.human(ctx, ws, "o Senhor da Guilda não aprovou o ruleset de exceção para o Grão-Mestre")
+			return s.human(ctx, ws, i18n.M("approval.why_owner_declined"))
 		}
 		return nil
 	}
@@ -277,27 +284,27 @@ func (s *Settings) Decided(ctx context.Context, r chain.Result) error {
 	switch {
 	case err == nil:
 		name, _ := t.Body["name"].(string)
-		s.tell(ctx, ws, fmt.Sprintf("O ruleset %q foi criado no repositório %s.", name, t.Repo))
+		s.tell(ctx, ws, i18n.M("approval.ruleset_created", "name", name, "repo", t.Repo))
 		return nil
 	case t.PlanB && errors.As(err, &api) && api.Status == http.StatusForbidden:
-		return s.human(ctx, ws, "o GitHub não aceita rulesets em repositório privado sem o plano Pro ("+api.Message+")")
+		return s.human(ctx, ws, i18n.M("approval.why_private_plan", "detail", api.Message))
 	case t.PlanB:
-		s.tell(ctx, ws, fmt.Sprintf("O ruleset de exceção do repositório %s não foi criado: %v.", t.Repo, err))
+		s.tell(ctx, ws, i18n.M("approval.ruleset_not_created", "repo", t.Repo, "reason", err.Error()))
 		return err
 	}
 	return err
 }
 
-func (s *Settings) human(ctx context.Context, workspace, why string) error {
-	if err := s.Modes.Set(ctx, workspace, ModeHuman, why); err != nil {
+func (s *Settings) human(ctx context.Context, workspace string, why i18n.Msg) error {
+	if err := s.Modes.Set(ctx, workspace, ModeHuman, i18n.Render(i18n.PtBR, why)); err != nil {
 		return err
 	}
-	s.tell(ctx, workspace, fmt.Sprintf("A campanha %s passou ao modo de aprovação humana: %s. Cada merge vai pedir a aprovação de uma pessoa pelo Telegram.", workspace, why))
+	s.tell(ctx, workspace, i18n.M("approval.human_mode", "workspace", workspace, "why", why))
 	return nil
 }
 
-func (s *Settings) tell(ctx context.Context, workspace, text string) {
+func (s *Settings) tell(ctx context.Context, workspace string, m i18n.Msg) {
 	if s.Tell != nil {
-		s.Tell(ctx, workspace, text)
+		s.Tell(ctx, workspace, m)
 	}
 }

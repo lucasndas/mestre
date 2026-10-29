@@ -10,6 +10,7 @@ import (
 
 	"github.com/mestre-ia/mestre/internal/classes"
 	"github.com/mestre-ia/mestre/internal/decrees"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/orchestration/tablerules"
 	"github.com/mestre-ia/mestre/internal/panel"
@@ -85,8 +86,8 @@ func (f *fakeEngine) RevokeRules(_ context.Context, ws, _ string) (int, error) {
 	}
 	return n, nil
 }
-func (f *fakeEngine) Reroute(context.Context, string) error { return nil }
-func (f *fakeEngine) Told(context.Context, string, string)  {}
+func (f *fakeEngine) Reroute(context.Context, string) error  { return nil }
+func (f *fakeEngine) Told(context.Context, string, i18n.Msg) {}
 
 func (f *fakeEngine) OpenTables(context.Context, string) ([]string, error) {
 	return []string{"42-login", "43-busca"}, nil
@@ -203,8 +204,8 @@ type revokeHooks struct{ f *fakeEngine }
 func (h revokeHooks) RevokeRules(ctx context.Context, ws, by string) (int, error) {
 	return h.f.RevokeRules(ctx, ws, by)
 }
-func (h revokeHooks) Reroute(ctx context.Context, ws string) error { return h.f.Reroute(ctx, ws) }
-func (h revokeHooks) Told(ctx context.Context, ws, text string)    { h.f.Told(ctx, ws, text) }
+func (h revokeHooks) Reroute(ctx context.Context, ws string) error    { return h.f.Reroute(ctx, ws) }
+func (h revokeHooks) Told(ctx context.Context, ws string, m i18n.Msg) { h.f.Told(ctx, ws, m) }
 
 func (r *rulesRig) addRule(id int64, class string) {
 	r.eng.mu.Lock()

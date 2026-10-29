@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/mestre-ia/mestre/internal/glossary"
+	"github.com/mestre-ia/mestre/internal/i18n"
 )
 
 // commonWords are the one-word terms of the glossary that are also a verb or a
@@ -14,8 +15,33 @@ import (
 // sentence (docs/telegram/bot.md#explicação-de-termos-na-primeira-vez).
 var commonWords = map[string]bool{
 	"Aceite": true, "Vigia": true, "Prova": true, "Espera": true, "Base": true, "Ficha": true, "Etapa": true, "Receita": true,
+	// mestre:allow pt-text: the words of the glossary that are common Portuguese words: the filter of the first explanation, not a text for a person
 	"Risco": true, "Nível": true, "Superior": true, "Impressão": true, "Fixado": true, "Triagem": true, "Mesa": true, "Classe": true,
+	// mestre:allow pt-text: the words of the glossary that are common Portuguese words: the filter of the first explanation, not a text for a person
 	"Torre": true, "Época": true, "Espelho": true, "Ritual": true, "Terminal": true, "Missão": true, "Decreto": true, "Devolução": true,
+}
+
+// commonWordsEn are the same for the English names.
+var commonWordsEn = map[string]bool{
+	"Table": true, "Class": true, "Tower": true, "Mission": true, "Decree": true, "Mirror": true, "Base": true, "Risk": true,
+	"Level": true, "Epoch": true, "Ritual": true, "Terminal": true, "Triage": true, "Epic": true, "Acceptance": true,
+	"Proof": true, "Watch": true, "Wait": true, "Step": true, "Recipe": true, "Pinned": true, "Return": true,
+}
+
+// termsIn is the glossary in a language: the names and helps of that language, with
+// the Portuguese name kept as the key of what a user has already seen.
+func termsIn(terms []glossary.Term, lang string) []glossary.Term {
+	if i18n.Match(lang) == i18n.PtBR {
+		return terms
+	}
+	out := make([]glossary.Term, 0, len(terms))
+	for _, t := range terms {
+		if t.En.Name == "" {
+			continue
+		}
+		out = append(out, glossary.Term{Name: t.En.Name, Help: t.En.Help, En: glossary.English{Key: t.Name}})
+	}
+	return out
 }
 
 type termMatch struct {
@@ -28,12 +54,20 @@ type termMatch struct {
 // (the longest term wins: "Mestre da mesa" is explained, not "Mestre"). The
 // code (fences and spans) is left alone. It returns the new text and the terms
 // it explained.
-func explain(text string, terms []glossary.Term, seen map[string]bool) (string, []string) {
+func explain(text string, terms []glossary.Term, seen map[string]bool, lang string) (string, []string) {
+	common := commonWords
+	if i18n.Match(lang) != i18n.PtBR {
+		common = commonWordsEn
+	}
 	skip := codeRanges(text)
 	lower := strings.ToLower(text)
 	var found []termMatch
 	for _, t := range terms {
-		if seen[t.Name] {
+		key := t.Name
+		if t.En.Key != "" {
+			key = t.En.Key
+		}
+		if seen[key] {
 			continue
 		}
 		needle := strings.ToLower(t.Name)
@@ -48,7 +82,7 @@ func explain(text string, terms []glossary.Term, seen map[string]bool) (string, 
 			if start+len(needle) > len(text) || inRanges(skip, start) || !wordEdge(text, start, end) {
 				continue
 			}
-			if commonWords[t.Name] && !strings.Contains(t.Name, " ") && !properUse(text, start) {
+			if common[t.Name] && !strings.Contains(t.Name, " ") && !properUse(text, start) {
 				continue
 			}
 			found = append(found, termMatch{start, end, t})
@@ -74,7 +108,7 @@ func explain(text string, terms []glossary.Term, seen map[string]bool) (string, 
 	var names []string
 	for _, m := range kept {
 		text = text[:m.end] + " (" + m.term.Help + ")" + text[m.end:]
-		names = append(names, m.term.Name)
+		names = append(names, keyOf(m.term))
 	}
 	return text, names
 }
@@ -148,4 +182,12 @@ func properUse(s string, at int) bool {
 	}
 	last, _ := utf8.DecodeLastRuneInString(before)
 	return last != '.' && last != '!' && last != '?' && last != '\n'
+}
+
+// keyOf is the Portuguese name of a term, which is what a user has seen is kept under.
+func keyOf(t glossary.Term) string {
+	if t.En.Key != "" {
+		return t.En.Key
+	}
+	return t.Name
 }

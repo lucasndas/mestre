@@ -2,7 +2,6 @@ package users
 
 import (
 	"errors"
-	"fmt"
 	"slices"
 
 	"github.com/mestre-ia/mestre/internal/i18n"
@@ -133,12 +132,7 @@ type LevelError struct {
 	Have, Need Level
 }
 
-func (e *LevelError) Error() string {
-	if e.Need == Owner {
-		return fmt.Sprintf("exige o nível %s; o seu é %s", e.Need.Name(), e.Have.Name())
-	}
-	return fmt.Sprintf("exige o nível %s ou acima; o seu é %s", e.Need.Name(), e.Have.Name())
-}
+func (e *LevelError) Error() string { return e.Msg().String() }
 
 // Msg is the refusal as a message: the level that is required and the one the
 // user has, translated by whoever shows it.

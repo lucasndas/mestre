@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mestre-ia/mestre/internal/approvals"
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/internal/orchestration/chain"
 	"github.com/mestre-ia/mestre/internal/users"
 )
@@ -68,13 +69,13 @@ func buttonsFor(request int64, answers []chain.Answer) [][]Button {
 	var rows [][]Button
 	var row []Button
 	for _, a := range answers {
-		row = append(row, Button{Text: a.Label(), Action: ApprovalAction, Arg: fmt.Sprintf("%d:%s", request, a), Capability: approvals.Capability(a)})
+		row = append(row, Button{Msg: a.LabelMsg(), Action: ApprovalAction, Arg: fmt.Sprintf("%d:%s", request, a), Capability: approvals.Capability(a)})
 		if len(row) == 2 {
 			rows, row = append(rows, row), nil
 		}
 	}
 	if len(answers) > 0 { // a message with its answers taken away has no details either
-		row = append(row, Button{Text: "Ver detalhes", Action: ApprovalAction, Arg: fmt.Sprintf("%d:%s", request, detailsArg), Capability: users.DecideApprovals})
+		row = append(row, Button{Msg: i18n.M("block.details"), Action: ApprovalAction, Arg: fmt.Sprintf("%d:%s", request, detailsArg), Capability: users.DecideApprovals})
 	}
 	if len(row) > 0 {
 		rows = append(rows, row)
@@ -91,7 +92,7 @@ func (c *ApprovalChannel) Send(ctx context.Context, m approvals.Message) (string
 	if u.TelegramID == 0 {
 		return "", approvals.ErrNoChannel
 	}
-	id, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: m.Text, Workspace: m.Request.Workspace, Mesa: m.Request.Table, Origin: "aprovacao",
+	id, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: m.Msg, Workspace: m.Request.Workspace, Mesa: m.Request.Table, Origin: "aprovacao",
 		Buttons: buttonsFor(m.Request.ID, m.Answers)})
 	if err != nil {
 		return "", err
@@ -105,7 +106,7 @@ func (c *ApprovalChannel) Edit(ctx context.Context, e approvals.MessageEdit) err
 	if err != nil {
 		return err
 	}
-	return c.bot.Edit(ctx, Edit{Outbox: id, UserID: e.UserID, Text: e.Text, Buttons: buttonsFor(e.Request, e.Answers)})
+	return c.bot.Edit(ctx, Edit{Outbox: id, UserID: e.UserID, Msg: e.Msg, Buttons: buttonsFor(e.Request, e.Answers)})
 }
 
 // parseArg reads "<request>:<answer>".
@@ -116,66 +117,66 @@ func parseArg(arg string) (int64, chain.Answer, bool) {
 }
 
 // needs says what an answer asks the user to write.
-func needs(a chain.Answer) string {
+func needs(a chain.Answer) i18n.Msg {
 	switch a {
 	case chain.AnswerDenyInstruction:
-		return "Escreva a instrução que quem pediu vai receber (ex.: use pnpm)."
+		return i18n.M("bot.needs_instruction")
 	case chain.AnswerAskBack:
-		return "Escreva a pergunta que quem pediu vai responder."
+		return i18n.M("bot.needs_question")
 	case chain.AnswerApproveFor:
-		return "Por quanto tempo? (ex.: 3h, 2d)"
+		return i18n.M("bot.needs_duration")
 	case chain.AnswerApprovePattern:
-		return "Qual padrão aprovar? (ex.: npm install *)"
+		return i18n.M("bot.needs_pattern")
 	}
-	return ""
+	return i18n.Msg{}
 }
 
 // click is a button of the flow.
-func (c *ApprovalChannel) click(ctx context.Context, k Click) (string, string, error) {
+func (c *ApprovalChannel) click(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	request, ans, ok := parseArg(k.Arg)
 	if !ok {
-		return "", "", errors.New("botão inválido")
+		return i18n.Msg{}, i18n.Msg{}, errInvalidButton
 	}
 	if ans == detailsArg {
 		text, err := c.flow.Details(ctx, k.User.ID, request)
 		if err != nil {
-			return "", "", err
+			return i18n.Msg{}, i18n.Msg{}, err
 		}
 		u, err := c.Users.Get(ctx, k.User.ID)
 		if err != nil || u.TelegramID == 0 {
-			return "", "", approvals.ErrNoChannel
+			return i18n.Msg{}, i18n.Msg{}, approvals.ErrNoChannel
 		}
-		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: fmt.Sprintf("Detalhes do pedido %d:\n%s", request, text), Origin: "aprovacao"}); err != nil {
-			return "", "", err
+		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: i18n.M("bot.request_details", "id", request, "text", text), Origin: "aprovacao"}); err != nil {
+			return i18n.Msg{}, i18n.Msg{}, err
 		}
-		return "Enviei os detalhes.", "", nil
+		return i18n.M("bot.details_sent"), i18n.Msg{}, nil
 	}
-	if prompt := needs(ans); prompt != "" {
+	if prompt := needs(ans); !prompt.IsZero() {
 		if err := c.bot.Ask(ctx, k.User.ID, ApprovalTextKind, k.Arg, prompt, promptTTL); err != nil {
 			if errors.Is(err, ErrCaptureBusy) {
-				return "", "", errors.New("termine a resposta anterior primeiro")
+				return i18n.Msg{}, i18n.Msg{}, errFinishFirst
 			}
-			return "", "", err
+			return i18n.Msg{}, i18n.Msg{}, err
 		}
-		return "Responda à mensagem que abri para você.", "", nil
+		return i18n.M("bot.answer_the_prompt"), i18n.Msg{}, nil
 	}
 	rep, err := c.flow.Answer(ctx, k.User.ID, approvals.Input{Request: request, Answer: ans})
 	if err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
-	return c.afterAnswer(ctx, k.User, rep), "", nil
+	return c.afterAnswer(ctx, k.User, rep), i18n.Msg{}, nil
 }
 
 // afterAnswer asks the PIN when the answer waits for it and gives the toast.
-func (c *ApprovalChannel) afterAnswer(ctx context.Context, u users.User, rep approvals.Reply) string {
+func (c *ApprovalChannel) afterAnswer(ctx context.Context, u users.User, rep approvals.Reply) i18n.Msg {
 	if rep.PIN == "" {
-		return rep.Text
+		return rep.Msg
 	}
-	if err := c.bot.Ask(ctx, u.ID, PINKind, rep.PIN, "Digite o seu PIN para confirmar a aprovação. A mensagem com o PIN é apagada.", promptTTL); err != nil {
+	if err := c.bot.Ask(ctx, u.ID, PINKind, rep.PIN, i18n.M("bot.pin_prompt_approval"), promptTTL); err != nil {
 		c.flow.PINFailed(ctx, u.ID, rep.PIN)
-		return "Não consegui pedir o PIN agora: " + err.Error()
+		return i18n.M("bot.pin_not_asked", "reason", i18n.OfError(err))
 	}
-	return "Confirme com o PIN."
+	return i18n.M("bot.confirm_with_pin")
 }
 
 // AskPIN implements approvals.PINPrompter: the review a user made on GitHub is
@@ -185,7 +186,7 @@ func (c *ApprovalChannel) AskPIN(ctx context.Context, userID string, rep approva
 	if rep.PIN == "" {
 		return nil
 	}
-	err := c.bot.Ask(ctx, userID, PINKind, rep.PIN, "Seu review no GitHub vale como aprovação de um pedido que exige o seu PIN. Se você não fez esse review, ignore esta mensagem. Para confirmar, digite o PIN (a mensagem com o PIN é apagada).", promptTTL)
+	err := c.bot.Ask(ctx, userID, PINKind, rep.PIN, i18n.M("bot.pin_prompt_review"), promptTTL)
 	if err != nil {
 		c.flow.PINFailed(ctx, userID, rep.PIN)
 	}
@@ -195,10 +196,10 @@ func (c *ApprovalChannel) AskPIN(ctx context.Context, userID string, rep approva
 var _ approvals.PINPrompter = (*ApprovalChannel)(nil)
 
 // text takes the text an answer needs and applies the answer.
-func (c *ApprovalChannel) text(ctx context.Context, u users.User, ref, text string) (string, bool, error) {
+func (c *ApprovalChannel) text(ctx context.Context, u users.User, ref, text string) (i18n.Msg, bool, error) {
 	request, ans, ok := parseArg(ref)
 	if !ok {
-		return "Resposta inválida.", false, nil
+		return i18n.M("bot.invalid_answer"), false, nil
 	}
 	in := approvals.Input{Request: request, Answer: ans}
 	text = strings.TrimSpace(text)
@@ -210,21 +211,21 @@ func (c *ApprovalChannel) text(ctx context.Context, u users.User, ref, text stri
 	case chain.AnswerApproveFor:
 		d, err := ParseValidity(text)
 		if err != nil {
-			return "Não entendi a duração. Exemplos: 3h, 2d.", true, nil
+			return i18n.M("bot.bad_duration"), true, nil
 		}
 		in.For = d
 	}
 	rep, err := c.flow.Answer(ctx, u.ID, in)
 	if err != nil {
 		c.flow.Resend(ctx, request, u.ID)
-		return c.bot.o.Mask(err.Error()), false, nil
+		return i18n.OfError(err), false, nil
 	}
 	if rep.PIN != "" {
 		// the PIN is asked when this capture is over
 		c.bot.Then(u.ID, func(ctx context.Context) { c.afterAnswer(ctx, u, rep) })
-		return "Agora confirme com o seu PIN.", false, nil
+		return i18n.M("bot.now_confirm_pin"), false, nil
 	}
-	return rep.Text, false, nil
+	return rep.Msg, false, nil
 }
 
 // pinDone is told whether the PIN of an approval was right: if so the approval
@@ -233,9 +234,9 @@ func (c *ApprovalChannel) pinDone(ctx context.Context, u users.User, pinRequest 
 	switch err { //nolint:errorlint // the error that cancelled the request wraps ErrBadPIN: only the bare one has tries left
 	case nil:
 		rep, aerr := c.flow.ConfirmPIN(ctx, u.ID, pinRequest)
-		text := rep.Text
+		text := rep.Msg
 		if aerr != nil {
-			text = "Não apliquei a aprovação: " + aerr.Error()
+			text = i18n.M("bot.approval_not_applied", "reason", i18n.OfError(aerr))
 		}
 		c.tell(ctx, u, text)
 	case users.ErrBadPIN:
@@ -245,11 +246,11 @@ func (c *ApprovalChannel) pinDone(ctx context.Context, u users.User, pinRequest 
 	}
 }
 
-func (c *ApprovalChannel) tell(ctx context.Context, u users.User, text string) {
+func (c *ApprovalChannel) tell(ctx context.Context, u users.User, text i18n.Msg) {
 	if u.TelegramID == 0 {
 		return
 	}
-	if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Origin: "aprovacao"}); err != nil {
+	if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Msg: text, Origin: "aprovacao"}); err != nil {
 		c.bot.log.Warn("telegram: the user was not told the result of an approval", "err", err)
 	}
 }
@@ -260,13 +261,26 @@ func ParseValidity(s string) (time.Duration, error) {
 	if n, ok := strings.CutSuffix(s, "d"); ok {
 		days, err := strconv.Atoi(n)
 		if err != nil || days <= 0 || days > 365 {
+			// mestre:allow pt-text: an internal error that is never shown to a person
 			return 0, errors.New("duração inválida")
 		}
 		return time.Duration(days) * 24 * time.Hour, nil
 	}
 	d, err := time.ParseDuration(s)
 	if err != nil || d <= 0 || d > 365*24*time.Hour {
+		// mestre:allow pt-text: an internal error that is never shown to a person
 		return 0, errors.New("duração inválida")
 	}
 	return d, nil
 }
+
+// The refusals of a button that the user reads.
+var (
+	errInvalidButton = i18n.Err("bot.invalid_button")
+	errFinishFirst   = i18n.Err("bot.finish_first")
+)
+
+var (
+	errNoPIN     = i18n.Err("bot.register_pin_first_err")
+	errPINLocked = i18n.Err("bot.pin_locked_err")
+)

@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
+
 	"github.com/mestre-ia/mestre/internal/attachments"
 	"github.com/mestre-ia/mestre/internal/orchestration/characters"
 	"github.com/mestre-ia/mestre/internal/orchestration/inbox"
@@ -136,7 +138,7 @@ func (r *Routing) Bind(bot *Bot) { r.bot = bot }
 
 // Commands is /workspace, for Options.Commands.
 func (r *Routing) Commands() []Command {
-	return []Command{{Name: "workspace", Description: "mostra e troca o workspace ativo", Capability: users.TalkToGrandMaster, Run: r.workspaceCommand}}
+	return []Command{{Name: "workspace", Description: i18n.M("bot.cmd_workspace"), Capability: users.TalkToGrandMaster, Run: r.workspaceCommand}}
 }
 
 // Actions are the buttons, for Options.Actions.
@@ -177,14 +179,14 @@ func (r *Routing) Deliver(ctx context.Context, in Inbound) error {
 	}
 	if ws, rest, ok := shortcut(in.Text); ok {
 		if rest == "" && in.Kind == KindText {
-			r.say(ctx, in, fmt.Sprintf("Escreva a mensagem depois de #%s.", ws))
+			r.say(ctx, in, i18n.M("bot.route_write_after", "workspace", ws))
 			return nil
 		}
 		return r.to(ctx, in, allowed, ws, "", rest, true)
 	}
 	switch len(allowed) {
 	case 0:
-		r.say(ctx, in, "Você não atua em nenhuma campanha ainda. Peça ao Senhor da Guilda para incluí-lo em um.")
+		r.say(ctx, in, i18n.M("bot.route_no_workspace_yet"))
 		return nil
 	case 1:
 		return r.to(ctx, in, allowed, allowed[0], "", in.Text, false)
@@ -200,7 +202,7 @@ func (r *Routing) Deliver(ctx context.Context, in Inbound) error {
 	if err := st.Park(ctx, in); err != nil {
 		return err
 	}
-	r.ask(ctx, in, allowed, "Em qual campanha entrego a sua mensagem? A escolha passa a ser a sua campanha ativa.")
+	r.ask(ctx, in, allowed, i18n.M("bot.route_which_workspace"))
 	return nil
 }
 
@@ -217,7 +219,7 @@ func contains(l []string, v string) bool {
 // that is not his, or does not exist, gets the same answer.
 func (r *Routing) to(ctx context.Context, in Inbound, allowed []string, ws, mesa, text string, short bool) error {
 	if !contains(allowed, ws) {
-		r.say(ctx, in, "Você não atua em #"+ws+". "+listOf(allowed))
+		r.say(ctx, in, i18n.M("bot.route_not_yours", "workspace", ws, "list", listOf(allowed)))
 		return nil
 	}
 	in.Text = text
@@ -236,7 +238,7 @@ func (r *Routing) to(ctx context.Context, in Inbound, allowed []string, ws, mesa
 // and nothing goes to the Grão-Mestre (a file that failed is not delivered).
 func (r *Routing) receive(ctx context.Context, in Inbound, ws string) (attachments.Stored, bool) {
 	if r.Files == nil {
-		r.say(ctx, in, "Não consigo receber arquivos agora.")
+		r.say(ctx, in, i18n.M("bot.route_no_files"))
 		return attachments.Stored{}, false
 	}
 	req := attachments.Request{Workspace: ws, UserID: in.User.ID, File: *in.File, Caption: in.Text,
@@ -261,36 +263,36 @@ func (r *Routing) receive(ctx context.Context, in Inbound, ws string) (attachmen
 	var big *attachments.TooLargeError
 	switch {
 	case errors.As(err, &big):
-		r.say(ctx, in, fmt.Sprintf("O arquivo passa do limite de %s. Não baixei nada: mande um menor.", attachments.HumanSize(big.Limit)))
+		r.say(ctx, in, i18n.M("bot.route_file_too_large", "limit", attachments.HumanSize(big.Limit)))
 	case errors.Is(err, attachments.ErrDownload):
-		r.say(ctx, in, fmt.Sprintf("Não consegui baixar o arquivo depois de %d tentativas. Tente de novo em instantes.", attachments.Attempts))
+		r.say(ctx, in, i18n.M("bot.route_download_failed", "attempts", attachments.Attempts))
 	case err != nil:
 		r.bot.log.Warn("telegram: an attachment was not received", "err", err)
-		r.say(ctx, in, "Não consegui guardar o arquivo. Tente de novo em instantes.")
+		r.say(ctx, in, i18n.M("bot.route_file_not_kept"))
 	default:
 		return stored, true
 	}
 	return attachments.Stored{}, false
 }
 
-func listOf(allowed []string) string {
+func listOf(allowed []string) i18n.Msg {
 	if len(allowed) == 0 {
-		return "Você não atua em nenhuma campanha."
+		return i18n.M("bot.route_in_none")
 	}
 	names := make([]string, len(allowed))
 	for i, w := range allowed {
 		names[i] = "#" + w
 	}
-	return "Campanhas que você pode usar: " + strings.Join(names, ", ") + "."
+	return i18n.M("bot.route_usable", "list", strings.Join(names, ", "))
 }
 
 // say answers the user from the engine.
-func (r *Routing) say(ctx context.Context, in Inbound, text string) {
-	r.bot.say(ctx, in.ChatID, in.User.ID, text)
+func (r *Routing) say(ctx context.Context, in Inbound, m i18n.Msg) {
+	r.bot.say(ctx, in.ChatID, in.User.ID, m)
 }
 
 // ask puts the workspaces in buttons.
-func (r *Routing) ask(ctx context.Context, in Inbound, allowed []string, text string) {
+func (r *Routing) ask(ctx context.Context, in Inbound, allowed []string, m i18n.Msg) {
 	active, _ := r.bot.Store().Active(ctx, in.User.ID)
 	var rows [][]Button
 	for _, w := range allowed {
@@ -300,7 +302,7 @@ func (r *Routing) ask(ctx context.Context, in Inbound, allowed []string, text st
 		}
 		rows = append(rows, []Button{{Text: label, Action: WorkspaceAction, Arg: w, Capability: users.TalkToGrandMaster}})
 	}
-	if _, err := r.bot.Send(ctx, Out{ChatID: in.ChatID, UserID: in.User.ID, Text: text, Buttons: rows, Origin: "motor"}); err != nil {
+	if _, err := r.bot.Send(ctx, Out{ChatID: in.ChatID, UserID: in.User.ID, Msg: m, Buttons: rows, Origin: "motor"}); err != nil {
 		r.bot.log.Warn("telegram: the question of the workspace was not queued", "err", err)
 	}
 }
@@ -313,55 +315,55 @@ func (r *Routing) systemReply(ctx context.Context, in Inbound) error {
 		return err
 	}
 	if actions == "" {
-		r.say(ctx, in, "Essa mensagem do Sistema é um aviso: não há nada a responder.")
+		r.say(ctx, in, i18n.M("bot.route_system_notice"))
 		return nil
 	}
-	r.say(ctx, in, "Essa mensagem do Sistema se responde pelos botões: "+strings.ReplaceAll(actions, "\n", ", ")+".")
+	r.say(ctx, in, i18n.M("bot.route_system_buttons", "actions", strings.ReplaceAll(actions, "\n", ", ")))
 	return nil
 }
 
 // workspaceCommand is /workspace.
-func (r *Routing) workspaceCommand(ctx context.Context, call Call) (string, error) {
+func (r *Routing) workspaceCommand(ctx context.Context, call Call) (i18n.Msg, error) {
 	all, err := r.bot.Store().Workspaces(ctx)
 	if err != nil {
-		return "", err
+		return i18n.Msg{}, err
 	}
 	allowed := permitted(all, call.User)
 	switch len(allowed) {
 	case 0:
-		return "Você não atua em nenhuma campanha.", nil
+		return i18n.M("bot.route_in_none"), nil
 	case 1:
-		return "Você atua só em #" + allowed[0] + ": ela é sempre a sua campanha ativa.", nil
+		return i18n.M("bot.route_single", "workspace", allowed[0]), nil
 	}
-	r.ask(ctx, Inbound{User: call.User, ChatID: call.ChatID}, allowed, "Escolha a campanha ativa. O `#nome` no começo de uma mensagem a leva a outro sem trocar a ativa.")
-	return "", nil
+	r.ask(ctx, Inbound{User: call.User, ChatID: call.ChatID}, allowed, i18n.M("bot.route_choose_active"))
+	return i18n.Msg{}, nil
 }
 
 // choose makes the workspace the active one and delivers what waited for the choice.
-func (r *Routing) choose(ctx context.Context, k Click) (string, string, error) {
+func (r *Routing) choose(ctx context.Context, k Click) (i18n.Msg, i18n.Msg, error) {
 	st := r.bot.Store()
 	all, err := st.Workspaces(ctx)
 	if err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
 	// the level and the workspaces as stored now, not as the button remembers
 	u, err := r.bot.o.Users.Get(ctx, k.User.ID)
 	if err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
 	allowed := permitted(all, u)
 	if !contains(allowed, k.Arg) {
-		return "", "", errors.New("você não atua nessa campanha")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.route_not_in_workspace")
 	}
 	if users.Require(u.Level, users.TalkToGrandMaster) != nil {
-		return "", "", errors.New("com o seu nível você não fala com o Grão-Mestre")
+		return i18n.Msg{}, i18n.Msg{}, i18n.Err("bot.route_level_no_talk")
 	}
 	if err := st.SetActive(ctx, u.ID, k.Arg); err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
 	parked, err := st.Parked(ctx, u.ID)
 	if err != nil {
-		return "", "", err
+		return i18n.Msg{}, i18n.Msg{}, err
 	}
 	for _, h := range parked {
 		in := h.Inbound
@@ -376,17 +378,17 @@ func (r *Routing) choose(ctx context.Context, k Click) (string, string, error) {
 			d.File = &stored
 		}
 		if err := r.To.Deliver(ctx, d); err != nil {
-			return "", "", fmt.Errorf("a mensagem não foi entregue: %w", err)
+			return i18n.Msg{}, i18n.Msg{}, fmt.Errorf("telegram: the message was not delivered: %w", err)
 		}
 		if err := st.Unpark(ctx, h.ID); err != nil {
-			return "", "", err
+			return i18n.Msg{}, i18n.Msg{}, err
 		}
 	}
-	text := "Campanha ativa: #" + k.Arg + "."
+	text := i18n.M("bot.route_active", "workspace", k.Arg)
 	if len(parked) > 0 {
-		text += " Entreguei a sua mensagem."
+		text = i18n.Concat(text, i18n.M("bot.route_delivered"))
 	}
-	return "Ativo: " + k.Arg, text, nil
+	return i18n.M("bot.route_active_toast", "workspace", k.Arg), text, nil
 }
 
 // OriginOf is the origin a message of the Telegram carries in the inbox of the

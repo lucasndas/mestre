@@ -209,7 +209,7 @@ func TestACommandWithLineBreaksIsShownEscapedInTheRequestText(t *testing.T) {
 	}
 	// an ordinary command is shown as is
 	id2 := w.shell(dev, "npm install lodash")
-	if t2 := chain.Text(w.request(id2), chain.Level{Kind: chain.LevelMesa}, nil); !strings.Contains(t2, "Comando exato: npm install lodash\n") {
+	if t2 := chain.Text(w.request(id2), chain.Level{Kind: chain.LevelMesa}, nil); !strings.Contains(t2, "Exact command: npm install lodash\n") {
 		t.Errorf("the ordinary command changed:\n%s", t2)
 	}
 }

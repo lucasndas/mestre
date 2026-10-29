@@ -2,10 +2,10 @@ package guild
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
+	"github.com/mestre-ia/mestre/internal/i18n"
 	"github.com/mestre-ia/mestre/pkg/clock"
 )
 
@@ -15,8 +15,10 @@ import (
 // actions wait); the second, how many left the queue.
 type DownNotice struct {
 	// Tell sends the notice to the Owner (the Telegram and the panel).
-	Tell      func(ctx context.Context, text string)
-	Clock     clock.Clock
+	Tell  func(ctx context.Context, m i18n.Msg)
+	Clock clock.Clock
+	// Location is the time zone of the Guild, where the moment of the notice is said (nil: UTC).
+	Location  *time.Location
 	Queued    func() int
 	LastError func() error
 
@@ -44,17 +46,20 @@ func (n *DownNotice) Changed(st FenceState) {
 		n.mu.Unlock()
 	case st == FenceLockDown && !n.down:
 		n.down, n.since = true, n.Clock.Now()
-		since := n.since
-		n.mu.Unlock()
-		why := "sem detalhe"
-		if n.LastError != nil && n.LastError() != nil {
-			why = n.LastError().Error()
+		since := n.since.UTC()
+		if n.Location != nil {
+			since = n.since.In(n.Location)
 		}
-		n.Tell(context.Background(), fmt.Sprintf("GitHub fora desde %s. Último erro: %s. O Telegram e o comando seguem; as ações no GitHub ficam na fila (%d até agora).", since.Format("15:04:05"), why, queued()))
+		n.mu.Unlock()
+		why := i18n.M("guild.github_down_no_detail")
+		if n.LastError != nil && n.LastError() != nil {
+			why = i18n.Text(n.LastError().Error()) // the error of a program: not translated
+		}
+		n.Tell(context.Background(), i18n.M("guild.github_down", "since", since, "why", why, "queued", queued()))
 	case st == FenceConfirmed && n.down:
 		n.down = false
 		n.mu.Unlock()
-		n.Tell(context.Background(), fmt.Sprintf("GitHub de volta. %d ações saem da fila, na ordem.", queued()))
+		n.Tell(context.Background(), i18n.M("guild.github_back", "queued", queued()))
 	default:
 		n.mu.Unlock()
 	}
